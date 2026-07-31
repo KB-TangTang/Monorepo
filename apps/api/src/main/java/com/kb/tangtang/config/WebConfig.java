@@ -9,43 +9,44 @@ import javax.servlet.ServletRegistration;
 
 public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitializer {
 
-    final String LOCATION = "c:/upload";
-    final long MAX_FILE_SIZE = 1024 * 1024 * 10L;
-    final long MAX_REQUEST_SIZE = 1024 * 1024 * 20L;
-    final int FILE_SIZE_THRESHOLD = 1024 * 1024 * 5;
+    // 업로드 임시 경로: OS 에 종속되지 않도록 시스템 임시 디렉터리를 사용한다.
+    // 운영에서 별도 경로가 필요하면 -Dtangtang.upload.dir=/path 로 지정한다.
+    private static final String LOCATION =
+            System.getProperty("tangtang.upload.dir", System.getProperty("java.io.tmpdir"));
+    private static final long MAX_FILE_SIZE = 1024 * 1024 * 10L;
+    private static final long MAX_REQUEST_SIZE = 1024 * 1024 * 20L;
+    private static final int FILE_SIZE_THRESHOLD = 1024 * 1024 * 5;
 
     @Override
     protected Class<?>[] getRootConfigClasses() {
-        return new Class[] { RootConfig.class };
-    }
-    @Override
-    protected Class<?>[] getServletConfigClasses() {
-        return new Class[] { ServletConfig.class };
-    }
-    // 스프링의 FrontController인 DispatcherServlet이 담당할 Url 매핑 패턴, / : 모든 요청에 대해 매핑
-    @Override
-    protected String[] getServletMappings() {
-        return new String[] { "/" };
+        return new Class[]{RootConfig.class};
     }
 
-    // POST body 문자 인코딩 필터 설정 - UTF-8 설정
+    @Override
+    protected Class<?>[] getServletConfigClasses() {
+        return new Class[]{ServletConfig.class};
+    }
+
+    @Override
+    protected String[] getServletMappings() {
+        return new String[]{"/"};
+    }
+
+    @Override
     protected Filter[] getServletFilters() {
-        CharacterEncodingFilter characterEncodingFilter = new CharacterEncodingFilter();
-        characterEncodingFilter.setEncoding("UTF-8");
-        characterEncodingFilter.setForceEncoding(true);
-        return new Filter[] {characterEncodingFilter};
+        CharacterEncodingFilter encodingFilter = new CharacterEncodingFilter();
+        encodingFilter.setEncoding("UTF-8");
+        encodingFilter.setForceEncoding(true);
+        return new Filter[]{encodingFilter};
     }
 
     @Override
     protected void customizeRegistration(ServletRegistration.Dynamic registration) {
+        // 매핑되지 않은 요청도 예외로 던져 CommonExceptionAdvice 가 JSON 404 를 반환하게 한다
         registration.setInitParameter("throwExceptionIfNoHandlerFound", "true");
-        MultipartConfigElement multipartConfig =
-                new MultipartConfigElement(
-                        LOCATION, // 업로드 처리 디렉토리 경로
-                        MAX_FILE_SIZE, // 업로드 가능한 파일 하나의 최대 크기
-                        MAX_REQUEST_SIZE, // 업로드 가능한 전체 최대 크기(여러 파일 업로드 하는 경우)
-                        FILE_SIZE_THRESHOLD // 메모리 파일의 최대 크기(이보다 작으면 실제 메모리에서만 작업)
-                );
-        registration.setMultipartConfig(multipartConfig);
+        registration.setMultipartConfig(new MultipartConfigElement(
+                LOCATION, MAX_FILE_SIZE, MAX_REQUEST_SIZE, FILE_SIZE_THRESHOLD));
+        // SSE(알림) 사용을 위한 비동기 지원
+        registration.setAsyncSupported(true);
     }
 }

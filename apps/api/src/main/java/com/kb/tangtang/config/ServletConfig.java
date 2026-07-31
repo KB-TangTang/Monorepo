@@ -2,46 +2,38 @@ package com.kb.tangtang.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.ViewResolverRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.view.InternalResourceViewResolver;
-import org.springframework.web.servlet.view.JstlView;
 
+/**
+ * 서블릿(웹) 컨텍스트 설정.
+ * 이 프로젝트는 Vue3 SPA + REST API 구조다. JSP / 뷰 리졸버는 사용하지 않는다.
+ * 응답은 전부 JSON 이며 공통 래퍼(ApiResponse)를 사용한다.
+ */
 @EnableWebMvc
-@ComponentScan(basePackages = {
-        "org.scoula.exception",
-        "org.scoula.controller"})
+@ComponentScan(
+        basePackages = "com.kb.tangtang",
+        useDefaultFilters = false,
+        includeFilters = @ComponentScan.Filter(
+                type = FilterType.ANNOTATION,
+                classes = {Controller.class, ControllerAdvice.class}))
 public class ServletConfig implements WebMvcConfigurer {
-    // 스프링 내부에서 사용하는 서블릿(or JSP)와 관련된 설정을 하는 파일
-
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // jsp에서 사용할 프론트용 자원들(js, css, img 위치와 접근 주소 설정)
-        registry.addResourceHandler("/resources/**") // url이 /resources/로 시작하는 모든 경로
-                .addResourceLocations("/resources/"); // webapp/resources/경로 로 맵핑
+        // 운영 배포 시 Vue 빌드 산출물을 webapp/resources 아래에 두고 서빙하기 위한 설정
+        registry.addResourceHandler("/resources/**")
+                .addResourceLocations("/resources/");
     }
 
-    @Override
-    public void configureViewResolvers(ViewResolverRegistry registry) {
-        // 서버의 결과를 넣을 jsp위치와 전체 경로를 설정
-        InternalResourceViewResolver bean = new InternalResourceViewResolver();
-
-        bean.setViewClass(JstlView.class);
-        bean.setPrefix("/WEB-INF/views/");
-        bean.setSuffix(".jsp");
-
-        registry.viewResolver(bean);
-    }
-
-    // Servlet 3.0 파일 이상 업로드 사용시
-    @Bean // 메서드 호출 시 싱글톤 빈을 생성
+    @Bean
     public MultipartResolver multipartResolver() {
-        StandardServletMultipartResolver resolver = new StandardServletMultipartResolver();
-        return resolver;
+        return new StandardServletMultipartResolver();
     }
 }

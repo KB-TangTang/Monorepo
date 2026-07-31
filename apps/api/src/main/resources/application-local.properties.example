@@ -1,0 +1,11 @@
+# 이 파일을 같은 폴더에 application-local.properties 로 복사한 뒤 본인 값으로 채운다.
+# application-local.properties 는 .gitignore 대상이라 커밋되지 않는다.
+#
+# 사전 준비: db/00_init_local_db.sql 을 MySQL 관리자 계정으로 실행하면
+#            tangtang DB 와 tangtang 계정이 함께 생성된다.
+
+jdbc.username=tangtang
+jdbc.password=tangtang1234
+
+# 호스트·포트·DB명이 기본값(localhost:3306/tangtang)과 다를 때만 주석 해제
+#jdbc.url=jdbc:log4jdbc:mysql://localhost:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul

@@ -4,6 +4,22 @@
         "http://mybatis.org/dtd/mybatis-3-config.dtd">
 <configuration>
     <settings>
-        <setting name="mapUnderscoreToCamelCase" value="true" />
+        <!-- DB의 snake_case 컬럼을 자바 camelCase 필드로 자동 매핑 -->
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+        <!-- NULL 컬럼도 매핑 대상에 포함 -->
+        <setting name="callSettersOnNulls" value="true"/>
     </settings>
+
+    <!--
+      ⚠️ <typeAliases><package .../></typeAliases> 를 여기에 넣지 말 것.
+      MyBatis 의 VFS 패키지 스캔이 Tomcat WebappClassLoader 와 충돌해
+      .class 파일의 바이너리를 경로로 오인하면서 기동이 실패한다.
+      (증상: "리소스 경로 [...HealthController.class/????] 가 null 로 정규화")
+
+      매퍼 XML 에서는 클래스를 FQCN 으로 쓴다.
+        <select id="findById" resultType="com.kb.tangtang.user.dto.UserDto">
+      별칭이 꼭 필요해지면 XML 이 아니라 RootConfig 의
+      SqlSessionFactoryBean#setTypeAliasesPackage 로 지정한다.
+      (mybatis-spring 2.x 는 Spring 의 클래스패스 스캐너를 쓰므로 이 문제가 없다)
+    -->
 </configuration>
