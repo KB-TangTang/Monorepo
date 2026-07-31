@@ -17,6 +17,9 @@ Gradle 멀티프로젝트다. 루트의 `settings.gradle`·`gradlew`·`gradle/` 
 
 > ⚠️ **Spring Boot / JPA·Hibernate / React(웹) 사용 금지** — 평가 감점 항목이다.
 
+> 🤖 AI 코딩 도구(Claude Code · Codex · Gemini)를 쓴다면 **`AGENTS.md` 가 규칙 원본**이다.
+> 각 파일이 뭘 하는지는 `docs/AI_TOOLING_GUIDE.md` 참고.
+
 ## 로컬 세팅
 
 ### 1. DB
