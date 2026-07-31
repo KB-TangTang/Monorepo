@@ -1,5 +1,5 @@
 ---
-name: PR 템플릿
+name: "✅ PR 템플릿"
 about: PR 이슈
 title: ''
 labels: pull-request

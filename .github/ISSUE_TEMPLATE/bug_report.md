@@ -2,7 +2,7 @@
 name: "\U0001F41B 버그 리포트"
 about: 버그를 발견하셨나요? 자세히 알려주세요.
 title: "[BUG] "
-labels: bug
+labels: bug, pull-request
 assignees: ''
 
 ---
