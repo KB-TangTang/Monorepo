@@ -1,15 +1,15 @@
 ---
-name: "\U0001F41B Fix"
-about: 버그 수정
-title: "[FIX]"
-labels: bug
+name: "\U0001F4DD Docs"
+about: '문서 수정(예: README)'
+title: "[DOCS]"
+labels: documentation
 assignees: ''
 
 ---
 
-## 🐛 문제 설명
+## 📝 문서 설명
 
-> 수정할 버그를 간단히 설명해주세요.
+> 수정하거나 작성할 문서를 간단히 설명해주세요.
 
 ---
 
@@ -25,7 +25,7 @@ assignees: ''
 
 ## 📎 참고 자료 (선택)
 
-> 에러 로그, 스크린샷 등을 첨부해주세요.
+> 관련 문서나 참고 자료를 첨부해주세요.
 
 ---
 

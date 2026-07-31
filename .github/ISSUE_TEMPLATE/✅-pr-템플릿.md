@@ -1,7 +1,7 @@
 ---
 name: "✅ PR 템플릿"
 about: PR 이슈
-title: ''
+title: "[PR]"
 labels: pull-request
 assignees: ''
 
