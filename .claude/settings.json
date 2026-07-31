@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :apps:api:build)",
+      "Bash(./gradlew :apps:api:test)",
+      "Bash(./gradlew :apps:api:compileJava)",
+      "Bash(npm install)",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(mysql:*DROP*)",
+      "Read(./apps/api/src/main/resources/application-local.properties)",
+      "Read(./**/*.key)",
+      "Read(./.env)"
+    ]
+  }
+}
