@@ -66,10 +66,13 @@ config          앱 전역 설정 (RootConfig / ServletConfig / WebConfig)
 - **실제 DB 연결이 필요한 테스트는 `@Disabled` 로 둔다.** 활성화한 채 커밋하면 팀원 빌드가 깨진다.
   (`config/DataSourceConnectionTest` 참고)
 
-## 네이밍
+## 네이밍 (들여쓰기 4칸)
 
 | 대상 | 규칙 | 예 |
 |---|---|---|
+| 클래스 | `PascalCase` | `FixedExpenseService` |
+| 메서드·변수 | `camelCase` | `getUserInfo()`, `fixedExpenseList` |
+| 상수 | `UPPER_SNAKE_CASE` | `MAX_USER_LIMIT` |
 | 테이블 | `tbl_` 접두, snake_case | `tbl_fixed_expense` |
 | 컬럼 | snake_case (camelCase 자동 매핑됨) | `merchant_name` |
 | DTO | `<도메인><용도>Dto` | `FixedExpenseDetailDto` |

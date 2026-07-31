@@ -23,11 +23,12 @@ KB IT's Your Life 7기 종합실무 프로젝트. 6인 팀이 동시에 개발�
 ## 기술 스택 (고정 — 임의 변경 금지)
 
 - **Backend**: Java 17 · Spring Framework 5.3.39 (Spring MVC) · MyBatis 3.5.16 / mybatis-spring 2.1.2 · MySQL 8 · HikariCP · **Gradle** · Tomcat 9.x (war)
-- **Frontend**: Vue3 + Vite · Pinia · Vue Router · axios
+- **Frontend**: **Node 24.14.1** (팀 표준 — `.nvmrc` 참고) · Vue3 + Vite · Pinia · Vue Router · axios
 - **모듈 간 비동기**: Spring Event (`ApplicationEventPublisher` + `@EventListener`/`@Async`) — 메시지 브로커 없음
 - **실시간 알림**: SSE (`SseEmitter`). `WebConfig` 에 `setAsyncSupported(true)` 적용됨
 - **알림 실패 대비**: `tbl_notification_dlq` + 스케줄 재시도 배치
 - 빌드에 **JDK 17 필수** (toolchain 강제. JDK 21만 설치된 환경은 빌드 실패)
+- 프론트는 **Node 24.12 이상 필수**. 팀 표준은 **24.14.1** — 버전이 다르면 빌드 산출물이 미묘하게 달라진다
 
 ## 폴더 구조
 
@@ -67,6 +68,20 @@ cp apps/api/src/main/resources/application-local.properties.example \
 4. 확실하지 않은 값(포트·경로·버전·컬럼명)은 지어내지 말고 실제 파일을 확인하거나 질문한다.
 5. 6명이 병렬로 작업한다. 담당 모듈 밖의 파일을 고칠 때는 먼저 알린다.
 
+## 코드 스타일 (팀 컨벤션)
+
+| 구분 | 규칙 | 예 |
+|---|---|---|
+| Java 클래스 | `PascalCase` | `UserController`, `FixedExpenseService` |
+| Java 메서드·변수 | `camelCase` | `getUserInfo()`, `fixedExpenseList` |
+| Vue 컴포넌트 | `PascalCase` (**두 단어 이상**) | `FixedExpenseCard.vue`, `UserList.vue` |
+| Vue 반응형 변수 | `camelCase` | `userName`, `isLoading` |
+| 상수 (공통) | `UPPER_SNAKE_CASE` | `MAX_USER_LIMIT`, `API_URL` |
+| Vue 이벤트·prop | `kebab-case` | `@click-submit`, `user-id` |
+
+- 들여쓰기 **4칸**, 세미콜론 사용, 문자열은 **싱글 쿼트**
+- 프론트는 **Prettier + ESLint** 로 포맷을 강제한다 (`apps/web`)
+
 ## API 응답 규칙
 
 모든 REST 응답은 공통 래퍼 `com.kb.tangtang.common.dto.ApiResponse` 로 감싼다. **raw 객체 반환 금지.**
@@ -79,13 +94,40 @@ cp apps/api/src/main/resources/application-local.properties.example \
 업무 규칙 위반은 `BusinessException(code, message)` 를 던진다 → 400 으로 자동 변환된다.
 전역 예외 처리는 `common/exception/CommonExceptionAdvice` 한 곳에서만 한다.
 
-## Git 규칙
+## Git 규칙 (팀 컨벤션)
 
-- 브랜치: `main`(배포) / `develop`(통합) / `feat-<모듈>-<기능>` · `fix-<이슈>`
-- 커밋: `타입: 한국어 요약` — `feat` `fix` `docs` `refactor` `test` `chore`
-  - 예) `feat: 고정지출 탐지 룰 기반 매칭 구현`
-- `main`·`develop` 직접 push 금지. PR 로 병합하며 리뷰어 1명 이상
+### 브랜치
+| 브랜치 | 용도 |
+|---|---|
+| `main` | 배포 가능한 안정 버전. **직접 push 금지** |
+| `dev` | 개발 통합 브랜치. feature 병합 대상 |
+| `feature/{issueNumber}-{domainName}-{detail}` | 기능 개발 (예: `feature/12-fixedexpense-detection`) |
+| `fix/{issueNumber}-{detail}` | 버그 수정 (예: `fix/34-mapper-null`) |
+
+- 작업 시작 전 **최신 `dev` 를 pull** 한다.
+- 모든 작업은 브랜치 기반. `main` 에 직접 push 하지 않는다.
+
+### 커밋
+형식: `type: 작업 내용` (한국어)
+
+| 타입 | 설명 | 타입 | 설명 |
+|---|---|---|---|
+| `feat` | 새로운 기능 추가 | `test` | 테스트 코드 추가/수정 |
+| `fix` | 버그 수정 | `chore` | 빌드·패키지 설정 등 기타 |
+| `docs` | 문서 수정 (코드 변경 없음) | `design` | CSS 등 UI 디자인 변경 |
+| `style` | 포맷팅·세미콜론 등 (논리 변경 없음) | `comment` | 주석 추가/변경 |
+| `refactor` | 리팩토링 (기능 변화 없음) | `rename` | 파일·폴더명 수정/이동만 |
+| `!HOTFIX` | 치명적 버그 긴급 수정 | `remove` | 파일 삭제만 수행 |
+
+예) `feat: 고정지출 탐지 룰 기반 매칭 구현`
+
+### Pull Request
+- 기능 단위 작업 완료 시 **`dev` 기준**으로 PR 생성
+- 제목: `[타입] 제목` — 이슈 번호를 포함하면 자동 링크가 걸린다. 예) `[feat] 고정지출 탐지 API 구현 #12`
+- **최소 1명 이상 리뷰 후 merge.** 리뷰 코멘트 반영 후 병합한다.
 - 문서·주석·커밋 메시지·PR 은 **한국어**
+
+> 기술적 의견이 갈리면 근거를 들어 논의하고 **다수결로 결정**한다.
 
 ### 커밋 금지 목록
 - 시크릿: CODEF 키, DB 비밀번호, `application-local.properties`, `*.key`, `.env`

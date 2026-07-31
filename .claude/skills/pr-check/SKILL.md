@@ -5,7 +5,7 @@ description: PR 올리기 전 셀프 점검. 금지기술·시크릿·커밋 컨
 
 # PR 전 셀프 점검
 
-`git diff origin/develop...HEAD` (또는 스테이징된 변경)을 대상으로 아래를 순서대로 확인하고,
+`git diff origin/dev...HEAD` (또는 스테이징된 변경)을 대상으로 아래를 순서대로 확인하고,
 **통과/실패 체크리스트로 출력**한다. 하나라도 실패면 PR을 올리지 말라고 명확히 말한다.
 
 ## 1. 금지기술 (감점 직결 — 최우선)
@@ -33,9 +33,12 @@ description: PR 올리기 전 셀프 점검. 금지기술·시크릿·커밋 컨
 - 새 Service·Mapper 가 추가됐는데 테스트가 없는지
 - `./gradlew :apps:api:test` 통과 여부 (실행해서 확인)
 
-## 5. 커밋 메시지
-- `타입: 한국어 요약` 형식인지 (`feat` `fix` `docs` `refactor` `test` `chore`)
-- 브랜치명이 `feat-<모듈>-<기능>` / `fix-<이슈>` 형식인지
+## 5. 커밋 · 브랜치 · PR
+- 커밋이 `type: 한국어 요약` 형식인지.
+  허용 타입: `feat` `fix` `docs` `style` `refactor` `test` `chore` `design` `comment` `rename` `remove` `!HOTFIX`
+- 브랜치명이 `feature/{이슈번호}-{도메인}-{상세}` 또는 `fix/{이슈번호}-{상세}` 형식인지
+- PR 대상 브랜치가 **`dev`** 인지 (`main` 직접 PR 금지)
+- PR 제목이 `[타입] 제목` 형식인지
 
 ## 6. 규칙 변경 동반 여부
 스택·구조·규칙을 바꾸는 PR이면 `AGENTS.md` 도 함께 수정했는지 확인한다.

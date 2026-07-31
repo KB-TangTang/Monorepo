@@ -22,6 +22,21 @@ Gradle 멀티프로젝트다. 루트의 `settings.gradle`·`gradlew`·`gradle/` 
 
 ## 로컬 세팅
 
+### 0. 사전 요구사항 (팀 전원 동일하게 맞출 것)
+
+| 도구 | 버전 | 확인 |
+|---|---|---|
+| JDK | **17** (필수 — toolchain 강제) | `java -version` |
+| Node | **24.14.1** (최소 24.12) | `node -v` |
+| MySQL | 8.x | `mysql --version` |
+| Tomcat | 9.0.x (javax.servlet 기준) | |
+
+Node 는 `apps/web/.nvmrc` 에 버전이 고정돼 있다. nvm 사용 시:
+```bash
+cd apps/web && nvm install 24.14.1 && nvm use 24.14.1
+```
+
+
 ### 1. DB
 관리자 계정으로 초기화 스크립트를 1회 실행한다. `tangtang` DB 와 `tangtang` 전용 계정이 생성된다.
 ```bash
@@ -50,8 +65,9 @@ npm run dev        # http://localhost:5173, /api 요청은 8080 으로 프록시
 
 ## 규칙
 
-- 브랜치: `main`(배포) / `develop`(통합) / `feat-<모듈>-<기능>` · `fix-<이슈>`
-- 커밋: `타입: 한국어 요약` — `feat` `fix` `docs` `refactor` `test` `chore`
+- 브랜치: `main`(배포·직접 push 금지) / `dev`(통합) / `feature/{이슈번호}-{도메인}-{상세}` · `fix/{이슈번호}-{상세}`
+- 커밋: `type: 한국어 요약` — 전체 타입 목록은 `AGENTS.md` 참고
+- PR 은 `dev` 기준, 제목은 `[타입] 제목`, 리뷰어 1명 이상 승인 후 merge
 - API 응답은 **공통 래퍼 `ApiResponse`** 로 통일한다
 - 매퍼 인터페이스에는 반드시 `@Mapper` 를 붙인다. 매퍼 XML 은 `src/main/resources/mapper/<모듈>/` 에 둔다
 
@@ -60,4 +76,5 @@ npm run dev        # http://localhost:5173, /api 요청은 8080 으로 프록시
 - [ ] Tomcat 버전 고정 (9.0.x 권장 — javax.servlet 기준)
 - [ ] MySQL 버전 확정 후 `db/schema.sql` 실행 검증
 - [ ] 프론트 UI 라이브러리 사용 여부
-- [ ] `develop` 브랜치 생성 및 `main` 브랜치 보호 설정
+- [ ] `dev` 브랜치 생성 및 `main` 브랜치 보호 설정
+- [ ] `apps/web` Prettier · ESLint 설정 도입 (들여쓰기 4칸·싱글 쿼트)

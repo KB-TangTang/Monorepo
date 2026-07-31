@@ -2,12 +2,29 @@
 
 루트 `AGENTS.md` 의 규칙을 전제로 한다. 여기에는 **이 폴더에서만 다른 것**만 적는다.
 
+**Node 24.14.1** 을 쓴다 (`.nvmrc`). 버전이 다르면 `npm install` 에서 EBADENGINE 경고가 뜨고,
+Vite·Babel 이 요구하는 최소 버전에 미달하면 빌드 결과가 달라질 수 있다.
+
 ## Vue 작성 방식 (고정)
 
 - **Composition API + `<script setup>` 만 사용한다.** Options API 혼용 금지.
   6명이 섞어 쓰면 리뷰 비용이 급증한다.
-- 컴포넌트 파일명은 PascalCase (`FixedExpenseCard.vue`). 페이지는 `views/`, 조각은 `components/`.
+- 컴포넌트 파일명은 **PascalCase 이면서 두 단어 이상**이어야 한다 (`FixedExpenseCard.vue`, `UserList.vue`).
+  한 단어 컴포넌트(`Card.vue`)는 HTML 기본 요소와 충돌할 수 있어 금지.
+  페이지는 `views/`, 조각은 `components/`.
 - `@/` 별칭이 `src/` 를 가리킨다. 상대경로 `../../` 대신 별칭을 쓴다.
+
+## 코드 스타일 (Prettier + ESLint 로 강제)
+
+| 구분 | 규칙 | 예 |
+|---|---|---|
+| 반응형 변수 | `camelCase` | `userName`, `isLoading` |
+| 상수 | `UPPER_SNAKE_CASE` | `MAX_USER_LIMIT`, `API_URL` |
+| 이벤트·prop | `kebab-case` (템플릿) | `@click-submit`, `user-id` |
+| 컴포넌트 | `PascalCase` 두 단어 이상 | `FixedExpenseCard.vue` |
+
+- **들여쓰기 4칸 · 세미콜론 사용 · 싱글 쿼트**
+- 커밋 전 포맷을 맞춘다. 포맷만 바꾼 커밋은 타입 `style` 을 쓴다.
 
 ## 폴더
 
