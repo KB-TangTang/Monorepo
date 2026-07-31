@@ -3,33 +3,33 @@
  * 색상은 반드시 이 변수를 통해 사용한다. 컴포넌트에 HEX 하드코딩 금지.
  */
 :root {
-  /* Brand */
-  --tt-trust-blue: #2f5ad0;   /* 주색 — 신뢰·금융 */
-  --tt-gavel-yellow: #ffc338; /* 강조 — 판사봉·포인트 */
-  --tt-verdict-red: #e5484d;  /* 경고·유죄 판결 */
-  --tt-acquit-mint: #12a594;  /* 긍정·무죄·절감 성공 */
+    /* Brand */
+    --tt-trust-blue: #2f5ad0; /* 주색 — 신뢰·금융 */
+    --tt-gavel-yellow: #ffc338; /* 강조 — 판사봉·포인트 */
+    --tt-verdict-red: #e5484d; /* 경고·유죄 판결 */
+    --tt-acquit-mint: #12a594; /* 긍정·무죄·절감 성공 */
 
-  /* Neutral */
-  --tt-gray-900: #17181c;
-  --tt-gray-700: #45474f;
-  --tt-gray-500: #7b7e8a;
-  --tt-gray-300: #d3d5db;
-  --tt-gray-100: #f2f3f5;
-  --tt-white: #ffffff;
+    /* Neutral */
+    --tt-gray-900: #17181c;
+    --tt-gray-700: #45474f;
+    --tt-gray-500: #7b7e8a;
+    --tt-gray-300: #d3d5db;
+    --tt-gray-100: #f2f3f5;
+    --tt-white: #ffffff;
 
-  /* Semantic */
-  --tt-text: var(--tt-gray-900);
-  --tt-text-muted: var(--tt-gray-700);
-  --tt-bg: var(--tt-white);
-  --tt-bg-subtle: var(--tt-gray-100);
-  --tt-border: var(--tt-gray-300);
-  --tt-primary: var(--tt-trust-blue);
-  --tt-danger: var(--tt-verdict-red);
-  --tt-success: var(--tt-acquit-mint);
-  --tt-accent: var(--tt-gavel-yellow);
+    /* Semantic */
+    --tt-text: var(--tt-gray-900);
+    --tt-text-muted: var(--tt-gray-700);
+    --tt-bg: var(--tt-white);
+    --tt-bg-subtle: var(--tt-gray-100);
+    --tt-border: var(--tt-gray-300);
+    --tt-primary: var(--tt-trust-blue);
+    --tt-danger: var(--tt-verdict-red);
+    --tt-success: var(--tt-acquit-mint);
+    --tt-accent: var(--tt-gavel-yellow);
 
-  /* Radius / Spacing */
-  --tt-radius-sm: 6px;
-  --tt-radius-md: 12px;
-  --tt-radius-lg: 20px;
+    /* Radius / Spacing */
+    --tt-radius-sm: 6px;
+    --tt-radius-md: 12px;
+    --tt-radius-lg: 20px;
 }
