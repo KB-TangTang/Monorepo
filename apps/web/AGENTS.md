@@ -54,16 +54,29 @@ const data = await fetchHealth()   // { status: 'UP', service: 'tangtang-api' }
 ## 디자인 토큰
 
 `src/assets/tokens.css` 의 CSS 변수만 사용한다. **색상 HEX 하드코딩 금지.**
+전체 값 표는 `docs/DESIGN_SYSTEM.md` 에 있다 (Figma 없이도 값을 찾을 수 있다).
 
-| 토큰 | 값 | 용도 |
-|---|---|---|
-| `--tt-trust-blue` | `#2F5AD0` | 주색 · 신뢰 |
-| `--tt-gavel-yellow` | `#FFC338` | 강조 · 판사봉 |
-| `--tt-verdict-red` | `#E5484D` | 경고 · 유죄 |
-| `--tt-acquit-mint` | `#12A594` | 긍정 · 절감 성공 |
+**컴포넌트는 의미 토큰만 참조한다.** 원시 팔레트(`--tt-brand-700`, `--tt-guilty-700` …)는
+`tokens.css` 안의 의미 토큰 정의에서만 쓴다.
 
-의미 토큰(`--tt-primary`, `--tt-danger`, `--tt-success`, `--tt-accent`)을 우선 쓰고,
-브랜드 토큰은 그 정의에서만 참조한다.
+| 의미 토큰 | 참조 원시 토큰 | 값 | 용도 |
+|---|---|---|---|
+| `--tt-primary` | `--tt-brand-700` | `#2F5AD0` | 주색 · 메인 액션 |
+| `--tt-primary-hover` | `--tt-brand-900` | `#1E3E9C` | hover · pressed |
+| `--tt-accent` | `--tt-accent-500` | `#FFC338` | 강조 · 판사봉 · 배지 |
+| `--tt-danger` | `--tt-guilty-700` | `#C7515A` | 유죄 · 초과 · 위험 |
+| `--tt-success` | `--tt-innocent-700` | `#3E9B7E` | 무죄 · 절약 성공 |
+| `--tt-text` / `--tt-text-muted` | `--tt-ink` / `--tt-gray-700` | `#1B2138` / `#68728F` | 본문 / 보조 |
+| `--tt-bg` / `--tt-bg-subtle` | `--tt-white` / `--tt-gray-50` | `#FFFFFF` / `#F8FAFD` | 배경 |
+| `--tt-border` / `--tt-border-strong` | `--tt-gray-200` / `--tt-gray-400` | `#E5EAF2` / `#B8C2D3` | 선 |
+
+> 구 팔레트(`--tt-verdict-red` `#E5484D`, `--tt-acquit-mint` `#12A594`, 중립 그레이)는
+> 2026-07-31 디자인시스템 값으로 교체돼 더 이상 존재하지 않는다.
+
+색상 외에 폰트·간격·라운드·그림자도 토큰을 쓴다:
+`--tt-font-sans`(Pretendard) · `--tt-font-mono`(Roboto Mono) · `--tt-fs-*` · `--tt-fw-*` ·
+`--tt-space-*` · `--tt-radius-*` · `--tt-elevation-*`.
+갈색(`--tt-wood`, `--tt-kraft`)은 판사봉·인장·종이 질감에만 쓴다.
 
 ## 상태 관리
 
