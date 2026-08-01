@@ -69,6 +69,14 @@
     --tt-border: var(--tt-gray-200);
     --tt-border-strong: var(--tt-gray-400);
 
+    /* 모달·바텀시트 뒤에 까는 딤. --tt-ink 의 rgb 값에 투명도를 준 것 —
+     * CSS 변수는 색상 채널만 따로 꺼내 쓸 수 없어 값을 직접 적는다. */
+    --tt-overlay-dim: rgba(27, 33, 56, 0.48);
+    /* 카드 가장자리를 파낸 노치(영수증 절취선·소환장 펀치홀)를 칠하는 색.
+     * "카드 뒤에 보이는 배경"이어야 한다. 흰 배경 화면에서는 화면 쪽에서
+     * --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
+    --tt-notch-bg: var(--tt-bg-subtle);
+
     /* ── 타이포 ─────────────────────────────────────────── */
     --tt-font-sans:
         'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,

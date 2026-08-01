@@ -119,7 +119,7 @@ useOverlay({
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    background: rgba(27, 33, 56, 0.48);
+    background: var(--tt-overlay-dim);
 }
 
 .tt-sheet__panel {

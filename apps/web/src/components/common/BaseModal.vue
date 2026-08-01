@@ -86,7 +86,7 @@ useOverlay({
     align-items: center;
     justify-content: center;
     padding: var(--tt-space-5);
-    background: rgba(27, 33, 56, 0.48);
+    background: var(--tt-overlay-dim);
 }
 
 .tt-modal__panel {

@@ -71,6 +71,8 @@ const SEMANTIC_TOKENS = [
     '--tt-bg-subtle',
     '--tt-border',
     '--tt-border-strong',
+    '--tt-overlay-dim',
+    '--tt-notch-bg',
 ];
 
 const PALETTE_GROUPS = [
@@ -433,6 +435,13 @@ const CODE = {
                 <p class="catalog__note">
                     열고 나서 ESC · 오버레이 클릭 · 브라우저 뒤로가기 · Tab 이동을 모두 확인해 볼
                     것.
+                </p>
+                <p class="catalog__note">
+                    ⚠ 겹쳐 뜨는 레이어를 새로 만들 일이 생기면 오버레이 동작을 직접 짜지 말고
+                    <code>components/common/useOverlay.js</code> 를 쓴다. 스크롤 잠금(참조 카운트) ·
+                    ESC · 포커스 트랩 · 뒤로가기 닫기 · 포커스 복원이 그 파일 하나에 모여 있고,
+                    <code>BaseModal</code> 과 <code>BaseBottomSheet</code> 가 이걸 공유한다. 각자
+                    만들면 화면마다 동작이 갈린다.
                 </p>
                 <BaseModal v-model="modalOpen" title="정말 해지할까요?">
                     <p>해지하면 이번 달 절감액 집계에서 빠집니다.</p>

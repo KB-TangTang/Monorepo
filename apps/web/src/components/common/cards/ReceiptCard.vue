@@ -2,6 +2,9 @@
   용도: 영수증 카드. 항목별 금액을 괘선 위에 늘어놓고 절취선 아래에 소계 · 한도 · 초과액을 정렬한다.
   언제 쓰는지: 하루치 지출 명세, 챌린지 한도 대비 사용액 정산.
   쓰면 안 되는 경우: 항목이 없는 요약 수치(BentoStats), 확정된 판결(JudgmentCard).
+
+  ※ 절취선 노치는 "카드 뒤 배경색"을 칠한 원이다. 흰 배경 위에 올릴 화면에서는
+     --tt-notch-bg: var(--tt-bg) 로 덮어써야 회색 원으로 보이지 않는다.
 -->
 <script setup>
 import { computed } from 'vue';
@@ -111,7 +114,8 @@ const isOver = computed(() => excess.value > 0);
 }
 
 /* 절취선 — 카드 좌우 끝까지 뻗는 점선 + 양끝 노치.
- * 노치는 카드가 페이지 배경(--tt-bg-subtle) 위에 놓인다고 가정한다. */
+ * 노치는 진짜 구멍이 아니라 "카드 뒤 배경색"을 칠한 원이다. 기본값은 --tt-bg-subtle 이고,
+ * 흰 배경 화면에서는 쓰는 쪽에서 --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
 .receipt__tear {
     position: relative;
     height: 0;
@@ -126,7 +130,7 @@ const isOver = computed(() => excess.value > 0);
     width: 16px;
     height: 16px;
     content: '';
-    background: var(--tt-bg-subtle);
+    background: var(--tt-notch-bg);
     border-radius: var(--tt-radius-full);
 }
 

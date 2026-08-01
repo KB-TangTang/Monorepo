@@ -2,6 +2,9 @@
   용도: 소환장(티켓) 카드. 그룹명 · 기간 · 참여 코드(모노) · 참여 CTA 를 티켓 모양으로 보여준다.
   언제 쓰는지: 커스텀 그룹챌린지 초대·참여 화면, 공유 링크로 들어온 사용자에게 보여줄 때.
   쓰면 안 되는 경우: 이미 참여한 챌린지의 진행 상황(RecordCard).
+
+  ※ 펀치홀은 "카드 뒤 배경색"을 칠한 원이다. 흰 배경 위에 올릴 화면에서는
+     --tt-notch-bg: var(--tt-bg) 로 덮어써야 회색 원으로 보이지 않는다.
 -->
 <script setup>
 import BaseCard from '@/components/common/BaseCard.vue';
@@ -81,7 +84,8 @@ defineEmits(['join']);
 }
 
 /* 절취선: 가로 점선 + 양끝 펀치홀.
- * 노치는 카드가 페이지 배경(--tt-bg-subtle) 위에 놓인다고 가정한다. */
+ * 펀치홀은 진짜 구멍이 아니라 "카드 뒤 배경색"을 칠한 원이다. 기본값은 --tt-bg-subtle 이고,
+ * 흰 배경 화면에서는 쓰는 쪽에서 --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
 .summons__perf {
     position: relative;
     height: 1px;
@@ -96,7 +100,7 @@ defineEmits(['join']);
     width: 20px;
     height: 20px;
     content: '';
-    background: var(--tt-bg-subtle);
+    background: var(--tt-notch-bg);
     border-radius: var(--tt-radius-full);
 }
 
