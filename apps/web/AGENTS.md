@@ -29,13 +29,28 @@ Vite·Babel 이 요구하는 최소 버전에 미달하면 빌드 결과가 달�
 ## 폴더
 
 ```
-src/api/         API 호출 모듈. 도메인별 파일 (health.js, user.js …)
-src/views/       라우트에 연결되는 페이지
-src/components/  재사용 조각
-src/stores/      Pinia 스토어
-src/router/      라우팅
-src/assets/      tokens.css(디자인 토큰) · 전역 스타일
+src/api/                 API 호출 모듈. 도메인별 파일 (health.js, user.js …)
+src/views/               라우트에 연결되는 페이지
+src/components/common/   팀 공용 컴포넌트. 수정하면 다른 화면이 같이 바뀐다 — 담당자 리뷰 필요
+src/components/<도메인>/  화면 전용 조각 (trial, asset, home, ledger, my, dev)
+src/stores/              Pinia 스토어
+src/router/              라우팅
+src/assets/              tokens.css(디자인 토큰) · 전역 스타일
 ```
+
+공용은 `Base*` / `The*` 접두(`BaseCard.vue`, `TheTabBar.vue`), 화면 전용은 도메인 접두를 쓴다.
+
+## 공통 컴포넌트 — 만들기 전에 `/dev/ui` 를 먼저 본다
+
+**새 공통 컴포넌트를 만들기 전에 개발 서버에서 `/dev/ui` 를 열어 이미 있는지 확인한다.**
+카탈로그에는 컴포넌트별 용도 · variant/size 조합 · 복사용 코드와 컬러 토큰 · 타이포 스케일이 모두 있다.
+확인하지 않으면 같은 걸 6명이 각자 만든다.
+
+- 화면 전용 조각은 `components/<도메인>/` 에 만든다. **세 번째 화면에서 또 필요해지면** 그때 `common/` 으로 올린다(3의 법칙).
+- `common/` 에 컴포넌트를 추가하면 **`views/dev/UiCatalogView.vue` 에도 등록한다.** 등록하지 않은 공용 컴포넌트는 없는 것과 같다.
+- 카탈로그 라우트는 `import.meta.env.DEV` 로 막혀 있어 프로덕션 빌드에는 포함되지 않는다.
+- **모달·바텀시트는 반드시 `BaseModal` / `BaseBottomSheet` 를 쓴다.** 각자 오버레이를 만들면
+  z-index·스크롤 잠금·뒤로가기 처리가 화면마다 달라진다. z-index 는 `--tt-z-*` 토큰만 참조한다.
 
 ## API 호출
 
