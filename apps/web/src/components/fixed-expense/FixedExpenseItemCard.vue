@@ -25,7 +25,9 @@ function accessibleLabel() {
         :aria-label="accessibleLabel()"
         @click="$emit('select', item.id)"
     >
-        <span class="fixed-item__holes" aria-hidden="true"></span>
+        <span class="fixed-item__holes" aria-hidden="true">
+            <span v-for="index in 3" :key="index" class="fixed-item__hole"></span>
+        </span>
         <span class="fixed-item__category" :class="`fixed-item__category--${item.categoryCode}`">
             {{ item.categoryLabel }}
         </span>
@@ -93,36 +95,33 @@ function accessibleLabel() {
     );
 }
 
-.fixed-item__holes::before,
-.fixed-item__holes::after {
-    position: absolute;
-    left: 13px;
-    z-index: 1;
-    width: 10px;
-    height: 10px;
-    content: '';
-    background: var(--tt-surface-row);
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-full);
-    box-shadow: inset 0 1px 2px var(--tt-border-strong);
-}
-
 .fixed-item__holes {
     position: absolute;
+    top: 14px;
+    left: 13px;
+    z-index: 1;
+    display: grid;
+    gap: 11px;
 }
 
-.fixed-item__holes::before {
-    top: 26px;
+.fixed-item__hole {
+    display: block;
+    width: 10px;
+    height: 10px;
+    background: var(--tt-bg-subtle);
+    border: 1px solid var(--tt-border-strong);
+    border-radius: var(--tt-radius-full);
+    box-shadow:
+        inset 0 1px 2px var(--tt-border-strong),
+        var(--tt-elevation-1);
 }
 
-.fixed-item__holes::after {
-    top: 47px;
-}
-
-.fixed-item--candidate .fixed-item__holes::before,
-.fixed-item--candidate .fixed-item__holes::after {
-    background: var(--tt-surface-candidate-strong);
+.fixed-item--candidate .fixed-item__hole {
+    background: var(--tt-surface-candidate);
     border-color: var(--tt-border-candidate);
+    box-shadow:
+        inset 0 1px 2px var(--tt-border-candidate),
+        var(--tt-elevation-1);
 }
 
 .fixed-item__category {

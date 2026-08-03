@@ -27,12 +27,20 @@ function openCandidate(candidateId) {
     router.push(`/asset/fixed-expenses/candidates/${candidateId}`);
 }
 
+function goBack() {
+    router.push('/asset/fixed-expenses/savings');
+}
+
 onMounted(() => store.loadOverview());
 </script>
 
 <template>
     <article class="management-view">
-        <FixedExpensePageHeader title="고정지출 관리" />
+        <FixedExpensePageHeader
+            title="고정지출 관리"
+            back-label="절약 감정서로 이동"
+            @back="goBack"
+        />
 
         <StateLoading v-if="state === 'loading'" size="lg" message="고정지출을 정리하고 있어요" />
         <StateError v-else-if="state === 'error'" :message="error" @retry="store.loadOverview" />
