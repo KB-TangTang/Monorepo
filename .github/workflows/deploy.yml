@@ -16,8 +16,6 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/Financial-Mock-Server
-            git pull origin main
             cd ~/Monorepo
             git pull origin main
             docker compose down
