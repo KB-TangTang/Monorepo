@@ -3547,6 +3547,14 @@ onMounted(() => {
 
 - [ ] **Step 2: 라우터에 라우트 2개와 가드 추가**
 
+> ⚠️ **기존 라우트를 지우지 말 것.** 2026-08-03 `origin/dev` 병합으로 팀원의 챌린지 리포트
+> 라우트 2개(`challengeReport`, `challengeNetSavings`)가 들어와 있다. 아래 내용에 포함돼 있으니
+> 그대로 유지한다. 파일을 통째로 갈아엎기 전에 **현재 파일과 대조해 이 두 라우트가 살아 있는지
+> 반드시 확인**한다. 다른 팀원이 그 사이 라우트를 더 추가했을 수도 있다 —
+> 그 경우 지우지 말고 아래 내용에 합쳐 넣는다.
+>
+> 챌린지 라우트에는 `meta.public` 이 없으므로 가드가 자동으로 보호한다. 의도한 동작이다.
+
 `apps/web/src/router/index.js` 전체를 아래로 교체한다.
 
 ```js
@@ -3554,7 +3562,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
 /*
- * 하단 5탭 구조: 재판 · 자산 · 홈 · 장부 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
+ * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
  * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
  *   component: () => import('@/views/trial/TrialHomeView.vue')
  *
@@ -3603,6 +3611,19 @@ const routes = [
         name: 'my',
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '마이' },
+    },
+    // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
+    {
+        path: '/reports/challenge',
+        name: 'challengeReport',
+        component: () => import('@/views/challenge/report/ChallengeReportView.vue'),
+        meta: { title: '챌린지 리포트' },
+    },
+    {
+        path: '/reports/challenge/savings',
+        name: 'challengeNetSavings',
+        component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
+        meta: { title: '카테고리별 순 절감액' },
     },
 ];
 
