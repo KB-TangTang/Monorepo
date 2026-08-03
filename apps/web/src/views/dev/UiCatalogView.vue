@@ -627,7 +627,7 @@ const CODE = {
 
             <CatalogItem
                 name="⑥ LifeGauge — 목숨 게이지"
-                purpose="남은 목숨 N/M 을 판사봉 점등·소등으로. 1개 이하면 빨강."
+                purpose="남은 목숨 N/M 을 성한 판사봉 ↔ 부러진 판사봉으로. 1개 이하면 빨강."
                 :code="CODE.life"
             >
                 <LifeGauge :remaining="3" :total="3" />
