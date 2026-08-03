@@ -53,7 +53,7 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-core:${log4jVersion}"
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}"
     // jdbc4(JDBC 4.0) 는 ResultSet.getObject(String, Class) 가 없어 MyBatis 가 LocalDateTime 컬럼을
-    // 읽을 때 AbstractMethodError 가 난다. jdbc4.1 로 되돌리지 말 것 — LocalDateTime 매핑에 필수.
+    // 읽을 때 AbstractMethodError 가 난다. jdbc4 로 되돌리지 말 것 — LocalDateTime 매핑에 jdbc4.1 이 필수다.
     implementation 'org.bgee.log4jdbc-log4j2:log4jdbc-log4j2-jdbc4.1:1.16'
 
     // ---- XML 파싱(MyBatis 매퍼 내 한글 처리) ----

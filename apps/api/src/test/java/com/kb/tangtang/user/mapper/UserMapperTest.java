@@ -3,7 +3,6 @@ package com.kb.tangtang.user.mapper;
 import com.kb.tangtang.config.RootConfig;
 import com.kb.tangtang.user.dto.RefreshTokenDto;
 import com.kb.tangtang.user.dto.UserDto;
-import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ContextConfiguration(classes = {RootConfig.class})
 @Transactional
 @Rollback
-@Log4j2
 class UserMapperTest {
 
     @Autowired
@@ -101,7 +100,7 @@ class UserMapperTest {
         RefreshTokenDto found = refreshTokenMapper.findByHash("a".repeat(64));
         assertNotNull(found);
         assertEquals(user.getId(), found.getUserId());
-        assertTrue(!found.isRevoked(), "새로 발급한 토큰은 폐기 상태가 아니어야 한다");
+        assertFalse(found.isRevoked(), "새로 발급한 토큰은 폐기 상태가 아니어야 한다");
 
         refreshTokenMapper.revokeById(found.getId());
 

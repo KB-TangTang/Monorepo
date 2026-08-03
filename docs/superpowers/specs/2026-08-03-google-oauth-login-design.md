@@ -209,7 +209,10 @@ common/auth/    JwtProvider                 생성 · 검증
 
 `app.front-url`·`google.oauth.redirect-uri`는 시크릿은 아니지만 환경마다 다르다.
 `application.properties`에 로컬 기본값(`http://localhost:5173`, `http://localhost:5173/api/auth/google/callback`)을
-두고, 다른 환경에서는 `application-local.properties`가 같은 키로 덮어쓴다.
+둔다. 다른 환경은 같은 키로 "덮어쓰는" 것이 아니라, `APP_ENV` 기반 조건부 로딩으로 환경별 파일
+(`application-docker.properties` 등) 자체가 공통 파일 대신 통째로 로드되어 이 값을 대체한다
+(`apps/api/AGENTS.md` 참고 — 환경 파일은 한 번에 하나만 로드된다. 여러 환경 파일을 나란히
+`@PropertySource`에 나열하지 않는다).
 리다이렉트 URI는 프론트 오리진(`:5173`) 기준이어야 한다 — Vite 프록시를 거쳐야
 쿠키가 프론트와 same-origin으로 심긴다. 이 값은 Google Cloud Console의
 "승인된 리디렉션 URI"에도 **똑같이** 등록돼 있어야 한다.
@@ -292,10 +295,16 @@ Figma 버튼은 남색(`--tt-ink` 계열) 배경인데 `BaseButton`의 4개 vari
 
 ## 7. 에러 처리
 
+> **구현 후 정정(2026-08-03)**: `OAUTH_STATE_MISMATCH`·`OAUTH_CANCELLED`는 **API 에러 코드로 존재하지 않는다.**
+> `AuthController`의 콜백 핸들러가 이 두 상황에서 예외를 던지지 않고 바로 302 리다이렉트로 처리하기
+> 때문이다(동작은 동일하고 더 단순하다). 즉 아래 표의 이 두 행은 `ApiResponse.code` 로는 절대 나타나지
+> 않고, 오직 리다이렉트 쿼리(`/login?error=...`)로만 표현된다. 후속 담당자는 이 두 코드를
+> `CommonExceptionAdvice`나 `BusinessException`에서 찾지 말 것.
+
 | 코드 | 상황 | 프론트 동작 |
 |---|---|---|
-| `OAUTH_STATE_MISMATCH` | state 쿠키 불일치 (CSRF 의심) | `/login?error=invalid` — 재시도 안내 |
-| `OAUTH_CANCELLED` | 구글 동의 화면에서 사용자가 취소 | `/login` 조용히 복귀 |
+| `OAUTH_STATE_MISMATCH`(리다이렉트 쿼리 전용 — API 코드 아님) | state 쿠키 불일치 (CSRF 의심) | `/login?error=invalid` — 재시도 안내 |
+| `OAUTH_CANCELLED`(리다이렉트 쿼리 전용 — API 코드 아님) | 구글 동의 화면에서 사용자가 취소 | `/login` 조용히 복귀 |
 | `OAUTH_TOKEN_EXCHANGE_FAILED` | code→token 교환 실패 | `/login?error=failed` |
 | `TOKEN_EXPIRED` | 액세스 토큰 만료 | refresh 자동 재시도 (6.4) |
 | `INVALID_TOKEN` | 서명 위조·형식 오류 | 즉시 로그아웃 → `/login` |
