@@ -54,17 +54,37 @@ cd apps/web && npm run dev     # 프론트 개발 서버 :5173, /api 는 :8080 �
 
 최초 세팅 (신규 합류자):
 ```bash
-# 1) DB 비밀번호를 정하고 db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 를 그 값으로 바꾼다
-mysql -u root -p < db/00_init_local_db.sql     # tangtang DB + 전용 계정 생성
+# 1) DB 비밀번호를 정하고 db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 2곳을 그 값으로 바꾼다
+mysql -u root -p < db/00_init_local_db.sql            # tangtang DB + 전용 계정
 
-# 2) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
+# 2) 테이블 33개 + 초기 데이터
+mysql -u tangtang -p tangtang < db/schema.sql
+mysql -u tangtang -p tangtang < db/seed.sql
+
+# 3) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
 cp apps/api/src/main/resources/application-local.properties.example \
    apps/api/src/main/resources/application-local.properties
 
-# 3) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
+# 4) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
 cp .env.example .env
 ```
+
+**PowerShell 은 `<` 리다이렉션을 지원하지 않는다.** Windows 에서는 mysql 의 `source` 를 쓴다
+(경로는 슬래시, 한글 주석이 깨지지 않게 `--default-character-set=utf8mb4` 를 붙인다):
+```powershell
+mysql -u root -p -e "source D:/.../db/00_init_local_db.sql"
+mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/schema.sql"
+mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/seed.sql"
+```
+`Get-Content | mysql` 은 PowerShell 5.1 의 기본 인코딩이 UTF-8 이 아니라 한글 주석이 깨진다.
+
 > 비밀번호는 **위 3곳이 모두 같아야** 한다. 바꾼 `00_init_local_db.sql` 은 커밋하지 않는다.
+> 이미 계정이 있는데 비밀번호를 바꾸고 싶다면 파일을 고쳐 재실행하거나 아래 한 줄이면 된다.
+> ```
+> mysql -u root -p -e "ALTER USER 'tangtang'@'localhost' IDENTIFIED BY '새비밀번호'; FLUSH PRIVILEGES;"
+> ```
+
+확인: `mysql -u tangtang -p tangtang -e "SHOW TABLES"` → 33개
 연결 확인: `GET http://localhost:8080/api/health` → `{"success":true,"data":{"status":"UP",...}}`
 
 ## 작업 프로토콜
