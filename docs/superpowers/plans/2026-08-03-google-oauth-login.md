@@ -2695,6 +2695,12 @@ class AuthControllerTest {
     @Test
     @DisplayName("쿠키 없이 refresh 하면 400 과 INVALID_TOKEN 이다")
     void refreshWithoutCookie() throws Exception {
+        // 컨트롤러는 쿠키가 없으면 null 을 넘긴다. 실제 AuthService 안에서는
+        // RefreshTokenService.consume(null) 이 INVALID_TOKEN 을 던지므로 목도 같게 흉내낸다.
+        // 이 스텁이 없으면 목이 null 을 돌려주고 다음 줄에서 NPE → 500 이 되어 테스트가 깨진다.
+        when(authService.refresh(null))
+                .thenThrow(new BusinessException("INVALID_TOKEN", "리프레시 토큰이 없습니다."));
+
         mockMvc.perform(post("/api/auth/refresh"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
@@ -2958,6 +2964,14 @@ import { defineStore } from 'pinia';
  * 새로고침하면 사라지지만, main.js 부팅 시퀀스가 httpOnly 쿠키로
  * 재발급받아 복원한다.
  */
+/**
+ * 로그인 후 돌아갈 경로를 잠시 맡겨두는 sessionStorage 키.
+ *
+ * 구글 로그인은 SPA 라우팅이 아니라 전체 페이지 이동이라 라우터 상태(?redirect=...)가
+ * 통째로 날아간다. 그래서 이동 직전에 여기 저장하고, 콜백 착지 화면이 꺼내 쓴다.
+ */
+export const POST_LOGIN_REDIRECT_KEY = 'tt.postLoginRedirect';
+
 export const useAuthStore = defineStore('auth', () => {
     const accessToken = ref('');
     const user = ref(null);
@@ -3261,6 +3275,7 @@ const emit = defineEmits(['click-login']);
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { GOOGLE_LOGIN_URL } from '@/api/auth';
+import { POST_LOGIN_REDIRECT_KEY } from '@/stores/auth';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton.vue';
 
 const route = useRoute();
@@ -3279,8 +3294,18 @@ const errorMessage = computed(() => ERROR_MESSAGES[route.query.error] ?? '');
 /*
  * SPA 라우팅이 아니라 전체 이동이다.
  * 백엔드가 state 쿠키를 심고 구글로 302 하는 구조라 router.push 로는 동작하지 않는다.
+ *
+ * 전체 이동이라 라우터의 ?redirect= 값도 함께 날아간다. 그래서 떠나기 직전에
+ * sessionStorage 에 맡겨두고, 돌아온 뒤 AuthCallbackView 가 꺼내 쓴다.
  */
 function startGoogleLogin() {
+    const redirect = route.query.redirect;
+    // '/' 로 시작하는 내부 경로만 허용한다. 외부 URL 을 그대로 받으면 오픈 리다이렉트가 된다.
+    if (typeof redirect === 'string' && redirect.startsWith('/')) {
+        sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, redirect);
+    } else {
+        sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+    }
     window.location.href = GOOGLE_LOGIN_URL;
 }
 </script>
@@ -3472,18 +3497,24 @@ git commit -m "feat: 구글 로그인 화면과 버튼 컴포넌트 구현"
 <script setup>
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore, POST_LOGIN_REDIRECT_KEY } from '@/stores/auth';
 import StateLoading from '@/components/common/StateLoading.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
 
 onMounted(() => {
-    if (auth.isLoggedIn) {
-        router.replace({ name: 'home' });
-    } else {
+    // 한 번만 쓰고 버린다. 남겨두면 다음 로그인 때 엉뚱한 곳으로 간다.
+    const redirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+    sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+
+    if (!auth.isLoggedIn) {
         router.replace({ name: 'login', query: { error: 'failed' } });
+        return;
     }
+
+    // 내부 경로만 허용한다 (오픈 리다이렉트 방지)
+    router.replace(redirect && redirect.startsWith('/') ? redirect : { name: 'home' });
 });
 </script>
 
@@ -3729,6 +3760,15 @@ http://localhost:5173/api/auth/google/callback
 
 `application.properties` 의 `google.oauth.redirect-uri` 와 **문자 하나까지 같아야** 한다.
 다르면 구글이 `redirect_uri_mismatch` 로 거부한다.
+
+- [ ] **Step 7-1: 리다이렉트 복원 확인 (수동)**
+
+미로그인 상태로 `http://localhost:5173/asset` 에 접속하면 `/login?redirect=/asset` 으로 튕긴다.
+로그인을 마치면 홈이 아니라 **`/asset` 으로 돌아와야** 한다.
+돌아오지 않으면 `sessionStorage` 저장·조회 키가 어긋난 것이다.
+
+DevTools > Application > Session Storage 에서 로그인 직후 `tt.postLoginRedirect` 가
+**남아 있지 않은지**도 확인한다. 남아 있으면 다음 로그인 때 엉뚱한 곳으로 간다.
 
 - [ ] **Step 8: 로컬 통합 검증 (수동)**
 
