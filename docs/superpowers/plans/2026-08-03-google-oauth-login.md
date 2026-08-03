@@ -2979,6 +2979,24 @@ import { defineStore } from 'pinia';
  */
 export const POST_LOGIN_REDIRECT_KEY = 'tt.postLoginRedirect';
 
+/**
+ * 로그인 후 돌아갈 경로로 안전한 값인지 판정한다.
+ *
+ * '/' 로 시작하는 것만으로는 부족하다 — '//evil.com' 은 '/' 로 시작하지만
+ * 브라우저가 프로토콜 상대 URL 로 보고 외부 도메인으로 해석한다.
+ * '/\evil.com' 도 일부 브라우저가 '//' 로 정규화하므로 함께 막는다.
+ *
+ * 저장 시점(LoginView)과 사용 시점(AuthCallbackView) 양쪽에서 쓴다.
+ */
+export function isSafeRedirectPath(value) {
+    return (
+        typeof value === 'string' &&
+        value.startsWith('/') &&
+        !value.startsWith('//') &&
+        !value.startsWith('/\\')
+    );
+}
+
 export const useAuthStore = defineStore('auth', () => {
     const accessToken = ref('');
     const user = ref(null);
@@ -3310,10 +3328,12 @@ const errorMessage = computed(() => ERROR_MESSAGES[route.query.error] ?? '');
  */
 function startGoogleLogin() {
     const redirect = route.query.redirect;
-    // '/' 로 시작하는 내부 경로만 허용한다. 외부 URL 을 그대로 받으면 오픈 리다이렉트가 된다.
-    if (typeof redirect === 'string' && redirect.startsWith('/')) {
+    // 내부 경로만 허용한다. 외부 URL 을 그대로 받으면 오픈 리다이렉트가 된다.
+    // 판정은 stores/auth.js 의 isSafeRedirectPath 한 곳에서만 한다 (사용 시점과 규칙이 어긋나면 안 된다).
+    if (isSafeRedirectPath(redirect)) {
         sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, redirect);
     } else {
+        // 조건 불충족이면 이전 시도의 값을 지운다. 안 지우면 엉뚱한 곳으로 간다.
         sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
     }
     window.location.href = GOOGLE_LOGIN_URL;
@@ -3507,7 +3527,7 @@ git commit -m "feat: 구글 로그인 화면과 버튼 컴포넌트 구현"
 <script setup>
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore, POST_LOGIN_REDIRECT_KEY } from '@/stores/auth';
+import { useAuthStore, POST_LOGIN_REDIRECT_KEY, isSafeRedirectPath } from '@/stores/auth';
 import StateLoading from '@/components/common/StateLoading.vue';
 
 const router = useRouter();
@@ -3523,8 +3543,9 @@ onMounted(() => {
         return;
     }
 
-    // 내부 경로만 허용한다 (오픈 리다이렉트 방지)
-    router.replace(redirect && redirect.startsWith('/') ? redirect : { name: 'home' });
+    // 저장 시점에도 검사하지만 여기서 다시 검사한다.
+    // sessionStorage 는 사용자가 DevTools 로 직접 고칠 수 있어 저장 시점 검사만으로는 부족하다.
+    router.replace(isSafeRedirectPath(redirect) ? redirect : { name: 'home' });
 });
 </script>
 
