@@ -149,6 +149,10 @@ tbl_user_consent(
     // 서블릿 API 는 main 이 compileOnly 라 테스트 클래스패스에 자동으로 오지 않는다.
     // MockHttpServletRequest 등을 쓰려면 테스트에도 따로 얹어야 한다.
     testCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+    // spring-test 의 MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 hamcrest 를 쓴다.
+    // spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않는다 (JUnit4 와 달리 JUnit5 도 안 끌어온다).
+    // 없으면 Task 4 의 테스트가 "class file for org.hamcrest.Matcher not found" 로 컴파일 실패한다.
+    testImplementation 'org.hamcrest:hamcrest:2.2'
 ```
 
 - [ ] **Step 2: 공통 프로퍼티 추가**
@@ -1419,8 +1423,25 @@ git commit -m "feat: 구글 OAuth 인가 URL 생성과 code 교환 클라이언�
 **Files:**
 - Create: `apps/api/src/main/java/com/kb/tangtang/user/dto/UserMeDto.java`
 - Create: `apps/api/src/main/java/com/kb/tangtang/user/dto/LoginResponseDto.java`
+- Create: `apps/api/src/main/java/com/kb/tangtang/user/dto/AuthResultDto.java`
+- Create: `apps/api/src/main/java/com/kb/tangtang/user/service/RefreshTokenSecurityService.java`
 - Create: `apps/api/src/main/java/com/kb/tangtang/user/service/AuthService.java`
+- Modify: `apps/api/src/main/java/com/kb/tangtang/user/service/RefreshTokenService.java`
+- Modify: `apps/api/src/main/java/com/kb/tangtang/user/mapper/UserMapper.java`
+- Modify: `apps/api/src/main/resources/mapper/user/UserMapper.xml`
+- Modify: `apps/api/src/test/java/com/kb/tangtang/user/service/RefreshTokenServiceTest.java`
 - Test: `apps/api/src/test/java/com/kb/tangtang/user/service/AuthServiceTest.java`
+
+> ### ⚠️ 먼저 고쳐야 할 결함 — 재사용 감지가 롤백된다
+>
+> Task 3 리뷰에서 발견됐다. `RefreshTokenService.consume()` 은 재사용을 감지하면
+> `revokeAllByUserId()` 로 전체 토큰을 폐기한 **직후** `BusinessException` 을 던진다.
+> `BusinessException` 은 `RuntimeException` 이고 `AuthService.refresh()` 는 `@Transactional` 이라,
+> **Spring 기본 롤백 정책이 그 폐기를 되돌린다.** 탈취 대응이 조용히 아무 일도 하지 않게 된다.
+>
+> 폐기를 `REQUIRES_NEW` 독립 트랜잭션으로 분리해 바깥이 롤백돼도 살아남게 한다.
+> **반드시 별도 빈이어야 한다** — 같은 클래스 안의 메서드를 호출하면 self-invocation 이라
+> 프록시를 타지 않아 `@Transactional` 이 통째로 무시된다.
 
 **Interfaces:**
 - Consumes: `GoogleOAuthClient` (Task 4), `RefreshTokenService` (Task 3), `UserMapper` (Task 2), `JwtProvider` (Task 1)
@@ -1428,10 +1449,121 @@ git commit -m "feat: 구글 OAuth 인가 URL 생성과 code 교환 클라이언�
   - `UserMeDto` — 필드 `Long id, String nickname, String email`
   - `LoginResponseDto` — 필드 `String accessToken, UserMeDto user, boolean needsConsent`. **리프레시 토큰은 여기 담지 않는다** (JSON 본문에 나가면 안 되고 쿠키로만 나간다)
   - `AuthResultDto` — 필드 `LoginResponseDto response, String refreshToken`. 서비스가 컨트롤러에 둘을 한 번에 넘기기 위한 묶음이다. `response` 는 JSON 본문으로, `refreshToken` 은 `Set-Cookie` 로 나간다
+  - `RefreshTokenSecurityService.revokeAllForUser(Long userId) → void` (`REQUIRES_NEW`)
+  - `RefreshTokenService` 생성자가 `(RefreshTokenMapper, RefreshTokenSecurityService, long)` 3개로 바뀐다
+  - `UserMapper.findById(Long id) → UserDto|null`
   - `AuthService.loginWithGoogleCode(String code) → AuthResultDto`
   - `AuthService.refresh(String rawRefreshToken) → AuthResultDto`
   - `AuthService.logout(String rawRefreshToken) → void`
-  - `AuthResultDto` — 필드 `LoginResponseDto response, String refreshToken`
+
+- [ ] **Step 0-1: RefreshTokenSecurityService 작성**
+
+`apps/api/src/main/java/com/kb/tangtang/user/service/RefreshTokenSecurityService.java`
+
+```java
+package com.kb.tangtang.user.service;
+
+import com.kb.tangtang.user.mapper.RefreshTokenMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 탈취 의심 시의 일괄 폐기만 담당한다.
+ *
+ * 왜 별도 클래스인가:
+ * 폐기 직후 호출자가 BusinessException(RuntimeException)을 던지므로, 같은 트랜잭션에 있으면
+ * Spring 기본 롤백 정책이 폐기를 되돌려 버린다. REQUIRES_NEW 로 독립 트랜잭션에서 커밋해야
+ * 바깥이 롤백돼도 폐기가 살아남는다.
+ *
+ * RefreshTokenService 안의 메서드로 두면 self-invocation 이라 프록시를 타지 않아
+ * @Transactional 이 통째로 무시된다. 반드시 다른 빈이어야 한다.
+ */
+@Service
+public class RefreshTokenSecurityService {
+
+    private final RefreshTokenMapper refreshTokenMapper;
+
+    public RefreshTokenSecurityService(RefreshTokenMapper refreshTokenMapper) {
+        this.refreshTokenMapper = refreshTokenMapper;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void revokeAllForUser(Long userId) {
+        refreshTokenMapper.revokeAllByUserId(userId);
+    }
+}
+```
+
+- [ ] **Step 0-2: RefreshTokenService 가 새 빈을 쓰도록 수정**
+
+`apps/api/src/main/java/com/kb/tangtang/user/service/RefreshTokenService.java` 에서
+필드·생성자·`consume()` 세 곳만 바꾼다. 나머지는 그대로 둔다.
+
+```java
+    private final RefreshTokenMapper refreshTokenMapper;
+    private final RefreshTokenSecurityService refreshTokenSecurityService;
+    private final long refreshTokenValiditySeconds;
+
+    public RefreshTokenService(RefreshTokenMapper refreshTokenMapper,
+                               RefreshTokenSecurityService refreshTokenSecurityService,
+                               @Value("${jwt.refresh-token-validity}") long refreshTokenValiditySeconds) {
+        this.refreshTokenMapper = refreshTokenMapper;
+        this.refreshTokenSecurityService = refreshTokenSecurityService;
+        this.refreshTokenValiditySeconds = refreshTokenValiditySeconds;
+    }
+```
+
+`consume()` 의 재사용 감지 분기에서 매퍼 직접 호출을 새 빈 호출로 바꾼다.
+
+```java
+        if (token.isRevoked()) {
+            // 폐기된 토큰이 다시 왔다 = 누군가 탈취본을 쓰고 있다는 신호.
+            // 아래 예외로 바깥 트랜잭션이 롤백되더라도 폐기는 남아야 하므로 독립 트랜잭션으로 처리한다.
+            log.warn("리프레시 토큰 재사용 감지 — userId={} 전체 폐기", token.getUserId());
+            refreshTokenSecurityService.revokeAllForUser(token.getUserId());
+            throw new BusinessException("REFRESH_TOKEN_REUSED",
+                    "보안을 위해 로그아웃되었습니다. 다시 로그인해 주세요.");
+        }
+```
+
+- [ ] **Step 0-3: RefreshTokenServiceTest 를 새 생성자에 맞춘다**
+
+`apps/api/src/test/java/com/kb/tangtang/user/service/RefreshTokenServiceTest.java` 에서
+목 추가·생성자 호출·검증 대상 세 곳만 바꾼다. 나머지 테스트 본문은 그대로다.
+
+```java
+    @Mock
+    private RefreshTokenMapper refreshTokenMapper;
+
+    @Mock
+    private RefreshTokenSecurityService refreshTokenSecurityService;
+
+    private RefreshTokenService service;
+
+    @BeforeEach
+    void setUp() {
+        // 리프레시 토큰 유효기간 14일(초)
+        service = new RefreshTokenService(refreshTokenMapper, refreshTokenSecurityService, 1209600);
+    }
+```
+
+`consumeRevokesAndReturnsUserId` 의 마지막 검증:
+```java
+        verify(refreshTokenMapper).revokeById(100L);
+        verify(refreshTokenSecurityService, never()).revokeAllForUser(7L);
+```
+
+`consumeDetectsReuse` 의 마지막 검증:
+```java
+        assertEquals("REFRESH_TOKEN_REUSED", ex.getCode());
+        verify(refreshTokenSecurityService).revokeAllForUser(7L);
+```
+
+- [ ] **Step 0-4: 여기까지 테스트 통과 확인**
+
+Run: `./gradlew :apps:api:test --tests "*RefreshTokenServiceTest*"`
+Expected: PASS (7개 테스트)
 
 - [ ] **Step 1: 응답 DTO 3개 작성**
 
@@ -1816,13 +1948,122 @@ public class AuthService {
 Run: `./gradlew :apps:api:test --tests "*AuthServiceTest*"`
 Expected: PASS (6개 테스트)
 
-- [ ] **Step 7: 커밋**
+- [ ] **Step 7: 롤백 생존을 증명하는 통합 테스트 작성**
+
+목을 쓰는 단위 테스트로는 트랜잭션 동작을 증명할 수 없다. `REQUIRES_NEW` 가 실제로 듣는지는
+실DB 로만 확인된다. **이 테스트가 Step 0-1 의 유일한 증거다.**
+
+`apps/api/src/test/java/com/kb/tangtang/user/service/RefreshTokenReuseIntegrationTest.java`
+
+```java
+package com.kb.tangtang.user.service;
+
+import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.config.RootConfig;
+import com.kb.tangtang.user.dto.RefreshTokenDto;
+import com.kb.tangtang.user.dto.UserDto;
+import com.kb.tangtang.user.mapper.RefreshTokenMapper;
+import com.kb.tangtang.user.mapper.UserMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import javax.sql.DataSource;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * 재사용 감지로 인한 전체 폐기가 바깥 트랜잭션 롤백을 견디는지 검증한다.
+ *
+ * 이 테스트에는 @Transactional 을 붙이지 않는다. 붙이면 테스트 자체가 롤백돼
+ * "커밋이 살아남았는가" 를 관찰할 수 없어 검증하려는 성질이 사라진다.
+ * 대신 @AfterEach 에서 직접 지운다.
+ *
+ * 실DB 연결이 필요하므로 기본은 비활성화다.
+ */
+@Disabled("실DB 연결이 필요할 때만 임시로 해제")
+@ExtendWith(SpringExtension.class)
+@ContextConfiguration(classes = {RootConfig.class})
+class RefreshTokenReuseIntegrationTest {
+
+    private static final String TEST_SUB = "reuse-rollback-test-sub";
+
+    @Autowired private UserMapper userMapper;
+    @Autowired private RefreshTokenMapper refreshTokenMapper;
+    @Autowired private RefreshTokenService refreshTokenService;
+    @Autowired private AuthService authService;
+    @Autowired private DataSource dataSource;
+
+    @AfterEach
+    void cleanUp() {
+        // tbl_refresh_token 은 tbl_user 에 ON DELETE CASCADE 로 걸려 있어 함께 지워진다
+        new JdbcTemplate(dataSource).update(
+                "DELETE FROM tbl_user WHERE provider_user_id = ?", TEST_SUB);
+    }
+
+    @Test
+    @DisplayName("재사용 감지 시 전체 폐기는 바깥 트랜잭션이 롤백돼도 커밋된 채 남는다")
+    void revokeAllSurvivesRollback() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId(TEST_SUB)
+                .nickname("재사용테스트").status("ACTIVE").difficultyId(1L)
+                .build();
+        userMapper.insert(user);
+
+        String stolen = refreshTokenService.issue(user.getId());
+        String alive = refreshTokenService.issue(user.getId());
+
+        // stolen 을 한 번 정상 사용해 폐기 상태로 만든다 (= 회전이 일어난 상태)
+        refreshTokenService.consume(stolen);
+
+        // 탈취자가 폐기된 토큰을 다시 쓴다. AuthService.refresh 는 @Transactional 이라
+        // 여기서 던져지는 예외가 바깥 트랜잭션을 롤백시킨다.
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> authService.refresh(stolen));
+        assertEquals("REFRESH_TOKEN_REUSED", ex.getCode());
+
+        // 핵심 단언: 살아 있던 다른 토큰까지 폐기돼 있어야 한다.
+        // REQUIRES_NEW 가 아니면 롤백돼 alive 가 그대로 살아남고 이 단언이 깨진다.
+        RefreshTokenDto aliveRow =
+                refreshTokenMapper.findByHash(RefreshTokenService.sha256Hex(alive));
+        assertTrue(aliveRow.isRevoked(),
+                "재사용 감지 시 전체 폐기가 독립 트랜잭션으로 커밋돼 있어야 한다");
+    }
+}
+```
+
+- [ ] **Step 8: 통합 테스트를 실DB 로 한 번 검증**
+
+`@Disabled` 줄 앞에 `//` 를 붙여 임시 해제한 뒤 실행한다.
+
+Run: `./gradlew :apps:api:test --tests "*RefreshTokenReuseIntegrationTest*"`
+Expected: PASS
+
+**실패하면 `REQUIRES_NEW` 가 듣지 않는 것이다.** 흔한 원인은 `RefreshTokenSecurityService` 를
+별도 빈이 아닌 같은 클래스 메서드로 만든 경우(self-invocation)다. 고치고 다시 돌린다.
+
+확인 후 **`@Disabled` 를 반드시 복원**하고 `./gradlew :apps:api:test` 로 skipped 를 확인한다.
+
+- [ ] **Step 9: 커밋**
 
 ```bash
 git add apps/api/src/main/java/com/kb/tangtang/user/ \
         apps/api/src/main/resources/mapper/user/UserMapper.xml \
-        apps/api/src/test/java/com/kb/tangtang/user/service/AuthServiceTest.java
+        apps/api/src/test/java/com/kb/tangtang/user/service/
 git commit -m "feat: 구글 로그인·가입 분기와 토큰 발급 AuthService 구현"
+```
+
+두 번째 커밋으로 나눠도 좋다.
+```bash
+git commit -m "fix: 재사용 감지 폐기가 롤백되지 않도록 독립 트랜잭션으로 분리"
 ```
 
 ---
