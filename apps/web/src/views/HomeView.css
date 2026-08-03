@@ -1,0 +1,277 @@
+.home {
+    min-height: 100%;
+    padding: var(--tt-space-5);
+    background: var(--tt-bg-subtle);
+}
+
+.home__header {
+    position: relative;
+    padding-bottom: var(--tt-space-5);
+}
+
+.home__header::after {
+    position: absolute;
+    top: calc(var(--tt-space-10) * -1);
+    right: calc(var(--tt-space-8) * -1);
+    width: 160px;
+    height: 160px;
+    content: '';
+    background: var(--tt-primary-subtle);
+    border-radius: var(--tt-radius-full);
+    opacity: 0.45;
+}
+
+.home__status-row {
+    position: relative;
+    z-index: var(--tt-z-base);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.home__notification {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-1);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-primary);
+}
+
+.home__notification-count {
+    display: inline-grid;
+    width: 18px;
+    height: 18px;
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-text-inverse);
+    background: var(--tt-danger);
+    border-radius: var(--tt-radius-full);
+    place-items: center;
+}
+
+.home__title {
+    position: relative;
+    z-index: var(--tt-z-base);
+    margin-top: var(--tt-space-4);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-tight);
+    color: var(--tt-text);
+}
+
+.home__description {
+    position: relative;
+    z-index: var(--tt-z-base);
+    margin-top: var(--tt-space-2);
+    color: var(--tt-text-muted);
+}
+
+.challenge-card {
+    position: relative;
+    min-height: 167px;
+    color: var(--tt-text-inverse);
+    background: var(--tt-text);
+    border-color: var(--tt-text);
+    border-radius: var(--tt-radius-lg);
+    box-shadow: var(--tt-elevation-3);
+}
+
+.challenge-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-3);
+}
+
+.challenge-card__case-no {
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-border-strong);
+}
+
+.challenge-card__title {
+    margin-top: var(--tt-space-4);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+}
+
+.challenge-card__summary {
+    margin-top: var(--tt-space-1);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-border-strong);
+}
+
+.challenge-card__summary strong {
+    color: var(--tt-success);
+}
+
+.challenge-card__progress-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--tt-space-5);
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-border-strong);
+}
+
+.challenge-card__progress-info strong {
+    color: var(--tt-accent);
+}
+
+.challenge-card__progress {
+    height: 9px;
+    margin-top: var(--tt-space-2);
+    overflow: hidden;
+    background: var(--tt-border-strong);
+    border-radius: var(--tt-radius-full);
+}
+
+.challenge-card__progress-value {
+    display: block;
+    height: 100%;
+    background: var(--tt-accent);
+    border-radius: inherit;
+}
+
+.challenge-card--empty {
+    min-height: 207px;
+    overflow: hidden;
+}
+
+.challenge-card__empty-content {
+    position: relative;
+    z-index: 1;
+}
+
+.challenge-card__empty-title {
+    margin-top: var(--tt-space-4);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+}
+
+.challenge-card__empty-title strong {
+    color: var(--tt-accent);
+}
+
+.challenge-card__empty-description {
+    margin-top: var(--tt-space-4);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-border-strong);
+}
+
+.challenge-card__image {
+    position: absolute;
+    right: var(--tt-space-2);
+    bottom: var(--tt-space-4);
+    width: 130px;
+    height: 130px;
+    object-fit: contain;
+}
+
+.challenge-card__button {
+    position: absolute;
+    right: var(--tt-space-5);
+    bottom: var(--tt-space-4);
+    z-index: 1;
+    color: var(--tt-text);
+    background: var(--tt-accent);
+}
+
+.home-summary {
+    margin-top: var(--tt-space-5);
+}
+
+.home-summary__title {
+    margin-bottom: var(--tt-space-3);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+}
+
+.home-summary__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--tt-space-3);
+}
+
+.home-summary__grid > * {
+    min-height: 92px;
+}
+
+.summary-card__label,
+.summary-card__empty {
+    display: block;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.summary-card__value,
+.summary-card__amount {
+    display: block;
+    margin-top: var(--tt-space-2);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.summary-card__amount {
+    font-family: var(--tt-font-mono);
+}
+
+.summary-card__empty {
+    margin-top: var(--tt-space-3);
+}
+
+.summary-card__caption {
+    display: block;
+    margin-top: var(--tt-space-1);
+    font-size: var(--tt-fs-mono-chip);
+    font-weight: var(--tt-fw-bold);
+}
+
+.summary-card__caption--danger {
+    color: var(--tt-danger);
+}
+
+.summary-card__caption--success {
+    color: var(--tt-success);
+}
+
+.honor-court {
+    min-height: 95px;
+    margin-top: var(--tt-space-3);
+    background: var(--tt-primary-subtle);
+    border-color: var(--tt-primary-subtle);
+    box-shadow: var(--tt-elevation-0);
+}
+
+.honor-court__title {
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-primary);
+}
+
+.honor-court__ranking {
+    display: flex;
+    align-items: baseline;
+    gap: var(--tt-space-2);
+    margin-top: var(--tt-space-1);
+}
+
+.honor-court__ranking strong {
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+}
+
+.honor-court__ranking span {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-primary);
+}
+
+.honor-court__description {
+    margin-top: var(--tt-space-1);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-primary);
+}
