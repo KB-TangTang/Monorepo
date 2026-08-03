@@ -16,3 +16,9 @@ jdbc.password=CHANGE_ME_DB_PASSWORD
 # HS256 은 256비트 이상을 요구한다. 32자 미만이면 기동 시 WeakKeyException 으로 실패한다.
 # 팀 개발용으로는 아무 랜덤 문자열 32자 이상이면 된다. 운영 값과 다르게 둔다.
 jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
+
+# ── Google OAuth 클라이언트 (커밋 금지) ────────────────
+# Google Cloud Console > API 및 서비스 > 사용자 인증 정보 에서 발급.
+# 팀 개발용 클라이언트 하나를 공유한다. 값은 팀 채널에서 받는다.
+google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
+google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET

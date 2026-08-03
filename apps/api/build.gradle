@@ -85,6 +85,9 @@ dependencies {
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
     testImplementation 'org.mockito:mockito-core:5.12.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.12.0'
+    // spring-test 의 MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 hamcrest 를 쓴다.
+    // spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않으므로 테스트 스코프에 직접 얹는다.
+    testImplementation 'org.hamcrest:hamcrest:2.2'
     // 서블릿 API 는 main 이 compileOnly 라 테스트 클래스패스에 자동으로 오지 않는다.
     // MockHttpServletRequest 등을 쓰려면 테스트에도 따로 얹어야 한다.
     testCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
