@@ -3090,9 +3090,12 @@ function requestRefresh() {
 
 // 요청: 액세스 토큰 주입
 http.interceptors.request.use((config) => {
-    const { accessToken } = useAuthStore();
-    if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+    // 스토어를 구조분해(const { accessToken } = ...)하지 않는다.
+    // 여기서는 요청마다 호출돼 결과가 같지만, 그 패턴이 컴포넌트로 복사되면
+    // 반응성이 끊겨 토큰이 갱신돼도 화면이 옛 값을 계속 들고 있게 된다.
+    const auth = useAuthStore();
+    if (auth.accessToken) {
+        config.headers.Authorization = `Bearer ${auth.accessToken}`;
     }
     return config;
 });
