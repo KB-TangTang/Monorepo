@@ -54,10 +54,17 @@ cd apps/web && npm run dev     # 프론트 개발 서버 :5173, /api 는 :8080 �
 
 최초 세팅 (신규 합류자):
 ```bash
+# 1) DB 비밀번호를 정하고 db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 를 그 값으로 바꾼다
 mysql -u root -p < db/00_init_local_db.sql     # tangtang DB + 전용 계정 생성
+
+# 2) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
 cp apps/api/src/main/resources/application-local.properties.example \
    apps/api/src/main/resources/application-local.properties
+
+# 3) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
+cp .env.example .env
 ```
+> 비밀번호는 **위 3곳이 모두 같아야** 한다. 바꾼 `00_init_local_db.sql` 은 커밋하지 않는다.
 연결 확인: `GET http://localhost:8080/api/health` → `{"success":true,"data":{"status":"UP",...}}`
 
 ## 작업 프로토콜
