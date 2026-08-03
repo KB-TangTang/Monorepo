@@ -30,17 +30,22 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableTransactionManagement
-// Spring @PropertySource 는 뒤에 오는 것이 앞의 값을 덮어쓴다.
-// application-local.properties(개인) 를 가장 마지막에 둬야 실제로 우선 적용된다.
-// 도커 전용 프로퍼티 파일은 두지 않는다. OS 환경변수(systemEnvironment)는 @PropertySource 로
-// 등록한 파일들보다 우선순위가 높고, docker-compose.yml 이 컨테이너에 JDBC_DRIVER/JDBC_URL/
-// JDBC_USERNAME/JDBC_PASSWORD 를 직접 주입하므로 도커에서는 그 값이 항상 이긴다.
-// 로컬에는 그 환경변수가 없으니 application.properties(driver·url) + application-local.properties
-// (username·password) 조합으로 정상 해석된다.
+/*
+ * 환경별 설정은 한 번에 하나만 로드한다.
+ *   로컬 : APP_ENV 없음 → 기본값 local → application-local.properties (git 제외, 개인 시크릿)
+ *   도커 : docker-compose 가 APP_ENV=docker 주입 → application-docker.properties
+ *
+ * 과거에 두 파일을 동시에 나열했다가, 로컬에서도 docker 파일이 로드돼
+ * jdbc.driver 가 ${JDBC_DRIVER} 로 덮이면서 컨텍스트 로딩이 실패했다.
+ * (실측: @PropertySource 는 뒤에 선언한 파일이 앞을 덮어쓴다)
+ *
+ * @PropertySource 의 경로에는 플레이스홀더를 쓸 수 있고, 이 시점에는
+ * 시스템 프로퍼티·환경변수가 이미 해석 가능하다.
+ */
 @PropertySource(
         value = {
                 "classpath:/application.properties",
-                "classpath:/application-local.properties"
+                "classpath:/application-${app.env:local}.properties"
         },
         ignoreResourceNotFound = true)
 @ComponentScan(

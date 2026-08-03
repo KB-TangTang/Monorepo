@@ -38,10 +38,14 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
+      APP_ENV: docker
       JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
       JDBC_URL: jdbc:log4jdbc:mysql://db:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
       JDBC_USERNAME: ${MYSQL_USER}
       JDBC_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       CODEF_API_URL: ${CODEF_API_URL}
       CODEF_CLIENT_ID: ${CODEF_CLIENT_ID}
       CODEF_CLIENT_SECRET: ${CODEF_CLIENT_SECRET}
