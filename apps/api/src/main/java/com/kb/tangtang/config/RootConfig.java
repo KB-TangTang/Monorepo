@@ -30,12 +30,14 @@ import javax.sql.DataSource;
 @EnableTransactionManagement
 // Spring @PropertySource 는 뒤에 오는 것이 앞의 값을 덮어쓴다.
 // application-local.properties(개인) 를 가장 마지막에 둬야 실제로 우선 적용된다.
-// application-docker.properties 는 도커 이미지에는 있지만 로컬(gitignore 대상이라 미포함)엔 없으므로
-// ignoreResourceNotFound=true 로 로컬에서는 조용히 스킵된다.
+// 도커 전용 프로퍼티 파일은 두지 않는다. OS 환경변수(systemEnvironment)는 @PropertySource 로
+// 등록한 파일들보다 우선순위가 높고, docker-compose.yml 이 컨테이너에 JDBC_DRIVER/JDBC_URL/
+// JDBC_USERNAME/JDBC_PASSWORD 를 직접 주입하므로 도커에서는 그 값이 항상 이긴다.
+// 로컬에는 그 환경변수가 없으니 application.properties(driver·url) + application-local.properties
+// (username·password) 조합으로 정상 해석된다.
 @PropertySource(
         value = {
                 "classpath:/application.properties",
-                "classpath:/application-docker.properties",
                 "classpath:/application-local.properties"
         },
         ignoreResourceNotFound = true)
