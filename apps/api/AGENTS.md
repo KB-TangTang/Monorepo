@@ -36,8 +36,22 @@ config          앱 전역 설정 (RootConfig / ServletConfig / WebConfig)
   - `RootConfig` — 그 둘을 **제외한** 나머지 (Service, Mapper, 설정 빈)
 - **`ServletConfig` 에 `@Configuration` 을 붙이지 말 것.** 붙이면 루트 컨텍스트에도 등록돼
   `@EnableWebMvc` 가 두 번 적용된다.
-- 설정 값은 `application.properties`(공통) 위에 `application-local.properties`(개인)가 덮어쓴다.
-  **접속 계정은 개인 파일에만.** 공통 파일에 계정을 쓰면 안 된다.
+- 설정은 **공통 1개 + 환경별 1개**가 로드된다. 환경별 파일은 `APP_ENV` 로 갈린다.
+
+  | 환경 | 로드되는 파일 |
+  |---|---|
+  | 로컬 (`APP_ENV` 없음) | `application.properties` + `application-local.properties` |
+  | 도커 (`APP_ENV=docker`) | `application.properties` + `application-docker.properties` |
+
+  `@PropertySource` 는 **뒤에 선언한 파일이 앞을 덮어쓴다**(2026-08-03 실측). 그래서 환경별 파일이
+  공통 파일을 이긴다. 과거에 두 환경 파일을 동시에 나열했다가, 로컬에서도 도커 파일이 로드돼
+  `jdbc.driver` 가 `${JDBC_DRIVER}` 로 덮이면서 **백엔드가 로컬에서 기동조차 못 하는** 사고가 났다.
+  **환경 파일을 `@PropertySource` 에 나란히 추가하지 말 것.**
+- **접속 계정·시크릿은 `application-local.properties` 에만.** 공통 파일(git 추적)에 쓰면 안 된다.
+  도커는 `application-docker.properties` 가 `${JWT_SECRET}` 처럼 컨테이너 환경변수를 참조한다 —
+  실제 값은 `.env` → `docker-compose.yml` 을 거쳐 주입된다.
+- 로그인 도입 후 개인 파일에 **`jwt.secret`(32자 이상) · `google.oauth.client-id` · `client-secret`**
+  이 없으면 컨텍스트 로딩이 실패한다. `application-local.properties.example` 참고.
 
 ## MyBatis
 

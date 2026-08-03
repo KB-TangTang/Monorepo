@@ -17,4 +17,6 @@
 - 문자셋 `utf8mb4` / 콜레이션 `utf8mb4_general_ci`
 - **이미 팀에 공유된 스키마는 `schema.sql` 을 직접 고치지 말고 `migration/` 에 변경분을 추가한다.**
 - 스키마를 바꿀 때 반영 순서: **SQL → 매퍼 XML → 문서**
-- 개인 계정·비밀번호를 SQL 에 넣지 않는다. (`00_init_local_db.sql` 의 로컬 개발 계정은 예외)
+- **계정·비밀번호를 SQL 에 넣지 않는다. 예외 없다.** `00_init_local_db.sql` 은 비밀번호 자리에
+  `CHANGE_ME_DB_PASSWORD` 플레이스홀더를 두며, 각자 실행 직전에 자기 값으로 바꿔 쓰고 커밋하지 않는다.
+  같은 값을 `.env`(`MYSQL_PASSWORD`) 와 `application-local.properties`(`jdbc.password`) 에도 넣어야 한다.

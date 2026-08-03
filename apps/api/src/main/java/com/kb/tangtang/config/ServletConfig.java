@@ -1,16 +1,23 @@
 package com.kb.tangtang.config;
 
+import com.kb.tangtang.common.auth.JwtAuthInterceptor;
+import com.kb.tangtang.common.auth.LoginUserArgumentResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.List;
 
 /**
  * 서블릿(웹) 컨텍스트 설정.
@@ -26,10 +33,37 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
                 classes = {Controller.class, ControllerAdvice.class}))
 public class ServletConfig implements WebMvcConfigurer {
 
+    /*
+     * 두 컨텍스트 구조 주의:
+     *   RootConfig  가 @Controller·@ControllerAdvice 를 제외한 모든 @Component 를 스캔한다.
+     *   → JwtAuthInterceptor · LoginUserArgumentResolver 는 루트 컨텍스트의 빈이다.
+     *   ServletConfig(자식)는 부모 컨텍스트의 빈을 주입받을 수 있으므로 아래가 동작한다.
+     */
+    @Autowired
+    private JwtAuthInterceptor jwtAuthInterceptor;
+
+    @Autowired
+    private LoginUserArgumentResolver loginUserArgumentResolver;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(jwtAuthInterceptor)
+                .addPathPatterns("/api/**")
+                // 로그인 자체 경로와 헬스체크는 인증 없이 열어둔다
+                .excludePathPatterns("/api/health", "/api/auth/**");
+    }
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(loginUserArgumentResolver);
+    }
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("https://monorepo-three-ruby-81.vercel.app")
+                // 로컬 개발은 Vite 프록시(same-origin)라 CORS 를 타지 않지만,
+                // 프록시를 끄고 직접 붙이는 경우를 위해 남겨둔다.
+                .allowedOrigins("https://monorepo-three-ruby-81.vercel.app", "http://localhost:5173")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);

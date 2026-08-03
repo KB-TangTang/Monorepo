@@ -1,11 +1,24 @@
 # 이 파일을 같은 폴더에 application-local.properties 로 복사한 뒤 본인 값으로 채운다.
 # application-local.properties 는 .gitignore 대상이라 커밋되지 않는다.
 #
-# 사전 준비: db/00_init_local_db.sql 을 MySQL 관리자 계정으로 실행하면
-#            tangtang DB 와 tangtang 계정이 함께 생성된다.
+# 사전 준비: db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 를 본인 비밀번호로 바꾼 뒤
+#            MySQL 관리자 계정으로 실행하면 tangtang DB 와 tangtang 계정이 함께 생성된다.
+#
+# ⚠️ jdbc.password 는 그때 정한 값과 같아야 한다. (.env 의 MYSQL_PASSWORD 와도 동일)
 
 jdbc.username=tangtang
-jdbc.password=tangtang1234
+jdbc.password=CHANGE_ME_DB_PASSWORD
 
 # 호스트·포트·DB명이 기본값(localhost:3306/tangtang)과 다를 때만 주석 해제
 #jdbc.url=jdbc:log4jdbc:mysql://localhost:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+
+# ── JWT 서명키 ─────────────────────────────────────────
+# HS256 은 256비트 이상을 요구한다. 32자 미만이면 기동 시 WeakKeyException 으로 실패한다.
+# 팀 개발용으로는 아무 랜덤 문자열 32자 이상이면 된다. 운영 값과 다르게 둔다.
+jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
+
+# ── Google OAuth 클라이언트 (커밋 금지) ────────────────
+# Google Cloud Console > API 및 서비스 > 사용자 인증 정보 에서 발급.
+# 팀 개발용 클라이언트 하나를 공유한다. 값은 팀 채널에서 받는다.
+google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
+google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET

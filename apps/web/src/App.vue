@@ -1,13 +1,16 @@
 <script setup>
+import { useRoute } from 'vue-router';
 import TheTabBar from '@/components/common/TheTabBar.vue';
+
+const route = useRoute();
 </script>
 
 <template>
     <div class="tt-app">
-        <main class="tt-app__content">
+        <main class="tt-app__content" :class="{ 'tt-app__content--bare': route.meta.hideTabBar }">
             <RouterView />
         </main>
-        <TheTabBar />
+        <TheTabBar v-if="!route.meta.hideTabBar" />
     </div>
 </template>
 
@@ -26,5 +29,10 @@ import TheTabBar from '@/components/common/TheTabBar.vue';
 .tt-app__content {
     flex: 1;
     padding-bottom: calc(var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-4));
+}
+
+/* 탭바가 없는 화면(로그인 등)은 여백도 필요 없다 */
+.tt-app__content--bare {
+    padding-bottom: 0;
 }
 </style>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType / parameterType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+-->
+<mapper namespace="com.kb.tangtang.user.mapper.UserMapper">
+
+    <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
+    <sql id="userColumns">
+        id, social_provider, provider_user_id, email, nickname, name, status, difficulty_id
+    </sql>
+
+    <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
+        SELECT <include refid="userColumns"/>
+          FROM tbl_user
+         WHERE social_provider  = #{socialProvider}
+           AND provider_user_id = #{providerUserId}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.kb.tangtang.user.dto.UserDto"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO tbl_user (social_provider, provider_user_id, email, nickname, status, difficulty_id)
+        VALUES (#{socialProvider}, #{providerUserId}, #{email}, #{nickname}, #{status}, #{difficultyId})
+    </insert>
+
+    <select id="findById" resultType="com.kb.tangtang.user.dto.UserDto">
+        SELECT <include refid="userColumns"/>
+          FROM tbl_user
+         WHERE id = #{id}
+    </select>
+
+    <select id="countActiveConsents" resultType="int">
+        SELECT COUNT(*)
+          FROM tbl_user_consent
+         WHERE user_id      = #{userId}
+           AND is_required  = 1
+           AND withdrawn_at IS NULL
+    </select>
+
+</mapper>
