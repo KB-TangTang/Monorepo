@@ -154,6 +154,22 @@ class AuthControllerTest {
     }
 
     @Test
+    @DisplayName("예기치 못한 예외도 JSON 이 아니라 로그인 화면으로 되돌린다")
+    void callbackUnexpectedError() throws Exception {
+        when(authService.loginWithGoogleCode("the-code"))
+                .thenThrow(new IllegalStateException("boom"));
+
+        MvcResult result = mockMvc.perform(get("/api/auth/google/callback")
+                        .param("code", "the-code")
+                        .param("state", "st-1")
+                        .cookie(new Cookie("oauth_state", "st-1")))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        assertEquals(FRONT_URL + "/login?error=failed", result.getResponse().getRedirectedUrl());
+    }
+
+    @Test
     @DisplayName("POST /api/auth/refresh 는 새 액세스 토큰과 사용자 정보를 준다")
     void refresh() throws Exception {
         when(authService.refresh("old-raw")).thenReturn(authResult());

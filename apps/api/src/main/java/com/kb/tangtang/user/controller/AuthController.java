@@ -81,14 +81,23 @@ public class AuthController {
             return;
         }
 
+        AuthResultDto result;
         try {
-            AuthResultDto result = authService.loginWithGoogleCode(code);
-            cookieWriter.writeRefreshToken(response, result.getRefreshToken());
-            response.sendRedirect(frontUrl + "/auth/callback");
+            result = authService.loginWithGoogleCode(code);
         } catch (BusinessException ex) {
             log.warn("로그인 실패 [{}] {}", ex.getCode(), ex.getMessage());
             response.sendRedirect(frontUrl + "/login?error=" + toFrontErrorCode(ex.getCode()));
+            return;
+        } catch (Exception ex) {
+            // 브라우저 전체 이동이라 예외가 새어나가면 주소창에 JSON 500 이 뜬다.
+            // 원인은 서버 로그에만 남기고 사용자에게는 일반 실패로 되돌린다.
+            log.error("로그인 처리 중 예기치 못한 오류", ex);
+            response.sendRedirect(frontUrl + "/login?error=failed");
+            return;
         }
+
+        cookieWriter.writeRefreshToken(response, result.getRefreshToken());
+        response.sendRedirect(frontUrl + "/auth/callback");
     }
 
     /** 액세스 토큰 재발급. 리프레시 토큰은 회전하며 새 쿠키로 덮어쓴다. */
