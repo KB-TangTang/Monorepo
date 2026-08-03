@@ -7,7 +7,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { GOOGLE_LOGIN_URL } from '@/api/auth';
-import { POST_LOGIN_REDIRECT_KEY } from '@/stores/auth';
+import { POST_LOGIN_REDIRECT_KEY, isSafeRedirectPath } from '@/stores/auth';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton.vue';
 
 const route = useRoute();
@@ -33,7 +33,7 @@ const errorMessage = computed(() => ERROR_MESSAGES[route.query.error] ?? '');
 function startGoogleLogin() {
     const redirect = route.query.redirect;
     // '/' 로 시작하는 내부 경로만 허용한다. 외부 URL 을 그대로 받으면 오픈 리다이렉트가 된다.
-    if (typeof redirect === 'string' && redirect.startsWith('/')) {
+    if (isSafeRedirectPath(redirect)) {
         sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, redirect);
     } else {
         sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);

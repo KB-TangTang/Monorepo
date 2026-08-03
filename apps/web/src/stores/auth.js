@@ -17,6 +17,22 @@ import { defineStore } from 'pinia';
  */
 export const POST_LOGIN_REDIRECT_KEY = 'tt.postLoginRedirect';
 
+/**
+ * 로그인 후 돌아갈 경로로 안전한 값인지 판정한다.
+ *
+ * '/' 로 시작하는 것만으로는 부족하다 — '//evil.com' 은 '/' 로 시작하지만
+ * 브라우저가 프로토콜 상대 URL 로 보고 외부 도메인으로 해석한다.
+ * '/\evil.com' 도 일부 브라우저가 '//' 로 정규화하므로 함께 막는다.
+ */
+export function isSafeRedirectPath(value) {
+    return (
+        typeof value === 'string' &&
+        value.startsWith('/') &&
+        !value.startsWith('//') &&
+        !value.startsWith('/\\')
+    );
+}
+
 export const useAuthStore = defineStore('auth', () => {
     const accessToken = ref('');
     const user = ref(null);
