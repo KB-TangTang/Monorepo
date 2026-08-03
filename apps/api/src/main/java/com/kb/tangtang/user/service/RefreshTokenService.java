@@ -28,11 +28,14 @@ import java.util.UUID;
 public class RefreshTokenService {
 
     private final RefreshTokenMapper refreshTokenMapper;
+    private final RefreshTokenSecurityService refreshTokenSecurityService;
     private final long refreshTokenValiditySeconds;
 
     public RefreshTokenService(RefreshTokenMapper refreshTokenMapper,
+                               RefreshTokenSecurityService refreshTokenSecurityService,
                                @Value("${jwt.refresh-token-validity}") long refreshTokenValiditySeconds) {
         this.refreshTokenMapper = refreshTokenMapper;
+        this.refreshTokenSecurityService = refreshTokenSecurityService;
         this.refreshTokenValiditySeconds = refreshTokenValiditySeconds;
     }
 
@@ -62,9 +65,10 @@ public class RefreshTokenService {
         }
 
         if (token.isRevoked()) {
-            // 폐기된 토큰이 다시 왔다 = 누군가 탈취본을 쓰고 있다는 신호
+            // 폐기된 토큰이 다시 왔다 = 누군가 탈취본을 쓰고 있다는 신호.
+            // 아래 예외로 바깥 트랜잭션이 롤백되더라도 폐기는 남아야 하므로 독립 트랜잭션으로 처리한다.
             log.warn("리프레시 토큰 재사용 감지 — userId={} 전체 폐기", token.getUserId());
-            refreshTokenMapper.revokeAllByUserId(token.getUserId());
+            refreshTokenSecurityService.revokeAllForUser(token.getUserId());
             throw new BusinessException("REFRESH_TOKEN_REUSED",
                     "보안을 위해 로그아웃되었습니다. 다시 로그인해 주세요.");
         }

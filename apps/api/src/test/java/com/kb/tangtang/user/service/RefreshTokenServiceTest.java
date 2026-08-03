@@ -27,12 +27,15 @@ class RefreshTokenServiceTest {
     @Mock
     private RefreshTokenMapper refreshTokenMapper;
 
+    @Mock
+    private RefreshTokenSecurityService refreshTokenSecurityService;
+
     private RefreshTokenService service;
 
     @BeforeEach
     void setUp() {
         // 리프레시 토큰 유효기간 14일(초)
-        service = new RefreshTokenService(refreshTokenMapper, 1209600);
+        service = new RefreshTokenService(refreshTokenMapper, refreshTokenSecurityService, 1209600);
     }
 
     @Test
@@ -66,7 +69,7 @@ class RefreshTokenServiceTest {
 
         assertEquals(7L, userId);
         verify(refreshTokenMapper).revokeById(100L);
-        verify(refreshTokenMapper, never()).revokeAllByUserId(7L);
+        verify(refreshTokenSecurityService, never()).revokeAllForUser(7L);
     }
 
     @Test
@@ -84,7 +87,7 @@ class RefreshTokenServiceTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> service.consume(raw));
 
         assertEquals("REFRESH_TOKEN_REUSED", ex.getCode());
-        verify(refreshTokenMapper).revokeAllByUserId(7L);
+        verify(refreshTokenSecurityService).revokeAllForUser(7L);
     }
 
     @Test
