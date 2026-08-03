@@ -61,7 +61,9 @@ public class ServletConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("https://monorepo-three-ruby-81.vercel.app")
+                // 로컬 개발은 Vite 프록시(same-origin)라 CORS 를 타지 않지만,
+                // 프록시를 끄고 직접 붙이는 경우를 위해 남겨둔다.
+                .allowedOrigins("https://monorepo-three-ruby-81.vercel.app", "http://localhost:5173")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
