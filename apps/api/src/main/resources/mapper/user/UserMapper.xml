@@ -27,6 +27,12 @@
         VALUES (#{socialProvider}, #{providerUserId}, #{email}, #{nickname}, #{status}, #{difficultyId})
     </insert>
 
+    <select id="findById" resultType="com.kb.tangtang.user.dto.UserDto">
+        SELECT <include refid="userColumns"/>
+          FROM tbl_user
+         WHERE id = #{id}
+    </select>
+
     <select id="countActiveConsents" resultType="int">
         SELECT COUNT(*)
           FROM tbl_user_consent
