@@ -152,10 +152,14 @@ tbl_user_consent(
     // NoClassDefFoundError: javax/servlet/http/HttpServletResponse 로 죽는다 (Task 6 에서 실제 발생).
     // testImplementation 은 테스트 스코프 전용이라 war 에는 들어가지 않는다.
     testImplementation 'javax.servlet:javax.servlet-api:4.0.1'
-    // spring-test 의 MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 hamcrest 를 쓴다.
-    // spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않는다 (JUnit4 와 달리 JUnit5 도 안 끌어온다).
-    // 없으면 Task 4 의 테스트가 "class file for org.hamcrest.Matcher not found" 로 컴파일 실패한다.
+    // ── spring-test 가 optional 로 선언해 자동으로 딸려오지 않는 것들 ──
+    // 이 프로젝트는 Spring Boot 가 아니라 스타터가 챙겨주지 않는다. 직접 얹어야 한다.
+    //
+    // hamcrest: MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 쓴다.
+    //   없으면 Task 4 가 "class file for org.hamcrest.Matcher not found" 로 컴파일 실패.
     testImplementation 'org.hamcrest:hamcrest:2.2'
+    // json-path: MockMvc 의 jsonPath() 매처가 쓴다. 없으면 Task 7 이 컴파일 실패.
+    testImplementation 'com.jayway.jsonpath:json-path:2.9.0'
 ```
 
 - [ ] **Step 2: 공통 프로퍼티 추가**
