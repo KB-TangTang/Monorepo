@@ -29,7 +29,11 @@ import javax.sql.DataSource;
 @Configuration
 @EnableTransactionManagement
 @PropertySource(
-        value = {"classpath:/application.properties", "classpath:/application-local.properties"},
+        value = {
+                "classpath:/application.properties",
+                "classpath:/application-local.properties",
+                "classpath:/application-docker.properties"
+        },
         ignoreResourceNotFound = true)
 @ComponentScan(
         basePackages = "com.kb.tangtang",
