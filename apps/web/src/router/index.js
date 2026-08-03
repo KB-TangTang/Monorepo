@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
 /*
- * 하단 5탭 구조: 재판 · 자산 · 홈 · 장부 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
+ * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
  * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
  *   component: () => import('@/views/trial/TrialHomeView.vue')
  */
@@ -35,6 +35,18 @@ const routes = [
         name: 'my',
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '마이' },
+    },
+    {
+        path: '/reports/challenge',
+        name: 'challengeReport',
+        component: () => import('@/views/challenge/report/ChallengeReportView.vue'),
+        meta: { title: '챌린지 리포트' },
+    },
+    {
+        path: '/reports/challenge/savings',
+        name: 'challengeNetSavings',
+        component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
+        meta: { title: '카테고리별 순 절감액' },
     },
 ];
 

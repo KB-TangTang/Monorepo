@@ -1,5 +1,5 @@
 <!--
-  용도: 앱 하단 고정 5탭(재판 · 자산 · 홈 · 장부 · 마이). 라우트 이동과 활성 표시를 담당한다.
+  용도: 앱 하단 고정 5탭(재판 · 자산 · 홈 · 자료실 · 마이). 라우트 이동과 활성 표시를 담당한다.
   언제 쓰는지: 앱 셸(App.vue)에서 한 번만 렌더한다. 화면마다 따로 두지 않는다.
   쓰면 안 되는 경우: 로그인 · 온보딩 등 탭 이동이 없는 화면. 그런 라우트에서는 App.vue 에서 숨긴다.
 -->
@@ -32,7 +32,7 @@ const TABS = [
     },
     {
         name: 'ledger',
-        label: '장부',
+        label: '자료실',
         to: '/ledger',
         paths: [
             'M6 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z',
@@ -53,6 +53,9 @@ const route = useRoute();
 
 /* 홈(/)만 정확 매칭. 나머지는 하위 경로(/trial/3 …)에서도 활성으로 본다. */
 function isActive(tab) {
+    if (tab.name === 'ledger' && route.path.startsWith('/reports')) {
+        return true;
+    }
     return tab.to === '/' ? route.path === '/' : route.path.startsWith(tab.to);
 }
 </script>

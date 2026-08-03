@@ -1,0 +1,33 @@
+name: EC2 백엔드 자동 배포
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: '배포할 브랜치 (기본: main)'
+        required: false
+        default: 'main'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: EC2에 SSH 접속해서 배포
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/Monorepo
+            BRANCH=${{ github.event.inputs.branch || github.ref_name }}
+            git fetch origin
+            git checkout $BRANCH
+            git pull origin $BRANCH
+            docker compose down
+            docker compose up --build -d
+            docker image prune -f
+            sleep 15
+            curl -f http://localhost:8080/api/health || (docker compose logs && exit 1)
