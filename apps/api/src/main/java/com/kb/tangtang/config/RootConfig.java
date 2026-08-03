@@ -28,11 +28,15 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableTransactionManagement
+// Spring @PropertySource 는 뒤에 오는 것이 앞의 값을 덮어쓴다.
+// application-local.properties(개인) 를 가장 마지막에 둬야 실제로 우선 적용된다.
+// application-docker.properties 는 도커 이미지에는 있지만 로컬(gitignore 대상이라 미포함)엔 없으므로
+// ignoreResourceNotFound=true 로 로컬에서는 조용히 스킵된다.
 @PropertySource(
         value = {
                 "classpath:/application.properties",
-                "classpath:/application-local.properties",
-                "classpath:/application-docker.properties"
+                "classpath:/application-docker.properties",
+                "classpath:/application-local.properties"
         },
         ignoreResourceNotFound = true)
 @ComponentScan(
