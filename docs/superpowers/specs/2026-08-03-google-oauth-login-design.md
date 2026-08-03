@@ -30,7 +30,9 @@
   후속 이슈에서 라우팅만 바꿔 끼울 수 있게 한다.
 - 계좌 연동 · 홈 대시보드 · 알림
 - 로그아웃 UI (마이페이지 소관). API만 제공한다.
-- 운영 도메인 통합 (7절 참고)
+
+> 운영 도메인 통합(Vercel 프론트 ↔ EC2 백엔드 연결)은 8.2 참고 — 2026-08-03 `vercel.json`
+> 서버 사이드 프록시 + 배포용 설정 분리로 해결됐다.
 
 ### 사용자 동선과 개발 순서의 차이
 실제 동선은 **로그인 → 동의 → 계좌연동**이지만, 개발은 **로그인 → 계좌연동 → 동의** 순으로 진행한다.
@@ -335,13 +337,39 @@ Figma 버튼은 남색(`--tt-ink` 계열) 배경인데 `BaseButton`의 4개 vari
 **`/refresh`가 통째로 실패**한다. `auth.cookie.same-site` 프로퍼티로 분리해
 로컬 `Lax` / 운영 `None`을 환경별로 선택한다.
 
-### 8.2 미해결 — 운영 도메인 통합 (이번 범위 밖)
-현재 Vercel 프론트와 API가 서로 다른 도메인이고 CORS(`allowCredentials=true`)로 연결돼 있다.
-이 구조에서 리프레시 쿠키는 **서드파티 쿠키**가 되어 최신 크롬에서 차단될 수 있다.
+### 8.2 운영 도메인 통합 (2026-08-03 해결)
+Vercel 프론트와 EC2 백엔드는 원래 서로 다른 도메인이라, CORS(`allowCredentials=true`)로 연결하면
+리프레시 쿠키가 **서드파티 쿠키**가 되어 최신 크롬에서 차단될 수 있는 문제가 있었다.
 
-- **이번 이슈의 완료 기준은 로컬 동작까지**로 한다.
-- 운영 대응은 `/api`를 프론트 도메인 아래로 프록시하는 것(Vercel rewrites 또는 nginx)이며,
-  별도 이슈로 분리한다. Vercel rewrites는 대상이 HTTPS여야 하므로 백엔드 TLS 여부를 먼저 확인해야 한다.
+팀원 작업(`apps/web/vercel.json`)이 이를 해결했다.
+
+```json
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "http://3.35.24.153:8080/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+Vercel이 **서버 사이드**에서 `/api/*` 를 EC2로 프록시한다. 브라우저 관점에서는 프론트와 API가
+**같은 오리진**이 되므로, 리프레시 쿠키는 서드파티 쿠키가 아니라 퍼스트파티 쿠키다.
+**서드파티 쿠키 문제가 발생하지 않으므로 `SameSite=Lax`를 그대로 유지한다** (운영에서 `None`으로
+바꿀 필요가 없어졌다 — 8.1에서 예상했던 시나리오와 다른 결론이다).
+
+백엔드의 환경별 주소(`app.front-url`·`google.oauth.redirect-uri`·`auth.cookie.secure`)는
+`APP_ENV=docker`일 때 로드되는 `application-docker.properties`가 컨테이너 환경변수로 받는다
+(`APP_FRONT_URL`·`GOOGLE_OAUTH_REDIRECT_URI`·`AUTH_COOKIE_SECURE`, `docker-compose.yml`의 `api`
+서비스 `environment`에 정의). 실제 값은 EC2의 `.env`에서 주입한다.
+
+**로컬은 영향 없다.** `APP_ENV`가 없으면 `application-local.properties`가 로드되고,
+`application.properties`의 localhost 기본값(`http://localhost:5173` 등)을 그대로 쓴다.
+
+남은 수동 절차 (코드로 해결 불가):
+- Google Cloud Console의 "승인된 리디렉션 URI"에 Vercel 콜백 주소
+  (`https://monorepo-three-ruby-81.vercel.app/api/auth/google/callback`)를 등록한다.
+- EC2의 `.env`에 `APP_FRONT_URL`·`GOOGLE_OAUTH_REDIRECT_URI`·`AUTH_COOKIE_SECURE=true`
+  값을 채운 뒤 `docker compose up -d --build api`로 반영한다.
 
 ---
 
@@ -383,7 +411,6 @@ Figma 버튼은 남색(`--tt-ink` 계열) 배경인데 `BaseButton`의 4개 vari
 
 | 항목 | 사유 |
 |---|---|
-| 운영 도메인 통합 (`/api` 프록시) | 8.2 — 서드파티 쿠키 차단 대응 |
 | Figma 로그인 화면의 `CPR` 표기 수정 | 6.6 — 구 서비스명. 디자인 담당 |
 | 약관 동의 화면 (`needsConsent` 게이트 연결) | 후속 이슈 |
 | 계좌 연동 3화면 | 후속 이슈 |
