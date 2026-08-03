@@ -146,9 +146,12 @@ tbl_user_consent(
 ```gradle
     testImplementation 'org.mockito:mockito-core:5.12.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.12.0'
-    // 서블릿 API 는 main 이 compileOnly 라 테스트 클래스패스에 자동으로 오지 않는다.
-    // MockHttpServletRequest 등을 쓰려면 테스트에도 따로 얹어야 한다.
-    testCompileOnly 'javax.servlet:javax.servlet-api:4.0.1'
+    // 서블릿 API 는 톰캣이 제공하므로 main 은 compileOnly 다.
+    // 다만 테스트는 MockHttpServletRequest/Response 를 "실행"하므로 런타임에도 필요하다.
+    // testCompileOnly 로 두면 컴파일은 되지만 JUnit5 discovery 단계에서
+    // NoClassDefFoundError: javax/servlet/http/HttpServletResponse 로 죽는다 (Task 6 에서 실제 발생).
+    // testImplementation 은 테스트 스코프 전용이라 war 에는 들어가지 않는다.
+    testImplementation 'javax.servlet:javax.servlet-api:4.0.1'
     // spring-test 의 MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 hamcrest 를 쓴다.
     // spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않는다 (JUnit4 와 달리 JUnit5 도 안 끌어온다).
     // 없으면 Task 4 의 테스트가 "class file for org.hamcrest.Matcher not found" 로 컴파일 실패한다.
