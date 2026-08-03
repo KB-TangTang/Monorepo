@@ -502,15 +502,13 @@ public interface RefreshTokenMapper {
 -->
 <mapper namespace="com.kb.tangtang.user.mapper.UserMapper">
 
+    <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
+    <sql id="userColumns">
+        id, social_provider, provider_user_id, email, nickname, name, status, difficulty_id
+    </sql>
+
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
-        SELECT id,
-               social_provider,
-               provider_user_id,
-               email,
-               nickname,
-               name,
-               status,
-               difficulty_id
+        SELECT <include refid="userColumns"/>
           FROM tbl_user
          WHERE social_provider  = #{socialProvider}
            AND provider_user_id = #{providerUserId}
@@ -1688,14 +1686,7 @@ class AuthServiceTest {
 
 ```xml
     <select id="findById" resultType="com.kb.tangtang.user.dto.UserDto">
-        SELECT id,
-               social_provider,
-               provider_user_id,
-               email,
-               nickname,
-               name,
-               status,
-               difficulty_id
+        SELECT <include refid="userColumns"/>
           FROM tbl_user
          WHERE id = #{id}
     </select>
