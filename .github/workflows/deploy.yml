@@ -2,8 +2,13 @@ name: EC2 백엔드 자동 배포
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: '배포할 브랜치 (기본: main)'
+        required: false
+        default: 'main'
 
 jobs:
   deploy:
@@ -17,7 +22,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/Monorepo
-            git pull origin main
+            BRANCH=${{ github.event.inputs.branch || github.ref_name }}
+            git fetch origin
+            git checkout $BRANCH
+            git pull origin $BRANCH
             docker compose down
             docker compose up --build -d
             docker image prune -f
