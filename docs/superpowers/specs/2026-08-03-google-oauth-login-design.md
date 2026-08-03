@@ -119,11 +119,15 @@ DB 비밀번호가 3개 파일에 하드코딩돼 git에 추적되고 있었다.
       ⑥ Set-Cookie: refresh_token=… HttpOnly; Secure; SameSite=…; Path=/api/auth
       302 → 프론트 /auth/callback        ← URL 에 토큰 일절 없음
 
-[5] /auth/callback 라우트가 POST /api/auth/refresh 1회 호출
-      → { accessToken, user, needsConsent }
-      → authStore 저장 (accessToken 은 메모리에만)
-      → router.replace('/')
+[5] 브라우저가 SPA 를 새로 로드한다 → main.js 부팅 시퀀스가 이미
+      POST /api/auth/refresh 를 1회 호출해 세션을 복원한다 (4.2 와 동일 경로)
+      → { accessToken, user, needsConsent } → authStore 저장 (accessToken 은 메모리에만)
+      → /auth/callback 라우트는 로그인 여부만 보고 router.replace('/')
 ```
+
+> 콜백 착지 화면이 refresh 를 따로 부르지 않는 이유: OAuth 리다이렉트는 전체 페이지 이동이라
+> 앱이 새로 부팅된다. 부팅 시퀀스(4.2)가 이미 refresh 를 수행하므로 여기서 또 부르면
+> **회전 방식 때문에 두 번째 호출이 재사용으로 감지돼 전체 토큰이 폐기된다.**
 
 > **`needsConsent`의 이번 범위**: 응답에 포함하고 `authStore`에 보관만 한다.
 > 이번 이슈에서는 값과 무관하게 항상 `/`로 보낸다(동의 화면이 아직 없음).
@@ -175,9 +179,14 @@ common/auth/    JwtProvider                 생성 · 검증
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트 `/auth/callback` + `Set-Cookie` |
 | POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user, needsConsent }` |
 | POST | `/api/auth/logout` | 쿠키 | `{}` + 쿠키 만료 + DB revoke |
-| GET | `/api/users/me` | Bearer | `{ id, nickname, email, profileImageUrl }` |
+| GET | `/api/users/me` | Bearer | `{ id, nickname, email }` |
 
 리다이렉트 2건을 제외한 모든 응답은 `ApiResponse` 래퍼로 감싼다.
+
+> `tbl_user`에는 프로필 이미지 컬럼이 없다(`id`·`social_provider`·`provider_user_id`·`email`·
+> `nickname`·`name`·`phone`·`birth_date`·`gender`·`status`·`withdrawn_at`·`difficulty_id`·타임스탬프).
+> 구글 `picture` 클레임은 저장하지 않고 버린다. 필요해지면 컬럼 추가를 `db/migration/`으로 처리한다.
+> 구글 `name`은 `nickname`에 넣고 `name`(실명)은 NULL로 둔다 — 본인확인용 실명은 계좌 인증 단계에서 채운다.
 
 ### 5.2 인터셉터 적용 범위
 `/api/**` 전체에 등록하되 `/api/health`, `/api/auth/**`는 제외한다.
