@@ -1,35 +1,142 @@
 /*
- * 탕탕(지갑재판소) 디자인 토큰.
- * 색상은 반드시 이 변수를 통해 사용한다. 컴포넌트에 HEX 하드코딩 금지.
+ * 탕탕(지갑재판소) 디자인 토큰 — 팀 디자인시스템(Figma) 기준.
+ *
+ * 규칙
+ *  1. 색상·폰트·간격은 반드시 이 변수를 통해 쓴다. 컴포넌트에 HEX 하드코딩 금지.
+ *  2. 컴포넌트는 「의미 토큰」(--tt-primary, --tt-text, --tt-bg …)만 참조한다.
+ *     원시 팔레트(--tt-brand-700 등)는 이 파일의 의미 토큰 정의에서만 쓴다.
+ *  3. 값을 바꿔야 하면 docs/DESIGN_SYSTEM.md 도 같이 고친다.
  */
 :root {
-    /* Brand */
-    --tt-trust-blue: #2f5ad0; /* 주색 — 신뢰·금융 */
-    --tt-gavel-yellow: #ffc338; /* 강조 — 판사봉·포인트 */
-    --tt-verdict-red: #e5484d; /* 경고·유죄 판결 */
-    --tt-acquit-mint: #12a594; /* 긍정·무죄·절감 성공 */
+    /* ── Brand (Trust Blue) ─────────────────────────────── */
+    --tt-brand-900: #1e3e9c; /* hover · pressed */
+    --tt-brand-700: #2f5ad0; /* Primary — 메인 액션 */
+    --tt-brand-500: #5b7bc4;
+    --tt-brand-200: #bfd2f6; /* border */
+    --tt-brand-100: #dae7fb; /* Secondary — 선택 상태 */
+    --tt-brand-50: #eaf0fb; /* bg */
 
-    /* Neutral */
-    --tt-gray-900: #17181c;
-    --tt-gray-700: #45474f;
-    --tt-gray-500: #7b7e8a;
-    --tt-gray-300: #d3d5db;
-    --tt-gray-100: #f2f3f5;
+    /* ── Accent (Gold · 배지 · 판사봉) ──────────────────── */
+    --tt-accent-700: #8a6410; /* 텍스트용 진한 골드 */
+    --tt-accent-500: #ffc338; /* Accent */
+    --tt-accent-50: #fff6e0; /* bg */
+
+    /* ── Cool Gray 10단계 ───────────────────────────────── */
+    --tt-gray-50: #f8fafd;
+    --tt-gray-100: #f1f4f9;
+    --tt-gray-200: #e5eaf2;
+    --tt-gray-300: #d3dae7;
+    --tt-gray-400: #b8c2d3;
+    --tt-gray-500: #9da8bd;
+    --tt-gray-600: #8792ae;
+    --tt-gray-700: #68728f;
+    --tt-gray-800: #444c68;
+    --tt-gray-900: #252b42; /* Navy — 수치카드 · CTA */
+    --tt-ink: #1b2138; /* 최고 대비 텍스트 */
     --tt-white: #ffffff;
 
-    /* Semantic */
-    --tt-text: var(--tt-gray-900);
-    --tt-text-muted: var(--tt-gray-700);
-    --tt-bg: var(--tt-white);
-    --tt-bg-subtle: var(--tt-gray-100);
-    --tt-border: var(--tt-gray-300);
-    --tt-primary: var(--tt-trust-blue);
-    --tt-danger: var(--tt-verdict-red);
-    --tt-success: var(--tt-acquit-mint);
-    --tt-accent: var(--tt-gavel-yellow);
+    /* ── 시맨틱 · 판정 ──────────────────────────────────── */
+    --tt-guilty-700: #c7515a; /* 유죄 · 초과 · 위험 */
+    --tt-guilty-300: #f0d4d7;
+    --tt-guilty-50: #fbedee;
+    --tt-innocent-800: #2f7a62;
+    --tt-innocent-700: #3e9b7e; /* 무죄 · 절약 · 성공 */
+    --tt-innocent-300: #cde5d9;
+    --tt-innocent-50: #e7f2ed;
 
-    /* Radius / Spacing */
+    /* ── 종이 · 목재 (절제 사용) ────────────────────────── */
+    /* 판사봉 · 인장 · 종이 질감에만 쓴다. 일반 UI 배경·텍스트에 쓰지 말 것. */
+    --tt-wood: #9c7b54;
+    --tt-kraft: #efe7d8;
+
+    /* ── 의미 토큰 (컴포넌트는 이쪽만 참조한다) ─────────── */
+    --tt-primary: var(--tt-brand-700);
+    --tt-primary-hover: var(--tt-brand-900);
+    --tt-primary-subtle: var(--tt-brand-100);
+    --tt-danger: var(--tt-guilty-700);
+    --tt-danger-subtle: var(--tt-guilty-50);
+    --tt-success: var(--tt-innocent-700);
+    --tt-success-subtle: var(--tt-innocent-50);
+    --tt-accent: var(--tt-accent-500);
+    --tt-accent-subtle: var(--tt-accent-50);
+
+    --tt-text: var(--tt-ink);
+    --tt-text-muted: var(--tt-gray-700);
+    --tt-text-inverse: var(--tt-white);
+
+    --tt-bg: var(--tt-white);
+    --tt-bg-subtle: var(--tt-gray-50);
+    --tt-border: var(--tt-gray-200);
+    --tt-border-strong: var(--tt-gray-400);
+
+    /* 모달·바텀시트 뒤에 까는 딤. --tt-ink 의 rgb 값에 투명도를 준 것 —
+     * CSS 변수는 색상 채널만 따로 꺼내 쓸 수 없어 값을 직접 적는다. */
+    --tt-overlay-dim: rgba(27, 33, 56, 0.48);
+    /* 카드 가장자리를 파낸 노치(영수증 절취선·소환장 펀치홀)를 칠하는 색.
+     * "카드 뒤에 보이는 배경"이어야 한다. 흰 배경 화면에서는 화면 쪽에서
+     * --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
+    --tt-notch-bg: var(--tt-bg-subtle);
+
+    /* ── 타이포 ─────────────────────────────────────────── */
+    --tt-font-sans:
+        'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+        'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    --tt-font-mono: 'Roboto Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+    /* 스케일 — display / title / section / body / caption / numeric / mono-chip */
+    --tt-fs-display: 44px;
+    --tt-fs-title: 26px;
+    --tt-fs-numeric: 34px;
+    --tt-fs-section: 18px;
+    --tt-fs-body: 15px;
+    --tt-fs-caption: 13px;
+    --tt-fs-mono-chip: 12px;
+
+    --tt-fw-regular: 400;
+    --tt-fw-medium: 500;
+    --tt-fw-bold: 700;
+    --tt-fw-black: 800;
+
+    --tt-lh-tight: 1.2; /* display · title · numeric */
+    --tt-lh-snug: 1.4; /* section */
+    --tt-lh-normal: 1.6; /* body · caption */
+
+    /* ── Radius ─────────────────────────────────────────── */
+    --tt-radius-xs: 4px;
     --tt-radius-sm: 6px;
     --tt-radius-md: 12px;
     --tt-radius-lg: 20px;
+    --tt-radius-xl: 28px;
+    --tt-radius-full: 999px;
+
+    /* ── Spacing (4px 그리드) ───────────────────────────── */
+    --tt-space-1: 4px;
+    --tt-space-2: 8px;
+    --tt-space-3: 12px;
+    --tt-space-4: 16px;
+    --tt-space-5: 20px;
+    --tt-space-6: 24px;
+    --tt-space-8: 32px;
+    --tt-space-10: 40px;
+    --tt-space-12: 48px;
+
+    /* ── Elevation (Navy 계열 그림자) ───────────────────── */
+    --tt-elevation-0: none;
+    --tt-elevation-1: 0 1px 2px rgba(37, 43, 66, 0.06);
+    --tt-elevation-2: 0 2px 8px rgba(37, 43, 66, 0.08);
+    --tt-elevation-3: 0 8px 24px rgba(37, 43, 66, 0.12);
+
+    /* ── z-index ────────────────────────────────────────
+     * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다.
+     * 각자 숫자를 쓰면 화면마다 겹침 순서가 달라진다. */
+    --tt-z-base: 0;
+    --tt-z-sticky: 100; /* 화면 상단 고정 헤더 */
+    --tt-z-tabbar: 200; /* 하단 탭바 */
+    --tt-z-overlay: 900; /* 모달 · 바텀시트 뒤 딤 */
+    --tt-z-modal: 1000; /* 모달 · 바텀시트 패널 */
+    --tt-z-toast: 1100; /* 토스트 · 스낵바 */
+
+    /* ── 레이아웃 ───────────────────────────────────────── */
+    --tt-tabbar-height: 60px;
+    --tt-content-max: 480px; /* 모바일 웹 우선 — 본문 최대 폭 */
 }
