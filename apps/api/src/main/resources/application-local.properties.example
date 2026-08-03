@@ -11,3 +11,8 @@ jdbc.password=CHANGE_ME_DB_PASSWORD
 
 # 호스트·포트·DB명이 기본값(localhost:3306/tangtang)과 다를 때만 주석 해제
 #jdbc.url=jdbc:log4jdbc:mysql://localhost:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+
+# ── JWT 서명키 ─────────────────────────────────────────
+# HS256 은 256비트 이상을 요구한다. 32자 미만이면 기동 시 WeakKeyException 으로 실패한다.
+# 팀 개발용으로는 아무 랜덤 문자열 32자 이상이면 된다. 운영 값과 다르게 둔다.
+jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
