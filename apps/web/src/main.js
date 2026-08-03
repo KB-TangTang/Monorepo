@@ -28,8 +28,14 @@ app.use(pinia);
 try {
     const session = await refreshSession();
     useAuthStore(pinia).setSession(session);
-} catch {
-    // 비로그인 상태로 진행한다
+} catch (error) {
+    // 비로그인 사용자는 여기서 실패하는 게 정상이므로 조용히 넘어간다.
+    // 단 재사용 감지로 폐기된 경우(탈취 의심)는 이유를 알려야 하므로 로그인 화면으로 보낸다.
+    // refreshSession() 은 http 인스턴스를 타므로 여기서 잡히는 건 ApiError 다(http.js 의
+    // 인터셉터가 이미 가공했다) — refreshError.response.data.code 가 아니라 error.code 로 접근한다.
+    if (error?.code === 'REFRESH_TOKEN_REUSED') {
+        window.location.replace('/login?error=security');
+    }
 }
 
 app.use(router);

@@ -23,7 +23,7 @@
 | GET | `/api/auth/google` | 불필요 | 302 → 구글 동의 화면. `oauth_state` 쿠키 발급 |
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
 | POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: { id, nickname, email }, needsConsent }` |
-| POST | `/api/auth/logout` | 쿠키 | `{}` + 쿠키 만료 |
+| POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
 | GET | `/api/users/me` | Bearer | `{ id, nickname, email }` |
 
 ### 인증 에러 코드
@@ -36,7 +36,14 @@
 | `REFRESH_TOKEN_REUSED` | 400 | 폐기된 리프레시 토큰 재사용 — 전체 토큰 폐기됨 |
 | `USER_WITHDRAWN` | 400 | 탈퇴·차단 계정 |
 | `OAUTH_TOKEN_EXCHANGE_FAILED` | 400 | 구글 code↔token 교환 실패 |
+| `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 |
 
-### 콜백 리다이렉트 error 쿼리
+### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 
-`cancelled`(사용자 취소) · `invalid`(state 불일치) · `failed`(교환 실패) · `withdrawn`(이용 불가 계정) · `expired`(세션 만료)
+`cancelled`(사용자 취소) · `invalid`(state 불일치) · `failed`(교환 실패) · `withdrawn`(이용 불가 계정)
+
+### 프론트 재발급 실패 시 error 쿼리 (`http.js`/`main.js` 가 붙이는 값)
+
+콜백이 아니라 액세스 토큰 재발급(`/api/auth/refresh`) 실패 시 프론트가 붙인다.
+
+`expired`(단순 세션 만료) · `security`(`REFRESH_TOKEN_REUSED` 감지 — 탈취 의심으로 전체 토큰 폐기됨)

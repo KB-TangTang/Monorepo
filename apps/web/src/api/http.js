@@ -89,10 +89,15 @@ http.interceptors.response.use(
                 useAuthStore().setSession(session);
                 config.headers.Authorization = `Bearer ${session.accessToken}`;
                 return http(config);
-            } catch {
+            } catch (refreshError) {
                 // 재발급도 실패 = 세션이 끝났다. 로그인 화면으로 되돌린다.
+                // 재사용 감지(탈취 의심)로 폐기된 경우와 단순 만료를 구분해 안내한다.
                 useAuthStore().clear();
-                window.location.assign('/login?error=expired');
+                const reason =
+                    refreshError?.response?.data?.code === 'REFRESH_TOKEN_REUSED'
+                        ? 'security'
+                        : 'expired';
+                window.location.assign(`/login?error=${reason}`);
             }
         }
 

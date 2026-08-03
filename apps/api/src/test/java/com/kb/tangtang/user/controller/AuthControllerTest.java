@@ -174,12 +174,20 @@ class AuthControllerTest {
     void refresh() throws Exception {
         when(authService.refresh("old-raw")).thenReturn(authResult());
 
-        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refresh_token", "old-raw")))
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refresh_token", "old-raw")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
                 .andExpect(jsonPath("$.data.user.nickname").value("지윤"))
-                .andExpect(jsonPath("$.data.needsConsent").value(true));
+                .andExpect(jsonPath("$.data.needsConsent").value(true))
+                .andReturn();
+
+        assertTrue(result.getResponse().getHeaders("Set-Cookie").stream()
+                        .anyMatch(header -> header.startsWith("refresh_token=refresh-raw")),
+                "회전된 리프레시 토큰이 쿠키로 나가야 한다");
+        assertTrue(result.getResponse().getHeaders("Set-Cookie").stream()
+                        .anyMatch(header -> header.startsWith("refresh_token=refresh-raw") && header.contains("HttpOnly")),
+                "회전된 쿠키도 HttpOnly 여야 한다");
     }
 
     @Test
