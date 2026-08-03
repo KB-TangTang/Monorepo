@@ -10,7 +10,7 @@ import axios from 'axios';
  * 인터셉터에서 data 만 꺼내주므로, 호출부는 실제 payload 만 받는다.
  */
 const http = axios.create({
-    baseURL: '/api',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 10000,
     headers: { 'Content-Type': 'application/json' },
 });

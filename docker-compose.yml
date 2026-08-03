@@ -1,0 +1,63 @@
+services:
+
+  # === 1. 데이터베이스 ===
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # === 2. 목서버 (CODEF 대역) — 별도 레포 ===
+  mock:
+    build:
+      context: ../Financial-Mock-Server
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # === 3. 본서버 (비즈니스 로직) ===
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+      JDBC_URL: jdbc:log4jdbc:mysql://db:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      JDBC_USERNAME: ${MYSQL_USER}
+      JDBC_PASSWORD: ${MYSQL_PASSWORD}
+      CODEF_API_URL: ${CODEF_API_URL}
+      CODEF_CLIENT_ID: ${CODEF_CLIENT_ID}
+      CODEF_CLIENT_SECRET: ${CODEF_CLIENT_SECRET}
+      MOCK_API_URL: http://mock:8080
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      TZ: Asia/Seoul
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      mock:
+        condition: service_started
+
+volumes:
+  mysql_data:

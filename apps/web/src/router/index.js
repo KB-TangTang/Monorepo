@@ -1,23 +1,57 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue';
+
+/*
+ * 하단 5탭 구조: 재판 · 자산 · 홈 · 장부 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
+ * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
+ *   component: () => import('@/views/trial/TrialHomeView.vue')
+ */
+const routes = [
+    {
+        path: '/',
+        name: 'home',
+        component: () => import('@/views/HomeView.vue'),
+        meta: { title: '홈' },
+    },
+    {
+        path: '/trial',
+        name: 'trial',
+        component: () => import('@/views/PlaceholderView.vue'),
+        meta: { title: '재판' },
+    },
+    {
+        path: '/asset',
+        name: 'asset',
+        component: () => import('@/views/PlaceholderView.vue'),
+        meta: { title: '자산' },
+    },
+    {
+        path: '/ledger',
+        name: 'ledger',
+        component: () => import('@/views/PlaceholderView.vue'),
+        meta: { title: '장부' },
+    },
+    {
+        path: '/my',
+        name: 'my',
+        component: () => import('@/views/PlaceholderView.vue'),
+        meta: { title: '마이' },
+    },
+];
+
+/* 개발용 컴포넌트 카탈로그. import.meta.env.DEV 가 false 인 프로덕션 빌드에서는
+ * 이 블록째로 제거돼 라우트도 청크도 생기지 않는다. */
+if (import.meta.env.DEV) {
+    routes.push({
+        path: '/dev/ui',
+        name: 'devUi',
+        component: () => import('@/views/dev/UiCatalogView.vue'),
+        meta: { title: '컴포넌트 카탈로그' },
+    });
+}
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
-    routes: [
-        {
-            path: '/',
-            name: 'home',
-            component: HomeView,
-        },
-        {
-            path: '/about',
-            name: 'about',
-            // route level code-splitting
-            // this generates a separate chunk (About.[hash].js) for this route
-            // which is lazy-loaded when the route is visited.
-            component: () => import('../views/AboutView.vue'),
-        },
-    ],
+    routes,
 });
 
 export default router;

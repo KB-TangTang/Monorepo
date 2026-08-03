@@ -29,13 +29,28 @@ Vite·Babel 이 요구하는 최소 버전에 미달하면 빌드 결과가 달�
 ## 폴더
 
 ```
-src/api/         API 호출 모듈. 도메인별 파일 (health.js, user.js …)
-src/views/       라우트에 연결되는 페이지
-src/components/  재사용 조각
-src/stores/      Pinia 스토어
-src/router/      라우팅
-src/assets/      tokens.css(디자인 토큰) · 전역 스타일
+src/api/                 API 호출 모듈. 도메인별 파일 (health.js, user.js …)
+src/views/               라우트에 연결되는 페이지
+src/components/common/   팀 공용 컴포넌트. 수정하면 다른 화면이 같이 바뀐다 — 담당자 리뷰 필요
+src/components/<도메인>/  화면 전용 조각 (trial, asset, home, ledger, my, dev)
+src/stores/              Pinia 스토어
+src/router/              라우팅
+src/assets/              tokens.css(디자인 토큰) · 전역 스타일
 ```
+
+공용은 `Base*` / `The*` 접두(`BaseCard.vue`, `TheTabBar.vue`), 화면 전용은 도메인 접두를 쓴다.
+
+## 공통 컴포넌트 — 만들기 전에 `/dev/ui` 를 먼저 본다
+
+**새 공통 컴포넌트를 만들기 전에 개발 서버에서 `/dev/ui` 를 열어 이미 있는지 확인한다.**
+카탈로그에는 컴포넌트별 용도 · variant/size 조합 · 복사용 코드와 컬러 토큰 · 타이포 스케일이 모두 있다.
+확인하지 않으면 같은 걸 6명이 각자 만든다.
+
+- 화면 전용 조각은 `components/<도메인>/` 에 만든다. **세 번째 화면에서 또 필요해지면** 그때 `common/` 으로 올린다(3의 법칙).
+- `common/` 에 컴포넌트를 추가하면 **`views/dev/UiCatalogView.vue` 에도 등록한다.** 등록하지 않은 공용 컴포넌트는 없는 것과 같다.
+- 카탈로그 라우트는 `import.meta.env.DEV` 로 막혀 있어 프로덕션 빌드에는 포함되지 않는다.
+- **모달·바텀시트는 반드시 `BaseModal` / `BaseBottomSheet` 를 쓴다.** 각자 오버레이를 만들면
+  z-index·스크롤 잠금·뒤로가기 처리가 화면마다 달라진다. z-index 는 `--tt-z-*` 토큰만 참조한다.
 
 ## API 호출
 
@@ -54,16 +69,29 @@ const data = await fetchHealth()   // { status: 'UP', service: 'tangtang-api' }
 ## 디자인 토큰
 
 `src/assets/tokens.css` 의 CSS 변수만 사용한다. **색상 HEX 하드코딩 금지.**
+전체 값 표는 `docs/DESIGN_SYSTEM.md` 에 있다 (Figma 없이도 값을 찾을 수 있다).
 
-| 토큰 | 값 | 용도 |
-|---|---|---|
-| `--tt-trust-blue` | `#2F5AD0` | 주색 · 신뢰 |
-| `--tt-gavel-yellow` | `#FFC338` | 강조 · 판사봉 |
-| `--tt-verdict-red` | `#E5484D` | 경고 · 유죄 |
-| `--tt-acquit-mint` | `#12A594` | 긍정 · 절감 성공 |
+**컴포넌트는 의미 토큰만 참조한다.** 원시 팔레트(`--tt-brand-700`, `--tt-guilty-700` …)는
+`tokens.css` 안의 의미 토큰 정의에서만 쓴다.
 
-의미 토큰(`--tt-primary`, `--tt-danger`, `--tt-success`, `--tt-accent`)을 우선 쓰고,
-브랜드 토큰은 그 정의에서만 참조한다.
+| 의미 토큰 | 참조 원시 토큰 | 값 | 용도 |
+|---|---|---|---|
+| `--tt-primary` | `--tt-brand-700` | `#2F5AD0` | 주색 · 메인 액션 |
+| `--tt-primary-hover` | `--tt-brand-900` | `#1E3E9C` | hover · pressed |
+| `--tt-accent` | `--tt-accent-500` | `#FFC338` | 강조 · 판사봉 · 배지 |
+| `--tt-danger` | `--tt-guilty-700` | `#C7515A` | 유죄 · 초과 · 위험 |
+| `--tt-success` | `--tt-innocent-700` | `#3E9B7E` | 무죄 · 절약 성공 |
+| `--tt-text` / `--tt-text-muted` | `--tt-ink` / `--tt-gray-700` | `#1B2138` / `#68728F` | 본문 / 보조 |
+| `--tt-bg` / `--tt-bg-subtle` | `--tt-white` / `--tt-gray-50` | `#FFFFFF` / `#F8FAFD` | 배경 |
+| `--tt-border` / `--tt-border-strong` | `--tt-gray-200` / `--tt-gray-400` | `#E5EAF2` / `#B8C2D3` | 선 |
+
+> 구 팔레트(`--tt-verdict-red` `#E5484D`, `--tt-acquit-mint` `#12A594`, 중립 그레이)는
+> 2026-07-31 디자인시스템 값으로 교체돼 더 이상 존재하지 않는다.
+
+색상 외에 폰트·간격·라운드·그림자도 토큰을 쓴다:
+`--tt-font-sans`(Pretendard) · `--tt-font-mono`(Roboto Mono) · `--tt-fs-*` · `--tt-fw-*` ·
+`--tt-space-*` · `--tt-radius-*` · `--tt-elevation-*`.
+갈색(`--tt-wood`, `--tt-kraft`)은 판사봉·인장·종이 질감에만 쓴다.
 
 ## 상태 관리
 
