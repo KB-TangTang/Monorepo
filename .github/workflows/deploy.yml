@@ -3,6 +3,7 @@ name: EC2 백엔드 자동 배포
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
