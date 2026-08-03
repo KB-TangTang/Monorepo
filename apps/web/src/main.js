@@ -13,14 +13,16 @@ const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
-app.use(router);
 
 /*
- * 부팅 시 세션 복원.
- * 액세스 토큰은 메모리에만 있어 새로고침하면 사라진다. httpOnly 리프레시 쿠키로
- * 한 번 재발급받아 로그인 상태를 되살린다. 구글 콜백에서 돌아온 직후에도 이 경로를 탄다.
+ * 세션 복원을 라우터 설치보다 먼저 끝낸다.
  *
- * mount 전에 끝내야 라우터 가드가 올바른 로그인 상태를 보고 판단한다.
+ * app.use(router) 는 그 자리에서 초기 내비게이션을 시작한다(vue-router install 내부에서
+ * push(routerHistory.location) 를 호출). 복원보다 먼저 설치하면 가드가 "비로그인" 상태를
+ * 보고 /login 으로 보내버려, 로그인한 사용자가 새로고침할 때마다 튕긴다.
+ *
+ * 액세스 토큰은 메모리에만 있어 새로고침하면 사라진다. httpOnly 리프레시 쿠키로
+ * 한 번 재발급받아 로그인 상태를 되살린다.
  * 실패는 정상 흐름(비로그인)이므로 조용히 넘어간다.
  */
 try {
@@ -29,5 +31,9 @@ try {
 } catch {
     // 비로그인 상태로 진행한다
 }
+
+app.use(router);
+// 초기 내비게이션이 끝난 뒤 마운트해 첫 화면 깜빡임을 막는다
+await router.isReady();
 
 app.mount('#app');
