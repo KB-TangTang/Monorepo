@@ -58,6 +58,30 @@ const routes = [
         component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
         meta: { title: '카테고리별 순 절감액' },
     },
+    {
+        path: '/asset/fixed-expenses/savings',
+        name: 'fixedExpenseSavings',
+        component: () => import('@/views/fixed-expense/FixedExpenseSavingsView.vue'),
+        meta: { title: '절약 감정서' },
+    },
+    {
+        path: '/asset/fixed-expenses',
+        name: 'fixedExpenseManagement',
+        component: () => import('@/views/fixed-expense/FixedExpenseManagementView.vue'),
+        meta: { title: '고정지출 관리' },
+    },
+    {
+        path: '/asset/fixed-expenses/candidates/:candidateId',
+        name: 'fixedExpenseCandidate',
+        component: () => import('@/views/fixed-expense/FixedExpenseCandidateView.vue'),
+        meta: { title: '탐지 후보 확인' },
+    },
+    {
+        path: '/asset/fixed-expenses/:expenseId',
+        name: 'fixedExpenseDetail',
+        component: () => import('@/views/fixed-expense/FixedExpenseDetailView.vue'),
+        meta: { title: '고정지출 상세' },
+    },
 ];
 
 /* 개발용 컴포넌트 카탈로그. import.meta.env.DEV 가 false 인 프로덕션 빌드에서는
