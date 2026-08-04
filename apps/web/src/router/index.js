@@ -29,6 +29,12 @@ const routes = [
         meta: { title: '서비스 동의', hideTabBar: true },
     },
     {
+        path: '/consent/financial',
+        name: 'financialConsent',
+        component: () => import('@/views/consent/FinancialConsentView.vue'),
+        meta: { title: '금융데이터 수집 동의', hideTabBar: true },
+    },
+    {
         path: '/',
         name: 'home',
         component: () => import('@/views/HomeView.vue'),
