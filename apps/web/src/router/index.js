@@ -37,7 +37,7 @@ const routes = [
     {
         path: '/asset',
         name: 'asset',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/AssetHomeView.vue'),
         meta: { title: '자산' },
     },
     {
