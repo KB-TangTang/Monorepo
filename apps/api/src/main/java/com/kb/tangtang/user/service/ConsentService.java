@@ -5,14 +5,18 @@ import com.kb.tangtang.user.domain.ConsentScope;
 import com.kb.tangtang.user.domain.ConsentType;
 import com.kb.tangtang.user.dto.ConsentAgreementDto;
 import com.kb.tangtang.user.dto.ConsentRecordDto;
+import com.kb.tangtang.user.dto.MyConsentDto;
+import com.kb.tangtang.user.dto.MyConsentRowDto;
 import com.kb.tangtang.user.mapper.ConsentMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 동의 저장·철회·조회. 트랜잭션 경계는 이 클래스에 둔다.
@@ -90,6 +94,73 @@ public class ConsentService {
                     .withdrawnAt(agreed ? null : now)
                     .expiresAt(agreed && type == ConsentType.FINANCIAL_DATA ? now.plusYears(1) : null)
                     .build());
+        }
+
+        return needsConsent(userId);
+    }
+
+    /**
+     * 내 동의 현황. 카탈로그의 모든 항목을 돌려주고, 이력이 없는 항목은 미동의로 채운다.
+     * 화면이 "무엇에 동의할 수 있는지"를 알아야 하므로 저장된 행만 돌려주지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public List<MyConsentDto> myConsents(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, MyConsentRowDto> rows = consentMapper.findByUserId(userId).stream()
+                .collect(Collectors.toMap(MyConsentRowDto::getConsentType, row -> row, (a, b) -> a));
+
+        List<ConsentType> all = new ArrayList<>();
+        for (ConsentScope scope : ConsentScope.values()) {
+            for (ConsentType type : scope.types()) {
+                if (!all.contains(type)) {
+                    all.add(type);
+                }
+            }
+        }
+
+        return all.stream().map(type -> {
+            MyConsentRowDto row = rows.get(type.name());
+            boolean agreed = row != null
+                    && row.getStatus() == 1
+                    && row.getWithdrawnAt() == null
+                    && (row.getExpiresAt() == null || row.getExpiresAt().isAfter(now));
+            return MyConsentDto.builder()
+                    .type(type.name())
+                    .required(type.required())
+                    .label(type.label())
+                    .termsUrl(catalog.termsUrl(type))
+                    .agreed(agreed)
+                    .withdrawable(type.withdrawable())
+                    .termsVersion(row == null ? null : row.getTermsVersion())
+                    .expiresAt(row == null ? null : row.getExpiresAt())
+                    .build();
+        }).toList();
+    }
+
+    /**
+     * 동의 철회. 행을 지우지 않고 UPDATE 한다(DS_01_02).
+     *
+     * FINANCIAL_DATA 를 철회하면 THIRD_PARTY 도 함께 철회한다 —
+     * 금융데이터 포괄 동의를 거두면서 CODEF 개별 제공 동의만 남는 것은 모순이다.
+     *
+     * TODO(#12): 철회 시 계좌 연동 해제·수집 중단 처리를 연결한다.
+     *
+     * @return 철회 후 needsConsent
+     */
+    @Transactional
+    public boolean withdraw(Long userId, String rawType) {
+        ConsentType type = parseType(rawType);
+        if (!type.withdrawable()) {
+            throw new BusinessException("CONSENT_NOT_WITHDRAWABLE",
+                    "철회할 수 없는 항목입니다: " + type.label());
+        }
+
+        List<String> targets = type == ConsentType.FINANCIAL_DATA
+                ? List.of(ConsentType.FINANCIAL_DATA.name(), ConsentType.THIRD_PARTY.name())
+                : List.of(type.name());
+
+        if (consentMapper.withdraw(userId, targets, LocalDateTime.now()) == 0) {
+            throw new BusinessException("NOT_FOUND", "철회할 동의 내역이 없습니다.");
         }
 
         return needsConsent(userId);
