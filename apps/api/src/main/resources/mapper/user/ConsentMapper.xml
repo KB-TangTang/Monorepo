@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType / parameterType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+-->
+<mapper namespace="com.kb.tangtang.user.mapper.ConsentMapper">
+
+    <insert id="upsert" parameterType="com.kb.tangtang.user.dto.ConsentRecordDto">
+        INSERT INTO tbl_user_consent
+            (user_id, consent_type, is_required, terms_version, status, withdrawn_at, expires_at)
+        VALUES
+            (#{userId}, #{consentType}, #{required}, #{termsVersion}, #{status}, #{withdrawnAt}, #{expiresAt})
+        ON DUPLICATE KEY UPDATE
+            is_required   = #{required},
+            terms_version = #{termsVersion},
+            status        = #{status},
+            withdrawn_at  = #{withdrawnAt},
+            expires_at    = #{expiresAt}
+    </insert>
+
+    <select id="findByUserId" resultType="com.kb.tangtang.user.dto.MyConsentRowDto">
+        SELECT consent_type   AS consentType,
+               is_required    AS required,
+               terms_version  AS termsVersion,
+               status,
+               withdrawn_at   AS withdrawnAt,
+               expires_at     AS expiresAt,
+               created_at     AS createdAt
+          FROM tbl_user_consent
+         WHERE user_id = #{userId}
+    </select>
+
+    <update id="withdraw">
+        UPDATE tbl_user_consent
+           SET status       = 0,
+               withdrawn_at = #{withdrawnAt}
+         WHERE user_id = #{userId}
+           AND consent_type IN
+               <foreach item="type" collection="types" open="(" separator="," close=")">
+                   #{type}
+               </foreach>
+           AND withdrawn_at IS NULL
+    </update>
+
+    <select id="countActive" resultType="int">
+        SELECT COUNT(*)
+          FROM tbl_user_consent
+         WHERE user_id = #{userId}
+           AND consent_type IN
+               <foreach item="type" collection="types" open="(" separator="," close=")">
+                   #{type}
+               </foreach>
+           AND status = 1
+           AND withdrawn_at IS NULL
+           AND (expires_at IS NULL OR expires_at &gt; #{now})
+    </select>
+
+</mapper>
