@@ -32,3 +32,22 @@ export function canSubmit(items, state) {
 export function toAgreements(state) {
     return Object.entries(state).map(([type, agreed]) => ({ type, agreed }));
 }
+
+/**
+ * 재동의 화면 진입 시 초기 체크 상태를 사용자의 기존 동의로 채운다.
+ * (GET /api/consents/me 응답 items 를 그대로 넘기면 된다.)
+ *
+ * 기존 동의 행이 없거나(최초 사용자) 카탈로그 항목에 매칭되는 행이 없으면
+ * 미체크(false) 로 시작한다 — 안전한 기본값이다. 이렇게 시드해두지 않으면
+ * 재동의 시 선택 항목(AI_USAGE, MARKETING 등)이 사용자가 건드리지 않아도
+ * 전부 미동의로 제출돼버린다(백엔드 규칙: agreed:true 로 안 온 항목은 미동의 처리).
+ */
+export function buildAgreementStateFromConsents(items, myConsents) {
+    const agreedTypes = new Set(
+        myConsents.filter((consent) => consent.agreed).map((consent) => consent.type),
+    );
+    return items.reduce((state, item) => {
+        state[item.type] = agreedTypes.has(item.type);
+        return state;
+    }, {});
+}

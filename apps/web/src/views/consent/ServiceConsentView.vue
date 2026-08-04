@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/auth';
 import { logout } from '@/api/auth';
 import {
     buildAgreementState,
+    buildAgreementStateFromConsents,
     canSubmit,
     isAllChecked,
     toAgreements,
@@ -45,9 +46,20 @@ async function loadConsentCatalog() {
     errorMessage.value = '';
     try {
         await consent.loadCatalog('SIGNUP');
-        agreementState.value = buildAgreementState(items.value);
     } catch (err) {
         errorMessage.value = err.message;
+        return;
+    }
+
+    // 재동의 진입 시 기존 동의 상태로 체크박스를 시드한다 — 그래야 사용자가
+    // 건드리지 않은 선택 항목(AI_USAGE 등)이 재제출 때 미동의로 덮어써지지 않는다.
+    // 이 조회가 실패해도 화면은 막지 않는다: 최초 사용자는 원래 행이 없고,
+    // 이 화면은 라우터 가드가 강제하는 게이트라 우회할 수 없기 때문이다.
+    try {
+        await consent.loadMyConsents();
+        agreementState.value = buildAgreementStateFromConsents(items.value, consent.myConsents);
+    } catch {
+        agreementState.value = buildAgreementState(items.value);
     }
 }
 
@@ -87,7 +99,7 @@ async function onBack() {
 <template>
     <div class="consent-view">
         <header class="consent-view__header">
-            <button class="consent-view__back" type="button" aria-label="뒤로 가기" @click="onBack">‹</button>
+            <button class="consent-view__back" type="button" aria-label="동의 취소하고 로그아웃" @click="onBack">‹</button>
             <h1 class="consent-view__title">서비스 동의</h1>
         </header>
 
