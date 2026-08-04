@@ -166,7 +166,7 @@ async function onSubmit() {
 .financial-consent__card-title {
     margin: 0;
     padding: var(--tt-space-4);
-    background: var(--tt-text);
+    background: var(--tt-surface-inverse);
     color: var(--tt-accent);
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-mono-chip);
@@ -218,7 +218,7 @@ async function onSubmit() {
     align-items: center;
     gap: var(--tt-space-3);
     padding: var(--tt-space-4) var(--tt-space-5);
-    background: var(--tt-text);
+    background: var(--tt-surface-inverse);
     border-radius: var(--tt-radius-lg);
     cursor: pointer;
 }
