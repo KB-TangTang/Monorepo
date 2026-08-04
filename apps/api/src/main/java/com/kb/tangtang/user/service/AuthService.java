@@ -28,15 +28,18 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
     private final JwtProvider jwtProvider;
+    private final ConsentService consentService;
 
     public AuthService(GoogleOAuthClient googleOAuthClient,
                        RefreshTokenService refreshTokenService,
                        UserMapper userMapper,
-                       JwtProvider jwtProvider) {
+                       JwtProvider jwtProvider,
+                       ConsentService consentService) {
         this.googleOAuthClient = googleOAuthClient;
         this.refreshTokenService = refreshTokenService;
         this.userMapper = userMapper;
         this.jwtProvider = jwtProvider;
+        this.consentService = consentService;
     }
 
     /** 구글 콜백에서 받은 code 로 로그인/가입을 마치고 토큰 쌍을 만든다. */
@@ -89,7 +92,7 @@ public class AuthService {
     private AuthResultDto buildResult(UserDto user) {
         String accessToken = jwtProvider.createAccessToken(user.getId());
         String refreshToken = refreshTokenService.issue(user.getId());
-        boolean needsConsent = userMapper.countActiveConsents(user.getId()) == 0;
+        boolean needsConsent = consentService.needsConsent(user.getId());
 
         return AuthResultDto.builder()
                 .response(LoginResponseDto.builder()
