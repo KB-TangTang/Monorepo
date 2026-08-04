@@ -32,12 +32,13 @@ class AuthServiceTest {
     @Mock private RefreshTokenService refreshTokenService;
     @Mock private UserMapper userMapper;
     @Mock private JwtProvider jwtProvider;
+    @Mock private ConsentService consentService;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider);
+        authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider, consentService);
     }
 
     private static GoogleProfileDto profile() {
@@ -61,7 +62,7 @@ class AuthServiceTest {
         }).when(userMapper).insert(any(UserDto.class));
         when(jwtProvider.createAccessToken(11L)).thenReturn("access-jwt");
         when(refreshTokenService.issue(11L)).thenReturn("refresh-raw");
-        when(userMapper.countActiveConsents(11L)).thenReturn(0);
+        when(consentService.needsConsent(11L)).thenReturn(true);
 
         AuthResultDto result = authService.loginWithGoogleCode("code");
 
@@ -89,7 +90,7 @@ class AuthServiceTest {
                         .status("ACTIVE").difficultyId(2L).build());
         when(jwtProvider.createAccessToken(11L)).thenReturn("access-jwt");
         when(refreshTokenService.issue(11L)).thenReturn("refresh-raw");
-        when(userMapper.countActiveConsents(11L)).thenReturn(3);
+        when(consentService.needsConsent(11L)).thenReturn(false);
 
         AuthResultDto result = authService.loginWithGoogleCode("code");
 
@@ -134,7 +135,7 @@ class AuthServiceTest {
                         .status("ACTIVE").difficultyId(1L).build());
         when(jwtProvider.createAccessToken(11L)).thenReturn("new-access");
         when(refreshTokenService.issue(11L)).thenReturn("new-raw");
-        when(userMapper.countActiveConsents(11L)).thenReturn(0);
+        when(consentService.needsConsent(11L)).thenReturn(true);
 
         AuthResultDto result = authService.refresh("old-raw");
 

@@ -37,8 +37,9 @@ export const useAuthStore = defineStore('auth', () => {
     const accessToken = ref('');
     const user = ref(null);
     /**
-     * 필수 동의를 아직 하지 않은 사용자인지.
-     * 동의 화면은 후속 이슈라 지금은 저장만 하고 라우팅에 쓰지 않는다.
+     * 필수 동의(SIGNUP 그룹)를 아직 마치지 않은 사용자인지.
+     * 라우터 가드가 이 값을 보고 동의 화면으로 보낸다.
+     * 동의 저장·철회 응답으로도 갱신된다(stores/consent.js).
      */
     const needsConsent = ref(false);
 

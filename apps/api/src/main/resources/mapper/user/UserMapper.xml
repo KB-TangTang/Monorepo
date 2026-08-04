@@ -33,12 +33,4 @@
          WHERE id = #{id}
     </select>
 
-    <select id="countActiveConsents" resultType="int">
-        SELECT COUNT(*)
-          FROM tbl_user_consent
-         WHERE user_id      = #{userId}
-           AND is_required  = 1
-           AND withdrawn_at IS NULL
-    </select>
-
 </mapper>

@@ -70,18 +70,6 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("동의 이력이 없는 사용자는 0 건이다")
-    void countConsentsEmpty() {
-        UserDto user = UserDto.builder()
-                .socialProvider("GOOGLE").providerUserId("test-sub-0002")
-                .nickname("동의없음").status("ACTIVE").difficultyId(1L)
-                .build();
-        userMapper.insert(user);
-
-        assertEquals(0, userMapper.countActiveConsents(user.getId()));
-    }
-
-    @Test
     @DisplayName("리프레시 토큰을 넣고 해시로 찾은 뒤 폐기한다")
     void refreshTokenLifecycle() {
         UserDto user = UserDto.builder()

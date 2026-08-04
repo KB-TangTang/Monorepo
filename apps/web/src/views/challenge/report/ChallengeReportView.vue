@@ -99,6 +99,10 @@ function openNetSavings() {
     router.push({ name: 'challengeNetSavings', query: { month: selectedPeriod.value } });
 }
 
+function openMonthlyReport() {
+    router.push({ name: 'monthlyConsumptionReport' });
+}
+
 onMounted(initialize);
 </script>
 
@@ -142,9 +146,9 @@ onMounted(initialize);
         />
 
         <ChallengeReportToggle
-            v-if="state === 'ready'"
+            v-if="selectedPeriod"
             @open-transactions="emit('open-transactions')"
-            @open-monthly-report="emit('open-monthly-report')"
+            @open-monthly-report="openMonthlyReport"
         />
         <ChallengeMonthPicker
             v-if="selectedPeriod"
