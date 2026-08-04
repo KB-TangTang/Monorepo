@@ -73,6 +73,22 @@
     --tt-border: var(--tt-gray-200);
     --tt-border-strong: var(--tt-gray-400);
 
+    /* 고정지출 화면 — 원본의 네이비 요약면 · 명세 · 탐지 후보 상태 */
+    --tt-surface-strong: var(--tt-gray-900);
+    --tt-surface-strong-deep: #1f263d;
+    --tt-surface-strong-muted: #3a4160;
+    --tt-surface-row: #eef2f8;
+    --tt-surface-candidate: #fffbf0;
+    --tt-surface-candidate-strong: #f6ecd2;
+    --tt-border-candidate: #f6e4b0;
+    --tt-category-subscription: #fff0c8;
+    --tt-category-living: #eaf3ee;
+    --tt-text-subtle: var(--tt-gray-600);
+    --tt-text-soft: var(--tt-gray-500);
+    --tt-accent-strong: var(--tt-accent-700);
+    --tt-success-strong: var(--tt-innocent-800);
+    --tt-success-bright: #7fd1b4;
+
     /* 모달·바텀시트 뒤에 까는 딤. --tt-ink 의 rgb 값에 투명도를 준 것 —
      * CSS 변수는 색상 채널만 따로 꺼내 쓸 수 없어 값을 직접 적는다. */
     --tt-overlay-dim: rgba(27, 33, 56, 0.48);

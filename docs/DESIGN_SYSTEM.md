@@ -89,6 +89,20 @@
 | `--tt-bg-subtle` | `--tt-gray-50` | 섹션 배경 |
 | `--tt-border` | `--tt-gray-200` | 기본 선 |
 | `--tt-border-strong` | `--tt-gray-400` | 강조 선 · 입력 포커스 전 |
+| `--tt-surface-strong` | `--tt-gray-900` | 고정지출 요약 카드 · 후보 지정 CTA |
+| `--tt-surface-strong-deep` | `#1F263D` | 절약 감정서 요약 카드 상단 면 |
+| `--tt-surface-strong-muted` | `#3A4160` | 어두운 카드 내부 보조 면 · 금액 |
+| `--tt-surface-row` | `#EEF2F8` | 고정지출 카드 줄무늬 · 미탐지 상태 |
+| `--tt-surface-candidate` | `#FFFBF0` | 탐지 후보 카드 상단 면 |
+| `--tt-surface-candidate-strong` | `#F6ECD2` | 탐지 후보 카드 줄무늬 |
+| `--tt-border-candidate` | `#F6E4B0` | 탐지 후보 · 금액 변동 안내선 |
+| `--tt-category-subscription` | `#FFF0C8` | 구독 카테고리 배경 |
+| `--tt-category-living` | `#EAF3EE` | 생활 카테고리 배경 |
+| `--tt-text-subtle` | `--tt-gray-600` | 고정지출 보조 텍스트 |
+| `--tt-text-soft` | `--tt-gray-500` | 고정지출 비강조 텍스트 |
+| `--tt-accent-strong` | `--tt-accent-700` | 골드 계열 배경 위 텍스트 |
+| `--tt-success-strong` | `--tt-innocent-800` | 절약 금액 강조 텍스트 |
+| `--tt-success-bright` | `#7FD1B4` | 어두운 면 위 확정 건수 |
 | `--tt-overlay-dim` | `rgba(27,33,56,.48)` | 모달 · 바텀시트 뒤 딤 |
 | `--tt-notch-bg` | `--tt-bg-subtle` | 카드 노치(영수증 절취선 · 소환장 펀치홀) |
 
@@ -179,4 +193,5 @@
 | 2026-07-31 | 초기 세팅 팔레트(Verdict Red `#E5484D` / Acquit Mint `#12A594` / 중립 그레이)를 팀 디자인시스템 값으로 교체. Cool Gray 10단계 · 타이포 스케일 · spacing · elevation 토큰 신설 |
 | 2026-08-01 | 공통 컴포넌트 작업(P2~P4)에 맞춰 `--tt-z-*` 6단계 · `--tt-tabbar-height` · `--tt-content-max` 신설 |
 | 2026-08-01 | 컴포넌트에 남아 있던 색상 하드코딩을 걷어내며 `--tt-overlay-dim` · `--tt-notch-bg` 신설 |
+| 2026-08-03 | 고정지출 원본 화면의 네이비 요약면 · 명세 줄무늬 · 탐지 후보 상태를 위한 의미 토큰 추가 |
 | 2026-08-04 | 동의 화면 개발에 맞춰 `--tt-surface-inverse` 신설 (텍스트 토큰 오용 방지) |
