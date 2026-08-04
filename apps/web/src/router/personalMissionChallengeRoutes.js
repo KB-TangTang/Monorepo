@@ -21,6 +21,12 @@ const personalMissionChallengeRoutes = [
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '명예법정' },
     },
+    {
+        path: '/group-challenges',
+        name: 'groupChallenge',
+        component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
+        meta: { title: '그룹 챌린지' },
+    },
 ];
 
 export default personalMissionChallengeRoutes;

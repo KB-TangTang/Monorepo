@@ -22,6 +22,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     state: () => ({
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
+        hasSeenTutorial: false,
         hasCompletedSetup: false,
         selectedDifficultyId: 'NORMAL',
         missionType: 'ABSOLUTE',
@@ -57,6 +58,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
 
             this.hasAgreed = savedState.hasAgreed ?? false;
+            this.hasSeenTutorial = savedState.hasSeenTutorial ?? false;
             this.hasCompletedSetup = savedState.hasCompletedSetup ?? false;
             this.selectedDifficultyId = savedState.selectedDifficultyId ?? 'NORMAL';
             this.missionType = savedState.missionType ?? selectPersonalMissionType(this.profile);
@@ -68,6 +70,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
                 STORAGE_KEY,
                 JSON.stringify({
                     hasAgreed: this.hasAgreed,
+                    hasSeenTutorial: this.hasSeenTutorial,
                     hasCompletedSetup: this.hasCompletedSetup,
                     selectedDifficultyId: this.selectedDifficultyId,
                     missionType: this.missionType,
@@ -85,6 +88,11 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.selectedDifficultyId = difficultyId;
         },
 
+        completeTutorial() {
+            this.hasSeenTutorial = true;
+            this.save();
+        },
+
         completeDifficultySetup() {
             this.hasCompletedSetup = true;
             this.save();
@@ -94,6 +102,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             localStorage.removeItem(STORAGE_KEY);
 
             this.hasAgreed = false;
+            this.hasSeenTutorial = false;
             this.hasCompletedSetup = false;
             this.selectedDifficultyId = 'NORMAL';
             this.missionType = 'ABSOLUTE';

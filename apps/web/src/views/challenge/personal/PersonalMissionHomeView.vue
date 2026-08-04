@@ -1,18 +1,35 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
 import PersonalMissionCard from '@/components/challenge/personal/PersonalMissionCard.vue';
 import PersonalMissionDataGuide from '@/components/challenge/personal/PersonalMissionDataGuide.vue';
 import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalMissionStreakCard from '@/components/challenge/personal/PersonalMissionStreakCard.vue';
+import PersonalMissionTutorialModal from '@/components/challenge/personal/PersonalMissionTutorialModal.vue';
 import { MOCK_PERSONAL_MISSION_STREAK } from '@/fixtures/personalMission';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 
 const router = useRouter();
 const challengeStore = usePersonalMissionChallengeStore();
 const isConsentOpen = ref(false);
+const isTutorialOpen = ref(false);
 const isDevelopment = import.meta.env.DEV;
+
+/*
+ * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
+ * 닫자마자 다음 화면을 열면 이전 오버레이의 history.back()이 새 화면까지 닫을 수 있으므로,
+ * 해당 항목이 정리된 뒤 다음 단계로 이동한다.
+ */
+function afterOverlayClosed(callback) {
+    if (!window.history.state?.ttOverlay) {
+        callback();
+        return;
+    }
+
+    window.addEventListener('popstate', callback, { once: true });
+}
 
 onMounted(() => {
     challengeStore.hydrate();
@@ -22,10 +39,11 @@ onMounted(() => {
         return;
     }
 
-    /*
-     * 맞춤 미션에 필요한 소비 데이터가 충분하고 난이도 설정이 끝나지 않았다면
-     * 소개 화면을 거치지 않고 난이도 설정으로 바로 이동
-     */
+    if (challengeStore.hasEnoughData && !challengeStore.hasSeenTutorial) {
+        isTutorialOpen.value = true;
+        return;
+    }
+
     if (challengeStore.hasEnoughData && !challengeStore.hasCompletedSetup) {
         router.replace({
             name: 'personalMissionChallengeDifficulty',
@@ -37,10 +55,18 @@ function handleAgree() {
     challengeStore.agree();
 
     if (challengeStore.hasEnoughData) {
-        router.push({
-            name: 'personalMissionChallengeDifficulty',
+        afterOverlayClosed(() => {
+            isTutorialOpen.value = true;
         });
     }
+}
+
+function finishTutorial() {
+    challengeStore.completeTutorial();
+    isTutorialOpen.value = false;
+    afterOverlayClosed(() => {
+        router.push({ name: 'personalMissionChallengeDifficulty' });
+    });
 }
 
 function resetDemo() {
@@ -56,6 +82,11 @@ function openHonorCourt() {
 <template>
     <div class="personal-mission-home">
         <PersonalMissionConsentSheet v-model="isConsentOpen" @agree="handleAgree" />
+        <PersonalMissionTutorialModal
+            v-model="isTutorialOpen"
+            @complete="finishTutorial"
+            @skip="finishTutorial"
+        />
 
         <header class="personal-mission-home__hero">
             <p>오늘의 개인 챌린지 · 7월 29일</p>
@@ -83,13 +114,9 @@ function openHonorCourt() {
             />
 
             <PersonalMissionStreakCard v-else :days="MOCK_PERSONAL_MISSION_STREAK" />
-
-            <div class="personal-mission-home__mode">
-                <button type="button" class="personal-mission-home__mode--active">♙ 개인</button>
-
-                <button type="button">♟ 그룹</button>
-            </div>
         </main>
+
+        <ChallengeModeTabBar active-mode="personal" />
 
         <button
             v-if="isDevelopment"

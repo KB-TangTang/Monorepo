@@ -1,0 +1,32 @@
+.challenge-mode {
+    position: fixed;
+    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-3));
+    left: 50%;
+    z-index: var(--tt-z-sticky);
+    display: flex;
+    padding: var(--tt-space-1);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-full);
+    box-shadow: var(--tt-elevation-2);
+    transform: translateX(-50%);
+}
+
+.challenge-mode a {
+    display: flex;
+    gap: var(--tt-space-2);
+    align-items: center;
+    justify-content: center;
+    min-width: 96px;
+    min-height: 44px;
+    padding: 0 var(--tt-space-4);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    text-decoration: none;
+    border-radius: var(--tt-radius-full);
+}
+
+.challenge-mode .challenge-mode__link--active {
+    color: var(--tt-text);
+    background: var(--tt-accent);
+}
