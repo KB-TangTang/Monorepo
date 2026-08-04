@@ -60,6 +60,12 @@ const routes = [
         meta: { title: '챌린지 리포트' },
     },
     {
+        path: '/reports/monthly',
+        name: 'monthlyConsumptionReport',
+        component: () => import('@/views/report/MonthlyConsumptionReportView.vue'),
+        meta: { title: '월간 판결문' },
+    },
+    {
         path: '/reports/challenge/savings',
         name: 'challengeNetSavings',
         component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
