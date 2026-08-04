@@ -46,7 +46,11 @@ export const useConsentStore = defineStore('consent', () => {
     async function withdraw(type) {
         const result = await withdrawConsent(type);
         useAuthStore().needsConsent = result.needsConsent;
-        await loadMyConsents();
+        try {
+            await loadMyConsents();
+        } catch {
+            // 서버 철회는 이미 성공했으므로 목록 갱신 실패로 작업 전체를 실패로 보고하지 않는다. 다음 조회 때 최신 상태가 반영된다.
+        }
         return result;
     }
 
