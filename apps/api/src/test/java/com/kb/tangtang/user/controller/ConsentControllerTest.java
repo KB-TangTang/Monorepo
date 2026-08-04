@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.exception.CommonExceptionAdvice;
 import com.kb.tangtang.user.domain.ConsentScope;
@@ -14,11 +16,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -63,9 +67,17 @@ class ConsentControllerTest {
             }
         };
 
+        // standaloneSetup 은 ServletConfig 를 타지 않으므로 응답 직렬화용 컨버터를 직접 물린다.
+        // RootConfig.objectMapper() 와 동일하게 JavaTimeModule 등록 + 타임스탬프 비활성화 —
+        // 그래야 이 테스트가 실제 운영 직렬화 설정(ISO-8601 문자열)을 검증한다.
+        ObjectMapper responseObjectMapper = new ObjectMapper();
+        responseObjectMapper.registerModule(new JavaTimeModule());
+        responseObjectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(loginUser)
                 .setControllerAdvice(new CommonExceptionAdvice())
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(responseObjectMapper))
                 .build();
     }
 
@@ -135,6 +147,22 @@ class ConsentControllerTest {
                 .andExpect(jsonPath("$.data.items[0].type").value("TERMS"))
                 .andExpect(jsonPath("$.data.items[0].agreed").value(true))
                 .andExpect(jsonPath("$.data.items[0].withdrawable").value(false));
+    }
+
+    @Test
+    @DisplayName("expiresAt 이 있는 FINANCIAL_DATA 항목도 ISO-8601 문자열로 직렬화된다")
+    void myConsentsSerializesExpiresAtAsIsoString() throws Exception {
+        LocalDateTime expiresAt = LocalDateTime.of(2027, 8, 4, 15, 12, 33);
+        when(consentService.myConsents(7L)).thenReturn(List.of(
+                MyConsentDto.builder().type("FINANCIAL_DATA").required(true).label("금융 정보 수집·이용")
+                        .termsUrl("u/financial").agreed(true).withdrawable(true).termsVersion("v1.0")
+                        .expiresAt(expiresAt).build()));
+
+        mockMvc.perform(get("/api/consents/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items[0].type").value("FINANCIAL_DATA"))
+                .andExpect(jsonPath("$.data.items[0].expiresAt").value("2027-08-04T15:12:33"));
     }
 
     @Test

@@ -1,11 +1,14 @@
 package com.kb.tangtang.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.auth.JwtAuthInterceptor;
 import com.kb.tangtang.common.auth.LoginUserArgumentResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -44,6 +47,25 @@ public class ServletConfig implements WebMvcConfigurer {
 
     @Autowired
     private LoginUserArgumentResolver loginUserArgumentResolver;
+
+    /** RootConfig 의 ObjectMapper 빈(JavaTimeModule 등록됨) — JwtAuthInterceptor/GoogleOAuthClient 와 동일 설정을 공유한다. */
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    /*
+     * @EnableWebMvc 의 기본 MappingJackson2HttpMessageConverter 는 Jackson2ObjectMapperBuilder 가
+     * classpath 에서 JavaTimeModule 을 찾아 자동 등록하지만, WRITE_DATES_AS_TIMESTAMPS 는 기본값(true)
+     * 그대로라 LocalDateTime 이 ISO-8601 문자열이 아니라 [2027,8,4,...] 숫자 배열로 내려간다
+     * (실측, ConsentControllerTest 참고). RootConfig 의 objectMapper 빈으로 교체해 통일한다.
+     */
+    @Override
+    public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
+        for (HttpMessageConverter<?> converter : converters) {
+            if (converter instanceof MappingJackson2HttpMessageConverter) {
+                ((MappingJackson2HttpMessageConverter) converter).setObjectMapper(objectMapper);
+            }
+        }
+    }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
