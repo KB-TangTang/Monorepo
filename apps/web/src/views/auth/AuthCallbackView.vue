@@ -28,6 +28,13 @@ onMounted(() => {
         return;
     }
 
+    // 동의를 마치지 않았으면 원래 가려던 곳보다 동의가 우선이다.
+    // (동의 완료 후에는 홈으로 간다 — redirect 는 여기서 버려진다)
+    if (auth.needsConsent) {
+        router.replace({ name: 'consent' });
+        return;
+    }
+
     // 저장 시점에도 검사하지만 여기서 다시 검사한다.
     // sessionStorage 는 사용자가 DevTools 로 직접 고칠 수 있어 저장 시점 검사만으로는 부족하다.
     router.replace(isSafeRedirectPath(redirect) ? redirect : { name: 'home' });

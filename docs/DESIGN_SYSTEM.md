@@ -84,6 +84,7 @@
 | `--tt-text` | `--tt-ink` | 본문 |
 | `--tt-text-muted` | `--tt-gray-700` | 보조 설명 · 캡션 |
 | `--tt-text-inverse` | `--tt-white` | 어두운 배경 위 텍스트 |
+| `--tt-surface-inverse` | `--tt-ink` | 강조 바 · 역전 배경 (--tt-text-inverse 텍스트를 올림) |
 | `--tt-bg` | `--tt-white` | 기본 배경 |
 | `--tt-bg-subtle` | `--tt-gray-50` | 섹션 배경 |
 | `--tt-border` | `--tt-gray-200` | 기본 선 |
@@ -193,3 +194,4 @@
 | 2026-08-01 | 공통 컴포넌트 작업(P2~P4)에 맞춰 `--tt-z-*` 6단계 · `--tt-tabbar-height` · `--tt-content-max` 신설 |
 | 2026-08-01 | 컴포넌트에 남아 있던 색상 하드코딩을 걷어내며 `--tt-overlay-dim` · `--tt-notch-bg` 신설 |
 | 2026-08-03 | 고정지출 원본 화면의 네이비 요약면 · 명세 줄무늬 · 탐지 후보 상태를 위한 의미 토큰 추가 |
+| 2026-08-04 | 동의 화면 개발에 맞춰 `--tt-surface-inverse` 신설 (텍스트 토큰 오용 방지) |
