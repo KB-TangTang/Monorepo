@@ -5,7 +5,12 @@
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import { formatWon, formatCompactWon, getCompositionTotal, getCompositionRatios } from '@/utils/asset';
+import {
+    formatWon,
+    formatCompactWon,
+    getCompositionTotal,
+    getCompositionRatios,
+} from '@/utils/asset';
 
 const props = defineProps({
     composition: { type: Array, required: true },
@@ -58,14 +63,20 @@ const segments = computed(() => getCompositionRatios(props.composition));
             </div>
 
             <ul class="asset-composition__legend">
-                <li v-for="item in composition" :key="item.code" class="asset-composition__legend-item">
+                <li
+                    v-for="item in composition"
+                    :key="item.code"
+                    class="asset-composition__legend-item"
+                >
                     <span
                         class="asset-composition__dot"
                         :style="{ background: toneColor(item.tone) }"
                         aria-hidden="true"
                     ></span>
                     <span class="asset-composition__legend-label">{{ item.label }}</span>
-                    <span class="asset-composition__legend-amount">{{ formatWon(item.amount) }}</span>
+                    <span class="asset-composition__legend-amount">{{
+                        formatWon(item.amount)
+                    }}</span>
                 </li>
             </ul>
         </div>

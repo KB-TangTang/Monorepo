@@ -27,6 +27,12 @@ test('formatCompactWon 은 1만/1억 경계에서 단위를 바꾼다', () => {
     assert.equal(formatCompactWon(-20000), '-₩2만');
 });
 
+test('formatCompactWon 은 반올림으로 1억을 넘는 값도 억 단위로 표기한다', () => {
+    assert.equal(formatCompactWon(99995000), '₩1.0억');
+    assert.equal(formatCompactWon(10000), '₩1만');
+    assert.equal(formatCompactWon(100000000), '₩1.0억');
+});
+
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {
     const composition = [
         { code: 'a', amount: 100 },

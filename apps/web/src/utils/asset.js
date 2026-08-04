@@ -18,7 +18,11 @@ function formatCompactWon(amount) {
         return `${sign}₩${(abs / EOK).toFixed(1)}억`;
     }
     if (abs >= MAN) {
-        return `${sign}₩${Math.round(abs / MAN).toLocaleString('ko-KR')}만`;
+        const man = Math.round(abs / MAN);
+        if (man >= 10000) {
+            return `${sign}₩${(abs / EOK).toFixed(1)}억`;
+        }
+        return `${sign}₩${man.toLocaleString('ko-KR')}만`;
     }
     return formatWon(amount);
 }
