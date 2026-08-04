@@ -40,14 +40,18 @@ const items = computed(() => catalog.value?.items ?? []);
 const allChecked = computed(() => items.value.length > 0 && isAllChecked(items.value, agreementState.value));
 const submittable = computed(() => items.value.length > 0 && canSubmit(items.value, agreementState.value));
 
-onMounted(async () => {
+async function loadConsentCatalog() {
+    // 재시도 시 이전 실패 메시지가 남아있으면 성공해도 화면에 계속 보인다.
+    errorMessage.value = '';
     try {
         await consent.loadCatalog('SIGNUP');
         agreementState.value = buildAgreementState(items.value);
     } catch (err) {
         errorMessage.value = err.message;
     }
-});
+}
+
+onMounted(loadConsentCatalog);
 
 function onToggleAll(checked) {
     agreementState.value = toggleAll(items.value, checked);
@@ -119,7 +123,11 @@ async function onBack() {
             </div>
         </template>
 
-        <StateError v-else :message="errorMessage || '약관을 불러오지 못했습니다.'" />
+        <StateError
+            v-else
+            :message="errorMessage || '약관을 불러오지 못했습니다.'"
+            @retry="loadConsentCatalog"
+        />
     </div>
 </template>
 
