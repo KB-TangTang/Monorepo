@@ -1,11 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
  * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
- * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
- *   component: () => import('@/views/trial/TrialHomeView.vue')
- *
  * meta.public   — 로그인 없이 접근 가능
  * meta.hideTabBar — 하단 탭바를 숨긴다 (App.vue 가 읽는다)
  */
@@ -28,12 +26,7 @@ const routes = [
         component: () => import('@/views/HomeView.vue'),
         meta: { title: '홈' },
     },
-    {
-        path: '/trial',
-        name: 'trial',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '재판' },
-    },
+    ...personalMissionChallengeRoutes,
     {
         path: '/asset',
         name: 'asset',

@@ -9,9 +9,9 @@ import { useRoute } from 'vue-router';
 /* 탭 정의는 이 배열 하나뿐이다. 라우트를 바꾸면 router/index.js 와 함께 고친다. */
 const TABS = [
     {
-        name: 'trial',
+        name: 'personalMissionChallenge',
         label: '재판',
-        to: '/trial',
+        to: '/personal-missions',
         paths: ['M12 4v16', 'M7.5 20h9', 'M4.5 8h15', 'M4.5 8 2 14h5z', 'M19.5 8 17 14h5z'],
     },
     {
@@ -51,7 +51,7 @@ const TABS = [
 
 const route = useRoute();
 
-/* 홈(/)만 정확 매칭. 나머지는 하위 경로(/trial/3 …)에서도 활성으로 본다. */
+/* 홈(/)만 정확 매칭. 나머지는 하위 경로에서도 활성으로 본다. */
 function isActive(tab) {
     if (tab.name === 'ledger' && route.path.startsWith('/reports')) {
         return true;
