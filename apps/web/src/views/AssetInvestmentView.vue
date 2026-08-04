@@ -90,6 +90,7 @@ onMounted(load);
     display: flex;
     flex-direction: column;
     gap: var(--tt-space-4);
+    min-height: calc(100vh - var(--tt-tabbar-height));
     padding: var(--tt-space-5);
     background: var(--tt-bg-subtle);
 }
