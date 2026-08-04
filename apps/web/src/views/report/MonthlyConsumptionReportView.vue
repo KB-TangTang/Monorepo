@@ -8,6 +8,7 @@ import {
 import MonthlyCategoryReport from '@/components/report/monthly-consumption/MonthlyCategoryReport.vue';
 import MonthlyReportMonthPicker from '@/components/report/monthly-consumption/MonthlyReportMonthPicker.vue';
 import MonthlyVerdictSummary from '@/components/report/monthly-consumption/MonthlyVerdictSummary.vue';
+import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
@@ -64,6 +65,10 @@ function openChallengeReport() {
 
 function openSavingsStatement() {
     router.push({ name: 'fixedExpenseSavings' });
+}
+
+function openMonthlyReport() {
+    router.push({ name: 'monthlyConsumptionReport', query: { month: selectedPeriod.value } });
 }
 
 onMounted(async () => {
@@ -177,6 +182,7 @@ watch(selectedPeriod, loadReport, { immediate: true });
             :selected-period="selectedPeriod"
             @select="selectPeriod"
         />
+        <ChallengeReportToggle v-if="state === 'ready'" @open-monthly-report="openMonthlyReport" />
     </article>
 </template>
 
