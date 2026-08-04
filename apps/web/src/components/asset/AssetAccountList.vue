@@ -3,22 +3,27 @@
   언제 쓰는지: AssetHomeView 하단 한 곳. 대출처럼 부채인 계좌는 amount 가 음수로 들어와 빨간색으로 표시된다.
 -->
 <script setup>
-import { formatWon } from '@/utils/asset';
+import { useRouter } from 'vue-router';
+import { formatWon, toneColor } from '@/utils/asset';
 
 defineProps({
     accounts: { type: Array, required: true },
 });
 
-const TONE_COLORS = {
-    navy: 'var(--tt-gray-900)',
-    blue: 'var(--tt-primary)',
-    teal: 'var(--tt-success)',
-    gray: 'var(--tt-gray-300)',
-    danger: 'var(--tt-danger)',
+const router = useRouter();
+
+const DETAIL_ROUTE_NAMES = {
+    checking: 'assetChecking',
+    savings: 'assetSavings',
+    investment: 'assetInvestment',
+    loan: 'assetLoan',
 };
 
-function toneColor(tone) {
-    return TONE_COLORS[tone] ?? 'var(--tt-gray-300)';
+function goToDetail(account) {
+    const routeName = DETAIL_ROUTE_NAMES[account.code];
+    if (routeName) {
+        router.push({ name: routeName });
+    }
 }
 </script>
 
@@ -26,24 +31,26 @@ function toneColor(tone) {
     <section class="asset-accounts">
         <h2 class="asset-accounts__title">자산 목록</h2>
         <ul class="asset-accounts__list">
-            <li v-for="account in accounts" :key="account.code" class="asset-accounts__item">
-                <span
-                    class="asset-accounts__avatar"
-                    :style="{ background: toneColor(account.tone) }"
-                    aria-hidden="true"
-                >
-                    {{ account.badge }}
-                </span>
-                <div class="asset-accounts__info">
-                    <p class="asset-accounts__name">{{ account.label }}</p>
-                    <p class="asset-accounts__count">{{ account.count }}개</p>
-                </div>
-                <p
-                    class="asset-accounts__amount"
-                    :class="{ 'asset-accounts__amount--negative': account.amount < 0 }"
-                >
-                    {{ formatWon(account.amount) }}
-                </p>
+            <li v-for="account in accounts" :key="account.code">
+                <button type="button" class="asset-accounts__item" @click="goToDetail(account)">
+                    <span
+                        class="asset-accounts__avatar"
+                        :style="{ background: toneColor(account.tone) }"
+                        aria-hidden="true"
+                    >
+                        {{ account.badge }}
+                    </span>
+                    <div class="asset-accounts__info">
+                        <p class="asset-accounts__name">{{ account.label }}</p>
+                        <p class="asset-accounts__count">{{ account.count }}개</p>
+                    </div>
+                    <p
+                        class="asset-accounts__amount"
+                        :class="{ 'asset-accounts__amount--negative': account.amount < 0 }"
+                    >
+                        {{ formatWon(account.amount) }}
+                    </p>
+                </button>
             </li>
         </ul>
     </section>
@@ -66,11 +73,23 @@ function toneColor(tone) {
 .asset-accounts__item {
     display: flex;
     align-items: center;
+    width: 100%;
     gap: var(--tt-space-3);
     padding: var(--tt-space-4);
+    font: inherit;
+    text-align: left;
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
+    cursor: pointer;
+    transition:
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.asset-accounts__item:hover {
+    border-color: var(--tt-border-strong);
+    box-shadow: var(--tt-elevation-2);
 }
 
 .asset-accounts__avatar {

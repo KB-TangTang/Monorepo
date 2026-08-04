@@ -1,6 +1,19 @@
 const EOK = 100000000;
 const MAN = 10000;
 
+const TONE_COLORS = {
+    navy: 'var(--tt-gray-900)',
+    blue: 'var(--tt-primary)',
+    teal: 'var(--tt-success)',
+    gray: 'var(--tt-gray-300)',
+    danger: 'var(--tt-danger)',
+    accent: 'var(--tt-accent-700)',
+};
+
+function toneColor(tone) {
+    return TONE_COLORS[tone] ?? 'var(--tt-gray-300)';
+}
+
 function formatWon(amount) {
     const sign = amount < 0 ? '-' : '';
     return `${sign}₩${Math.abs(Math.trunc(amount)).toLocaleString('ko-KR')}`;
@@ -9,6 +22,11 @@ function formatWon(amount) {
 function formatSignedWon(amount) {
     const arrow = amount < 0 ? '▼' : '▲';
     return `${arrow} ${formatWon(Math.abs(amount))}`;
+}
+
+function formatSignedPercent(rate) {
+    const sign = rate < 0 ? '-' : '+';
+    return `${sign}${Math.abs(rate * 100).toFixed(1)}%`;
 }
 
 function formatCompactWon(amount) {
@@ -60,8 +78,10 @@ function getSparklinePoints(trend, width, height) {
 }
 
 export {
+    toneColor,
     formatWon,
     formatSignedWon,
+    formatSignedPercent,
     formatCompactWon,
     getCompositionTotal,
     getCompositionRatios,

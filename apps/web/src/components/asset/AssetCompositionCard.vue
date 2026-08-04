@@ -10,6 +10,7 @@ import {
     formatCompactWon,
     getCompositionTotal,
     getCompositionRatios,
+    toneColor,
 } from '@/utils/asset';
 
 const props = defineProps({
@@ -18,18 +19,6 @@ const props = defineProps({
 
 const RADIUS = 54;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const TONE_COLORS = {
-    navy: 'var(--tt-gray-900)',
-    blue: 'var(--tt-primary)',
-    teal: 'var(--tt-success)',
-    gray: 'var(--tt-gray-300)',
-    danger: 'var(--tt-danger)',
-};
-
-function toneColor(tone) {
-    return TONE_COLORS[tone] ?? 'var(--tt-gray-300)';
-}
 
 const total = computed(() => getCompositionTotal(props.composition));
 const segments = computed(() => getCompositionRatios(props.composition));

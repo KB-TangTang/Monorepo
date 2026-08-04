@@ -41,6 +41,30 @@ const routes = [
         meta: { title: '자산' },
     },
     {
+        path: '/asset/checking',
+        name: 'assetChecking',
+        component: () => import('@/views/AssetCheckingView.vue'),
+        meta: { title: '입출금 계좌' },
+    },
+    {
+        path: '/asset/savings',
+        name: 'assetSavings',
+        component: () => import('@/views/AssetSavingsView.vue'),
+        meta: { title: '예적금' },
+    },
+    {
+        path: '/asset/investment',
+        name: 'assetInvestment',
+        component: () => import('@/views/AssetInvestmentView.vue'),
+        meta: { title: '투자증권' },
+    },
+    {
+        path: '/asset/loan',
+        name: 'assetLoan',
+        component: () => import('@/views/AssetLoanView.vue'),
+        meta: { title: '대출' },
+    },
+    {
         path: '/ledger',
         name: 'ledger',
         component: () => import('@/views/PlaceholderView.vue'),
