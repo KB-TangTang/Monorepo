@@ -34,7 +34,7 @@ function onToggle(event) {
     align-items: center;
     gap: var(--tt-space-3);
     padding: var(--tt-space-4) var(--tt-space-5);
-    background: var(--tt-text);
+    background: var(--tt-surface-inverse);
     border-radius: var(--tt-radius-lg);
     cursor: pointer;
 }

@@ -64,6 +64,10 @@
     --tt-text-muted: var(--tt-gray-700);
     --tt-text-inverse: var(--tt-white);
 
+    --tt-surface-inverse: var(
+        --tt-ink
+    ); /* 강조 바·역전 배경 — --tt-text-inverse 텍스트를 올리는 어두운 surface. 텍스트 토큰을 surface로 오용하면 디자인이 깨지므로 명확한 의도로 분리한다. */
+
     --tt-bg: var(--tt-white);
     --tt-bg-subtle: var(--tt-gray-50);
     --tt-border: var(--tt-gray-200);

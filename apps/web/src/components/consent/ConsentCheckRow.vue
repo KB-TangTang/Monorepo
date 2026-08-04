@@ -29,7 +29,7 @@ function onToggle(event) {
                 class="consent-row__check"
                 type="checkbox"
                 :checked="modelValue"
-                :aria-label="label"
+                :aria-label="`${required ? '필수' : '선택'} ${label}`"
                 @change="onToggle"
             />
             <span class="consent-row__badge" :class="{ 'consent-row__badge--required': required }">
