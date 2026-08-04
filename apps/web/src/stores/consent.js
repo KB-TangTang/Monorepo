@@ -20,6 +20,8 @@ export const useConsentStore = defineStore('consent', () => {
     const isLoading = ref(false);
 
     async function loadCatalog(scope) {
+        // 실패 시 다른 scope 의 낡은 카탈로그가 남아 잘못된 약관이 렌더링되는 것을 막는다.
+        catalog.value = null;
         isLoading.value = true;
         try {
             catalog.value = await fetchConsentCatalog(scope);
