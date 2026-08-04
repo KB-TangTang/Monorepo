@@ -47,3 +47,34 @@
 콜백이 아니라 액세스 토큰 재발급(`/api/auth/refresh`) 실패 시 프론트가 붙인다.
 
 `expired`(단순 세션 만료) · `security`(`REFRESH_TOKEN_REUSED` 감지 — 탈취 의심으로 전체 토큰 폐기됨)
+
+## 동의 (이슈 #13)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/consents/catalog?scope=SIGNUP\|FINANCIAL` | Bearer | `{ scope, termsVersion, items:[{type,required,label,termsUrl}] }` |
+| POST | `/api/consents` | Bearer | `{ needsConsent }` — 본문 `{ scope, agreements:[{type,agreed}] }` |
+| GET | `/api/consents/me` | Bearer | `{ items:[{type,required,label,termsUrl,agreed,withdrawable,termsVersion,expiresAt}] }` |
+| POST | `/api/consents/{type}/withdraw` | Bearer | `{ needsConsent }` |
+
+동의 그룹은 2종이다.
+
+| scope | 항목 |
+|---|---|
+| `SIGNUP` | 필수 `TERMS`·`PRIVACY`·`FINANCIAL_DATA` / 선택 `AI_USAGE`·`MARKETING` |
+| `FINANCIAL` | 필수 `THIRD_PARTY` |
+
+약관 본문은 서버가 갖지 않는다. `termsUrl` 은 노션 공개 페이지이고 새 탭으로 연다.
+`terms_version` 은 요청값을 무시하고 서버 카탈로그 값을 저장한다.
+`needsConsent` 는 `SIGNUP` 필수 3종 기준으로만 판정한다.
+
+동의를 기록하려면 `agreed: true` 를 명시적으로 보내야 한다. `agreed` 를 생략하거나 `null` 로 보내면 원시형 기본값 `false` 로 바인딩되어, 해당 항목을 요청에 넣지 않은 것과 동일하게 미동의로 저장된다.
+
+### 동의 에러 코드
+
+| 코드 | HTTP | 의미 |
+|---|---|---|
+| `CONSENT_REQUIRED_MISSING` | 400 | 필수 항목에 동의하지 않고 저장 시도 |
+| `CONSENT_TYPE_INVALID` | 400 | 알 수 없는 동의 항목·그룹이거나 해당 scope 밖의 항목 |
+| `CONSENT_NOT_WITHDRAWABLE` | 400 | `TERMS`·`PRIVACY` 철회 시도 (탈퇴에 해당) |
+| `NOT_FOUND` | 400 | 철회할 동의 내역 없음 |
