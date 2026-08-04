@@ -70,8 +70,8 @@ onMounted(load);
                         :badge="holding.badge"
                         :name="holding.name"
                         :quantity="holding.quantity"
-                        :unit-price="holding.unitPrice"
                         :amount="holding.amount"
+                        :gain-amount="holding.gainAmount"
                         :return-rate="holding.returnRate"
                         :tone="holding.tone"
                     />

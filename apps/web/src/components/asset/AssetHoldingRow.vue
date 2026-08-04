@@ -1,16 +1,16 @@
 <!--
-  용도: 투자증권 상세 화면의 보유 종목 한 행. 종목명 · 수량·평단가 · 평가금액 · 수익률을 보여준다.
+  용도: 투자증권 상세 화면의 보유 종목 한 행. 종목명 · 보유 수량 · 평가금액 · 수익률·증감액을 보여준다.
   언제 쓰는지: AssetInvestmentView 하나뿐. returnRate 는 소수(0.124 = +12.4%)로 받는다.
 -->
 <script setup>
-import { formatWon, formatSignedPercent, toneColor } from '@/utils/asset';
+import { formatWon, formatSignedWon, formatSignedPercent, toneColor } from '@/utils/asset';
 
 defineProps({
     badge: { type: String, required: true },
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
-    unitPrice: { type: Number, required: true },
     amount: { type: Number, required: true },
+    gainAmount: { type: Number, required: true },
     returnRate: { type: Number, required: true },
     tone: { type: String, default: 'gray' },
 });
@@ -27,9 +27,7 @@ defineProps({
         </span>
         <div class="holding-row__info">
             <p class="holding-row__name">{{ name }}</p>
-            <p class="holding-row__meta">
-                {{ quantity }}주 · {{ unitPrice.toLocaleString('ko-KR') }}
-            </p>
+            <p class="holding-row__meta">{{ quantity }}주</p>
         </div>
         <div class="holding-row__figures">
             <p class="holding-row__amount">{{ formatWon(amount) }}</p>
@@ -37,7 +35,7 @@ defineProps({
                 class="holding-row__rate"
                 :class="returnRate < 0 ? 'holding-row__rate--down' : 'holding-row__rate--up'"
             >
-                {{ formatSignedPercent(returnRate) }}
+                {{ formatSignedPercent(returnRate) }} ({{ formatSignedWon(gainAmount) }})
             </p>
         </div>
     </li>
