@@ -41,19 +41,19 @@ const segments = computed(() => getCompositionRatios(props.composition));
 
         <div class="asset-composition__body">
             <div class="asset-composition__chart">
-                <svg viewBox="0 0 120 120" class="asset-composition__donut" aria-hidden="true">
+                <svg viewBox="0 0 124 124" class="asset-composition__donut" aria-hidden="true">
                     <circle
                         v-for="segment in segments"
                         :key="segment.code"
-                        cx="60"
-                        cy="60"
+                        cx="62"
+                        cy="62"
                         :r="RADIUS"
                         fill="none"
                         :stroke="toneColor(segment.tone)"
                         stroke-width="16"
                         :stroke-dasharray="`${segment.ratio * CIRCUMFERENCE} ${CIRCUMFERENCE}`"
                         :stroke-dashoffset="-segment.offset * CIRCUMFERENCE"
-                        transform="rotate(-90 60 60)"
+                        transform="rotate(-90 62 62)"
                     />
                 </svg>
                 <div class="asset-composition__center">
