@@ -70,6 +70,8 @@ dependencies {
 
     // ---- JSON ----
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    // java.time(LocalDateTime 등) 직렬화 지원. 없으면 InvalidDefinitionException 으로 500.
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
 
     // ---- Database / MyBatis (JPA·Hibernate 사용 금지 — 평가 감점) ----
     implementation 'com.mysql:mysql-connector-j:8.4.0'

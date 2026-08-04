@@ -23,6 +23,18 @@ const routes = [
         meta: { title: '로그인 처리 중', public: true, hideTabBar: true },
     },
     {
+        path: '/consent',
+        name: 'consent',
+        component: () => import('@/views/consent/ServiceConsentView.vue'),
+        meta: { title: '서비스 동의', hideTabBar: true },
+    },
+    {
+        path: '/consent/financial',
+        name: 'financialConsent',
+        component: () => import('@/views/consent/FinancialConsentView.vue'),
+        meta: { title: '금융데이터 수집 동의', hideTabBar: true },
+    },
+    {
         path: '/',
         name: 'home',
         component: () => import('@/views/HomeView.vue'),
@@ -132,6 +144,15 @@ router.beforeEach((to) => {
 
     if (!auth.isLoggedIn) {
         return { name: 'login', query: { redirect: to.fullPath } };
+    }
+
+    /*
+     * 필수 동의를 마치지 않은 사용자는 동의 화면에 묶어둔다.
+     * 계좌 연동용 CODEF 동의(/consent/financial)는 이 게이트 밖이다 —
+     * SIGNUP 동의를 이미 마친 사용자만 도달하는 화면이라 여기서 막으면 순환한다.
+     */
+    if (auth.needsConsent && to.name !== 'consent') {
+        return { name: 'consent' };
     }
 
     return true;

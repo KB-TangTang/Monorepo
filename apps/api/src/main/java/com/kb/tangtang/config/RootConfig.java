@@ -1,6 +1,8 @@
 package com.kb.tangtang.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.annotations.Mapper;
@@ -106,8 +108,18 @@ public class RootConfig {
         return new RestTemplate();
     }
 
+    /**
+     * 기본 ObjectMapper 는 java.time(LocalDateTime 등)을 직렬화하지 못한다
+     * (JavaTimeModule 이 없으면 InvalidDefinitionException 으로 500이 난다).
+     * 이 빈은 JwtAuthInterceptor · GoogleOAuthClient 가 직접 주입받아 쓰므로,
+     * MVC 응답 변환기(Jackson2ObjectMapperBuilder)와 동일하게 JavaTimeModule 을 등록하고
+     * 타임스탬프(숫자 배열) 대신 ISO-8601 문자열로 쓰도록 맞춘다.
+     */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return objectMapper;
     }
 }
