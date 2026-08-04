@@ -15,6 +15,12 @@ const personalMissionChallengeRoutes = [
         component: () => import('@/views/challenge/personal/PersonalMissionDifficultyView.vue'),
         meta: { title: '개인 미션 난이도 설정' },
     },
+    {
+        path: '/personal-missions/honor-court',
+        name: 'personalMissionHonorCourt',
+        component: () => import('@/views/PlaceholderView.vue'),
+        meta: { title: '명예법정' },
+    },
 ];
 
 export default personalMissionChallengeRoutes;

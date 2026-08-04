@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
 import PersonalMissionCard from '@/components/challenge/personal/PersonalMissionCard.vue';
 import PersonalMissionDataGuide from '@/components/challenge/personal/PersonalMissionDataGuide.vue';
+import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalMissionStreakCard from '@/components/challenge/personal/PersonalMissionStreakCard.vue';
 import { MOCK_PERSONAL_MISSION_STREAK } from '@/fixtures/personalMission';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
@@ -46,6 +47,10 @@ function resetDemo() {
     challengeStore.resetDemo();
     isConsentOpen.value = true;
 }
+
+function openHonorCourt() {
+    router.push({ name: 'personalMissionHonorCourt' });
+}
 </script>
 
 <template>
@@ -65,6 +70,11 @@ function resetDemo() {
                 :mission="challengeStore.currentMission"
                 :difficulty="challengeStore.selectedDifficulty"
                 :personalized="challengeStore.hasEnoughData"
+            />
+
+            <PersonalMissionHonorBanner
+                v-if="challengeStore.hasEnoughData"
+                @open="openHonorCourt"
             />
 
             <PersonalMissionDataGuide
