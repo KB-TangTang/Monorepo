@@ -32,7 +32,7 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
             </span>
         </div>
 
-        <div class="trend-chart__bars" :style="{ height: `${MAX_HEIGHT}px` }">
+        <div class="trend-chart__bars">
             <button
                 v-for="(month, i) in months"
                 :key="month"
@@ -41,15 +41,17 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
                 :class="{ 'trend-chart__bar--selected': i === selectedMonthIndex }"
                 @click="$emit('update:selectedMonthIndex', i)"
             >
-                <span class="trend-chart__stack">
-                    <span
-                        class="trend-chart__segment trend-chart__segment--debt"
-                        :style="{ height: `${bars[i].debtHeight}px` }"
-                    ></span>
-                    <span
-                        class="trend-chart__segment trend-chart__segment--net"
-                        :style="{ height: `${bars[i].netWorthHeight}px` }"
-                    ></span>
+                <span class="trend-chart__stack-wrap" :style="{ height: `${MAX_HEIGHT}px` }">
+                    <span class="trend-chart__stack">
+                        <span
+                            class="trend-chart__segment trend-chart__segment--debt"
+                            :style="{ height: `${bars[i].debtHeight}px` }"
+                        ></span>
+                        <span
+                            class="trend-chart__segment trend-chart__segment--net"
+                            :style="{ height: `${bars[i].netWorthHeight}px` }"
+                        ></span>
+                    </span>
                 </span>
                 <span class="trend-chart__month">{{ month }}</span>
             </button>
@@ -106,10 +108,17 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
     cursor: pointer;
 }
 
+.trend-chart__stack-wrap {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+}
+
 .trend-chart__stack {
     display: flex;
     flex-direction: column;
     width: 28px;
+    margin: 0 auto;
     overflow: hidden;
     border-radius: var(--tt-radius-xs) var(--tt-radius-xs) 0 0;
 }
