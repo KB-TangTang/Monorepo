@@ -23,21 +23,6 @@ export function shiftPeriod(period, delta) {
     return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`;
 }
 
-const CATEGORY_TONES = {
-    카페: 'primary',
-    편의점: 'primary',
-    배달: 'accent',
-    쇼핑: 'accent',
-    식비: 'success',
-    생활: 'success',
-    교통: 'muted',
-    문화: 'muted',
-};
-
-export function resolveCategoryTone(category) {
-    return CATEGORY_TONES[category] ?? 'muted';
-}
-
 export function resolveDefaultLedgerPeriod(months) {
     const withData = months.filter((month) => month.hasData);
     if (withData.length === 0) {

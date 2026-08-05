@@ -1,49 +1,61 @@
 <!--
-  용도: 거래내역 목록의 한 행. 카테고리 이니셜 배지 + 가맹점명 + 카테고리·결제수단 + 금액.
+  용도: 거래내역 목록의 한 행. 카테고리 아이콘 배지 + 가맹점명 + 카테고리·결제수단 + 금액.
+  탭하면 카테고리 선택 팝업을 열도록 click 이벤트를 emit 한다.
   언제 쓰는지: LedgerView 의 날짜별 그룹 안에서 반복 렌더한다.
 -->
 <script setup>
-import { formatWon, resolveCategoryTone } from '@/utils/ledger';
+import CategoryIcon from '@/components/common/CategoryIcon.vue';
+import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
+import { formatWon } from '@/utils/ledger';
 
 defineProps({
     transaction: { type: Object, required: true },
 });
+
+defineEmits(['click']);
 </script>
 
 <template>
     <li class="ledger-row">
-        <span
-            class="ledger-row__avatar"
-            :class="`ledger-row__avatar--${resolveCategoryTone(transaction.category)}`"
-            aria-hidden="true"
-        >
-            {{ transaction.category.slice(0, 1) }}
-        </span>
-        <div class="ledger-row__info">
-            <p class="ledger-row__name">{{ transaction.merchant }}</p>
-            <p class="ledger-row__meta">
-                {{ transaction.category }} · {{ transaction.paymentMethod }}
+        <button type="button" class="ledger-row__button" @click="$emit('click')">
+            <span
+                class="ledger-row__avatar"
+                :class="`ledger-row__avatar--${resolveCategoryTone(transaction.category)}`"
+                aria-hidden="true"
+            >
+                <CategoryIcon :icon="resolveCategoryIcon(transaction.category)" />
+            </span>
+            <div class="ledger-row__info">
+                <p class="ledger-row__name">{{ transaction.merchant }}</p>
+                <p class="ledger-row__meta">
+                    {{ transaction.category }} · {{ transaction.paymentMethod }}
+                </p>
+            </div>
+            <p
+                class="ledger-row__amount"
+                :class="{ 'ledger-row__amount--income': transaction.amount > 0 }"
+            >
+                {{ formatWon(transaction.amount) }}
             </p>
-        </div>
-        <p
-            class="ledger-row__amount"
-            :class="{ 'ledger-row__amount--income': transaction.amount > 0 }"
-        >
-            {{ formatWon(transaction.amount) }}
-        </p>
+        </button>
     </li>
 </template>
 
 <style scoped>
-.ledger-row {
-    display: flex;
-    align-items: center;
-    gap: var(--tt-space-3);
-    padding: var(--tt-space-3) 0;
-}
-
 .ledger-row + .ledger-row {
     border-top: 1px solid var(--tt-border);
+}
+
+.ledger-row__button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--tt-space-3) 0;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: none;
+    gap: var(--tt-space-3);
 }
 
 .ledger-row__avatar {
