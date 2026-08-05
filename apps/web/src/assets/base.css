@@ -1,6 +1,6 @@
 /*
- * 전역 리셋 + 기본 타이포. 값은 전부 tokens.css 의 변수를 참조한다.
- * 색상·간격을 여기에 HEX 로 적지 말 것.
+ * 전역 리셋 + 기본 타이포 (v2).
+ * 값은 전부 tokens.css 의 변수를 참조한다. 색상/간격을 여기에 HEX 로 적지 말 것.
  */
 *,
 *::before,
@@ -18,7 +18,7 @@ body {
     min-height: 100vh;
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-regular);
+    font-weight: var(--tt-fw-medium);
     line-height: var(--tt-lh-normal);
     color: var(--tt-text);
     background: var(--tt-bg-subtle);
@@ -32,13 +32,19 @@ h2,
 h3,
 h4 {
     font-size: inherit;
-    font-weight: var(--tt-fw-bold);
+    font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-snug);
+    letter-spacing: -0.01em;
 }
 
 a {
-    color: var(--tt-primary);
+    color: var(--tt-info);
     text-decoration: none;
+    font-weight: var(--tt-fw-bold);
+}
+
+a:hover {
+    color: var(--tt-info-deep);
 }
 
 button,
@@ -61,6 +67,12 @@ ol {
 }
 
 :focus-visible {
-    outline: 2px solid var(--tt-primary);
+    outline: 2px solid var(--tt-info);
     outline-offset: 2px;
+}
+
+/* 마스코트 플로팅 애니메이션 */
+@keyframes tt-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
 }

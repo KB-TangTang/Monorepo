@@ -1,4 +1,5 @@
 import './assets/tokens.css';
+import './assets/tokens-compat.css';
 import './assets/main.css';
 
 import { createApp } from 'vue';
