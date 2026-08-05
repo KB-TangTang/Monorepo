@@ -22,6 +22,12 @@ const personalMissionChallengeRoutes = [
         meta: { title: '개인 미션 랭킹' },
     },
     {
+        path: '/mission/personal/ranking/certificate',
+        name: 'personalCertificate',
+        component: () => import('@/views/challenge/personal/PersonalCertificateView.vue'),
+        meta: { title: '개인 미션 명예 인증서' },
+    },
+    {
         path: '/group-challenges',
         name: 'groupChallenge',
         component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
