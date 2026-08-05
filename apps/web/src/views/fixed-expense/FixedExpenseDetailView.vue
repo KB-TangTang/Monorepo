@@ -27,7 +27,7 @@ const recentPaymentHistory = computed(
 );
 
 function goBack() {
-    router.push('/asset/fixed-expenses');
+    router.back();
 }
 
 onMounted(() => store.loadExpense(route.params.expenseId));

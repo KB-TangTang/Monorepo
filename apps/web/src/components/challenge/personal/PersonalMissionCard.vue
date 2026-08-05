@@ -32,7 +32,7 @@ const remainingAmount = computed(() => {
 </script>
 
 <template>
-    <BaseCard padding="lg">
+    <BaseCard class="personal-mission-card" padding="lg">
         <article class="mission-card">
             <header>
                 <span>
@@ -80,11 +80,13 @@ const remainingAmount = computed(() => {
 <style scoped>
 .mission-card header {
     display: flex;
+    gap: var(--tt-space-2);
     justify-content: space-between;
     color: var(--tt-text-muted);
 }
 
 .mission-card header span {
+    min-width: 0;
     padding: var(--tt-space-1) var(--tt-space-2);
     font-size: var(--tt-fs-mono-chip);
     color: var(--tt-primary);
@@ -93,6 +95,7 @@ const remainingAmount = computed(() => {
 }
 
 .mission-card header small {
+    flex: none;
     font-family: var(--tt-font-mono);
 }
 
@@ -108,12 +111,13 @@ const remainingAmount = computed(() => {
 
 .mission-card__amount {
     display: flex;
+    gap: var(--tt-space-1);
     align-items: baseline;
     margin-top: var(--tt-space-5);
 }
 
 .mission-card__amount span {
-    margin-left: var(--tt-space-1);
+    min-width: 0;
     color: var(--tt-text-muted);
 }
 
@@ -150,5 +154,39 @@ const remainingAmount = computed(() => {
 
 .mission-card__common-result strong {
     color: var(--tt-success);
+}
+
+@media (max-width: 390px) {
+    .mission-card header {
+        align-items: flex-start;
+    }
+
+    .mission-card header small {
+        font-size: var(--tt-fs-mono-chip);
+    }
+
+    .mission-card__amount {
+        flex-wrap: wrap;
+    }
+
+    .mission-card__amount em {
+        flex-basis: 100%;
+        margin-left: 0;
+        text-align: right;
+    }
+}
+
+@media (max-width: 359px) {
+    .personal-mission-card {
+        padding: var(--tt-space-3);
+    }
+
+    .mission-card__reward,
+    .mission-card__common-result {
+        padding: var(--tt-space-2);
+        font-size: calc(var(--tt-fs-mono-chip) * 0.92);
+        letter-spacing: -0.04em;
+        white-space: nowrap;
+    }
 }
 </style>

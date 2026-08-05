@@ -180,6 +180,7 @@ function later() {
 }
 
 .consent__agreement input {
+    flex: 0 0 20px;
     width: 20px;
     height: 20px;
     accent-color: var(--tt-primary);
@@ -187,7 +188,13 @@ function later() {
 
 .consent__agreement span {
     display: flex;
+    min-width: 0;
     flex-direction: column;
+}
+
+.consent__agreement strong,
+.consent__agreement small {
+    overflow-wrap: anywhere;
 }
 
 .consent__agreement small {
@@ -204,5 +211,43 @@ function later() {
     background: transparent;
     border: 0;
     cursor: pointer;
+}
+
+@media (max-width: 390px) {
+    :global(.tt-sheet__panel:has(.consent)) {
+        padding-right: var(--tt-space-4);
+        padding-left: var(--tt-space-4);
+    }
+
+    .consent__agreement {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-3);
+    }
+}
+
+@media (max-width: 359px) {
+    :global(.tt-sheet__panel:has(.consent)) {
+        padding-right: var(--tt-space-3);
+        padding-left: var(--tt-space-3);
+    }
+
+    .consent__judge {
+        width: 88px;
+        height: 88px;
+    }
+
+    .consent__judge img {
+        width: 70px;
+        height: 70px;
+    }
+
+    .consent__benefits > div {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-3);
+    }
+
+    .consent__agreement {
+        padding: var(--tt-space-2);
+    }
 }
 </style>
