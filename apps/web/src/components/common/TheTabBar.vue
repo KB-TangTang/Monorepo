@@ -11,7 +11,7 @@ const TABS = [
     {
         name: 'personalMissionChallenge',
         label: '재판',
-        to: '/personal-missions',
+        to: '/mission/personal',
         paths: ['M12 4v16', 'M7.5 20h9', 'M4.5 8h15', 'M4.5 8 2 14h5z', 'M19.5 8 17 14h5z'],
     },
     {

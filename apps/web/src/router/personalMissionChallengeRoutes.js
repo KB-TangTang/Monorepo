@@ -4,22 +4,22 @@
  */
 const personalMissionChallengeRoutes = [
     {
-        path: '/personal-missions',
+        path: '/mission/personal',
         name: 'personalMissionChallenge',
         component: () => import('@/views/challenge/personal/PersonalMissionHomeView.vue'),
         meta: { title: '개인 미션 챌린지' },
     },
     {
-        path: '/personal-missions/difficulty',
+        path: '/mission/personal/difficulty',
         name: 'personalMissionChallengeDifficulty',
         component: () => import('@/views/challenge/personal/PersonalMissionDifficultyView.vue'),
         meta: { title: '개인 미션 난이도 설정' },
     },
     {
-        path: '/personal-missions/honor-court',
-        name: 'personalMissionHonorCourt',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '명예법정' },
+        path: '/mission/personal/ranking',
+        name: 'personalRanking',
+        component: () => import('@/views/challenge/personal/PersonalRankingView.vue'),
+        meta: { title: '개인 미션 랭킹' },
     },
     {
         path: '/group-challenges',

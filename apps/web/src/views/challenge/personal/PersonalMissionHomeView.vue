@@ -74,8 +74,8 @@ function resetDemo() {
     isConsentOpen.value = true;
 }
 
-function openHonorCourt() {
-    router.push({ name: 'personalMissionHonorCourt' });
+function openPersonalRanking() {
+    router.push({ name: 'personalRanking' });
 }
 </script>
 
@@ -105,7 +105,7 @@ function openHonorCourt() {
 
             <PersonalMissionHonorBanner
                 v-if="challengeStore.hasEnoughData"
-                @open="openHonorCourt"
+                @open="openPersonalRanking"
             />
 
             <PersonalMissionDataGuide
