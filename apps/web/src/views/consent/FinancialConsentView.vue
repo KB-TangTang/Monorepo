@@ -46,8 +46,8 @@ async function onSubmit() {
     errorMessage.value = '';
     try {
         await consent.save('FINANCIAL', [{ type: 'THIRD_PARTY', agreed: true }]);
-        // TODO(#12): 계좌 연동 화면이 생기면 그쪽으로 보낸다.
-        router.replace({ name: 'home' });
+        // 이 동의는 계좌 연동의 앞단이라, 동의 직후 바로 기관 선택으로 이어간다(이슈 #12).
+        router.replace({ name: 'accountLinkInstitutions' });
     } catch (err) {
         errorMessage.value = err.message;
     } finally {

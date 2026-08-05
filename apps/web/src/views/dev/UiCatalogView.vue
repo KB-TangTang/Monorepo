@@ -367,10 +367,14 @@ const CODE = {
             <h2 class="catalog__h2">BaseButton</h2>
             <CatalogItem
                 name="BaseButton"
-                purpose="모든 액션 버튼. variant 4종 × size 3종 + block · disabled · loading."
+                purpose="모든 액션 버튼. variant 6종 × size 3종 + block · disabled · loading."
                 :code="CODE.button"
             >
-                <div v-for="v in ['primary', 'secondary', 'ghost', 'danger']" :key="v" class="demo">
+                <div
+                    v-for="v in ['primary', 'secondary', 'ghost', 'danger', 'dark', 'accent']"
+                    :key="v"
+                    class="demo"
+                >
                     <span class="demo__label">variant="{{ v }}"</span>
                     <div class="demo__row">
                         <BaseButton v-for="s in ['sm', 'md', 'lg']" :key="s" :variant="v" :size="s">
