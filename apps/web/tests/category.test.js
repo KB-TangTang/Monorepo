@@ -59,6 +59,10 @@ test('resolveCategoryDirection 은 금액 부호로 방향을 판단한다', () 
     assert.equal(resolveCategoryDirection(-6800), 'expense');
 });
 
+test('resolveCategoryDirection 은 0원을 지출로 취급한다', () => {
+    assert.equal(resolveCategoryDirection(0), 'expense');
+});
+
 test('resolveCategoryTone 은 지출 소분류의 대분류 인덱스로 톤을 정한다', () => {
     assert.equal(resolveCategoryTone('음식점/외식'), TONES[0]);
     assert.equal(resolveCategoryTone('온라인쇼핑'), TONES[1]);
