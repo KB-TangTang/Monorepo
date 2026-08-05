@@ -16,7 +16,7 @@ function toneColor(tone) {
 
 function formatWon(amount) {
     const sign = amount < 0 ? '-' : '';
-    return `${sign}₩${Math.abs(Math.trunc(amount)).toLocaleString('ko-KR')}`;
+    return `${sign}${Math.abs(Math.trunc(amount)).toLocaleString('ko-KR')}원`;
 }
 
 function formatSignedWon(amount) {
@@ -33,14 +33,14 @@ function formatCompactWon(amount) {
     const sign = amount < 0 ? '-' : '';
     const abs = Math.abs(amount);
     if (abs >= EOK) {
-        return `${sign}₩${(abs / EOK).toFixed(1)}억`;
+        return `${sign}${(abs / EOK).toFixed(1)}억원`;
     }
     if (abs >= MAN) {
         const man = Math.round(abs / MAN);
         if (man >= 10000) {
-            return `${sign}₩${(abs / EOK).toFixed(1)}억`;
+            return `${sign}${(abs / EOK).toFixed(1)}억원`;
         }
-        return `${sign}₩${man.toLocaleString('ko-KR')}만`;
+        return `${sign}${man.toLocaleString('ko-KR')}만원`;
     }
     return formatWon(amount);
 }

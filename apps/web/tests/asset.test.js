@@ -11,28 +11,28 @@ import {
     getSignedPercent,
 } from '../src/utils/asset.js';
 
-test('formatWon 은 부호를 기호 앞에 붙인다', () => {
-    assert.equal(formatWon(12846000), '₩12,846,000');
-    assert.equal(formatWon(-1500000), '-₩1,500,000');
-    assert.equal(formatWon(0), '₩0');
+test('formatWon 은 금액 뒤에 "원"을 붙인다', () => {
+    assert.equal(formatWon(12846000), '12,846,000원');
+    assert.equal(formatWon(-1500000), '-1,500,000원');
+    assert.equal(formatWon(0), '0원');
 });
 
 test('formatSignedWon 은 증감 방향에 따라 화살표를 붙인다', () => {
-    assert.equal(formatSignedWon(320000), '▲ ₩320,000');
-    assert.equal(formatSignedWon(-50000), '▼ ₩50,000');
+    assert.equal(formatSignedWon(320000), '▲ 320,000원');
+    assert.equal(formatSignedWon(-50000), '▼ 50,000원');
 });
 
 test('formatCompactWon 은 1만/1억 경계에서 단위를 바꾼다', () => {
-    assert.equal(formatCompactWon(9999), '₩9,999');
-    assert.equal(formatCompactWon(13146000), '₩1,315만');
-    assert.equal(formatCompactWon(150000000), '₩1.5억');
-    assert.equal(formatCompactWon(-20000), '-₩2만');
+    assert.equal(formatCompactWon(9999), '9,999원');
+    assert.equal(formatCompactWon(13146000), '1,315만원');
+    assert.equal(formatCompactWon(150000000), '1.5억원');
+    assert.equal(formatCompactWon(-20000), '-2만원');
 });
 
 test('formatCompactWon 은 반올림으로 1억을 넘는 값도 억 단위로 표기한다', () => {
-    assert.equal(formatCompactWon(99995000), '₩1.0억');
-    assert.equal(formatCompactWon(10000), '₩1만');
-    assert.equal(formatCompactWon(100000000), '₩1.0억');
+    assert.equal(formatCompactWon(99995000), '1.0억원');
+    assert.equal(formatCompactWon(10000), '1만원');
+    assert.equal(formatCompactWon(100000000), '1.0억원');
 });
 
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {

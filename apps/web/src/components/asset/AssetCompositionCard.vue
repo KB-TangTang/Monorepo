@@ -126,6 +126,7 @@ const segments = computed(() => getCompositionRatios(props.composition));
     align-items: center;
     gap: var(--tt-space-2);
     font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
 }
 
 .asset-composition__dot {
@@ -141,6 +142,7 @@ const segments = computed(() => getCompositionRatios(props.composition));
 
 .asset-composition__legend-amount {
     font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
 }

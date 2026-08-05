@@ -58,7 +58,7 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
                 <polyline
                     :points="sparkline.pointsAttr"
                     fill="none"
-                    stroke="var(--tt-innocent-300)"
+                    stroke="var(--tt-primary)"
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -68,7 +68,7 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
                     :cx="sparkline.lastPoint.x"
                     :cy="sparkline.lastPoint.y"
                     r="3"
-                    fill="var(--tt-innocent-300)"
+                    fill="var(--tt-primary)"
                 />
             </svg>
         </div>
@@ -76,23 +76,18 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
 </template>
 
 <style scoped>
-.net-worth {
-    background: var(--tt-gray-900);
-    border-color: var(--tt-gray-900);
-}
-
 .net-worth__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: var(--tt-fs-body);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-medium);
-    color: var(--tt-gray-400);
+    color: var(--tt-text-muted);
 }
 
 .net-worth__trend-link {
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-accent);
+    color: var(--tt-primary);
     background: transparent;
     border: 0;
     cursor: pointer;
@@ -110,7 +105,7 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
     font-size: var(--tt-fs-numeric);
     font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-tight);
-    color: var(--tt-text-inverse);
+    color: var(--tt-text);
 }
 
 .net-worth__change-row {
@@ -122,7 +117,8 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
 
 .net-worth__caption {
     font-size: var(--tt-fs-caption);
-    color: var(--tt-gray-400);
+    font-weight: var(--tt-fw-medium);
+    color: var(--tt-text-muted);
 }
 
 .net-worth__sparkline {

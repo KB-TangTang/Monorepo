@@ -158,13 +158,14 @@ onMounted(load);
 
 .net-worth-trend__totals-label {
     font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
     color: var(--tt-text-muted);
 }
 
 .net-worth-trend__totals-value {
     margin-top: var(--tt-space-1);
     font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-section);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }

@@ -65,6 +65,7 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
     gap: var(--tt-space-4);
     margin-bottom: var(--tt-space-4);
     font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
     color: var(--tt-text-muted);
 }
 

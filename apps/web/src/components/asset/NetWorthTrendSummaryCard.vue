@@ -35,13 +35,14 @@ const changeMonths = computed(() => props.trend.length);
 
 .trend-summary__label {
     font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
     color: var(--tt-gray-400);
 }
 
 .trend-summary__amount {
     margin-top: var(--tt-space-2);
     font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-display);
+    font-size: var(--tt-fs-numeric);
     font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-tight);
     color: var(--tt-text-inverse);
