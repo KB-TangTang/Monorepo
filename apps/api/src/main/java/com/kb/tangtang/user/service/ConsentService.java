@@ -8,6 +8,8 @@ import com.kb.tangtang.user.dto.ConsentRecordDto;
 import com.kb.tangtang.user.dto.MyConsentDto;
 import com.kb.tangtang.user.dto.MyConsentRowDto;
 import com.kb.tangtang.user.mapper.ConsentMapper;
+import com.kb.tangtang.user.domain.ConsentWithdrawnEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,10 +32,13 @@ public class ConsentService {
 
     private final ConsentMapper consentMapper;
     private final ConsentCatalog catalog;
+    private final ApplicationEventPublisher events;
 
-    public ConsentService(ConsentMapper consentMapper, ConsentCatalog catalog) {
+    public ConsentService(ConsentMapper consentMapper, ConsentCatalog catalog,
+                          ApplicationEventPublisher events) {
         this.consentMapper = consentMapper;
         this.catalog = catalog;
+        this.events = events;
     }
 
     /**
@@ -143,7 +148,8 @@ public class ConsentService {
      * FINANCIAL_DATA 를 철회하면 THIRD_PARTY 도 함께 철회한다 —
      * 금융데이터 포괄 동의를 거두면서 CODEF 개별 제공 동의만 남는 것은 모순이다.
      *
-     * TODO(#12): 철회 시 계좌 연동 해제·수집 중단 처리를 연결한다.
+     * FINANCIAL_DATA 를 철회하면 ConsentWithdrawnEvent 를 발행해 계좌 연동을 해제한다.
+     * account 모듈이 이 이벤트를 받는다 — 모듈 간 직접 호출을 피하기 위한 구조다.
      *
      * @return 철회 후 needsConsent
      */
@@ -161,6 +167,14 @@ public class ConsentService {
 
         if (consentMapper.withdraw(userId, targets, LocalDateTime.now()) == 0) {
             throw new BusinessException("NOT_FOUND", "철회할 동의 내역이 없습니다.");
+        }
+
+        /*
+         * 금융데이터 수집 동의를 거두면 수집 근거가 사라진다 — 연동도 함께 끊어야 한다.
+         * 같은 트랜잭션에서 처리되도록 @Async 없이 동기로 발행한다.
+         */
+        if (type == ConsentType.FINANCIAL_DATA) {
+            events.publishEvent(new ConsentWithdrawnEvent(userId, type.name()));
         }
 
         return needsConsent(userId);
