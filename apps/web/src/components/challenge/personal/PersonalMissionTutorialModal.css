@@ -1,0 +1,350 @@
+.tt-modal__panel:has(.tutorial) {
+    width: min(380px, calc(100vw - (var(--tt-space-5) * 2)));
+    max-width: 380px;
+    max-height: calc(100vh - (var(--tt-space-5) * 2));
+    padding: var(--tt-space-3);
+    overflow: visible;
+    border-radius: var(--tt-radius-xl);
+}
+
+.tt-modal__panel:has(.tutorial) > .tt-modal__header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.tt-modal__panel:has(.tutorial) > .tt-modal__body {
+    overflow: visible;
+}
+
+.tutorial {
+    position: relative;
+    padding-top: 72px;
+}
+
+.tutorial__judge {
+    position: absolute;
+    top: -80px;
+    right: 0;
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+}
+
+.tutorial__step {
+    position: absolute;
+    top: var(--tt-space-5);
+    right: var(--tt-space-4);
+    min-width: 64px;
+    text-align: center;
+    padding: var(--tt-space-2) var(--tt-space-3);
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+    background: var(--tt-primary);
+    border-radius: var(--tt-radius-md);
+}
+
+.tutorial__visual {
+    min-height: 176px;
+    padding: var(--tt-space-4);
+    border-radius: var(--tt-radius-lg);
+}
+
+.tutorial__visual--mission,
+.tutorial__visual--difficulty {
+    background: var(--tt-primary-subtle);
+}
+
+.tutorial__visual--honor {
+    background: var(--tt-accent-subtle);
+}
+
+.tutorial__kicker {
+    margin: 0 0 var(--tt-space-3);
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    letter-spacing: 0.14em;
+    color: var(--tt-text-muted);
+}
+
+.tutorial__mission-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-2);
+    width: clamp(180px, 68%, 230px);
+    max-width: 100%;
+    padding: var(--tt-space-4);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-md);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.tutorial__mission-card > span {
+    align-self: flex-start;
+    padding: var(--tt-space-1) var(--tt-space-2);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
+    border-radius: var(--tt-radius-sm);
+}
+
+.tutorial__mission-card strong {
+    font-size: var(--tt-fs-section);
+}
+
+.tutorial__mission-card div {
+    height: 8px;
+    overflow: hidden;
+    background: var(--tt-border);
+    border-radius: var(--tt-radius-full);
+}
+
+.tutorial__mission-card i {
+    display: block;
+    width: 58%;
+    height: 100%;
+    background: var(--tt-success);
+    border-radius: inherit;
+}
+
+.tutorial__difficulty-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--tt-space-3);
+}
+
+.tutorial__difficulty {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-2);
+    align-items: center;
+    justify-content: center;
+    min-height: 96px;
+    color: var(--tt-text-muted);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-md);
+}
+
+.tutorial__difficulty strong {
+    font-size: var(--tt-fs-title);
+}
+
+.tutorial__difficulty span {
+    font-family: var(--tt-font-mono);
+    font-weight: var(--tt-fw-bold);
+}
+
+.tutorial__difficulty--active {
+    color: var(--tt-text);
+    background: var(--tt-accent);
+    border-color: var(--tt-accent);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.tutorial__podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    height: 120px;
+}
+
+.tutorial__podium span {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: clamp(52px, 18vw, 64px);
+    padding-top: var(--tt-space-2);
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+}
+
+.tutorial__podium-first {
+    height: 88px;
+    color: var(--tt-text);
+    background: var(--tt-accent);
+    border-radius: var(--tt-radius-md) var(--tt-radius-md) 0 0;
+}
+
+.tutorial__podium-second {
+    height: 64px;
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
+    border-radius: var(--tt-radius-md) 0 0;
+}
+
+.tutorial__podium-third {
+    height: 52px;
+    color: var(--tt-text-muted);
+    background: var(--tt-border);
+    border-radius: 0 var(--tt-radius-md) 0 0;
+}
+
+.tutorial h2 {
+    margin: var(--tt-space-5) 0 var(--tt-space-2);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+}
+
+.tutorial__description {
+    min-height: 72px;
+    margin: 0;
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-text-muted);
+}
+
+.tutorial__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--tt-space-5);
+    gap: var(--tt-space-2);
+}
+
+.tutorial__skip,
+.tutorial__next {
+    min-height: 48px;
+    padding: 0 var(--tt-space-5);
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-bold);
+    border: 0;
+    border-radius: var(--tt-radius-md);
+    cursor: pointer;
+}
+
+.tutorial__skip {
+    color: var(--tt-text-muted);
+    background: transparent;
+}
+
+.tutorial__next {
+    color: var(--tt-text-inverse);
+    background: var(--tt-text);
+    min-width: 112px;
+    min-height: 60px;
+}
+
+.tutorial__indicators {
+    position: absolute;
+    right: 0;
+    bottom: -44px;
+    left: 0;
+    display: flex;
+    gap: var(--tt-space-2);
+    justify-content: center;
+    margin: 0;
+}
+
+.tutorial__indicators span {
+    width: 10px;
+    height: 10px;
+    background: var(--tt-border-strong);
+    border-radius: var(--tt-radius-full);
+    transition: width 0.15s ease;
+}
+
+.tutorial__indicators .tutorial__indicator--active {
+    width: 40px;
+    background: var(--tt-accent);
+}
+
+@media (max-width: 390px) {
+    .tt-modal__panel:has(.tutorial) {
+        width: calc(100vw - (var(--tt-space-3) * 2));
+        max-height: calc(100dvh - (var(--tt-space-3) * 2));
+        padding: var(--tt-space-2);
+    }
+
+    .tutorial {
+        padding-top: 64px;
+    }
+
+    .tutorial__judge {
+        top: -68px;
+        width: 84px;
+        height: 84px;
+    }
+
+    .tutorial__visual {
+        min-height: 156px;
+        padding: var(--tt-space-3);
+    }
+
+    .tutorial__difficulty-list {
+        gap: var(--tt-space-2);
+    }
+
+    .tutorial__difficulty {
+        min-height: 88px;
+    }
+
+    .tutorial h2 {
+        margin-top: var(--tt-space-4);
+        font-size: clamp(var(--tt-fs-section), 5.5vw, var(--tt-fs-title));
+    }
+
+    .tutorial__description {
+        min-height: 0;
+    }
+
+    .tutorial__actions {
+        margin-top: var(--tt-space-4);
+    }
+
+    .tutorial__skip,
+    .tutorial__next {
+        min-width: 0;
+        min-height: 52px;
+        padding: 0 var(--tt-space-4);
+    }
+}
+
+@media (max-width: 359px) {
+    .tt-modal__panel:has(.tutorial) {
+        width: calc(100vw - (var(--tt-space-2) * 2));
+    }
+
+    .tutorial__step {
+        right: var(--tt-space-2);
+        min-width: 56px;
+    }
+
+    .tutorial__visual {
+        padding: var(--tt-space-2);
+    }
+
+    .tutorial__mission-card {
+        width: min(100%, 200px);
+        padding: var(--tt-space-3);
+    }
+
+    .tutorial__difficulty-list {
+        gap: var(--tt-space-1);
+    }
+
+    .tutorial__difficulty {
+        min-height: 80px;
+    }
+
+    .tutorial__difficulty strong {
+        font-size: var(--tt-fs-section);
+    }
+
+    .tutorial__skip,
+    .tutorial__next {
+        padding: 0 var(--tt-space-3);
+        font-size: var(--tt-fs-body);
+    }
+}

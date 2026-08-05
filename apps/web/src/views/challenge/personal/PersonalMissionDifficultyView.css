@@ -1,0 +1,65 @@
+.difficulty {
+    min-height: 100vh;
+    padding: var(--tt-space-6) clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
+    font-family: var(--tt-font-sans);
+    color: var(--tt-text);
+    background: var(--tt-bg-subtle);
+}
+
+.difficulty__header {
+    display: flex;
+    gap: var(--tt-space-3);
+    align-items: center;
+}
+
+.difficulty__header button {
+    padding: 0;
+    font-size: var(--tt-fs-numeric);
+    color: var(--tt-text);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+.difficulty__header strong {
+    font-size: var(--tt-fs-section);
+}
+
+.difficulty__title {
+    margin: var(--tt-space-4) 0 var(--tt-space-5);
+}
+
+.difficulty__title h1 {
+    margin: 0 0 var(--tt-space-3);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-tight);
+}
+
+.difficulty__title p {
+    margin: 0;
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-text-muted);
+}
+
+.difficulty__options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-3);
+}
+
+.difficulty__notice {
+    margin: var(--tt-space-4) 0;
+    padding: var(--tt-space-4);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
+    border-radius: var(--tt-radius-md);
+}
+
+@media (max-width: 390px) {
+    .difficulty__title h1 {
+        font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
+    }
+}

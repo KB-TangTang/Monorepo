@@ -16,6 +16,15 @@ export function isAvailableReportMonth(month, referenceDate = new Date()) {
     return month.hasReport && month.value <= getPreviousPeriod(referenceDate);
 }
 
+export function resolveSelectedReportPeriod(months, requestedPeriod, referenceDate = new Date()) {
+    const availableMonths = months
+        .filter((month) => isAvailableReportMonth(month, referenceDate))
+        .sort((first, second) => second.value.localeCompare(first.value));
+    const requestedMonth = availableMonths.find((month) => month.value === requestedPeriod);
+
+    return requestedMonth?.value ?? availableMonths[0]?.value ?? '';
+}
+
 export function formatChangeRate(rate) {
     if (rate === 0) {
         return '−0%';

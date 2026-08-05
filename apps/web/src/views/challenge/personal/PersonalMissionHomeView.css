@@ -1,0 +1,61 @@
+.personal-mission-home {
+    min-height: calc(100vh - var(--tt-tabbar-height));
+    font-family: var(--tt-font-sans);
+    color: var(--tt-text);
+    background: var(--tt-bg-subtle);
+}
+
+.personal-mission-home__hero {
+    min-height: 172px;
+    padding: var(--tt-space-6) clamp(var(--tt-space-4), 5vw, var(--tt-space-5));
+    color: var(--tt-text-inverse);
+    background: var(--tt-text);
+}
+
+.personal-mission-home__hero p {
+    margin: 0;
+    font-size: var(--tt-fs-caption);
+    opacity: 0.72;
+}
+
+.personal-mission-home__hero h1 {
+    margin: var(--tt-space-3) 0 0;
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-tight);
+}
+
+.personal-mission-home__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-4);
+    padding: 0 clamp(var(--tt-space-3), 5vw, var(--tt-space-5))
+        calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
+    transform: translateY(-24px);
+}
+
+@media (max-width: 390px) {
+    .personal-mission-home__hero h1 {
+        font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
+    }
+}
+
+@media (max-width: 359px) {
+    .personal-mission-home__reset {
+        display: none;
+    }
+}
+
+.personal-mission-home__reset {
+    position: fixed;
+    right: var(--tt-space-3);
+    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
+    z-index: var(--tt-z-sticky);
+    padding: var(--tt-space-2);
+    font: inherit;
+    font-size: var(--tt-fs-mono-chip);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-full);
+    cursor: pointer;
+}

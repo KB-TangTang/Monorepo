@@ -2,12 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
 import { canEnterLinkStep } from '@/utils/account';
+import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
  * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
- * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
- *   component: () => import('@/views/trial/TrialHomeView.vue')
- *
  * meta.public   — 로그인 없이 접근 가능
  * meta.hideTabBar — 하단 탭바를 숨긴다 (App.vue 가 읽는다)
  */
@@ -42,17 +40,42 @@ const routes = [
         component: () => import('@/views/HomeView.vue'),
         meta: { title: '홈' },
     },
-    {
-        path: '/trial',
-        name: 'trial',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '재판' },
-    },
+    ...personalMissionChallengeRoutes,
     {
         path: '/asset',
         name: 'asset',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/AssetHomeView.vue'),
         meta: { title: '자산' },
+    },
+    {
+        path: '/asset/checking',
+        name: 'assetChecking',
+        component: () => import('@/views/AssetCheckingView.vue'),
+        meta: { title: '입출금 계좌' },
+    },
+    {
+        path: '/asset/savings',
+        name: 'assetSavings',
+        component: () => import('@/views/AssetSavingsView.vue'),
+        meta: { title: '예적금' },
+    },
+    {
+        path: '/asset/investment',
+        name: 'assetInvestment',
+        component: () => import('@/views/AssetInvestmentView.vue'),
+        meta: { title: '투자증권' },
+    },
+    {
+        path: '/asset/loan',
+        name: 'assetLoan',
+        component: () => import('@/views/AssetLoanView.vue'),
+        meta: { title: '대출' },
+    },
+    {
+        path: '/asset/trend',
+        name: 'assetNetWorthTrend',
+        component: () => import('@/views/NetWorthTrendView.vue'),
+        meta: { title: '순자산 추이' },
     },
     {
         path: '/ledger',

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     fetchMonthlyConsumptionMonths,
@@ -17,7 +17,7 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import {
     formatPeriod,
     formatWon,
-    getPreviousPeriod,
+    resolveSelectedReportPeriod,
     resolveReportState,
 } from '@/utils/monthlyConsumption';
 
@@ -25,12 +25,10 @@ const route = useRoute();
 const router = useRouter();
 const report = ref(null);
 const months = ref([]);
-const loading = ref(false);
+const loading = ref(true);
 const errorMessage = ref('');
 const isMonthPickerOpen = ref(false);
-const selectedPeriod = computed(() =>
-    typeof route.query.month === 'string' ? route.query.month : getPreviousPeriod(),
-);
+const selectedPeriod = ref('');
 const state = computed(() =>
     resolveReportState({ loading: loading.value, error: errorMessage.value, report: report.value }),
 );
@@ -56,7 +54,13 @@ async function loadReport() {
 }
 
 function selectPeriod(period) {
+    if (period === selectedPeriod.value) {
+        return;
+    }
+
+    selectedPeriod.value = period;
     router.replace({ name: 'monthlyConsumptionReport', query: { month: period } });
+    loadReport();
 }
 
 function openChallengeReport() {
@@ -74,12 +78,16 @@ function openMonthlyReport() {
 onMounted(async () => {
     try {
         await loadMonths();
+        const requestedPeriod = typeof route.query.month === 'string' ? route.query.month : '';
+        selectedPeriod.value = resolveSelectedReportPeriod(months.value, requestedPeriod);
+        if (!selectedPeriod.value) {
+            throw new Error('조회 가능한 소비 리포트가 없습니다.');
+        }
+        await loadReport();
     } catch (error) {
         errorMessage.value = error.message ?? '조회 가능한 달을 불러오지 못했습니다.';
     }
 });
-
-watch(selectedPeriod, loadReport, { immediate: true });
 </script>
 
 <template>
