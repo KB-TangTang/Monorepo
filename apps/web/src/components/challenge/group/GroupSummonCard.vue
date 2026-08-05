@@ -149,6 +149,7 @@ defineProps({
     font-size: 11px;
     font-weight: var(--tt-fw-bold);
     letter-spacing: 0.04em;
+    text-align: center;
 }
 
 .gsc-code {
@@ -157,5 +158,6 @@ defineProps({
     font-weight: var(--tt-fw-black);
     letter-spacing: 0.14em;
     margin-top: 6px;
+    text-align: center;
 }
 </style>

@@ -41,7 +41,7 @@ onMounted(async () => {
 async function handleShare() {
     const shareData = {
         title: `탕탕 그룹 챌린지 초대`,
-        text: `${group.value?.groupName} 그룹에 함께해요! 초대 코드: ${group.value?.displayCode}`,
+        text: `${group.value?.groupName} 그룹에 함께해요! 초대 코드: ${group.value?.inviteCode}`,
         url: `${window.location.origin}/challenge/group/join/${group.value?.inviteCode}`,
     };
 
@@ -84,7 +84,7 @@ function goBack() {
             <!-- 소환장 카드 -->
             <div class="giv-card-area">
                 <GroupSummonCard
-                    :invite-code="group.displayCode"
+                    :invite-code="group.inviteCode"
                     :variant="cardVariant"
                 />
             </div>
