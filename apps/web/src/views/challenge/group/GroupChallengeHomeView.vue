@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
+import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/groupTutorialGuide';
@@ -77,13 +78,8 @@ function reopenTutorial() {
             </button>
         </div>
 
-        <!-- ===== 개인/그룹 토글 ===== -->
-        <div class="gc-toggle-area">
-            <div class="gc-toggle">
-                <span class="gc-toggle-item gc-toggle-item--inactive">개인</span>
-                <span class="gc-toggle-item gc-toggle-item--active">그룹</span>
-            </div>
-        </div>
+        <!-- ===== 개인/그룹 세그먼트 (팀 공용) ===== -->
+        <ChallengeModeTabBar active-mode="group" />
 
         <!-- ===== 참여코드 입장 바텀시트 ===== -->
         <GroupJoinCodeSheet v-model="showJoinSheet" />
@@ -297,44 +293,4 @@ function reopenTutorial() {
     background: var(--tt-bg-fill);
 }
 
-/* ── 개인/그룹 토글 ───────────────────── */
-.gc-toggle-area {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-2));
-    display: flex;
-    justify-content: center;
-    z-index: var(--tt-z-sticky);
-    pointer-events: none;
-}
-
-.gc-toggle {
-    display: flex;
-    gap: 2px;
-    background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-full);
-    padding: var(--tt-space-1);
-    box-shadow: 0 8px 20px rgba(35, 40, 66, 0.1);
-    pointer-events: auto;
-}
-
-.gc-toggle-item {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    padding: 6px var(--tt-space-4);
-    border-radius: var(--tt-radius-full);
-    cursor: pointer;
-}
-
-.gc-toggle-item--inactive {
-    color: var(--tt-text-muted);
-}
-
-.gc-toggle-item--active {
-    background: var(--tt-primary-gold);
-    color: var(--tt-primary);
-    font-weight: var(--tt-fw-black);
-}
 </style>

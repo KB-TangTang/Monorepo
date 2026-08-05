@@ -15,7 +15,6 @@ defineProps({
             :aria-current="activeMode === 'personal' ? 'page' : undefined"
             :to="{ name: 'personalMissionChallenge' }"
         >
-            <span aria-hidden="true">♙</span>
             개인
         </RouterLink>
 
@@ -24,7 +23,6 @@ defineProps({
             :aria-current="activeMode === 'group' ? 'page' : undefined"
             :to="{ name: 'groupChallenge' }"
         >
-            <span aria-hidden="true">♟</span>
             그룹
         </RouterLink>
     </nav>
