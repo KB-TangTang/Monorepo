@@ -13,6 +13,7 @@ import LedgerPageHeader from '@/components/ledger/LedgerPageHeader.vue';
 import LedgerPaymentMethodSheet from '@/components/ledger/LedgerPaymentMethodSheet.vue';
 import LedgerSummaryCard from '@/components/ledger/LedgerSummaryCard.vue';
 import LedgerTransactionRow from '@/components/ledger/LedgerTransactionRow.vue';
+import LedgerCategorySheet from '@/components/ledger/LedgerCategorySheet.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
@@ -37,6 +38,8 @@ const searchTerm = ref('');
 const selectedDate = ref(null);
 const selectedPaymentMethod = ref('');
 const isPaymentSheetOpen = ref(false);
+const selectedTransaction = ref(null);
+const isCategorySheetOpen = ref(false);
 
 const state = computed(() =>
     resolveLedgerState({ loading: loading.value, error: errorMessage.value, data: summary.value }),
@@ -116,6 +119,18 @@ function selectPaymentMethod(method) {
     selectedPaymentMethod.value = method;
 }
 
+function openCategorySheet(tx) {
+    selectedTransaction.value = tx;
+    isCategorySheetOpen.value = true;
+}
+
+function applyCategory({ transactionId, categoryName }) {
+    const tx = transactions.value.find((item) => item.id === transactionId);
+    if (tx) {
+        tx.category = categoryName;
+    }
+}
+
 function openReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: period.value } });
 }
@@ -184,6 +199,7 @@ onMounted(async () => {
                             v-for="tx in group.items"
                             :key="tx.id"
                             :transaction="tx"
+                            @click="openCategorySheet(tx)"
                         />
                     </ul>
                 </div>
@@ -195,6 +211,12 @@ onMounted(async () => {
             :methods="summary?.paymentMethods ?? []"
             :selected="selectedPaymentMethod"
             @select="selectPaymentMethod"
+        />
+
+        <LedgerCategorySheet
+            v-model="isCategorySheetOpen"
+            :transaction="selectedTransaction"
+            @select="applyCategory"
         />
 
         <ChallengeReportToggle active="transactions" @open-monthly-report="openReport" />
