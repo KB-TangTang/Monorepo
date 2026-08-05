@@ -78,8 +78,8 @@ const routes = [
     {
         path: '/ledger',
         name: 'ledger',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '장부' },
+        component: () => import('@/views/LedgerView.vue'),
+        meta: { title: '전체 거래내역' },
     },
     {
         path: '/my',

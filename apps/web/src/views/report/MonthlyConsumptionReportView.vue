@@ -75,6 +75,10 @@ function openMonthlyReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: selectedPeriod.value } });
 }
 
+function openLedger() {
+    router.push({ name: 'ledger' });
+}
+
 onMounted(async () => {
     try {
         await loadMonths();
@@ -190,7 +194,12 @@ onMounted(async () => {
             :selected-period="selectedPeriod"
             @select="selectPeriod"
         />
-        <ChallengeReportToggle v-if="state === 'ready'" @open-monthly-report="openMonthlyReport" />
+        <ChallengeReportToggle
+            v-if="state === 'ready'"
+            active="report"
+            @open-transactions="openLedger"
+            @open-monthly-report="openMonthlyReport"
+        />
     </article>
 </template>
 
