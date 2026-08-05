@@ -82,6 +82,9 @@ function chooseExpenseChild(child) {
 }
 
 function chooseCategory(categoryName) {
+    if (!props.transaction) {
+        return;
+    }
     emit('select', { transactionId: props.transaction.id, categoryName });
     emit('update:modelValue', false);
 }
