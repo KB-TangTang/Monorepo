@@ -14,6 +14,8 @@ const props = defineProps({
     trend: { type: Array, required: true },
 });
 
+defineEmits(['view-trend']);
+
 const SPARK_WIDTH = 96;
 const SPARK_HEIGHT = 40;
 
@@ -26,7 +28,13 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
         <template #header>
             <div class="net-worth__head">
                 <span>순자산</span>
-                <span class="net-worth__trend-link">추이 보기</span>
+                <button
+                    type="button"
+                    class="net-worth__trend-link"
+                    @click="$emit('view-trend')"
+                >
+                    추이 보기
+                </button>
             </div>
         </template>
 
@@ -80,6 +88,9 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
 .net-worth__trend-link {
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
 }
 
 .net-worth__body {

@@ -77,6 +77,25 @@ function getSparklinePoints(trend, width, height) {
     return { pointsAttr, lastPoint: coords[coords.length - 1] };
 }
 
+function getBarHeights(netWorthArr, debtArr, maxHeightPx) {
+    const totals = netWorthArr.map((netWorth, i) => netWorth + debtArr[i]);
+    const maxTotal = Math.max(...totals);
+    const scale = maxTotal === 0 ? 0 : maxHeightPx / maxTotal;
+    return netWorthArr.map((netWorth, i) => ({
+        netWorthHeight: netWorth * scale,
+        debtHeight: debtArr[i] * scale,
+    }));
+}
+
+function getSignedPercent(from, to) {
+    if (from === 0) {
+        return '+0.0%';
+    }
+    const pct = ((to - from) / from) * 100;
+    const sign = pct < 0 ? '-' : '+';
+    return `${sign}${Math.abs(pct).toFixed(1)}%`;
+}
+
 export {
     toneColor,
     formatWon,
@@ -86,4 +105,6 @@ export {
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,
+    getBarHeights,
+    getSignedPercent,
 };

@@ -1,7 +1,9 @@
+const NET_WORTH_TREND_VALUES = [12200000, 12350000, 12100000, 12500000, 12700000, 12846000];
+
 const ASSET_SUMMARY = {
     netWorth: 12846000,
     monthOverMonthChange: 320000,
-    trend: [12200000, 12350000, 12100000, 12500000, 12700000, 12846000],
+    trend: NET_WORTH_TREND_VALUES,
     composition: [
         { code: 'checking', label: '입출금', amount: 2066800, tone: 'navy' },
         { code: 'savings', label: '예적금', amount: 5420000, tone: 'blue' },
@@ -42,6 +44,11 @@ const ASSET_SUMMARY = {
             tone: 'danger',
         },
     ],
+    netWorthTrend: {
+        months: ['1월', '2월', '3월', '4월', '5월', '6월'],
+        netWorth: NET_WORTH_TREND_VALUES,
+        totalDebt: [1800000, 1750000, 1700000, 1650000, 1600000, 1500000],
+    },
 };
 
 const CHECKING_DETAIL = {

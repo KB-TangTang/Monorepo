@@ -7,6 +7,8 @@ import {
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,
+    getBarHeights,
+    getSignedPercent,
 } from '../src/utils/asset.js';
 
 test('formatWon 은 부호를 기호 앞에 붙인다', () => {
@@ -79,4 +81,29 @@ test('getSparklinePoints 는 빈 배열에 안전하다', () => {
     const { pointsAttr, lastPoint } = getSparklinePoints([], 20, 10);
     assert.equal(pointsAttr, '');
     assert.equal(lastPoint, null);
+});
+
+test('getBarHeights 는 총자산이 가장 큰 달을 기준으로 높이를 정규화한다', () => {
+    const result = getBarHeights([100, 200], [50, 0], 160);
+    assert.deepEqual(result, [
+        { netWorthHeight: 80, debtHeight: 40 },
+        { netWorthHeight: 160, debtHeight: 0 },
+    ]);
+});
+
+test('getBarHeights 는 총자산이 모두 0이어도 0으로 나누지 않는다', () => {
+    const result = getBarHeights([0, 0], [0, 0], 160);
+    assert.deepEqual(result, [
+        { netWorthHeight: 0, debtHeight: 0 },
+        { netWorthHeight: 0, debtHeight: 0 },
+    ]);
+});
+
+test('getSignedPercent 는 증감률을 부호와 함께 포맷한다', () => {
+    assert.equal(getSignedPercent(12200000, 12846000), '+5.3%');
+    assert.equal(getSignedPercent(100, 50), '-50.0%');
+});
+
+test('getSignedPercent 는 from 이 0이면 안전한 기본값을 반환한다', () => {
+    assert.equal(getSignedPercent(0, 500), '+0.0%');
 });

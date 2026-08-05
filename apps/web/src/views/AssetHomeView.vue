@@ -4,6 +4,7 @@
 -->
 <script setup>
 import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { fetchAssetSummary } from '@/api/asset';
 import AssetNetWorthCard from '@/components/asset/AssetNetWorthCard.vue';
 import AssetCompositionCard from '@/components/asset/AssetCompositionCard.vue';
@@ -11,6 +12,7 @@ import AssetAccountList from '@/components/asset/AssetAccountList.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import StateError from '@/components/common/StateError.vue';
 
+const router = useRouter();
 const summary = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
@@ -25,6 +27,10 @@ async function load() {
     } finally {
         loading.value = false;
     }
+}
+
+function goToTrend() {
+    router.push({ name: 'assetNetWorthTrend' });
 }
 
 onMounted(load);
@@ -44,6 +50,7 @@ onMounted(load);
                 :net-worth="summary.netWorth"
                 :month-over-month-change="summary.monthOverMonthChange"
                 :trend="summary.trend"
+                @view-trend="goToTrend"
             />
             <AssetCompositionCard :composition="summary.composition" />
             <AssetAccountList :accounts="summary.accounts" />
