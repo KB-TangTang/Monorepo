@@ -18,7 +18,17 @@ defineEmits(['back', 'action']);
             :aria-label="backLabel"
             @click="$emit('back')"
         >
-            ‹
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+            >
+                <path d="m15 4-8 8 8 8" />
+            </svg>
         </button>
         <h1>{{ title }}</h1>
         <button
@@ -38,6 +48,7 @@ defineEmits(['back', 'action']);
     position: relative;
     display: flex;
     align-items: center;
+    gap: var(--tt-space-2);
     min-height: 48px;
 }
 
@@ -48,15 +59,22 @@ defineEmits(['back', 'action']);
 }
 
 .fixed-expense-header__back {
-    width: 28px;
-    margin-right: var(--tt-space-1);
-    font-size: var(--tt-fs-numeric);
-    font-weight: var(--tt-fw-black);
-    line-height: 1;
-    color: var(--tt-surface-strong);
+    display: flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--tt-text);
     background: transparent;
     border: 0;
     cursor: pointer;
+}
+
+.fixed-expense-header__back svg {
+    width: 22px;
+    height: 22px;
 }
 
 .fixed-expense-header__action {
