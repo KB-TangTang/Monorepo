@@ -4,9 +4,9 @@ export const AVAILABLE_MONTHS = [
     { value: '2026-06', year: 2026, month: 6, hasReport: true },
     { value: '2026-05', year: 2026, month: 5, hasReport: true },
     { value: '2026-04', year: 2026, month: 4, hasReport: false },
-    { value: '2026-03', year: 2026, month: 3, hasReport: true },
-    { value: '2026-02', year: 2026, month: 2, hasReport: true },
-    { value: '2026-01', year: 2026, month: 1, hasReport: true },
+    { value: '2026-03', year: 2026, month: 3, hasReport: false },
+    { value: '2026-02', year: 2026, month: 2, hasReport: false },
+    { value: '2026-01', year: 2026, month: 1, hasReport: false },
 ];
 
 export const REPORTS = {
