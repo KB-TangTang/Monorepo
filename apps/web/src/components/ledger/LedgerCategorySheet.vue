@@ -118,6 +118,8 @@ function chooseCategory(categoryName) {
                             `category-sheet__tile--${toneAt(rowIndex, itemIndex)}`,
                             { 'category-sheet__tile--active': isActiveTile(item) },
                         ]"
+                        :aria-expanded="isExpense ? expandedParentId === item.id : undefined"
+                        :aria-pressed="!isExpense ? isActiveTile(item) : undefined"
                         @click="handleTileClick(item)"
                     >
                         <CategoryIcon :icon="item.icon" />
@@ -137,6 +139,7 @@ function chooseCategory(categoryName) {
                         :class="{
                             'category-sheet__chip--active': child.name === transaction?.category,
                         }"
+                        :aria-pressed="child.name === transaction?.category"
                         @click="chooseExpenseChild(child)"
                     >
                         {{ child.name }}
