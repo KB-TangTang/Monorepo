@@ -27,12 +27,7 @@ const personalMissionChallengeRoutes = [
         component: () => import('@/views/challenge/personal/PersonalCertificateView.vue'),
         meta: { title: '개인 미션 명예 인증서' },
     },
-    {
-        path: '/group-challenges',
-        name: 'groupChallenge',
-        component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
-        meta: { title: '그룹 챌린지' },
-    },
+    // 그룹 챌린지 라우트는 router/index.js 로 이동함 (#36)
 ];
 
 export default personalMissionChallengeRoutes;

@@ -1,65 +1,58 @@
-# 탕탕 · 지갑재판소 — 디자인 시스템
+# 탕탕 · 지갑재판소 — 디자인 시스템 v2
 
-팀 디자인시스템(Figma)에서 추출한 값을 코드 기준으로 고정한 문서다.
+팀 디자인시스템에서 추출한 값을 코드 기준으로 고정한 문서다.
 **원본 정의는 `apps/web/src/assets/tokens.css` 하나뿐이고, 이 문서는 그 값을 사람이 읽기 위한 표다.**
-값을 바꿀 때는 두 곳을 같이 고친다. Figma 접근 권한이 없어도 여기서 값을 찾을 수 있어야 한다.
+값을 바꿀 때는 두 곳을 같이 고친다.
 
 ## 절대 규칙
 
-1. **색상 HEX 하드코딩 금지.** `#2f5ad0` 처럼 직접 쓰지 말고 `var(--tt-primary)` 를 쓴다.
-2. **컴포넌트는 「의미 토큰」만 참조한다.** 원시 팔레트(`--tt-brand-700`, `--tt-gray-800` …)는
-   `tokens.css` 안의 의미 토큰 정의에서만 쓴다. 그래야 나중에 팔레트를 통째로 바꿔도 화면이 안 깨진다.
+1. **색상 HEX 하드코딩 금지.** `#232842` 처럼 직접 쓰지 말고 `var(--tt-primary)` 를 쓴다.
+2. **컴포넌트는 「의미 토큰」만 참조한다.** 원시 팔레트(`--tt-ink`, `--tt-red` …)는
+   `tokens.css` 안의 의미 토큰 정의에서만 쓴다.
    - ⭕ `color: var(--tt-danger);`
-   - ❌ `color: var(--tt-guilty-700);` (컴포넌트에서)
-   - ❌ `color: #c7515a;`
-3. 폰트 크기·굵기·간격·라운드·그림자도 토큰을 쓴다 (`--tt-fs-*`, `--tt-fw-*`, `--tt-space-*`, `--tt-radius-*`, `--tt-elevation-*`).
-4. 갈색 계열(`--tt-wood`, `--tt-kraft`)은 **판사봉·인장·종이 질감에만** 쓴다. 일반 배경·텍스트에 쓰지 않는다.
+   - ❌ `color: var(--tt-red);` (컴포넌트에서)
+   - ❌ `color: #E0664B;`
+3. 폰트 크기·굵기·간격·라운드·그림자도 토큰을 쓴다.
+4. 갈색 계열(`--tt-wood`, `--tt-kraft`)은 **판사봉·인장·종이 질감에만** 쓴다.
 
 ---
 
 ## 1. 색상
 
-### Brand (Trust Blue) — 주색
+### Brand — Ink + Gold 이원 체계
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
-| `--tt-brand-900` | `#1E3E9C` | hover · pressed |
-| `--tt-brand-700` | `#2F5AD0` | **Primary** — 메인 액션 |
-| `--tt-brand-500` | `#5B7BC4` | 보조 |
-| `--tt-brand-200` | `#BFD2F6` | border |
-| `--tt-brand-100` | `#DAE7FB` | **Secondary** — 선택 상태 |
-| `--tt-brand-50` | `#EAF0FB` | bg |
+| `--tt-ink` | `#232842` | 헤더 · 본문 텍스트 · 스탯 카드 |
+| `--tt-ink-raised` | `#2E3556` | Ink 위에 겹치는 블록 |
+| `--tt-gold` | `#F5B921` | 주요 CTA · 진행바 · 목숨 |
+| `--tt-gold-soft` | `#FFF3D1` | 뱃지 배경 · 후광 |
+| `--tt-gold-deep` | `#B67D06` | Gold soft 위 텍스트 |
 
-### Accent (Gold) — 배지 · 판사봉
+> Ink는 구조, Gold는 강조. Gold는 화면당 1–2곳만.
+
+### 중립 · 종이
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
-| `--tt-accent-700` | `#8A6410` | 텍스트용 진한 골드 (골드 배경 위 대비 확보) |
-| `--tt-accent-500` | `#FFC338` | **Accent** |
-| `--tt-accent-50` | `#FFF6E0` | bg |
+| `--tt-neutral-text` | `#232842` | 최고 대비 텍스트 |
+| `--tt-neutral-body` | `#5A6076` | 본문 |
+| `--tt-neutral-muted` | `#8A8FA3` | 보조 설명 |
+| `--tt-neutral-hint` | `#A6A9B6` | 힌트 · placeholder |
+| `--tt-neutral-surface` | `#FFFFFF` | 카드 배경 |
+| `--tt-neutral-paper` | `#F7F8FA` | 페이지 · 섹션 배경 |
+| `--tt-neutral-fill` | `#EFF1F5` | 입력 필드 · 비활성 |
+| `--tt-neutral-border` | `#E5E8EF` | 구분선 · 카드 테두리 |
+| `--tt-neutral-track` | `#E9ECF2` | 진행바 트랙 |
 
-### Cool Gray 10단계
+### 상태 — 4색 체계 (진한값 / 옅은값 / deep)
 
-| 토큰 | 값 | | 토큰 | 값 |
+| 상태 | 진한 | 옅은 | deep | 도메인 매핑 |
 |---|---|---|---|---|
-| `--tt-gray-50` | `#F8FAFD` | | `--tt-gray-500` | `#9DA8BD` |
-| `--tt-gray-100` | `#F1F4F9` | | `--tt-gray-600` | `#8792AE` |
-| `--tt-gray-200` | `#E5EAF2` | | `--tt-gray-700` | `#68728F` |
-| `--tt-gray-300` | `#D3DAE7` | | `--tt-gray-800` | `#444C68` |
-| `--tt-gray-400` | `#B8C2D3` | | `--tt-gray-900` | `#252B42` (Navy — 수치카드·CTA) |
-| | | | `--tt-ink` | `#1B2138` (최고 대비 텍스트) |
-
-### 판정 (시맨틱)
-
-| 토큰 | 값 | 용도 |
-|---|---|---|
-| `--tt-guilty-700` | `#C7515A` | 유죄 · 초과 · 위험 |
-| `--tt-guilty-300` | `#F0D4D7` | 유죄 border |
-| `--tt-guilty-50` | `#FBEDEE` | 유죄 bg |
-| `--tt-innocent-800` | `#2F7A62` | 무죄 강조 |
-| `--tt-innocent-700` | `#3E9B7E` | 무죄 · 절약 · 성공 |
-| `--tt-innocent-300` | `#CDE5D9` | 무죄 border |
-| `--tt-innocent-50` | `#E7F2ED` | 무죄 bg |
+| **Green** | `#2E9E6B` | `#E4F4EC` | `#1F6B48` | 성공 · 안전 · 무죄 |
+| **Gold** | `#F5B921` | `#FFF3D1` | `#B67D06` | 주의 · 진행 중 · 기소 |
+| **Red** | `#E0664B` | `#FBE9E4` | `#C24B31` | 초과 · 탈락 · 유죄 |
+| **Blue** | `#3E63D6` | `#EAF0FF` | `#3E5299` | 정보 · 링크 · 기간 |
 
 ### 종이 · 목재 (절제 사용)
 
@@ -72,103 +65,95 @@
 
 | 토큰 | 참조 | 쓰는 곳 |
 |---|---|---|
-| `--tt-primary` | `--tt-brand-700` | 기본 버튼 · 링크 · 활성 탭 |
-| `--tt-primary-hover` | `--tt-brand-900` | hover · pressed |
-| `--tt-primary-subtle` | `--tt-brand-100` | 선택된 칩 · 연한 강조 배경 |
-| `--tt-danger` | `--tt-guilty-700` | 유죄 · 초과 · 삭제 |
-| `--tt-danger-subtle` | `--tt-guilty-50` | 유죄 배경 |
-| `--tt-success` | `--tt-innocent-700` | 무죄 · 절감 성공 |
-| `--tt-success-subtle` | `--tt-innocent-50` | 성공 배경 |
-| `--tt-accent` | `--tt-accent-500` | 배지 · 판사봉 포인트 |
-| `--tt-accent-subtle` | `--tt-accent-50` | 배지 배경 |
-| `--tt-text` | `--tt-ink` | 본문 |
-| `--tt-text-muted` | `--tt-gray-700` | 보조 설명 · 캡션 |
+| `--tt-primary` | `--tt-ink` | Ink 버튼 · 헤더 · 활성 상태 |
+| `--tt-primary-hover` | `--tt-ink-raised` | hover · pressed |
+| `--tt-primary-gold` | `--tt-gold` | 게임 시작 · 다음 라운드 CTA |
+| `--tt-primary-subtle` | `--tt-neutral-fill` | 선택된 칩 · 연한 강조 배경 |
+| `--tt-danger` | `--tt-red` | 유죄 · 초과 · 삭제 |
+| `--tt-danger-deep` | `--tt-red-deep` | Red soft 위 텍스트 |
+| `--tt-danger-subtle` | `--tt-red-soft` | 유죄 배경 |
+| `--tt-success` | `--tt-green` | 무죄 · 절감 성공 |
+| `--tt-success-deep` | `--tt-green-deep` | Green soft 위 텍스트 |
+| `--tt-success-subtle` | `--tt-green-soft` | 성공 배경 |
+| `--tt-info` | `--tt-blue` | 정보 · 링크 · 기간 |
+| `--tt-info-deep` | `--tt-blue-deep` | Blue soft 위 텍스트 |
+| `--tt-info-subtle` | `--tt-blue-soft` | 정보 배경 |
+| `--tt-accent` | `--tt-gold` | 배지 · 판사봉 포인트 |
+| `--tt-accent-deep` | `--tt-gold-deep` | Gold soft 위 텍스트 |
+| `--tt-accent-subtle` | `--tt-gold-soft` | 배지 배경 |
+| `--tt-text` | `--tt-neutral-text` | 제목 · 강조 텍스트 |
+| `--tt-text-body` | `--tt-neutral-body` | 본문 |
+| `--tt-text-muted` | `--tt-neutral-muted` | 보조 설명 · 캡션 |
+| `--tt-text-hint` | `--tt-neutral-hint` | 힌트 · placeholder |
 | `--tt-text-inverse` | `--tt-white` | 어두운 배경 위 텍스트 |
-| `--tt-surface-inverse` | `--tt-ink` | 강조 바 · 역전 배경 (--tt-text-inverse 텍스트를 올림) |
-| `--tt-bg` | `--tt-white` | 기본 배경 |
-| `--tt-bg-subtle` | `--tt-gray-50` | 섹션 배경 |
-| `--tt-border` | `--tt-gray-200` | 기본 선 |
-| `--tt-border-strong` | `--tt-gray-400` | 강조 선 · 입력 포커스 전 |
-| `--tt-surface-strong` | `--tt-gray-900` | 고정지출 요약 카드 · 후보 지정 CTA |
-| `--tt-surface-strong-deep` | `#1F263D` | 절약 감정서 요약 카드 상단 면 |
-| `--tt-surface-strong-muted` | `#3A4160` | 어두운 카드 내부 보조 면 · 금액 |
-| `--tt-surface-row` | `#EEF2F8` | 고정지출 카드 줄무늬 · 미탐지 상태 |
-| `--tt-surface-candidate` | `#FFFBF0` | 탐지 후보 카드 상단 면 |
-| `--tt-surface-candidate-strong` | `#F6ECD2` | 탐지 후보 카드 줄무늬 |
-| `--tt-border-candidate` | `#F6E4B0` | 탐지 후보 · 금액 변동 안내선 |
-| `--tt-category-subscription` | `#FFF0C8` | 구독 카테고리 배경 |
-| `--tt-category-living` | `#EAF3EE` | 생활 카테고리 배경 |
-| `--tt-text-subtle` | `--tt-gray-600` | 고정지출 보조 텍스트 |
-| `--tt-text-soft` | `--tt-gray-500` | 고정지출 비강조 텍스트 |
-| `--tt-accent-strong` | `--tt-accent-700` | 골드 계열 배경 위 텍스트 |
-| `--tt-success-strong` | `--tt-innocent-800` | 절약 금액 강조 텍스트 |
-| `--tt-success-bright` | `#7FD1B4` | 어두운 면 위 확정 건수 |
-| `--tt-overlay-dim` | `rgba(27,33,56,.48)` | 모달 · 바텀시트 뒤 딤 |
+| `--tt-surface-inverse` | `--tt-ink` | Ink 스탯 카드 · 역전 배경 |
+| `--tt-surface-raised` | `--tt-ink-raised` | Ink 위에 겹치는 블록 |
+| `--tt-bg` | `--tt-neutral-surface` | 카드 배경 |
+| `--tt-bg-subtle` | `--tt-neutral-paper` | 페이지 · 섹션 배경 |
+| `--tt-bg-fill` | `--tt-neutral-fill` | 입력 필드 · 비활성 배경 |
+| `--tt-border` | `--tt-neutral-border` | 기본 선 |
+| `--tt-border-track` | `--tt-neutral-track` | 진행바 트랙 |
+| `--tt-overlay-dim` | `rgba(35,40,66,.48)` | 모달 · 바텀시트 뒤 딤 |
 | `--tt-notch-bg` | `--tt-bg-subtle` | 카드 노치(영수증 절취선 · 소환장 펀치홀) |
-
-> `--tt-overlay-dim` 은 `--tt-ink` 에 투명도를 준 값이다. CSS 변수로는 색상 채널만 따로 꺼내
-> 쓸 수 없어 값을 직접 적었다. 딤 농도를 바꿀 일이 생기면 이 한 곳만 고친다.
->
-> `--tt-notch-bg` 는 **카드 뒤에 보이는 배경색**이어야 한다. 노치는 진짜 구멍이 아니라 그 색을
-> 칠한 원이기 때문이다. 흰 배경 화면에서 `ReceiptCard` · `SummonsCard` 를 쓸 때는
-> 그 화면에서 `--tt-notch-bg: var(--tt-bg)` 로 덮어쓴다.
 
 ---
 
 ## 2. 타이포
 
-본문 **Pretendard**, 수치·코드 **Roboto Mono**. 둘 다 `apps/web/index.html` 에서 CDN 로드하고
-`--tt-font-sans` / `--tt-font-mono` 로 참조한다.
+본문 **Pretendard Variable**, 수치·코드 **시스템 모노스페이스**.
 
 | 스타일 | 크기 | 굵기 | 토큰 | 용도 |
 |---|---|---|---|---|
-| display | 44px | 800 | `--tt-fs-display` / `--tt-fw-black` | 랜딩·판결 헤드라인 |
-| title | 26px | 800 | `--tt-fs-title` / `--tt-fw-black` | 화면 제목 |
-| numeric | 34px | 800 | `--tt-fs-numeric` / `--tt-fw-black` | 금액·수치 카드 |
-| section | 18px | 700 | `--tt-fs-section` / `--tt-fw-bold` | 섹션 헤더 |
-| body | 15px | 400 | `--tt-fs-body` / `--tt-fw-regular` | 본문 (기본값) |
-| caption | 13px | 500 | `--tt-fs-caption` / `--tt-fw-medium` | 보조 설명 |
-| mono-chip | 12px | 400~700 | `--tt-fs-mono-chip` + `--tt-font-mono` | 사건번호·참여코드 |
+| hero | 38px | 800 | `--tt-fs-hero` / `--tt-fw-black` | 결과 수치 · 순위 |
+| stat | 30px | 800 | `--tt-fs-stat` / `--tt-fw-black` | 스탯 카드 숫자 |
+| title | 23px | 800 | `--tt-fs-title` / `--tt-fw-black` | 화면 제목 (H1) |
+| subtitle | 19px | 800 | `--tt-fs-subtitle` / `--tt-fw-black` | 카드 제목 (H2) |
+| label | 15px | 800 | `--tt-fs-label` / `--tt-fw-black` | 섹션 라벨 · 리스트 이름 |
+| body | 13.5px | 500 | `--tt-fs-body` / `--tt-fw-medium` | 본문 (기본값) |
+| caption | 12px | 700 | `--tt-fs-caption` / `--tt-fw-bold` | 보조 설명 · 뱃지 |
+| badge | 11.5px | 800 | `--tt-fs-badge` / `--tt-fw-black` | 뱃지 텍스트 |
+| overline | 11px | 800 | `--tt-fs-overline` / `--tt-fw-black` | 오버라인 · 대문자 |
+| button | 14.5px | 800 | `--tt-fs-button` / `--tt-fw-black` | 버튼 라벨 |
 
-행간: `--tt-lh-tight` 1.2 (display·title·numeric) / `--tt-lh-snug` 1.4 (section) / `--tt-lh-normal` 1.6 (body·caption)
+행간: `--tt-lh-tight` 1.1 (hero·stat) / `--tt-lh-snug` 1.25 (title·subtitle) / `--tt-lh-normal` 1.6 (body·caption)
 
-```css
-.amount {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-numeric);
-    font-weight: var(--tt-fw-black);
-    line-height: var(--tt-lh-tight);
-}
-```
+제목은 항상 800, `letter-spacing: -.01em`. 굵기는 **800 / 700 / 600 / 500** 네 단계만.
 
 ---
 
 ## 3. Radius · Spacing · Elevation
 
-| Radius | 값 | | Spacing (4px 그리드) | 값 |
-|---|---|---|---|---|
-| `--tt-radius-xs` | 4px | | `--tt-space-1` | 4px |
-| `--tt-radius-sm` | 6px | | `--tt-space-2` | 8px |
-| `--tt-radius-md` | 12px | | `--tt-space-3` | 12px |
-| `--tt-radius-lg` | 20px | | `--tt-space-4` | 16px |
-| `--tt-radius-xl` | 28px | | `--tt-space-5` | 20px |
-| `--tt-radius-full` | 999px (pill) | | `--tt-space-6` | 24px |
-| | | | `--tt-space-8` | 32px |
-| | | | `--tt-space-10` | 40px |
-| | | | `--tt-space-12` | 48px |
+| Radius | 값 | 용도 | | Spacing (4px 그리드) | 값 |
+|---|---|---|---|---|---|
+| `--tt-radius-xs` | 8px | 태그 | | `--tt-space-1` | 4px |
+| `--tt-radius-sm` | 12px | 내부 요소 | | `--tt-space-2` | 8px |
+| `--tt-radius-md` | 14px | 버튼 | | `--tt-space-3` | 12px |
+| `--tt-radius-lg` | 18px | 리스트 행 · 배너 | | `--tt-space-4` | 16px |
+| `--tt-radius-xl` | 22px | 카드 | | `--tt-space-5` | 20px |
+| `--tt-radius-2xl` | 30px | 헤더 하단 곡률 | | `--tt-space-6` | 24px |
+| `--tt-radius-full` | 999px | pill · 뱃지 | | `--tt-space-8` ~ `12` | 32~48px |
+
+| 용도별 간격 | 토큰 | 값 |
+|---|---|---|
+| 화면 좌우 패딩 | `--tt-screen-padding` | 20px |
+| 카드 내부 패딩 | `--tt-card-padding` | 16px |
+| 카드 사이 간격 | `--tt-card-gap` | 10px |
+| 리스트 행 간격 | `--tt-list-gap` | 8px |
+| 최소 터치 영역 | `--tt-touch-min` | 44px |
 
 | Elevation | 값 | 용도 |
 |---|---|---|
 | `--tt-elevation-0` | `none` | 평면 |
-| `--tt-elevation-1` | `0 1px 2px rgba(37,43,66,.06)` | 카드 |
-| `--tt-elevation-2` | `0 2px 8px rgba(37,43,66,.08)` | 떠 있는 카드 · 탭바 |
-| `--tt-elevation-3` | `0 8px 24px rgba(37,43,66,.12)` | 모달 · 바텀시트 |
+| `--tt-elevation-1` | `0 6px 16px rgba(35,40,66,.04)` | 리스트 행 |
+| `--tt-elevation-2` | `0 8px 22px rgba(35,40,66,.05)` | 일반 카드 |
+| `--tt-elevation-3` | `0 12px 28px rgba(35,40,66,.10)` | 겹치는 카드 · 토글 |
+| `--tt-elevation-4` | `0 14px 30px -16px rgba(35,40,66,.55)` | Ink 스탯 카드 |
 
 ---
 
 ## 4. z-index · 레이아웃
 
-**컴포넌트에 z-index 숫자를 직접 쓰지 않는다.** 각자 숫자를 고르면 화면마다 겹침 순서가 달라진다.
+**컴포넌트에 z-index 숫자를 직접 쓰지 않는다.**
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
@@ -181,17 +166,46 @@
 
 | 레이아웃 토큰 | 값 | 용도 |
 |---|---|---|
-| `--tt-tabbar-height` | 60px | 탭바 높이. 콘텐츠 하단 여백 계산에 쓴다 |
+| `--tt-tabbar-height` | 64px | 탭바 높이 |
 | `--tt-content-max` | 480px | 본문 최대 폭 (모바일 웹 우선) |
 
 ---
 
-## 5. 변경 이력
+## 5. 버튼 체계
+
+| 버튼 | 배경 | 텍스트 | 용도 |
+|---|---|---|---|
+| Primary Ink | `--tt-primary` | `--tt-text-inverse` | 기본 이동 · 확정 |
+| Primary Gold | `--tt-primary-gold` | `--tt-primary` | 게임 시작 · 다음 라운드 |
+| Secondary | `--tt-bg` + border `--tt-primary` | `--tt-primary` | 외곽선 |
+| Tertiary | `--tt-bg` + border `--tt-border` | `--tt-text-body` | 보조 (좁은 폭 2개 병치) |
+| 무죄 | `--tt-bg` + border `--tt-success` | `--tt-success` | 재판 전용 |
+| 유죄 | `--tt-bg` + border `--tt-danger` | `--tt-danger` | 재판 전용 |
+
+한 화면에 Primary는 **1개**. Gold Primary는 게임을 시작·재개하는 순간에만.
+
+---
+
+## 6. 색상 사용 비율 (한 화면 기준)
+
+| 영역 | 비율 |
+|---|---|
+| Paper · Surface | 56% |
+| Ink | 24% |
+| Gold | 12% |
+| 상태색 | 8% |
+
+> Gold가 12%를 넘으면 강조가 사라진다. 상태색은 뱃지·바에만.
+
+---
+
+## 7. 변경 이력
 
 | 날짜 | 내용 |
 |---|---|
-| 2026-07-31 | 초기 세팅 팔레트(Verdict Red `#E5484D` / Acquit Mint `#12A594` / 중립 그레이)를 팀 디자인시스템 값으로 교체. Cool Gray 10단계 · 타이포 스케일 · spacing · elevation 토큰 신설 |
-| 2026-08-01 | 공통 컴포넌트 작업(P2~P4)에 맞춰 `--tt-z-*` 6단계 · `--tt-tabbar-height` · `--tt-content-max` 신설 |
-| 2026-08-01 | 컴포넌트에 남아 있던 색상 하드코딩을 걷어내며 `--tt-overlay-dim` · `--tt-notch-bg` 신설 |
-| 2026-08-03 | 고정지출 원본 화면의 네이비 요약면 · 명세 줄무늬 · 탐지 후보 상태를 위한 의미 토큰 추가 |
-| 2026-08-04 | 동의 화면 개발에 맞춰 `--tt-surface-inverse` 신설 (텍스트 토큰 오용 방지) |
+| 2026-07-31 | 초기 팔레트 교체. Cool Gray · 타이포 · spacing · elevation 토큰 신설 |
+| 2026-08-01 | `--tt-z-*` 6단계 · `--tt-tabbar-height` · `--tt-content-max` 신설 |
+| 2026-08-01 | `--tt-overlay-dim` · `--tt-notch-bg` 신설 |
+| 2026-08-03 | 고정지출 화면 의미 토큰 추가 |
+| 2026-08-04 | `--tt-surface-inverse` 신설 |
+| 2026-08-05 | **v2 전면 교체** — Ink/Gold 이원 체계, 4색 상태, 타이포 재조정, 7단 라운드, 4단 그림자 |

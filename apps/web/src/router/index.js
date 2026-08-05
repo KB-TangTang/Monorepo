@@ -89,6 +89,31 @@ const routes = [
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '마이' },
     },
+    // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
+    {
+        path: '/group-challenges',
+        name: 'groupChallenge',
+        component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
+        meta: { title: '그룹 챌린지' },
+    },
+    {
+        path: '/group-challenges/create',
+        name: 'groupChallengeCreate',
+        component: () => import('@/views/challenge/group/GroupCreateView.vue'),
+        meta: { title: '그룹 만들기', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/invite/:groupId',
+        name: 'groupChallengeInvite',
+        component: () => import('@/views/challenge/group/GroupInviteView.vue'),
+        meta: { title: '친구 초대', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/join/:code?',
+        name: 'groupChallengeJoin',
+        component: () => import('@/views/challenge/group/GroupJoinView.vue'),
+        meta: { title: '그룹 참여', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',

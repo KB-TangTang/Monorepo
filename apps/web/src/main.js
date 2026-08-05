@@ -1,4 +1,5 @@
 import './assets/tokens.css';
+import './assets/tokens-compat.css';
 import './assets/main.css';
 
 import { createApp } from 'vue';
@@ -30,9 +31,8 @@ try {
     useAuthStore(pinia).setSession(session);
 } catch (error) {
     // 비로그인 사용자는 여기서 실패하는 게 정상이므로 조용히 넘어간다.
-    // 단 재사용 감지로 폐기된 경우(탈취 의심)는 이유를 알려야 하므로 로그인 화면으로 보낸다.
-    // refreshSession() 은 http 인스턴스를 타므로 여기서 잡히는 건 ApiError 다(http.js 의
-    // 인터셉터가 이미 가공했다) — refreshError.response.data.code 가 아니라 error.code 로 접근한다.
+    // 재사용 감지(REFRESH_TOKEN_REUSED)는 백엔드가 Set-Cookie: Max-Age=0 으로
+    // stale 쿠키를 지워주므로, 다음 리로드에서는 단순 인증 실패로 끝난다.
     if (error?.code === 'REFRESH_TOKEN_REUSED') {
         window.location.replace('/login?error=security');
     }
