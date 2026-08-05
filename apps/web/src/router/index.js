@@ -64,6 +64,31 @@ const routes = [
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '마이' },
     },
+    // ↓ 그룹 챌린지 (#36 튜토리얼). 지우지 말 것.
+    {
+        path: '/challenge/group',
+        name: 'challengeGroup',
+        component: () => import('@/views/challenge/group/GroupChallengeView.vue'),
+        meta: { title: '그룹 챌린지' },
+    },
+    {
+        path: '/challenge/group/create',
+        name: 'challengeGroupCreate',
+        component: () => import('@/views/challenge/group/GroupCreateView.vue'),
+        meta: { title: '그룹 만들기', hideTabBar: true },
+    },
+    {
+        path: '/challenge/group/invite/:groupId',
+        name: 'challengeGroupInvite',
+        component: () => import('@/views/challenge/group/GroupInviteView.vue'),
+        meta: { title: '친구 초대', hideTabBar: true },
+    },
+    {
+        path: '/challenge/group/join/:code?',
+        name: 'challengeGroupJoin',
+        component: () => import('@/views/challenge/group/GroupJoinView.vue'),
+        meta: { title: '그룹 참여', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',
