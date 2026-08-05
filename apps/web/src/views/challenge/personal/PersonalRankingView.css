@@ -1,6 +1,6 @@
 .personal-ranking {
     min-height: calc(100vh - var(--tt-tabbar-height));
-    padding: var(--tt-space-5);
+    padding: clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-12) + var(--tt-space-6));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
@@ -11,11 +11,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--tt-space-2);
     margin-top: var(--tt-space-4);
 }
 
 .personal-ranking__toolbar span,
 .personal-ranking__toolbar button {
+    min-width: 0;
     padding: var(--tt-space-2) var(--tt-space-3);
     font: inherit;
     font-size: var(--tt-fs-caption);
@@ -113,15 +115,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--tt-space-2);
     margin-bottom: var(--tt-space-3);
 }
 
 .personal-ranking__podium-header h2 {
+    min-width: 0;
     margin: 0;
     font-size: var(--tt-fs-body);
 }
 
 .personal-ranking__podium-header button {
+    flex: none;
     min-height: 36px;
     padding: 0 var(--tt-space-3);
     font-family: var(--tt-font-sans);
@@ -277,6 +282,7 @@
 }
 
 .personal-ranking__mine > strong:last-child {
+    flex: none;
     margin-left: auto;
     color: var(--tt-primary);
 }
@@ -322,7 +328,76 @@
 }
 
 .personal-ranking__reset-notice p {
+    min-width: 0;
     margin: 0;
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
+}
+
+@media (max-width: 390px) {
+    .personal-ranking__summary {
+        padding: var(--tt-space-4);
+    }
+
+    .personal-ranking__summary > strong {
+        font-size: clamp(var(--tt-fs-title), 10vw, var(--tt-fs-display));
+    }
+
+    .personal-ranking__report-button {
+        max-width: 100%;
+        padding-right: var(--tt-space-3);
+        padding-left: var(--tt-space-3);
+    }
+
+    .personal-ranking__podium {
+        padding-right: var(--tt-space-2);
+        padding-left: var(--tt-space-2);
+    }
+
+    .personal-ranking__podium-avatar {
+        width: 44px;
+        height: 44px;
+    }
+
+    .personal-ranking__podium-item--1 .personal-ranking__podium-avatar {
+        width: 52px;
+        height: 52px;
+    }
+
+    .personal-ranking__mine {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-2);
+    }
+
+    .personal-ranking__reset-notice {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-3);
+    }
+}
+
+@media (max-width: 359px) {
+    .personal-ranking__toolbar span,
+    .personal-ranking__toolbar button {
+        padding-right: var(--tt-space-2);
+        padding-left: var(--tt-space-2);
+    }
+
+    .personal-ranking__podium-header {
+        align-items: flex-start;
+    }
+
+    .personal-ranking__podium-header button {
+        padding: 0 var(--tt-space-2);
+    }
+
+    .personal-ranking__podium-name,
+    .personal-ranking__podium-score {
+        font-size: var(--tt-fs-mono-chip);
+    }
+
+    .personal-ranking__avatar {
+        flex-basis: 40px;
+        width: 40px;
+        height: 40px;
+    }
 }
