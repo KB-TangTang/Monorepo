@@ -14,7 +14,6 @@ export async function fetchAssetSummary() {
     return clone(ASSET_SUMMARY);
 }
 
-<<<<<<< Updated upstream
 export async function fetchCheckingAccountDetail() {
     return clone(CHECKING_DETAIL);
 }
@@ -29,8 +28,8 @@ export async function fetchInvestmentAccountDetail() {
 
 export async function fetchLoanAccountDetail() {
     return clone(LOAN_DETAIL);
-=======
+}
+
 export async function fetchNetWorthTrend() {
     return clone(ASSET_SUMMARY.netWorthTrend);
->>>>>>> Stashed changes
 }

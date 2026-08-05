@@ -41,7 +41,6 @@ const routes = [
         meta: { title: '자산' },
     },
     {
-<<<<<<< Updated upstream
         path: '/asset/checking',
         name: 'assetChecking',
         component: () => import('@/views/AssetCheckingView.vue'),
@@ -64,12 +63,12 @@ const routes = [
         name: 'assetLoan',
         component: () => import('@/views/AssetLoanView.vue'),
         meta: { title: '대출' },
-=======
+    },
+    {
         path: '/asset/trend',
         name: 'assetNetWorthTrend',
         component: () => import('@/views/NetWorthTrendView.vue'),
         meta: { title: '순자산 추이' },
->>>>>>> Stashed changes
     },
     {
         path: '/ledger',
