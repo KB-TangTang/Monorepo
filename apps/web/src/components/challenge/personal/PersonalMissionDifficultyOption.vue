@@ -19,7 +19,12 @@ const emit = defineEmits(['select']);
     <button
         type="button"
         class="difficulty-option"
-        :class="{ 'difficulty-option--selected': selected }"
+        :class="{
+            'difficulty-option--selected': selected,
+            'difficulty-option--easy': difficulty.id === 'EASY',
+            'difficulty-option--normal': difficulty.id === 'NORMAL',
+            'difficulty-option--hard': difficulty.id === 'HARD',
+        }"
         :aria-pressed="selected"
         @click="emit('select', difficulty.id)"
     >
@@ -132,5 +137,24 @@ const emit = defineEmits(['select']);
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-sm);
+}
+
+/* 하·중·상 난이도를 노랑·파랑·빨강 배지로 구분한다. */
+.difficulty-option--easy .difficulty-option__heading small,
+.difficulty-option--easy .difficulty-option__points {
+    color: var(--tt-accent-strong);
+    background: var(--tt-accent-subtle);
+}
+
+.difficulty-option--normal .difficulty-option__heading small,
+.difficulty-option--normal .difficulty-option__points {
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
+}
+
+.difficulty-option--hard .difficulty-option__heading small,
+.difficulty-option--hard .difficulty-option__points {
+    color: var(--tt-danger);
+    background: var(--tt-danger-subtle);
 }
 </style>
