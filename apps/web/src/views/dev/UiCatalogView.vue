@@ -6,6 +6,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import CatalogItem from '@/components/dev/CatalogItem.vue';
+import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -34,6 +35,7 @@ const SECTIONS = [
     { id: 'modal', label: 'BaseModal' },
     { id: 'sheet', label: 'BaseBottomSheet' },
     { id: 'badge', label: 'BaseBadge' },
+    { id: 'category-icon', label: 'CategoryIcon' },
     { id: 'state', label: '상태 3종' },
     { id: 'cards', label: '카드 라이브러리 7종' },
 ];
@@ -213,6 +215,9 @@ const CODE = {
     badge: `<BaseBadge variant="progress">진행 중 3</BaseBadge>
 <BaseBadge variant="deadline">마감 02:14:03</BaseBadge>
 <BaseBadge variant="guilty">유죄</BaseBadge>`,
+    categoryIcon: `<CategoryIcon icon="Cake" />
+<CategoryIcon icon="ShoppingBag" />
+<CategoryIcon icon="Banknotes" />`,
     state: `<StateLoading v-if="isLoading" message="불러오는 중" />
 <StateError v-else-if="error" :message="error" @retry="load" />
 <StateEmpty v-else-if="!items.length" title="아직 기소된 지출이 없어요">
@@ -494,6 +499,25 @@ const CODE = {
                     <BaseBadge variant="deadline">마감 02:14:03</BaseBadge>
                     <BaseBadge variant="guilty">유죄</BaseBadge>
                     <BaseBadge variant="innocent">무혐의 처분</BaseBadge>
+                </div>
+            </CatalogItem>
+        </section>
+
+        <section id="category-icon" class="catalog__section">
+            <h2 class="catalog__h2">CategoryIcon</h2>
+            <CatalogItem
+                name="CategoryIcon"
+                purpose="카테고리 아이콘 키 → heroicons 매핑. 못 찾는 키는 기타(EllipsisHorizontalCircle)로 폴백."
+                :code="CODE.categoryIcon"
+            >
+                <div class="demo__row">
+                    <CategoryIcon icon="Cake" />
+                    <CategoryIcon icon="ShoppingBag" />
+                    <CategoryIcon icon="Truck" />
+                    <CategoryIcon icon="Home" />
+                    <CategoryIcon icon="Banknotes" />
+                    <CategoryIcon icon="Gift" />
+                    <CategoryIcon icon="존재하지않는키" />
                 </div>
             </CatalogItem>
         </section>
