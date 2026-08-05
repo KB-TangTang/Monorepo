@@ -49,7 +49,7 @@ function goPrev() {
     if (currentStep.value > 0) {
         currentStep.value--;
     } else {
-        router.push({ name: 'challengeGroup' });
+        router.push({ name: 'groupChallenge' });
     }
 }
 
@@ -61,14 +61,14 @@ function handleCreate() {
 
 function goToInvite() {
     router.push({
-        name: 'challengeGroupInvite',
+        name: 'groupChallengeInvite',
         params: { groupId: createdGroupId.value },
         query: { from: 'create' },
     });
 }
 
 function goToGroupHome() {
-    router.push({ name: 'challengeGroup' });
+    router.push({ name: 'groupChallenge' });
 }
 
 function formatDate(dateStr) {

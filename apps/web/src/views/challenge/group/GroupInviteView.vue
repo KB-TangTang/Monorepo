@@ -34,7 +34,7 @@ onMounted(async () => {
     try {
         group.value = await fetchGroupDetail(route.params.groupId);
     } catch {
-        router.replace({ name: 'challengeGroup' });
+        router.replace({ name: 'groupChallenge' });
     }
 });
 
@@ -42,7 +42,7 @@ async function handleShare() {
     const shareData = {
         title: `탕탕 그룹 챌린지 초대`,
         text: `${group.value?.groupName} 그룹에 함께해요! 초대 코드: ${group.value?.inviteCode}`,
-        url: `${window.location.origin}/challenge/group/join/${group.value?.inviteCode}`,
+        url: `${window.location.origin}/group-challenges/join/${group.value?.inviteCode}`,
     };
 
     try {
@@ -60,7 +60,7 @@ async function handleShare() {
 }
 
 function goBack() {
-    router.push({ name: 'challengeGroup' });
+    router.push({ name: 'groupChallenge' });
 }
 </script>
 

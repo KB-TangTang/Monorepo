@@ -31,18 +31,18 @@ function formatDateRange(start, end) {
 onMounted(async () => {
     const code = route.params.code;
     if (!code) {
-        router.replace({ name: 'challengeGroup' });
+        router.replace({ name: 'groupChallenge' });
         return;
     }
     try {
         const result = await validateInviteCode(code);
         if (!result.valid || !result.group) {
-            router.replace({ name: 'challengeGroup' });
+            router.replace({ name: 'groupChallenge' });
             return;
         }
         group.value = result.group;
     } catch {
-        router.replace({ name: 'challengeGroup' });
+        router.replace({ name: 'groupChallenge' });
     }
 });
 
@@ -51,7 +51,7 @@ async function handleJoin() {
     isLoading.value = true;
     try {
         await joinGroup(group.value.id);
-        router.replace({ name: 'challengeGroup' });
+        router.replace({ name: 'groupChallenge' });
     } catch {
         alert('그룹 참여에 실패했습니다.');
     } finally {

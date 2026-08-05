@@ -39,7 +39,7 @@ async function handleEnter() {
         }
         closeSheet();
         router.push({
-            name: 'challengeGroupJoin',
+            name: 'groupChallengeJoin',
             params: { code: code.value },
         });
     } catch {
