@@ -93,6 +93,7 @@ const emit = defineEmits(['select']);
 .difficulty-option__content {
     display: flex;
     flex: 1;
+    min-width: 0;
     flex-direction: column;
 }
 
@@ -100,6 +101,10 @@ const emit = defineEmits(['select']);
     display: flex;
     gap: var(--tt-space-2);
     align-items: center;
+}
+
+.difficulty-option__heading strong {
+    overflow-wrap: anywhere;
 }
 
 .difficulty-option__heading small {
@@ -131,12 +136,34 @@ const emit = defineEmits(['select']);
 }
 
 .difficulty-option__points {
+    flex: none;
     padding: var(--tt-space-2);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-sm);
+    white-space: nowrap;
+}
+
+@media (max-width: 390px) {
+    .difficulty-option {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-3);
+    }
+
+    .difficulty-option__heading {
+        gap: var(--tt-space-1);
+    }
+
+    .difficulty-option__target {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-2);
+    }
+
+    .difficulty-option__points {
+        padding: var(--tt-space-1) var(--tt-space-2);
+    }
 }
 
 /* 하·중·상 난이도를 노랑·파랑·빨강 배지로 구분한다. */

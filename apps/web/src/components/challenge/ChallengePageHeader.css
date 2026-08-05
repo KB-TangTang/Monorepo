@@ -8,6 +8,7 @@
 
 .challenge-page-header__title-row {
     display: flex;
+    flex: 1;
     min-width: 0;
     align-items: center;
     gap: var(--tt-space-2);
@@ -49,5 +50,27 @@
 @media (max-width: 520px) {
     .challenge-page-header__title-row h1 {
         font-size: var(--tt-fs-section);
+    }
+}
+
+@media (max-width: 390px) {
+    .challenge-page-header {
+        gap: var(--tt-space-2);
+    }
+
+    .challenge-page-header__title-row {
+        gap: var(--tt-space-1);
+    }
+
+    .challenge-page-header__title-row button {
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+    }
+}
+
+@media (max-width: 359px) {
+    .challenge-page-header__title-row h1 {
+        font-size: var(--tt-fs-body);
     }
 }

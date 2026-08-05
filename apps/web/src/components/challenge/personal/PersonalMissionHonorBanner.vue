@@ -122,7 +122,7 @@ defineEmits(['open']);
     outline-offset: 2px;
 }
 
-@media (max-width: 360px) {
+@media (max-width: 390px) {
     .honor-banner {
         gap: var(--tt-space-3);
         padding-right: var(--tt-space-4);
@@ -131,6 +131,22 @@ defineEmits(['open']);
 
     .honor-banner__button {
         padding: 0 var(--tt-space-3);
+    }
+}
+
+@media (max-width: 359px) {
+    .honor-banner {
+        min-height: 92px;
+        padding: var(--tt-space-3);
+    }
+
+    .honor-banner__heading h2 {
+        font-size: var(--tt-fs-body);
+    }
+
+    .honor-banner__button {
+        padding: 0 var(--tt-space-2);
+        white-space: nowrap;
     }
 }
 </style>

@@ -10,7 +10,7 @@ defineProps({
 </script>
 
 <template>
-    <BaseCard padding="lg">
+    <BaseCard class="personal-mission-streak-card" padding="lg">
         <section class="streak">
             <header>
                 <h2>연속 성공</h2>
@@ -78,8 +78,8 @@ defineProps({
 
 .streak__days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: var(--tt-space-2);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: clamp(2px, 1.5vw, var(--tt-space-2));
     margin-top: var(--tt-space-4);
 }
 
@@ -88,14 +88,17 @@ defineProps({
     flex-direction: column;
     gap: var(--tt-space-1);
     align-items: center;
+    min-width: 0;
 }
 
 .streak__day > span {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
+    width: min(38px, 100%);
+    max-width: 38px;
+    height: auto;
+    aspect-ratio: 1;
     font-size: 10px;
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
@@ -147,5 +150,25 @@ defineProps({
     margin-top: var(--tt-space-1);
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-section);
+}
+
+@media (max-width: 390px) {
+    .streak__days {
+        gap: 3px;
+    }
+
+    .streak__day > span {
+        font-size: 9px;
+    }
+
+    .streak__summary {
+        gap: var(--tt-space-2);
+    }
+}
+
+@media (max-width: 359px) {
+    .personal-mission-streak-card {
+        padding: var(--tt-space-3);
+    }
 }
 </style>
