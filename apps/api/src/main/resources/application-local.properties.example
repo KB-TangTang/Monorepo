@@ -22,3 +22,22 @@ jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
 # 팀 개발용 클라이언트 하나를 공유한다. 값은 팀 채널에서 받는다.
 google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
 google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
+
+# ── 계좌 연동 (이슈 #12) ────────────────────────────────
+# 평소에는 목서버로 돈다. 실 CODEF 를 붙일 때만 아래를 채운다.
+#
+# ⚠ **.properties 는 줄 끝 주석(#)을 지원하지 않는다.**
+#   `키=값   # 설명` 으로 쓰면 "값   # 설명" 전체가 값이 된다.
+#   설명은 반드시 값 줄과 분리해 별도 줄에 쓸 것. (2026-08-05 실제 사고)
+#
+# 데모 환경 주소는 https://development.codef.io 다.
+# public-key 는 CODEF 마이페이지 > 키 관리의 공개키(헤더 없는 Base64 한 줄).
+#
+#   financial.client=codef
+#   financial.codef.base-url=https://development.codef.io
+#   financial.codef.client-id=...
+#   financial.codef.client-secret=...
+#   financial.codef.public-key=...
+#
+# public-key 가 없으면 codef 모드 기동 시 즉시 실패한다 —
+# CODEF 는 평문 비밀번호를 거부하므로 이 값 없이는 인증이 성립하지 않는다.

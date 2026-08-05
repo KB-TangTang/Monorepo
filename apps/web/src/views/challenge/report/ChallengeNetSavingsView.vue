@@ -47,7 +47,7 @@ async function loadReport() {
 }
 
 function goBackToReport() {
-    router.push({ name: 'challengeReport', query: { month: selectedPeriod.value } });
+    router.back();
 }
 
 watch(selectedPeriod, loadReport, { immediate: true });
@@ -58,7 +58,15 @@ watch(selectedPeriod, loadReport, { immediate: true });
         <header>
             <div class="net-savings-view__title-row">
                 <button type="button" aria-label="챌린지 리포트로 돌아가기" @click="goBackToReport">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
                         <path d="m15 4-8 8 8 8" />
                     </svg>
                 </button>
@@ -152,7 +160,7 @@ watch(selectedPeriod, loadReport, { immediate: true });
 .net-savings-view__title-row {
     display: flex;
     align-items: center;
-    gap: var(--tt-space-3);
+    gap: var(--tt-space-2);
     margin-bottom: var(--tt-space-4);
 }
 
@@ -162,26 +170,22 @@ watch(selectedPeriod, loadReport, { immediate: true });
 }
 
 .net-savings-view__title-row button {
-    display: grid;
+    display: flex;
     flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
     width: 32px;
-    height: 40px;
+    height: 32px;
     padding: 0;
     color: var(--tt-text);
     background: transparent;
     border: 0;
     cursor: pointer;
-    place-items: center;
 }
 
 .net-savings-view__title-row svg {
-    width: 28px;
-    height: 28px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    width: 22px;
+    height: 22px;
 }
 
 .net-savings-view > header span {

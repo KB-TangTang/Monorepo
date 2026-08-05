@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useAccountStore } from '@/stores/account';
+import { canEnterLinkStep } from '@/utils/account';
+import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
  * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
- * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
- *   component: () => import('@/views/trial/TrialHomeView.vue')
- *
  * meta.public   — 로그인 없이 접근 가능
  * meta.hideTabBar — 하단 탭바를 숨긴다 (App.vue 가 읽는다)
  */
@@ -40,17 +40,42 @@ const routes = [
         component: () => import('@/views/HomeView.vue'),
         meta: { title: '홈' },
     },
-    {
-        path: '/trial',
-        name: 'trial',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '재판' },
-    },
+    ...personalMissionChallengeRoutes,
     {
         path: '/asset',
         name: 'asset',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/AssetHomeView.vue'),
         meta: { title: '자산' },
+    },
+    {
+        path: '/asset/checking',
+        name: 'assetChecking',
+        component: () => import('@/views/AssetCheckingView.vue'),
+        meta: { title: '입출금 계좌' },
+    },
+    {
+        path: '/asset/savings',
+        name: 'assetSavings',
+        component: () => import('@/views/AssetSavingsView.vue'),
+        meta: { title: '예적금' },
+    },
+    {
+        path: '/asset/investment',
+        name: 'assetInvestment',
+        component: () => import('@/views/AssetInvestmentView.vue'),
+        meta: { title: '투자증권' },
+    },
+    {
+        path: '/asset/loan',
+        name: 'assetLoan',
+        component: () => import('@/views/AssetLoanView.vue'),
+        meta: { title: '대출' },
+    },
+    {
+        path: '/asset/trend',
+        name: 'assetNetWorthTrend',
+        component: () => import('@/views/NetWorthTrendView.vue'),
+        meta: { title: '순자산 추이' },
     },
     {
         path: '/ledger',
@@ -132,6 +157,55 @@ const routes = [
         component: () => import('@/views/fixed-expense/FixedExpenseDetailView.vue'),
         meta: { title: '고정지출 상세' },
     },
+    // ↓ 계좌 연동(이슈 #12). 단계 순서는 stores/account.js 가 utils/account.js 의 LINK_STEPS 로 결정한다.
+    {
+        path: '/accounts/link/institutions',
+        name: 'accountLinkInstitutions',
+        component: () => import('@/views/account/InstitutionSelectView.vue'),
+        meta: { title: '금융기관 연결', hideTabBar: true },
+    },
+    {
+        path: '/accounts/link/auth',
+        name: 'accountLinkAuth',
+        component: () => import('@/views/account/AuthStepView.vue'),
+        meta: { title: '본인 인증', hideTabBar: true, linkStep: 'auth' },
+    },
+    {
+        path: '/accounts/link/progress',
+        name: 'accountLinkProgress',
+        component: () => import('@/views/account/LinkProgressView.vue'),
+        meta: { title: '자산 연결 중', hideTabBar: true, linkStep: 'progress' },
+    },
+    {
+        path: '/accounts/link/select',
+        name: 'accountLinkSelect',
+        component: () => import('@/views/account/AccountSelectView.vue'),
+        meta: { title: '연결할 계좌 선택', hideTabBar: true, linkStep: 'select' },
+    },
+    {
+        path: '/accounts/link/done',
+        name: 'accountLinkDone',
+        component: () => import('@/views/account/LinkDoneView.vue'),
+        meta: { title: '계좌 연결 완료', hideTabBar: true, linkStep: 'done' },
+    },
+    {
+        path: '/asset/accounts',
+        name: 'connectedAccounts',
+        component: () => import('@/views/account/ConnectedAccountView.vue'),
+        meta: { title: '연결 계좌 관리' },
+    },
+    {
+        path: '/asset/accounts/:accountId/reconnect',
+        name: 'accountReconnect',
+        component: () => import('@/views/account/AccountReconnectView.vue'),
+        meta: { title: '계좌 재연동', hideTabBar: true },
+    },
+    {
+        path: '/asset/accounts/refresh',
+        name: 'accountRefresh',
+        component: () => import('@/views/account/AccountRefreshView.vue'),
+        meta: { title: '계좌 즉시 조회' },
+    },
 ];
 
 /* 개발용 컴포넌트 카탈로그. import.meta.env.DEV 가 false 인 프로덕션 빌드에서는
@@ -178,6 +252,24 @@ router.beforeEach((to) => {
      */
     if (auth.needsConsent && to.name !== 'consent') {
         return { name: 'consent' };
+    }
+
+    /*
+     * 계좌 연결 플로우 중간 단계 직접 진입 차단 (이슈 #12).
+     * 북마크·새로고침으로 /accounts/link/select 에 바로 들어오면 이전 단계 결과가 없어 빈 화면이 된다.
+     * meta.linkStep 이 붙은 라우트만 검사하므로 다른 화면에는 영향이 없다.
+     */
+    if (to.meta.linkStep) {
+        const account = useAccountStore();
+        const canEnter = canEnterLinkStep(to.meta.linkStep, {
+            selectedCount: account.selectedCount,
+            hasConnection: account.hasConnection,
+            linkedCount: account.linkedCount,
+            progressDone: account.progressDone,
+        });
+        if (!canEnter) {
+            return { name: 'accountLinkInstitutions' };
+        }
     }
 
     return true;

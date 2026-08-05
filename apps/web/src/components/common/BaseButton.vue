@@ -10,7 +10,7 @@ const props = defineProps({
     variant: {
         type: String,
         default: 'primary',
-        validator: (v) => ['primary', 'secondary', 'ghost', 'danger'].includes(v),
+        validator: (v) => ['primary', 'secondary', 'ghost', 'danger', 'dark', 'accent'].includes(v),
     },
     size: {
         type: String,
@@ -114,6 +114,32 @@ function onClick(event) {
 
 .tt-btn--secondary:not(:disabled):hover {
     background: var(--tt-brand-200);
+}
+
+/*
+ * 골드 CTA. 완료·축하 맥락의 주 액션에 쓴다 (Figma 「생성 완료」 화면 패턴).
+ * 어두운 글자를 올려 대비를 확보한다 — 골드 위 흰 글자는 읽히지 않는다.
+ */
+.tt-btn--accent {
+    background: var(--tt-accent);
+    color: var(--tt-text);
+}
+.tt-btn--accent:not(:disabled):hover {
+    background: var(--tt-accent-strong);
+    color: var(--tt-text-inverse);
+}
+
+/*
+ * 네이비 CTA. 참고화면(`doc/개발참고화면/탕탕`)의 계좌 연동 플로우 주 버튼이 이 색이다.
+ * --tt-surface-strong 은 디자인시스템이 "고정지출 요약 카드 · 후보 지정 CTA" 용도로 정의한 토큰이라
+ * 이미 같은 계열을 쓰는 화면이 있다.
+ */
+.tt-btn--dark {
+    background: var(--tt-surface-strong);
+    color: var(--tt-text-inverse);
+}
+.tt-btn--dark:not(:disabled):hover {
+    background: var(--tt-surface-inverse);
 }
 
 .tt-btn--ghost {

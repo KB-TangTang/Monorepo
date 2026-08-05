@@ -1,0 +1,389 @@
+/**
+ * 계좌 연동의 도메인 상수와 순수 로직 (이슈 #12).
+ *
+ * 뷰에서 분리해 둔 이유는 두 가지다.
+ *   1. 컴포넌트를 마운트하지 않고 `node --test` 로 검증할 수 있어야 한다.
+ *   2. 단계 구성(LINK_STEPS)이 바뀔 가능성이 큰데, 뷰마다 흩어져 있으면 한 곳에서 못 고친다.
+ *
+ * ⚠ **이 파일에는 `@/` 별칭 import 를 쓰지 않는다.** 별칭은 Vite 가 푸는 것이라
+ * `node --test` 는 해석하지 못해 테스트 파일이 통째로 죽는다. 도메인 상수를 여기 둔 이유도 그것이다.
+ */
+
+/**
+ * 기관 분류 라벨. 화면 섹션 제목과 순서를 정한다.
+ * key 는 백엔드 `GET /accounts/institutions` 응답의 필드명과 같아야 한다.
+ */
+export const INSTITUTION_GROUPS = [
+    { key: 'banks', label: '은행' },
+    { key: 'cards', label: '카드' },
+    { key: 'securities', label: '증권' },
+    { key: 'insurances', label: '보험' },
+];
+
+/** 계좌 종류. 목서버가 은행 자산을 이 두 값으로 구분한다. */
+export const ACCOUNT_TYPE = {
+    DEMAND_DEPOSIT: 'DEMAND_DEPOSIT',
+    SAVINGS: 'SAVINGS',
+};
+
+/** 동기화 상태 5종. tbl_connected_account.sync_status 와 같은 값이다. */
+export const SYNC_STATUS = {
+    NORMAL: 'NORMAL',
+    SYNCING: 'SYNCING',
+    NEED_SYNC: 'NEED_SYNC',
+    FAILED: 'FAILED',
+    NEED_RECONNECT: 'NEED_RECONNECT',
+};
+
+/**
+ * 인증 수단 종류. 백엔드 auth-methods 응답의 type 값과 같다.
+ *
+ * ⚠ **프론트는 자기가 목 모드인지 CODEF 모드인지 몰라야 한다.**
+ * 어느 수단을 쓰는지는 서버가 내려주는 목록이 정한다. 여기에 'mock'·'codef' 같은 값을 두면
+ * "설정 교체만으로 전환 가능"이라는 전제가 깨진다. (DECISIONS.md 2026-08-05)
+ */
+export const AUTH_METHOD = {
+    SIMPLE_AUTH: 'SIMPLE_AUTH',
+    INSTITUTION_LOGIN: 'INSTITUTION_LOGIN',
+};
+
+/** 기관별 조회 진행 상태. 백엔드 progress 응답의 status 값과 같다. */
+export const PROGRESS_STATUS = {
+    WAITING: 'WAITING',
+    FETCHING: 'FETCHING',
+    DONE: 'DONE',
+    FAILED: 'FAILED',
+};
+
+/**
+ * 연결 플로우 단계 순서.
+ *
+ * 'auth' 는 수단 중립적인 이름이다 — 목 모드는 간편인증, CODEF 모드는 기관 로그인이
+ * **같은 자리**에 들어가고 나머지 단계는 공유한다. 화면이 갈리는 곳은 이 단계 하나뿐이다.
+ * 뷰는 서로를 router.push 로 직접 부르지 않고 store 의 goNextStep()/goPrevStep() 만 쓴다.
+ * (DECISIONS.md 2026-08-05 계좌 연동 항목)
+ */
+export const LINK_STEPS = ['institutions', 'auth', 'progress', 'select', 'done'];
+
+/** 단계 → 라우트 이름. 라우터에 등록된 name 과 짝이 맞아야 한다. */
+export const LINK_STEP_ROUTES = {
+    institutions: 'accountLinkInstitutions',
+    auth: 'accountLinkAuth',
+    progress: 'accountLinkProgress',
+    select: 'accountLinkSelect',
+    done: 'accountLinkDone',
+};
+
+/** 다음 단계. 마지막 단계면 null 을 돌려준다. */
+export function nextLinkStep(current) {
+    const index = LINK_STEPS.indexOf(current);
+    if (index === -1 || index === LINK_STEPS.length - 1) {
+        return null;
+    }
+    return LINK_STEPS[index + 1];
+}
+
+/** 이전 단계. 첫 단계면 null 을 돌려준다. */
+export function prevLinkStep(current) {
+    const index = LINK_STEPS.indexOf(current);
+    if (index <= 0) {
+        return null;
+    }
+    return LINK_STEPS[index - 1];
+}
+
+/** 진행 표시용. 1부터 센다. */
+export function linkStepPosition(current) {
+    const index = LINK_STEPS.indexOf(current);
+    return { current: index + 1, total: LINK_STEPS.length };
+}
+
+/**
+ * 그 단계에 들어갈 자격이 있는지. 라우터 가드가 쓴다.
+ *
+ * 북마크·새로고침으로 중간 단계에 바로 들어오면 이전 단계 결과가 없어 빈 화면이 된다.
+ * 스토어를 직접 읽지 않고 값만 받는 순수 함수라 마운트 없이 검증할 수 있다.
+ *
+ * @param {string} step 검사할 단계
+ * @param {{selectedCount: number, hasConnection: boolean, linkedCount: number, progressDone: boolean}} state
+ */
+export function canEnterLinkStep(step, state) {
+    switch (step) {
+        case 'auth':
+            return state.selectedCount > 0;
+        case 'progress':
+            return state.hasConnection;
+        case 'select':
+            /* 계좌 목록은 인증이 아니라 **조회**가 끝나야 생긴다. */
+            return state.hasConnection && state.progressDone === true;
+        case 'done':
+            return state.linkedCount > 0;
+        default:
+            return true;
+    }
+}
+
+/**
+ * 인증 수단 목록 → 어떤 화면을 보여줄지.
+ *
+ * 선택지가 하나뿐인 선택 화면은 헛걸음이라 건너뛰고 바로 그 수단의 패널로 들어간다.
+ * @param {Array<{type: string}>} methods auth-methods 응답의 methods
+ * @returns {{needsPicker: boolean, method: string|null}}
+ */
+export function resolveAuthView(methods) {
+    const list = Array.isArray(methods) ? methods : [];
+    if (list.length === 1) {
+        return { needsPicker: false, method: list[0].type };
+    }
+    return { needsPicker: list.length > 1, method: null };
+}
+
+/**
+ * 기관별 조회 상태 → 진행률(%).
+ * 실패도 '끝난 것'으로 센다 — 한 기관이 실패했다고 진행률이 멈춰 있으면 화면이 죽은 것처럼 보인다.
+ */
+export function calcLinkProgress(institutions) {
+    const list = Array.isArray(institutions) ? institutions : [];
+    if (!list.length) {
+        return 0;
+    }
+    const finished = list.filter(
+        (item) => item.status === PROGRESS_STATUS.DONE || item.status === PROGRESS_STATUS.FAILED,
+    ).length;
+    return Math.floor((finished / list.length) * 100);
+}
+
+/** 진행 상태 → 아이콘·라벨·색. 모르는 값은 대기로 본다. */
+export function resolveProgressRow(status) {
+    switch (status) {
+        case PROGRESS_STATUS.DONE:
+            return { icon: '✓', label: '완료', variant: 'innocent' };
+        case PROGRESS_STATUS.FETCHING:
+            return { icon: '⟳', label: '조회중', variant: 'progress' };
+        case PROGRESS_STATUS.FAILED:
+            return { icon: '✕', label: '실패', variant: 'guilty' };
+        default:
+            return { icon: '·', label: '대기', variant: 'default' };
+    }
+}
+
+/**
+ * 폴링 제한 시간을 넘겼는지.
+ *
+ * ⚠ 기본값은 **서버가 주는 인증 유효시간(5분)** 과 같아야 한다.
+ *   예전에는 60초로 고정돼 있어, 화면은 5분을 세는데 폴링은 1분에 멈췄다 —
+ *   사용자가 앱에서 승인해도 화면이 반응하지 않는 정지 상태가 됐다.
+ *   호출부는 서버가 준 expiresInSeconds 를 넘긴다.
+ *
+ * @param {Date|string|number} startedAt 폴링 시작 시각
+ * @param {Date|string|number} [now] 테스트에서 기준 시각을 고정하기 위한 인자
+ */
+export function isPollExpired(startedAt, now = new Date(), limitSeconds = 300) {
+    const start = new Date(startedAt).getTime();
+    if (Number.isNaN(start)) {
+        /* 시작 시각을 모르면 계속 도는 것보다 만료로 보는 편이 안전하다. */
+        return true;
+    }
+    return (new Date(now).getTime() - start) / 1000 >= limitSeconds;
+}
+
+/**
+ * 휴대폰번호 입력 포맷.
+ *
+ * 자리수에 맞춰 하이픈을 넣어준다 — 플레이스홀더가 `010-0000-0000` 인데 입력은 자유형이면
+ * 화면이 스스로 말한 형식을 지키지 않는 셈이다. 사용자가 하이픈을 치든 말든 결과가 같아진다.
+ *
+ * 숫자만 남기고 11자리에서 자른다.
+ * **`010` 으로 시작하면 3-4-4 로 고정**한다 — 타이핑 도중 10자리를 지날 때 하이픈이 한 칸 튀지 않는다.
+ * 그 외(011·016 같은 구 번호)는 10자리 3-3-4 규칙을 쓴다.
+ */
+export function formatPhoneNumber(value) {
+    const digits = String(value ?? '')
+        .replace(/\D/g, '')
+        .slice(0, 11);
+    if (digits.length <= 3) {
+        return digits;
+    }
+    if (digits.length <= 7) {
+        return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    }
+    if (digits.startsWith('010') || digits.length > 10) {
+        return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    }
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+/** 생년월일 입력 포맷. 숫자 6자리만 남긴다 — 화면이 "6자리"를 요구하므로 그 이상은 받지 않는다. */
+export function formatBirthDate(value) {
+    return String(value ?? '')
+        .replace(/\D/g, '')
+        .slice(0, 6);
+}
+
+/**
+ * 간편인증 입력 형식 검증.
+ *
+ * ⚠ **형식만 본다.** 목 모드에는 대조할 인증기관이 없다.
+ * 입력값(생년월일·통신사·휴대폰)은 서버로 보내지 않고 저장하지도 않는다.
+ * 실제 마이데이터에서 이 값들은 "누구에게 인증 푸시를 보낼지"를 정하는 용도이고,
+ * 우리 목 모드에는 보낼 곳이 없다. (DECISIONS.md 2026-08-05)
+ *
+ * @returns {{valid: boolean, errors: Object<string, string>}}
+ */
+export function validateSimpleAuthForm({ birthDate, carrier, phone } = {}) {
+    const errors = {};
+    if (!/^\d{6}$/.test(String(birthDate ?? ''))) {
+        errors.birthDate = '생년월일 6자리를 입력해주세요';
+    }
+    if (!carrier) {
+        errors.carrier = '통신사를 선택해주세요';
+    }
+    /* 하이픈은 허용한다 — 사용자가 넣는 걸 막을 이유가 없다. */
+    const digits = String(phone ?? '').replace(/-/g, '');
+    if (!/^010\d{7,8}$/.test(digits)) {
+        errors.phone = '010으로 시작하는 휴대폰번호를 입력해주세요';
+    }
+    return { valid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * 동기화 상태 5종 → 배지 라벨·색.
+ * tbl_connected_account.sync_status 값과 1:1 대응한다.
+ */
+export function resolveSyncBadge(syncStatus) {
+    switch (syncStatus) {
+        case SYNC_STATUS.NORMAL:
+            return { label: '정상', variant: 'innocent' };
+        case SYNC_STATUS.SYNCING:
+            return { label: '갱신 중', variant: 'progress' };
+        case SYNC_STATUS.NEED_SYNC:
+            return { label: '갱신 필요', variant: 'default' };
+        case SYNC_STATUS.FAILED:
+            return { label: '실패', variant: 'guilty' };
+        case SYNC_STATUS.NEED_RECONNECT:
+            return { label: '재연동 필요', variant: 'guilty' };
+        default:
+            return { label: '알 수 없음', variant: 'default' };
+    }
+}
+
+/** 재연동 버튼을 보여줘야 하는 상태인지. */
+export function needsReconnect(syncStatus) {
+    return syncStatus === SYNC_STATUS.NEED_RECONNECT || syncStatus === SYNC_STATUS.FAILED;
+}
+
+/**
+ * 쿨다운 남은 시간 → `MM:SS`.
+ * 참고화면의 `방금 갱신함 · 02:30 후 다시 조회` 표기를 만든다.
+ */
+export function formatCooldown(seconds) {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    const mm = String(Math.floor(safe / 60)).padStart(2, '0');
+    const ss = String(safe % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+}
+
+/** 같은 날인지. 시간대 계산 없이 연·월·일만 본다. */
+function isSameDay(a, b) {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+/**
+ * 동기화 시각 표기. 오늘이면 `오늘 09:32`, 아니면 `8월 3일 18:00`.
+ * @param {string|null} isoString ISO-8601. 최초 연결 직후엔 null 이 올 수 있다.
+ * @param {Date} [now] 테스트에서 기준 시각을 고정하기 위한 인자.
+ */
+export function formatSyncTime(isoString, now = new Date()) {
+    if (!isoString) {
+        return '동기화 이력 없음';
+    }
+    const target = new Date(isoString);
+    if (Number.isNaN(target.getTime())) {
+        return '동기화 이력 없음';
+    }
+    const hh = String(target.getHours()).padStart(2, '0');
+    const mm = String(target.getMinutes()).padStart(2, '0');
+    if (isSameDay(target, now)) {
+        return `오늘 ${hh}:${mm}`;
+    }
+    return `${target.getMonth() + 1}월 ${target.getDate()}일 ${hh}:${mm}`;
+}
+
+/**
+ * 동의 만료까지 남은 일수 → `D-12`.
+ * 명세 AC_01_04 가 "만료 30일 전 안내"를 요구하므로, 30일 이내일 때만 값을 돌려준다.
+ * @returns {string|null} 안내가 필요 없으면 null
+ */
+export function consentExpiryLabel(expiresAt, now = new Date()) {
+    if (!expiresAt) {
+        return null;
+    }
+    const target = new Date(expiresAt);
+    if (Number.isNaN(target.getTime())) {
+        return null;
+    }
+    const days = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (days > 30) {
+        return null;
+    }
+    return days <= 0 ? '동의 만료' : `동의 D-${days}`;
+}
+
+/**
+ * 금액 표기.
+ *
+ * 참고화면(`doc/개발참고화면/탕탕/0-4[계좌관리]조회`, `0-5[계좌연결]연결계좌선택`)은
+ * 계좌 금액을 **모노스페이스 숫자로만** 쓴다 — `8,340,000` 처럼 단위 '원'을 붙이지 않는다.
+ * 통화가 KRW 하나뿐이라 단위가 반복 정보이고, 모노 숫자는 자릿수가 세로로 정렬돼 비교하기 쉽다.
+ *
+ * 글꼴(`--tt-font-mono`)은 화면이 지정한다. 표기 규칙만 여기서 정한다.
+ */
+export function formatAmount(value) {
+    return Number(value ?? 0).toLocaleString('ko-KR');
+}
+
+/**
+ * 기관 코드 → 로고 색조.
+ *
+ * Figma 확정본(`금융기관 선택`)은 기관마다 로고 배경색이 다르다 —
+ * KB·카카오는 골드, 신한·토스는 블루, 우리는 그린, 하나는 로즈.
+ * 브랜드 색을 그대로 쓰면 HEX 하드코딩이 되므로(DESIGN_SYSTEM.md 절대 규칙 1)
+ * **디자인시스템의 의미 토큰 4계열에 배정**해 같은 인상을 만든다.
+ *
+ * 매핑에 없는 기관은 코드 앞 두 자리로 갈린다 — CODEF `organization` 체계에서 `03xx` 가 카드사다.
+ *
+ * @returns {'gold'|'blue'|'green'|'rose'} 컴포넌트가 이 값으로 클래스를 고른다
+ */
+const INSTITUTION_TONES = {
+    '0004': 'gold', // KB국민은행
+    '0090': 'gold', // 카카오뱅크
+    '0088': 'blue', // 신한은행
+    '0092': 'blue', // 토스뱅크
+    '0089': 'blue', // 케이뱅크
+    '0020': 'green', // 우리은행
+    '0011': 'green', // NH농협은행
+    '0003': 'green', // IBK기업은행
+    '0081': 'rose', // 하나은행
+};
+
+export function resolveInstitutionTone(code) {
+    const key = String(code ?? '');
+    if (INSTITUTION_TONES[key]) {
+        return INSTITUTION_TONES[key];
+    }
+    const prefix = key.slice(0, 2);
+    if (prefix === '03') {
+        return 'blue'; // 카드
+    }
+    if (prefix === '02') {
+        return 'green'; // 증권
+    }
+    if (prefix === '05') {
+        return 'rose'; // 보험
+    }
+    return 'gold';
+}
