@@ -1,5 +1,8 @@
 package com.kb.tangtang.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.annotations.Mapper;
@@ -15,6 +18,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.client.RestTemplate;
 
 import javax.sql.DataSource;
 
@@ -28,11 +32,22 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableTransactionManagement
+/*
+ * 환경별 설정은 한 번에 하나만 로드한다.
+ *   로컬 : APP_ENV 없음 → 기본값 local → application-local.properties (git 제외, 개인 시크릿)
+ *   도커 : docker-compose 가 APP_ENV=docker 주입 → application-docker.properties
+ *
+ * 과거에 두 파일을 동시에 나열했다가, 로컬에서도 docker 파일이 로드돼
+ * jdbc.driver 가 ${JDBC_DRIVER} 로 덮이면서 컨텍스트 로딩이 실패했다.
+ * (실측: @PropertySource 는 뒤에 선언한 파일이 앞을 덮어쓴다)
+ *
+ * @PropertySource 의 경로에는 플레이스홀더를 쓸 수 있고, 이 시점에는
+ * 시스템 프로퍼티·환경변수가 이미 해석 가능하다.
+ */
 @PropertySource(
         value = {
                 "classpath:/application.properties",
-                "classpath:/application-local.properties",
-                "classpath:/application-docker.properties"
+                "classpath:/application-${app.env:local}.properties"
         },
         ignoreResourceNotFound = true)
 @ComponentScan(
@@ -85,5 +100,26 @@ public class RootConfig {
     @Bean
     public DataSourceTransactionManager transactionManager() {
         return new DataSourceTransactionManager(dataSource());
+    }
+
+    /** 외부 API 호출용. 지금은 구글 OAuth 만 쓴다. */
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+
+    /**
+     * 기본 ObjectMapper 는 java.time(LocalDateTime 등)을 직렬화하지 못한다
+     * (JavaTimeModule 이 없으면 InvalidDefinitionException 으로 500이 난다).
+     * 이 빈은 JwtAuthInterceptor · GoogleOAuthClient 가 직접 주입받아 쓰므로,
+     * MVC 응답 변환기(Jackson2ObjectMapperBuilder)와 동일하게 JavaTimeModule 을 등록하고
+     * 타임스탬프(숫자 배열) 대신 ISO-8601 문자열로 쓰도록 맞춘다.
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return objectMapper;
     }
 }

@@ -52,7 +52,9 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-api:${log4jVersion}"
     implementation "org.apache.logging.log4j:log4j-core:${log4jVersion}"
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}"
-    implementation 'org.bgee.log4jdbc-log4j2:log4jdbc-log4j2-jdbc4:1.16'
+    // jdbc4(JDBC 4.0) 는 ResultSet.getObject(String, Class) 가 없어 MyBatis 가 LocalDateTime 컬럼을
+    // 읽을 때 AbstractMethodError 가 난다. jdbc4 로 되돌리지 말 것 — LocalDateTime 매핑에 jdbc4.1 이 필수다.
+    implementation 'org.bgee.log4jdbc-log4j2:log4jdbc-log4j2-jdbc4.1:1.16'
 
     // ---- XML 파싱(MyBatis 매퍼 내 한글 처리) ----
     implementation 'xerces:xercesImpl:2.12.2'
@@ -61,8 +63,15 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
+    // ---- JWT (jjwt) — Spring Boot 스타터가 아니므로 금지 기술이 아니다 ----
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
     // ---- JSON ----
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    // java.time(LocalDateTime 등) 직렬화 지원. 없으면 InvalidDefinitionException 으로 500.
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
 
     // ---- Database / MyBatis (JPA·Hibernate 사용 금지 — 평가 감점) ----
     implementation 'com.mysql:mysql-connector-j:8.4.0'
@@ -76,6 +85,19 @@ dependencies {
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     testImplementation "org.junit.jupiter:junit-jupiter-api:${junitVersion}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
+    testImplementation 'org.mockito:mockito-core:5.12.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.12.0'
+    // spring-test 의 MockRestServiceServer / MockRestRequestMatchers 가 시그니처에 hamcrest 를 쓴다.
+    // spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않으므로 테스트 스코프에 직접 얹는다.
+    testImplementation 'org.hamcrest:hamcrest:2.2'
+    // MockMvc 의 jsonPath() 매처가 JsonPath 를 쓴다.
+    // hamcrest 와 마찬가지로 spring-test POM 이 optional 로 선언해 자동으로 딸려오지 않는다.
+    testImplementation 'com.jayway.jsonpath:json-path:2.9.0'
+    // 서블릿 API 는 톰캣이 제공하므로 main 은 compileOnly 다.
+    // 다만 테스트는 MockHttpServletRequest/Response 를 "실행"하므로 런타임에도 필요하다.
+    // testCompileOnly 로 두면 컴파일은 되지만 JUnit5 discovery 에서
+    // NoClassDefFoundError: javax/servlet/http/HttpServletResponse 로 죽는다.
+    testImplementation 'javax.servlet:javax.servlet-api:4.0.1'
 }
 
 test {

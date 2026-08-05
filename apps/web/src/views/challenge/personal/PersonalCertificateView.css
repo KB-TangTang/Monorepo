@@ -1,0 +1,49 @@
+.personal-certificate {
+    min-height: 100vh;
+    padding: var(--tt-space-5);
+    font-family: var(--tt-font-sans);
+    color: var(--tt-text);
+    background: var(--tt-bg-subtle);
+}
+
+.personal-certificate__page-header {
+    margin-bottom: var(--tt-space-4);
+}
+
+.personal-certificate__notice {
+    margin: var(--tt-space-4) 0 0;
+    font-size: var(--tt-fs-caption);
+    text-align: center;
+    color: var(--tt-text-muted);
+}
+
+.personal-certificate__actions {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    gap: var(--tt-space-2);
+    margin-top: var(--tt-space-5);
+}
+
+.personal-certificate__actions button {
+    min-height: 52px;
+    padding: var(--tt-space-3) var(--tt-space-4);
+    font: inherit;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border-strong);
+    border-radius: var(--tt-radius-md);
+    cursor: pointer;
+}
+
+.personal-certificate__actions button:last-child {
+    color: var(--tt-text);
+    background: var(--tt-accent);
+    border-color: var(--tt-accent);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.personal-certificate__actions button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}

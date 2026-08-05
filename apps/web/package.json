@@ -9,11 +9,13 @@
         "preview": "vite preview",
         "format": "prettier --write \"src/**/*.{js,vue,css}\" \"*.{js,json,html}\"",
         "format:check": "prettier --check \"src/**/*.{js,vue,css}\" \"*.{js,json,html}\"",
+        "test": "node --test \"tests/*.test.js\"",
         "lint": "eslint . --fix",
         "lint:check": "eslint ."
     },
     "dependencies": {
         "axios": "^1.7.9",
+        "html-to-image": "^1.11.13",
         "pinia": "^4.0.2",
         "vue": "^3.5.40",
         "vue-router": "^5.2.0"

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
+import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import ChallengeMonthPicker from '@/components/challenge/report/ChallengeMonthPicker.vue';
 import ChallengeReportContent from '@/components/challenge/report/ChallengeReportContent.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
@@ -99,17 +100,42 @@ function openNetSavings() {
     router.push({ name: 'challengeNetSavings', query: { month: selectedPeriod.value } });
 }
 
+function openMonthlyReport() {
+    router.push({ name: 'monthlyConsumptionReport' });
+}
+
+function goBack() {
+    if (route.query.from === 'personalRanking') {
+        router.push({
+            name: 'personalRanking',
+            query: { month: selectedPeriod.value },
+        });
+        return;
+    }
+
+    router.back();
+}
+
 onMounted(initialize);
 </script>
 
 <template>
     <article class="challenge-report">
-        <header class="challenge-report__header">
-            <h1>챌린지 리포트</h1>
-            <button v-if="selectedPeriod" type="button" @click="isMonthPickerOpen = true">
-                지난달 보기 ›
-            </button>
-        </header>
+        <ChallengePageHeader
+            class="challenge-report__page-header"
+            title="챌린지 리포트"
+            @back="goBack"
+        >
+            <template v-if="selectedPeriod" #action>
+                <button
+                    type="button"
+                    class="challenge-report__month-button"
+                    @click="isMonthPickerOpen = true"
+                >
+                    지난달 보기 ›
+                </button>
+            </template>
+        </ChallengePageHeader>
 
         <StateLoading
             v-if="state === 'loading'"
@@ -142,9 +168,9 @@ onMounted(initialize);
         />
 
         <ChallengeReportToggle
-            v-if="state === 'ready'"
+            v-if="selectedPeriod"
             @open-transactions="emit('open-transactions')"
-            @open-monthly-report="emit('open-monthly-report')"
+            @open-monthly-report="openMonthlyReport"
         />
         <ChallengeMonthPicker
             v-if="selectedPeriod"
@@ -164,20 +190,13 @@ onMounted(initialize);
     background: var(--tt-bg-subtle);
 }
 
-.challenge-report__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-4);
+.challenge-report__page-header {
     margin-bottom: var(--tt-space-4);
 }
 
-.challenge-report__header h1 {
-    font-size: var(--tt-fs-title);
-    font-weight: var(--tt-fw-black);
-}
-
-.challenge-report__header button {
+.challenge-report__month-button {
+    padding: 0;
+    font: inherit;
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     background: transparent;
@@ -240,10 +259,6 @@ onMounted(initialize);
     .challenge-report {
         padding-right: var(--tt-space-4);
         padding-left: var(--tt-space-4);
-    }
-
-    .challenge-report__header h1 {
-        font-size: var(--tt-fs-section);
     }
 }
 </style>
