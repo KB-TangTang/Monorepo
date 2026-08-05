@@ -1,0 +1,35 @@
+.certificate-ratio-selector {
+    margin-top: var(--tt-space-4);
+}
+
+.certificate-ratio-selector h2 {
+    margin: 0;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.certificate-ratio-selector__options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--tt-space-2);
+    margin-top: var(--tt-space-2);
+}
+
+.certificate-ratio-selector__options button {
+    min-height: 44px;
+    padding: var(--tt-space-2) var(--tt-space-3);
+    font: inherit;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-sm);
+    cursor: pointer;
+}
+
+.certificate-ratio-selector__options button.is-selected {
+    color: var(--tt-text-inverse);
+    background: var(--tt-surface-inverse);
+    border-color: var(--tt-surface-inverse);
+}
