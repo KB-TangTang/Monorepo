@@ -1,6 +1,6 @@
 import http from './http';
 
-//API : /v1/home
+// API: /api/v1/home
 export function fetchHome() {
-    return http.get('/home');
+    return http.get('/v1/home');
 }
