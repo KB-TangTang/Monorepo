@@ -57,4 +57,11 @@ public class SseEmitterRegistry {
     public int connectionCount(long userId) {
         return emittersOf(userId).size();
     }
+
+    /** 하트비트용. 순회 중 변경돼도 안전하도록 복사본을 준다 */
+    public Map<Long, List<SseEmitter>> snapshot() {
+        Map<Long, List<SseEmitter>> copy = new java.util.HashMap<>();
+        emitters.forEach((userId, list) -> copy.put(userId, List.copyOf(list)));
+        return copy;
+    }
 }
