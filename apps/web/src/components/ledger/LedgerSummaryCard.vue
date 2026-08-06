@@ -41,7 +41,7 @@ const changeCopy = computed(() => {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--tt-space-4);
-    padding: var(--tt-space-5);
+    padding: var(--tt-space-4);
     color: var(--tt-text-inverse);
     background: var(--tt-surface-strong);
     border-radius: var(--tt-radius-xl);

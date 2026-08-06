@@ -19,7 +19,6 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import {
     formatDayLabel,
-    formatWon,
     groupTransactionsByDate,
     resolveDefaultLedgerPeriod,
     resolveLedgerState,
@@ -73,6 +72,7 @@ const visibleTransactions = computed(() => {
 });
 
 const groupedTransactions = computed(() => groupTransactionsByDate(visibleTransactions.value));
+const currentDayGroup = computed(() => groupedTransactions.value[0] ?? null);
 
 const monthIndex = computed(() => months.value.findIndex((month) => month.value === period.value));
 const disablePrev = computed(() => monthIndex.value <= 0);
@@ -91,6 +91,12 @@ async function loadPeriod() {
         ]);
         summary.value = summaryData;
         transactions.value = transactionData;
+        selectedDate.value = transactionData.length
+            ? transactionData.reduce(
+                  (latest, tx) => (tx.date > latest ? tx.date : latest),
+                  transactionData[0].date,
+              )
+            : null;
     } catch (err) {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
     } finally {
@@ -112,7 +118,7 @@ function selectDate(dateStr) {
     if (!dateStr) {
         return;
     }
-    selectedDate.value = selectedDate.value === dateStr ? null : dateStr;
+    selectedDate.value = dateStr;
 }
 
 function selectPaymentMethod(method) {
@@ -143,6 +149,10 @@ function applyCategory({ transactionId, categoryName, applyToMerchant }) {
 
 function openReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: period.value } });
+}
+
+function openMonthTransactions() {
+    router.push({ name: 'ledgerMonthTransactions', query: { month: period.value } });
 }
 
 onMounted(async () => {
@@ -186,27 +196,20 @@ onMounted(async () => {
                 @select-date="selectDate"
             />
 
-            <section class="ledger-view__list" aria-label="거래내역 목록">
+            <section class="ledger-view__list" aria-label="선택한 날짜의 거래내역">
                 <StateEmpty
-                    v-if="groupedTransactions.length === 0"
+                    v-if="!currentDayGroup"
                     title="조건에 맞는 거래내역이 없어요"
                     description="날짜나 결제수단, 검색어를 바꿔서 다시 확인해 보세요."
                 />
-                <div
-                    v-for="group in groupedTransactions"
-                    :key="group.date"
-                    class="ledger-view__group"
-                >
+                <div v-else class="ledger-view__group">
                     <div class="ledger-view__group-header">
-                        <h2>{{ formatDayLabel(group.date) }}</h2>
-                        <span
-                            :class="{ 'ledger-view__group-total--income': group.netAmount > 0 }"
-                            >{{ formatWon(group.netAmount) }}</span
-                        >
+                        <h2>{{ formatDayLabel(currentDayGroup.date) }}</h2>
+                        <button type="button" @click="openMonthTransactions">자세히보기 ›</button>
                     </div>
                     <ul class="ledger-view__group-rows">
                         <LedgerTransactionRow
-                            v-for="tx in group.items"
+                            v-for="tx in currentDayGroup.items"
                             :key="tx.id"
                             :transaction="tx"
                             @click="openCategorySheet(tx)"
@@ -237,9 +240,10 @@ onMounted(async () => {
 .ledger-view {
     display: flex;
     flex-direction: column;
-    gap: var(--tt-space-5);
-    min-height: calc(100vh - var(--tt-tabbar-height));
-    padding: var(--tt-space-5) var(--tt-space-5) calc(var(--tt-space-12) + 56px);
+    gap: var(--tt-space-2);
+    height: calc(100vh - var(--tt-tabbar-height) - env(safe-area-inset-bottom) - var(--tt-space-4));
+    padding: var(--tt-space-3) var(--tt-space-5) var(--tt-space-4);
+    overflow-y: auto;
     background: var(--tt-bg-subtle);
 }
 
@@ -250,7 +254,7 @@ onMounted(async () => {
 }
 
 .ledger-view__group {
-    padding: var(--tt-space-4);
+    padding: var(--tt-space-3);
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
@@ -270,15 +274,14 @@ onMounted(async () => {
     color: var(--tt-text);
 }
 
-.ledger-view__group-header span {
-    font-family: var(--tt-font-mono);
+.ledger-view__group-header button {
+    flex-shrink: 0;
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-danger);
-}
-
-.ledger-view__group-header .ledger-view__group-total--income {
-    color: var(--tt-success);
+    color: var(--tt-text-muted);
+    background: none;
+    border: 0;
+    cursor: pointer;
 }
 
 .ledger-view__group-rows {

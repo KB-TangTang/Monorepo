@@ -63,7 +63,7 @@ function weekdayTone(index) {
 
 <style scoped>
 .ledger-calendar {
-    padding: var(--tt-space-4);
+    padding: var(--tt-space-3);
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
@@ -76,7 +76,7 @@ function weekdayTone(index) {
 }
 
 .ledger-calendar__weekdays {
-    margin-bottom: var(--tt-space-2);
+    margin-bottom: var(--tt-space-1);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
@@ -86,7 +86,7 @@ function weekdayTone(index) {
 .ledger-calendar__day {
     position: relative;
     display: grid;
-    height: 48px;
+    height: 44px;
     font-size: var(--tt-fs-body);
     color: var(--tt-text);
     background: transparent;
@@ -97,8 +97,8 @@ function weekdayTone(index) {
 
 .ledger-calendar__day-badge {
     display: grid;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     border-radius: var(--tt-radius-full);
     place-items: center;
 }

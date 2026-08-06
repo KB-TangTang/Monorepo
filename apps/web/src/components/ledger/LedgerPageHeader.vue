@@ -1,5 +1,5 @@
 <!--
-  용도: 전체 거래내역 화면 상단. 아이브로우 라벨 + 제목 + 가맹점 검색 토글을 담당한다.
+  용도: 전체 거래내역 화면 상단. 제목 + 가맹점 검색 토글을 담당한다.
   언제 쓰는지: LedgerView 한 곳에서만 렌더한다.
 -->
 <script setup>
@@ -34,10 +34,7 @@ watch(
 <template>
     <header class="ledger-header">
         <div class="ledger-header__row">
-            <div>
-                <p class="ledger-header__eyebrow">CASE LEDGER · 혐의 기록</p>
-                <h1 class="ledger-header__title">전체 거래내역</h1>
-            </div>
+            <h1 class="ledger-header__title">전체 거래내역</h1>
             <button
                 type="button"
                 class="ledger-header__search-toggle"
@@ -71,21 +68,12 @@ watch(
 
 .ledger-header__row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: var(--tt-space-3);
 }
 
-.ledger-header__eyebrow {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-mono-chip);
-    font-weight: var(--tt-fw-bold);
-    letter-spacing: 0.08em;
-    color: var(--tt-text-muted);
-}
-
 .ledger-header__title {
-    margin-top: var(--tt-space-1);
     font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);

@@ -50,7 +50,7 @@ defineEmits(['click']);
     display: flex;
     align-items: center;
     width: 100%;
-    padding: var(--tt-space-3) 0;
+    padding: var(--tt-space-2) 0;
     text-align: left;
     cursor: pointer;
     background: none;
