@@ -24,7 +24,7 @@
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
 | POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: { id, nickname, email }, needsConsent }` |
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
-| GET | `/api/users/me` | Bearer | `{ id, nickname, email }` |
+| GET | `/api/users/me` | Bearer | `{ id, nickname, email, socialProvider }` |
 
 ### 인증 에러 코드
 
