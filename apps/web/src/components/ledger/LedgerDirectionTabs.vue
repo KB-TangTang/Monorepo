@@ -52,6 +52,7 @@ defineEmits(['select', 'open-category-filter', 'open-payment-filter']);
 <style scoped>
 .direction-tabs {
     display: flex;
+    flex-shrink: 0;
     gap: var(--tt-space-2);
     overflow-x: auto;
 }

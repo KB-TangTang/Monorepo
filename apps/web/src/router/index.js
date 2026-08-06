@@ -84,7 +84,7 @@ const routes = [
     {
         path: '/ledger/transactions',
         name: 'ledgerMonthTransactions',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/LedgerMonthTransactionsView.vue'),
         meta: { title: '해당월 거래내역' },
     },
     {

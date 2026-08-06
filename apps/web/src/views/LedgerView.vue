@@ -152,7 +152,10 @@ function openReport() {
 }
 
 function openMonthTransactions() {
-    router.push({ name: 'ledgerMonthTransactions', query: { month: period.value } });
+    router.push({
+        name: 'ledgerMonthTransactions',
+        query: { month: period.value, date: selectedDate.value },
+    });
 }
 
 onMounted(async () => {
