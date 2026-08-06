@@ -94,10 +94,16 @@ async function confirmLogout() {
         <h1 class="my-page__title">마이페이지</h1>
 
         <StateLoading v-if="loading" message="내 정보를 불러오는 중" />
-        <StateError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
         <template v-else>
-            <MyProfileCard :user="user" />
-            <MyMenuList :items="MENU" @select="onSelect" />
+            <!--
+              StateError 가 전체를 대체해도 로그아웃 버튼만은 밖에 둔다.
+              /users/me 조회가 계속 실패하면 이 화면에서 로그아웃할 방법이 없어져 사용자가 갇힌다.
+            -->
+            <StateError v-if="errorMessage" :message="errorMessage" @retry="load" />
+            <template v-else>
+                <MyProfileCard :user="user" />
+                <MyMenuList :items="MENU" @select="onSelect" />
+            </template>
 
             <div class="my-page__logout">
                 <button
