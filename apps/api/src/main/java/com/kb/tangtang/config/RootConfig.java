@@ -115,13 +115,6 @@ public class RootConfig {
     }
 
     /**
-     * 기본 ObjectMapper 는 java.time(LocalDateTime 등)을 직렬화하지 못한다
-     * (JavaTimeModule 이 없으면 InvalidDefinitionException 으로 500이 난다).
-     * 이 빈은 JwtAuthInterceptor · GoogleOAuthClient 가 직접 주입받아 쓰므로,
-     * MVC 응답 변환기(Jackson2ObjectMapperBuilder)와 동일하게 JavaTimeModule 을 등록하고
-     * 타임스탬프(숫자 배열) 대신 ISO-8601 문자열로 쓰도록 맞춘다.
-     */
-    /**
      * @EnableScheduling 전용 스케줄러.
      *
      * ⚠ 이 빈이 없으면 스프링이 **단일 스레드** 스케줄러로 폴백한다. SseHeartbeat.ping(15초)과
@@ -157,6 +150,13 @@ public class RootConfig {
         return executor;
     }
 
+    /**
+     * 기본 ObjectMapper 는 java.time(LocalDateTime 등)을 직렬화하지 못한다
+     * (JavaTimeModule 이 없으면 InvalidDefinitionException 으로 500이 난다).
+     * 이 빈은 JwtAuthInterceptor · GoogleOAuthClient 가 직접 주입받아 쓰므로,
+     * MVC 응답 변환기(Jackson2ObjectMapperBuilder)와 동일하게 JavaTimeModule 을 등록하고
+     * 타임스탬프(숫자 배열) 대신 ISO-8601 문자열로 쓰도록 맞춘다.
+     */
     @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
