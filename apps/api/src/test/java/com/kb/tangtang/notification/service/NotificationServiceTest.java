@@ -8,11 +8,14 @@ import com.kb.tangtang.notification.mapper.NotificationMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -54,6 +57,26 @@ class NotificationServiceTest {
         assertEquals(1, mapper.saved.size());
         assertEquals("ACCOUNT_RECONNECT", mapper.saved.get(0).getType());
         assertEquals("계좌 재연동이 필요해요", mapper.saved.get(0).getTitle());
+    }
+
+    /**
+     * ⚠ created_at 을 DB 컬럼 기본값에 맡기면 useGeneratedKeys 가 id 만 되받아 와
+     *   반환 객체의 createdAt 이 null 로 남는다. 그 객체가 그대로 SSE 로 나가면
+     *   프론트가 1970-01-01 그룹에 얹는다.
+     */
+    @Test
+    @DisplayName("create 가 돌려주는 객체에는 createdAt 이 채워져 있다")
+    void createFillsCreatedAt() {
+        FakeMapper mapper = new FakeMapper();
+        LocalDateTime fixed = LocalDateTime.of(2026, 8, 6, 9, 0);
+        Clock clock = Clock.fixed(fixed.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+
+        Notification created = new NotificationService(mapper, clock).create(
+                1L, NotificationType.ACCOUNT_RECONNECT, "국민은행", "/asset/accounts/9/reconnect");
+
+        assertEquals(fixed, created.getCreatedAt(), "반환 객체의 createdAt 이 비어 있다");
+        assertEquals(fixed, mapper.saved.get(0).getCreatedAt(), "INSERT 에도 같은 값이 실려야 한다");
+        assertFalse(created.isRead());
     }
 
     @Test

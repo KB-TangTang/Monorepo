@@ -19,9 +19,11 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -62,7 +64,8 @@ class NotificationControllerTest {
             capturedSize = size;
             return NotificationListDto.builder()
                     .items(List.of(NotificationDto.builder().id(1L).type("ACCOUNT_RECONNECT")
-                            .title("계좌 재연동이 필요해요").content("국민은행").isRead(false)
+                            .title("계좌 재연동이 필요해요").content("국민은행")
+                            .deepLinkUrl("/asset/accounts/9/reconnect").isRead(false)
                             .createdAt("2026-08-06T09:00:00").build()))
                     .nextCursor(null).unreadCount(3).build();
         }
@@ -88,6 +91,39 @@ class NotificationControllerTest {
         assertTrue(json.get("success").asBoolean());
         assertEquals(3, json.get("data").get("unreadCount").asInt());
         assertEquals(1, json.get("data").get("items").size());
+    }
+
+    /**
+     * ⚠ 이 테스트가 지키는 것은 **JSON 키 이름 자체**다.
+     *   boolean isRead 는 Lombok getter(isRead())를 Jackson 이 "read" 로 읽어버려
+     *   프론트의 item.isRead 가 계속 undefined 였다. 값이 아니라 이름을 검사해야 잡힌다.
+     */
+    @Test
+    @DisplayName("목록 항목의 JSON 키는 프론트·API_SPEC 과 정확히 같다 — isRead 는 read 가 아니다")
+    void listItemFieldNames() throws Exception {
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new NotificationController(new StubService(), new SseEmitterRegistry()))
+                .setCustomArgumentResolvers(loginUserResolver())
+                .build();
+
+        /* MockHttpServletResponse 의 기본 charset 은 ISO-8859-1 이라 한글이 깨진다. 명시할 것 */
+        String body = mvc.perform(get("/api/notifications"))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        JsonNode item = new ObjectMapper().readTree(body).get("data").get("items").get(0);
+
+        for (String field : List.of("id", "type", "title", "content", "deepLinkUrl", "isRead", "createdAt")) {
+            assertTrue(item.has(field), field + " 키가 응답에 없다 — 프론트가 읽지 못한다");
+        }
+        assertFalse(item.has("read"), "read 로 나가면 프론트의 item.isRead 가 undefined 가 된다");
+
+        assertEquals(1L, item.get("id").asLong());
+        assertEquals("ACCOUNT_RECONNECT", item.get("type").asText());
+        assertEquals("계좌 재연동이 필요해요", item.get("title").asText());
+        assertEquals("국민은행", item.get("content").asText());
+        assertEquals("/asset/accounts/9/reconnect", item.get("deepLinkUrl").asText());
+        assertFalse(item.get("isRead").asBoolean());
+        assertEquals("2026-08-06T09:00:00", item.get("createdAt").asText());
     }
 
     @Test
