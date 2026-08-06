@@ -6,6 +6,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import CatalogItem from '@/components/dev/CatalogItem.vue';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -37,6 +38,7 @@ const SECTIONS = [
     { id: 'badge', label: 'BaseBadge' },
     { id: 'state', label: '상태 3종' },
     { id: 'bell', label: 'TheNotificationBell' },
+    { id: 'back', label: 'BaseBackButton' },
     { id: 'cards', label: '카드 라이브러리 7종' },
 ];
 
@@ -220,6 +222,9 @@ const CODE = {
 <StateEmpty v-else-if="!items.length" title="아직 기소된 지출이 없어요">
     <template #action><BaseButton size="sm">계좌 연동하기</BaseButton></template>
 </StateEmpty>`,
+    back: `<BaseBackButton label="자산 홈으로 돌아가기" />
+<!-- to 를 주면 히스토리 대신 그 경로로 보낸다 -->
+<BaseBackButton to="/asset" />`,
     bell: `<TheNotificationBell />
 <!-- store 의 unreadCount 를 읽어 배지를 그리고, 클릭하면 /notifications 로 보낸다 -->`,
     record: `<RecordCard
@@ -548,6 +553,18 @@ const CODE = {
                 :code="CODE.bell"
             >
                 <TheNotificationBell />
+            </CatalogItem>
+        </section>
+
+        <!-- ── BaseBackButton ────────────────────────── -->
+        <section id="back" class="catalog__section">
+            <h2 class="catalog__h2">BaseBackButton</h2>
+            <CatalogItem
+                name="BaseBackButton"
+                purpose="화면 좌측 상단의 뒤로가기. 기본은 router.back() 이고, to 를 주면 그 경로로 보낸다. 히스토리 뒤가 라우터 가드에 막히는 화면에서는 to 를 명시할 것."
+                :code="CODE.back"
+            >
+                <BaseBackButton label="예시 뒤로 가기" />
             </CatalogItem>
         </section>
 

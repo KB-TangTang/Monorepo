@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
 import NotificationRow from '@/components/notification/NotificationRow.vue';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
@@ -38,6 +39,7 @@ async function open(notification) {
 <template>
     <div class="noti-list">
         <header class="noti-list__header">
+            <BaseBackButton label="이전 화면으로 돌아가기" />
             <h1 class="noti-list__title">
                 알림
                 <span v-if="unreadCount > 0" class="noti-list__count">{{ unreadCount }}</span>
@@ -96,10 +98,13 @@ async function open(notification) {
 .noti-list__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--tt-space-2);
 }
 
+/* 제목이 남은 폭을 먹어야 '모두 읽음' 이 오른쪽 끝에 붙는다.
+   space-between 으로 두면 뒤로가기·제목·모두읽음 이 3등분돼 제목이 가운데로 떠버린다 */
 .noti-list__title {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: var(--tt-space-2);
