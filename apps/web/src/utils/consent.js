@@ -60,9 +60,34 @@ export function buildAgreementStateFromConsents(items, myConsents) {
  * 그래서 날짜 문구는 만료 예정일(expiresAt, FINANCIAL_DATA 동의 시에만 채워짐)만 쓴다.
  */
 
-/** 토글 가능 여부. 동의 중이면서 철회 가능한 항목만 끌 수 있다. */
+/** 토글을 끌 수 있는지. 동의 중이면서 철회 가능한 항목만 끌 수 있다. */
 export function canWithdraw(item) {
     return Boolean(item?.agreed && item?.withdrawable);
+}
+
+/**
+ * 토글을 다시 켤 수 있는지. 철회한 항목은 이 화면에서 되돌릴 수 있어야 한다 —
+ * 되돌릴 수단이 없으면 선택 항목(AI_USAGE·MARKETING)은 한 번 끄면 영영 못 켠다.
+ *
+ * 철회 불가 항목(TERMS·PRIVACY)은 애초에 끌 수 없으니 여기 걸릴 일이 없지만,
+ * 데이터가 어긋나 미동의로 내려와도 이 화면에서 되살리게 두지 않는다(가입 절차의 몫이다).
+ */
+export function canAgreeAgain(item) {
+    return Boolean(item && !item.agreed && item.withdrawable && item.scope);
+}
+
+/**
+ * 재동의 요청 본문. POST /api/consents 는 **scope 단위 전량 저장**이라
+ * 같은 scope 의 다른 항목까지 현재 상태 그대로 실어 보내야 한다.
+ * 한 항목만 보내면 나머지가 전부 미동의로 꺼진다(백엔드 ConsentService.submit 참고).
+ */
+export function buildAgreeAgainPayload(myConsents, target) {
+    return myConsents
+        .filter((item) => item.scope === target.scope)
+        .map((item) => ({
+            type: item.type,
+            agreed: item.type === target.type ? true : Boolean(item.agreed),
+        }));
 }
 
 /** 카드 하단에 보여줄 상태 문구. */

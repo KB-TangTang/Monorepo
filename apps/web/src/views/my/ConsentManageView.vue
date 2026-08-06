@@ -1,5 +1,5 @@
 <!--
-  용도: 동의 현황 조회·철회 화면 (DS_01_02). 마이페이지 > 동의 관리 진입점.
+  용도: 동의 현황 조회·철회·재동의 화면 (DS_01_02). 마이페이지 > 동의 관리 진입점.
   언제 쓰는지: router 의 /my/consents. MyPageView 의 "동의 관리" 메뉴가 이 화면으로 보낸다.
   쓰면 안 되는 경우: 최초 가입 동의(ServiceConsentView)·계좌 연동 전 CODEF 동의(FinancialConsentView)를
     대체하지 말 것. 저쪽은 '받는' 화면이고 여기는 '되돌리는' 화면이다 — 두 화면을 건드리지 않는다.
@@ -12,7 +12,12 @@ import BaseButton from '@/components/common/BaseButton.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { useConsentStore } from '@/stores/consent';
-import { canWithdraw, consentStatusText } from '@/utils/consent';
+import {
+    buildAgreeAgainPayload,
+    canAgreeAgain,
+    canWithdraw,
+    consentStatusText,
+} from '@/utils/consent';
 
 /*
  * 금융정보 수집 동의(FINANCIAL_DATA)를 철회하면 백엔드 ConsentWithdrawnListener 가
@@ -34,7 +39,8 @@ const loading = ref(false);
 const errorMessage = ref('');
 const sheetOpen = ref(false);
 const target = ref(null);
-const withdrawing = ref(false);
+/* 철회·재동의가 같은 시트를 쓰므로 진행 플래그도 하나만 둔다 */
+const submitting = ref(false);
 const actionError = ref('');
 
 async function load() {
@@ -51,8 +57,10 @@ async function load() {
 
 onMounted(load);
 
-function askWithdraw(item) {
-    if (!canWithdraw(item)) {
+/* 토글은 양방향이다. 켜져 있으면 철회를, 꺼져 있으면 재동의를 확인받는다.
+ * 되돌릴 수단이 없으면 선택 항목(AI_USAGE·MARKETING)은 한 번 끄면 영영 못 켠다. */
+function onToggle(item) {
+    if (!canWithdraw(item) && !canAgreeAgain(item)) {
         return;
     }
     target.value = item;
@@ -60,11 +68,32 @@ function askWithdraw(item) {
     sheetOpen.value = true;
 }
 
+async function confirmAgreeAgain() {
+    if (!target.value) {
+        return;
+    }
+    submitting.value = true;
+    actionError.value = '';
+    try {
+        await store.agreeAgain(
+            target.value.scope,
+            buildAgreeAgainPayload(myConsents.value, target.value),
+        );
+        // 철회와 같은 이유로 낙관적 반영을 함께 둔다 — 재조회가 실패해도 토글이 거짓말하지 않게.
+        target.value.agreed = true;
+        sheetOpen.value = false;
+    } catch (err) {
+        actionError.value = err.message ?? '다시 동의하지 못했어요.';
+    } finally {
+        submitting.value = false;
+    }
+}
+
 async function confirmWithdraw() {
     if (!target.value) {
         return;
     }
-    withdrawing.value = true;
+    submitting.value = true;
     actionError.value = '';
     try {
         // withdraw() 는 성공 후 store 가 목록을 스스로 다시 불러온다 — 여기서 다시 부르지 않는다.
@@ -80,7 +109,7 @@ async function confirmWithdraw() {
         // 이미 불러온 나머지 목록을 지울 이유가 없다.
         actionError.value = err.message ?? '철회하지 못했어요.';
     } finally {
-        withdrawing.value = false;
+        submitting.value = false;
     }
 }
 
@@ -94,7 +123,9 @@ function closeSheet() {
     <div class="consent-manage">
         <header class="consent-manage__header">
             <h1 class="consent-manage__title">동의 관리</h1>
-            <p class="consent-manage__lead">현재 동의 상태를 확인하고 철회할 수 있어요.</p>
+            <p class="consent-manage__lead">
+                현재 동의 상태를 확인하고 철회하거나 다시 동의할 수 있어요.
+            </p>
         </header>
 
         <StateLoading v-if="loading" message="동의 정보를 불러오는 중" />
@@ -116,9 +147,9 @@ function closeSheet() {
                     :class="{ 'is-on': item.agreed }"
                     role="switch"
                     :aria-checked="item.agreed"
-                    :aria-label="`${item.label} 철회`"
-                    :disabled="!canWithdraw(item)"
-                    @click="askWithdraw(item)"
+                    :aria-label="`${item.label} ${item.agreed ? '철회' : '다시 동의'}`"
+                    :disabled="!canWithdraw(item) && !canAgreeAgain(item)"
+                    @click="onToggle(item)"
                 >
                     <span class="consent-manage__toggle-knob" aria-hidden="true"></span>
                 </button>
@@ -132,22 +163,41 @@ function closeSheet() {
 
         <BaseBottomSheet
             :model-value="sheetOpen"
-            title="동의를 철회할까요?"
+            :title="target?.agreed ? '동의를 철회할까요?' : '다시 동의할까요?'"
             @update:model-value="closeSheet"
         >
             <div class="consent-manage__sheet">
-                <p class="consent-manage__sheet-text">
+                <p v-if="target?.agreed" class="consent-manage__sheet-text">
                     {{ target?.label }} 동의를 철회하면 추가 수집과 동기화가 즉시 중단돼요.
                     <strong v-if="target?.type === FINANCIAL_DATA">
                         연결된 계좌가 모두 해제되고, CODEF 제3자 제공 동의도 함께 철회돼요. 이
                         동의는 필수 항목이라 다시 동의하기 전까지 서비스를 이용할 수 없어요.
                     </strong>
                 </p>
+                <p v-else class="consent-manage__sheet-text">
+                    {{ target?.label }} 동의를 다시 켜면 오늘부터 수집과 동기화가 재개돼요. 약관
+                    전문은 동의 화면에서 확인할 수 있어요.
+                </p>
                 <p v-if="actionError" class="consent-manage__sheet-error">{{ actionError }}</p>
-                <BaseButton variant="danger" block :loading="withdrawing" @click="confirmWithdraw">
+                <BaseButton
+                    v-if="target?.agreed"
+                    variant="danger"
+                    block
+                    :loading="submitting"
+                    @click="confirmWithdraw"
+                >
                     철회하기
                 </BaseButton>
-                <BaseButton variant="ghost" block :disabled="withdrawing" @click="closeSheet">
+                <BaseButton
+                    v-else
+                    variant="primary"
+                    block
+                    :loading="submitting"
+                    @click="confirmAgreeAgain"
+                >
+                    다시 동의하기
+                </BaseButton>
+                <BaseButton variant="ghost" block :disabled="submitting" @click="closeSheet">
                     취소
                 </BaseButton>
             </div>
