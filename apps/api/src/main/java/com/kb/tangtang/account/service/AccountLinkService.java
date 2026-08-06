@@ -6,6 +6,7 @@ import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.CredentialDto;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
 import com.kb.tangtang.account.client.dto.IdentityDto;
+import com.kb.tangtang.account.domain.AccountReconnectRequiredEvent;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
@@ -15,6 +16,7 @@ import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,7 @@ public class AccountLinkService {
     private final LinkProgressStore progressStore;
     private final InstitutionCatalog catalog;
     private final AccountNumberPolicy accountNumbers;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     /**
@@ -64,8 +67,9 @@ public class AccountLinkService {
                               ConnectedAccountMapper mapper,
                               LinkProgressStore progressStore,
                               InstitutionCatalog catalog,
-                              AccountNumberPolicy accountNumbers) {
-        this(client, mapper, progressStore, catalog, accountNumbers, Clock.systemDefaultZone());
+                              AccountNumberPolicy accountNumbers,
+                              ApplicationEventPublisher events) {
+        this(client, mapper, progressStore, catalog, accountNumbers, events, Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -74,12 +78,14 @@ public class AccountLinkService {
                        LinkProgressStore progressStore,
                        InstitutionCatalog catalog,
                        AccountNumberPolicy accountNumbers,
+                       ApplicationEventPublisher events,
                        Clock clock) {
         this.client = client;
         this.mapper = mapper;
         this.progressStore = progressStore;
         this.catalog = catalog;
         this.accountNumbers = accountNumbers;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -507,6 +513,10 @@ public class AccountLinkService {
                     : SyncStatus.FAILED;
             for (ConnectedAccount account : owned) {
                 mapper.updateSync(account.getId(), userId, status.name(), now, e.getMessage());
+                if (status == SyncStatus.NEED_RECONNECT) {
+                    events.publishEvent(new AccountReconnectRequiredEvent(
+                            userId, account.getId(), account.getBankName()));
+                }
             }
             return status;
         }
@@ -517,6 +527,8 @@ public class AccountLinkService {
                 /* 기관에서 사라진 계좌(해지 등). 잔액을 지어내지 않고 재연동 대상으로 둔다. */
                 mapper.updateSync(account.getId(), userId, SyncStatus.NEED_RECONNECT.name(), now,
                         "금융기관에서 이 계좌를 찾지 못했어요.");
+                events.publishEvent(new AccountReconnectRequiredEvent(
+                        userId, account.getId(), account.getBankName()));
                 continue;
             }
             mapper.updateSynced(account.getId(), userId, balance, now);

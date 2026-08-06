@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- ⚠ SQL 부등호는 &lt; 로 쓴다. 원시 < 는 XML 파싱을 깨뜨린다 (2026-08-06 실제 발생). -->
+<mapper namespace="com.kb.tangtang.notification.mapper.NotificationDlqMapper">
+
+    <insert id="insert">
+        INSERT INTO tbl_notification_dlq (original_event_type, payload_json, error_message, retry_count)
+        VALUES (#{eventType}, #{payloadJson}, #{errorMessage}, 0)
+    </insert>
+
+    <select id="findRetryable" resultType="com.kb.tangtang.notification.domain.NotificationDlqRow">
+        SELECT dlq_id AS dlqId, original_event_type AS originalEventType,
+               payload_json AS payloadJson, error_message AS errorMessage,
+               retry_count AS retryCount, reg_date AS regDate
+        FROM tbl_notification_dlq
+        WHERE retry_count &lt; #{maxRetry}
+        ORDER BY dlq_id
+    </select>
+
+    <update id="increaseRetry">
+        UPDATE tbl_notification_dlq SET retry_count = retry_count + 1 WHERE dlq_id = #{dlqId}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM tbl_notification_dlq WHERE dlq_id = #{dlqId}
+    </delete>
+</mapper>

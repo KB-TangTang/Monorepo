@@ -10,6 +10,7 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import StateError from '@/components/common/StateError.vue';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 
 const health = ref(null);
 const loading = ref(false);
@@ -32,7 +33,10 @@ onMounted(load);
 
 <template>
     <div class="home">
-        <h1 class="home__title">탕탕 · 지갑재판소</h1>
+        <header class="home__header">
+            <h1 class="home__title">탕탕 · 지갑재판소</h1>
+            <TheNotificationBell />
+        </header>
 
         <StateLoading v-if="loading" message="서버 상태를 확인하는 중" />
         <StateError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
@@ -56,6 +60,12 @@ onMounted(load);
     flex-direction: column;
     gap: var(--tt-space-4);
     padding: var(--tt-space-5);
+}
+
+.home__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .home__title {

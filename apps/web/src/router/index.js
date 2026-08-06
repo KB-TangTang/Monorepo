@@ -212,6 +212,13 @@ const routes = [
         component: () => import('@/views/account/AccountRefreshView.vue'),
         meta: { title: '계좌 즉시 조회' },
     },
+    // ↓ 알림 목록(이슈 #58). 탭바는 숨기지 않는다 — 화면에 뒤로가기 버튼이 없다.
+    {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationListView.vue'),
+        meta: { title: '알림' },
+    },
 ];
 
 /* 개발용 컴포넌트 카탈로그. import.meta.env.DEV 가 false 인 프로덕션 빌드에서는
