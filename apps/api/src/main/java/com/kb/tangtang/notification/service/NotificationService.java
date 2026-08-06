@@ -7,10 +7,12 @@ import com.kb.tangtang.notification.dto.NotificationDto;
 import com.kb.tangtang.notification.dto.NotificationListDto;
 import com.kb.tangtang.notification.dto.UnreadCountDto;
 import com.kb.tangtang.notification.mapper.NotificationMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -25,11 +27,30 @@ public class NotificationService {
     private static final int MAX_SIZE = 50;
 
     private final NotificationMapper mapper;
+    private final Clock clock;
 
+    /*
+     * ⚠ 생성자가 둘이다. 어느 쪽을 쓸지 @Autowired 로 명시해 둔다 —
+     *   후보가 둘이면 Spring 이 고르지 못해 컨텍스트 로딩이 실패한다.
+     *   (NotificationDlqRetryScheduler·LinkProgressStore 와 같은 이유)
+     */
+    @Autowired
     public NotificationService(NotificationMapper mapper) {
-        this.mapper = mapper;
+        this(mapper, Clock.systemDefaultZone());
     }
 
+    public NotificationService(NotificationMapper mapper, Clock clock) {
+        this.mapper = mapper;
+        this.clock = clock;
+    }
+
+    /**
+     * 알림을 저장하고 **완성된** 객체를 돌려준다.
+     *
+     * ⚠ createdAt 을 여기서 채운다. DB 컬럼 기본값(CURRENT_TIMESTAMP)에 맡기면
+     *   useGeneratedKeys 가 id 만 되받아 와 반환 객체의 createdAt 이 null 로 남는다.
+     *   그대로 SSE 로 나가면 프론트가 1970-01-01 그룹에 얹는다.
+     */
     @Transactional
     public Notification create(long userId, NotificationType type, String content, String deepLinkUrl) {
         Notification notification = Notification.builder()
@@ -38,6 +59,8 @@ public class NotificationService {
                 .title(type.getDefaultTitle())
                 .content(content)
                 .deepLinkUrl(deepLinkUrl)
+                .isRead(false)
+                .createdAt(LocalDateTime.now(clock).withNano(0))
                 .build();
         mapper.insert(notification);
         return notification;
@@ -85,16 +108,8 @@ public class NotificationService {
         return Math.min(size, MAX_SIZE);
     }
 
+    /** 변환은 NotificationDto.from 하나뿐이다 — SSE(NotificationSender)도 같은 것을 쓴다. */
     private NotificationDto toDto(Notification n) {
-        return NotificationDto.builder()
-                .id(n.getId())
-                .type(n.getType())
-                .title(n.getTitle())
-                .content(n.getContent())
-                .deepLinkUrl(n.getDeepLinkUrl())
-                .isRead(n.isRead())
-                .createdAt(n.getCreatedAt() == null ? null
-                        : n.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                .build();
+        return NotificationDto.from(n);
     }
 }

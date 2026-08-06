@@ -93,6 +93,10 @@
 - `nextCursor` 는 마지막 항목의 `id`. 더 없으면 `null`
 - `size` 기본 20 · 최대 50 (초과는 50 으로 자른다)
 - SSE 는 스트림이라 `ApiResponse` 로 감싸지 않는다. 15초마다 `: ping` 주석 프레임을 보낸다
+- `notification` 이벤트의 `data` 는 **목록 항목과 완전히 같은 모양**이다
+  (`{id,type,title,content,deepLinkUrl,isRead,createdAt}`) — 변환은 `NotificationDto.from` 한 곳뿐
+- `isRead` 는 boolean. Lombok getter 를 Jackson 이 `read` 로 바꾸지 않도록 `@JsonProperty("isRead")` 로 고정돼 있다
+- `createdAt` 은 `yyyy-MM-ddTHH:mm:ss` (ISO-8601, 초 단위). 푸시된 알림도 서버가 값을 채워 내려보낸다
 
 ### 알림 에러 코드
 

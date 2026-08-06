@@ -16,8 +16,13 @@
 
     <insert id="insert" parameterType="com.kb.tangtang.notification.domain.Notification"
             useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO tbl_notification (user_id, type, title, content, deep_link_url, is_read)
-        VALUES (#{userId}, #{type}, #{title}, #{content}, #{deepLinkUrl}, 0)
+        <!--
+          created_at 을 컬럼 기본값에 맡기지 않고 명시한다. 기본값에 맡기면
+          useGeneratedKeys 가 id 만 되받아 와 반환 객체의 createdAt 이 null 로 남고,
+          그 객체가 그대로 SSE 로 나간다 (프론트가 1970-01-01 로 묶는다).
+        -->
+        INSERT INTO tbl_notification (user_id, type, title, content, deep_link_url, is_read, created_at)
+        VALUES (#{userId}, #{type}, #{title}, #{content}, #{deepLinkUrl}, 0, #{createdAt})
     </insert>
 
     <select id="findPage" resultType="com.kb.tangtang.notification.domain.Notification">
