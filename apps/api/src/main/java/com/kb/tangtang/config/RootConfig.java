@@ -15,6 +15,10 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.*;
 import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -32,6 +36,8 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableTransactionManagement
+@EnableScheduling   // NotificationDlqRetryScheduler (NT_01_04)
+@EnableAsync        // AccountEventListener 의 @Async
 /*
  * 환경별 설정은 한 번에 하나만 로드한다.
  *   로컬 : APP_ENV 없음 → 기본값 local → application-local.properties (git 제외, 개인 시크릿)
@@ -106,6 +112,42 @@ public class RootConfig {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    /**
+     * @EnableScheduling 전용 스케줄러.
+     *
+     * ⚠ 이 빈이 없으면 스프링이 **단일 스레드** 스케줄러로 폴백한다. SseHeartbeat.ping(15초)과
+     *   NotificationDlqRetryScheduler.retryDue(60초)가 그 한 스레드를 나눠 쓰게 되고,
+     *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
+     *   하트비트가 막으려던 바로 그 상황이다.
+     */
+    @Bean
+    public ThreadPoolTaskScheduler taskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(3);
+        scheduler.setThreadNamePrefix("tt-sched-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(true);
+        scheduler.setAwaitTerminationSeconds(10);
+        return scheduler;
+    }
+
+    /**
+     * @EnableAsync 전용 실행기. 빈 이름이 반드시 taskExecutor 여야 @Async 가 집어 간다.
+     *
+     * ⚠ 이 빈이 없으면 SimpleAsyncTaskExecutor 로 폴백해 **이벤트 하나당 새 스레드**를 무제한 만든다.
+     *   큐 용량을 두어 상한을 건다.
+     */
+    @Bean
+    public ThreadPoolTaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("tt-async-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        return executor;
     }
 
     /**
