@@ -95,3 +95,18 @@ export function groupTransactionsByDate(transactions) {
             netAmount: items.reduce((sum, item) => sum + item.amount, 0),
         }));
 }
+
+export function filterTransactionsByTab(transactions, tab) {
+    if (tab === 'ALL') {
+        return transactions;
+    }
+    return transactions.filter((tx) => tx.classification === tab);
+}
+
+export function resolveAnchorDate(groupedTransactions, requestedDate) {
+    if (!requestedDate) {
+        return null;
+    }
+    const exists = groupedTransactions.some((group) => group.date === requestedDate);
+    return exists ? requestedDate : null;
+}
