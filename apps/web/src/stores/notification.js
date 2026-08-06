@@ -190,8 +190,16 @@ export const useNotificationStore = defineStore('notification', () => {
         controller = null;
         stopPolling();
         streamState.value = 'IDLE';
-        /* 사용자 단위 데이터를 비운다. Pinia 스토어는 싱글턴이라
-           그대로 두면 다음 로그인 사용자에게 이전 사용자의 알림이 그대로 보인다 */
+    }
+
+    /**
+     * 로그아웃 등 세션이 끝날 때 호출한다. 연결을 끊고 사용자 단위 데이터까지 비운다.
+     *
+     * ⚠ disconnect() 와 나눠 둔 이유: connect() 가 시작할 때 disconnect() 를 부르므로,
+     *   여기에 데이터 비우기를 넣으면 스트림이 끊겼다 재연결될 때마다 목록이 지워진다.
+     */
+    function clearSession() {
+        disconnect();
         items.value = [];
         nextCursor.value = null;
         unreadCount.value = 0;
@@ -213,5 +221,6 @@ export const useNotificationStore = defineStore('notification', () => {
         markAllRead,
         connect,
         disconnect,
+        clearSession,
     };
 });

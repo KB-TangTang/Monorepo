@@ -21,7 +21,7 @@ watch(
             notification.refreshBadge();
             notification.connect();
         } else {
-            notification.disconnect();
+            notification.clearSession();
         }
     },
     { immediate: true },
