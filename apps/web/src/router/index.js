@@ -114,6 +114,12 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupJoinView.vue'),
         meta: { title: '그룹 참여', hideTabBar: true },
     },
+    {
+        path: '/group-challenges/list',
+        name: 'groupChallengeList',
+        component: () => import('@/views/challenge/group/GroupChallengeListView.vue'),
+        meta: { title: '재판 전체보기' },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',

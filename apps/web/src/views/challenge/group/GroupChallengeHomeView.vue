@@ -105,8 +105,7 @@ function onEventAction(type) {
 }
 
 function goToAllChallenges() {
-    // TODO: 전체보기 라우트 연결
-    console.log('go to all challenges');
+    router.push({ name: 'groupChallengeList' });
 }
 
 function progressPercent(challenge) {
