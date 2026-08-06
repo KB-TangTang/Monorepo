@@ -35,3 +35,62 @@ export const MOCK_INVITE_CODES = {
     '22222': { groupId: 'mock-group-1', expired: false },
     '11111': { groupId: 'mock-group-2', expired: true },
 };
+
+/* ── 그룹 챌린지 홈 · 재판 위젯 목데이터 ─────────────────── */
+
+/**
+ * 투표 대기 (판결 참여) 요약 — 카드 1장에 건수만 표시.
+ * 투표하기를 누르면 개별 목록 화면으로 이동할 예정.
+ */
+export const MOCK_TRIAL_SUMMARY = {
+    count: 2,
+    /** 대표로 보여줄 최근 건 정보 */
+    latestDefendantName: '지판',
+    totalVoters: 5,
+    votedCount: 3,
+    votes: [
+        { verdict: 'GUILTY' },
+        { verdict: 'GUILTY' },
+        { verdict: 'NOT_GUILTY' },
+    ],
+    deadlineLabel: '02:14:03',
+};
+
+/**
+ * 기소 (변론 요청) 요약 — 카드 1장에 건수만 표시.
+ */
+export const MOCK_INDICTMENT_SUMMARY = {
+    count: 1,
+    challengeName: '배달 소비 줄이기',
+    chargeAmount: 6800,
+    daysLeft: 1,
+};
+
+/** 진행 중인 챌린지 목데이터 */
+export const MOCK_ACTIVE_CHALLENGES = [
+    {
+        id: 'active-1',
+        name: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        currentDay: 6,
+        totalDays: 14,
+        dailyLimit: 15000,
+        lives: 3,
+        maxLives: 5,
+        memberCount: 5,
+        pendingTrials: 1,
+    },
+    {
+        id: 'active-2',
+        name: '택시 대신 지하철',
+        evalType: 'DAILY',
+        currentDay: 9,
+        totalDays: 21,
+        dailyLimit: 8000,
+        lives: 4,
+        maxLives: 5,
+        memberCount: 4,
+        pendingTrials: 0,
+        hasObjection: true,
+    },
+];
