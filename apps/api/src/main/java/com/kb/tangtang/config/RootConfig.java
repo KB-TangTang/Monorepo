@@ -15,6 +15,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.*;
 import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -32,6 +34,8 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableTransactionManagement
+@EnableScheduling   // NotificationDlqRetryScheduler (NT_01_04)
+@EnableAsync        // AccountEventListener 의 @Async
 /*
  * 환경별 설정은 한 번에 하나만 로드한다.
  *   로컬 : APP_ENV 없음 → 기본값 local → application-local.properties (git 제외, 개인 시크릿)
