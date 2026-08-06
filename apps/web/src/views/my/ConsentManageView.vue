@@ -17,13 +17,20 @@ import { canWithdraw, consentStatusText } from '@/utils/consent';
 /*
  * 금융정보 수집 동의(FINANCIAL_DATA)를 철회하면 백엔드 ConsentWithdrawnListener 가
  * 연결된 계좌를 전부 해제한다(THIRD_PARTY 도 함께 철회된다, ConsentService.withdraw 참고).
+ * 이 항목은 ConsentScope.SIGNUP 의 필수 항목이기도 해서, 철회하면 서버가
+ * needsConsent:true 를 돌려주고(ConsentService.needsConsent) auth 스토어가 그 값을 반영,
+ * router 가드가 다음 이동부터 전부 /consent 로 돌려보낸다(router/index.js beforeEach 참고).
+ * 즉 이 화면에 남아 있는 동안만 잠잠하고, 탭을 하나라도 누르면 서비스 동의 화면에 갇힌다.
  * 그래서 이 항목만 확인 시트에 별도 경고 문구를 둔다.
  */
 const FINANCIAL_DATA = 'FINANCIAL_DATA';
 
 const store = useConsentStore();
-const { myConsents, isLoading } = storeToRefs(store);
+const { myConsents } = storeToRefs(store);
 
+// 스토어의 isLoading 은 철회 후 백그라운드 재조회에도 켜진다(store.withdraw 내부 loadMyConsents).
+// 그걸 그대로 쓰면 철회 직후 카드 목록이 통째로 StateLoading 으로 바뀐다 — 최초 진입 로딩만 이 화면 전용으로 갖는다.
+const loading = ref(false);
 const errorMessage = ref('');
 const sheetOpen = ref(false);
 const target = ref(null);
@@ -31,11 +38,14 @@ const withdrawing = ref(false);
 const actionError = ref('');
 
 async function load() {
+    loading.value = true;
     errorMessage.value = '';
     try {
         await store.loadMyConsents();
     } catch (err) {
         errorMessage.value = err.message ?? '동의 정보를 불러오지 못했어요.';
+    } finally {
+        loading.value = false;
     }
 }
 
@@ -59,6 +69,11 @@ async function confirmWithdraw() {
     try {
         // withdraw() 는 성공 후 store 가 목록을 스스로 다시 불러온다 — 여기서 다시 부르지 않는다.
         await store.withdraw(target.value.type);
+        // 재조회(store 내부)가 실패해도 서버 철회 자체는 이미 끝났다 — 토글이 계속 켜진 채로 보이면
+        // 사용자가 다시 눌렀을 때 "철회할 동의 내역이 없습니다" 를 받는다. target 은 store.myConsents
+        // 배열 안의 그 객체 참조라 여기서만 관리하는 별도 상태가 아니다. 재조회가 성공하면
+        // loadMyConsents 가 배열 자체를 새로 받아온 데이터로 교체하므로 같은 값으로 수렴한다.
+        target.value.agreed = false;
         sheetOpen.value = false;
     } catch (err) {
         // 목록은 그대로 두고 시트에만 실패 사유를 보여준다. 토글 하나 실패했다고
@@ -82,7 +97,7 @@ function closeSheet() {
             <p class="consent-manage__lead">현재 동의 상태를 확인하고 철회할 수 있어요.</p>
         </header>
 
-        <StateLoading v-if="isLoading" message="동의 정보를 불러오는 중" />
+        <StateLoading v-if="loading" message="동의 정보를 불러오는 중" />
         <StateError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
         <template v-else>
             <article v-for="item in myConsents" :key="item.type" class="consent-manage__card">
@@ -124,7 +139,8 @@ function closeSheet() {
                 <p class="consent-manage__sheet-text">
                     {{ target?.label }} 동의를 철회하면 추가 수집과 동기화가 즉시 중단돼요.
                     <strong v-if="target?.type === FINANCIAL_DATA">
-                        연결된 계좌가 모두 해제되고, CODEF 제3자 제공 동의도 함께 철회돼요.
+                        연결된 계좌가 모두 해제되고, CODEF 제3자 제공 동의도 함께 철회돼요. 이
+                        동의는 필수 항목이라 다시 동의하기 전까지 서비스를 이용할 수 없어요.
                     </strong>
                 </p>
                 <p v-if="actionError" class="consent-manage__sheet-error">{{ actionError }}</p>
