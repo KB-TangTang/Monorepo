@@ -80,8 +80,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # 목서버는 기동만 확인하고 넘어간다(service_healthy 아님).
+      # 목서버는 계좌 연동에만 쓰이는데, healthy 를 요구하면 목서버가 깨졌을 때
+      # api 컨테이너가 아예 시작하지 못해 서비스 전체가 내려간다.
+      # 2026-08-06 실제로 목서버 매퍼 XML 오류 하나로 전면 502 가 났다.
       mock:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
