@@ -97,6 +97,12 @@ const routes = [
         meta: { title: '그룹 챌린지' },
     },
     {
+        path: '/group-challenges/verdict',
+        name: 'groupChallengeVerdict',
+        component: () => import('@/views/challenge/group/GroupChallengeVerdictView.vue'),
+        meta: { title: '그룹 챌린지 동률 판결', hideTabBar: true },
+    },
+    {
         path: '/group-challenges/create',
         name: 'groupChallengeCreate',
         component: () => import('@/views/challenge/group/GroupCreateView.vue'),
