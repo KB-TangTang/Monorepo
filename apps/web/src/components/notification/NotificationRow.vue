@@ -96,7 +96,12 @@ const linkable = computed(() => resolveDeepLink(props.notification.deepLinkUrl) 
     width: 44px;
     height: 44px;
     border-radius: var(--tt-radius-md);
-    background: var(--tt-surface-strong);
+    /*
+     * ⚠ --tt-surface-strong 을 쓰지 않는다. 이름과 달리 --tt-ink(#232842) 즉 **어두운 잉크색**이고,
+     *   tokens.css 에서 "고정지출 화면 하위 호환, 제거 예정" 으로 표시돼 있다.
+     *   여기에 --tt-text-muted 글리프를 얹으면 어두운 타일에 회색 글리프가 되어 거의 안 보인다.
+     */
+    background: var(--tt-bg-fill);
     color: var(--tt-text-muted);
 }
 
