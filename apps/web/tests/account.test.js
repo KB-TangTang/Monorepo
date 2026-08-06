@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    LINK_EXIT_ROUTE,
     LINK_STEPS,
     calcLinkProgress,
     canEnterLinkStep,
@@ -14,6 +15,7 @@ import {
     linkStepPosition,
     needsReconnect,
     nextLinkStep,
+    prevLinkDestination,
     prevLinkStep,
     resolveAuthView,
     resolveInstitutionTone,
@@ -254,4 +256,25 @@ test('생년월일은 숫자 6자리로만 받는다', () => {
     assert.equal(formatBirthDate('9901019999'), '990101');
     assert.equal(formatBirthDate('99a1b1'), '9911');
     assert.equal(formatBirthDate(null), '');
+});
+
+test('첫 단계의 뒤로가기는 히스토리 대신 연결 계좌 관리로 나간다', () => {
+    // router.back() 을 쓰면 restartFlow 로 되돌아온 경우 히스토리 뒤의 auth/progress/select 로 가는데,
+    // 그 화면들은 가드가 institutions 로 되돌려보내 화면이 그대로인 것처럼 보인다.
+    assert.deepEqual(prevLinkDestination('institutions'), {
+        type: 'route',
+        name: LINK_EXIT_ROUTE,
+    });
+    assert.equal(LINK_EXIT_ROUTE, 'connectedAccounts');
+});
+
+test('두 번째 단계부터는 이전 단계로 간다', () => {
+    assert.deepEqual(prevLinkDestination('auth'), { type: 'step', step: 'institutions' });
+    assert.deepEqual(prevLinkDestination('progress'), { type: 'step', step: 'auth' });
+    assert.deepEqual(prevLinkDestination('select'), { type: 'step', step: 'progress' });
+    assert.deepEqual(prevLinkDestination('done'), { type: 'step', step: 'select' });
+});
+
+test('모르는 단계면 플로우 밖으로 내보낸다', () => {
+    assert.deepEqual(prevLinkDestination('알수없음'), { type: 'route', name: LINK_EXIT_ROUTE });
 });

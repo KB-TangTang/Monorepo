@@ -20,7 +20,7 @@ import {
     LINK_STEP_ROUTES,
     calcLinkProgress,
     nextLinkStep,
-    prevLinkStep,
+    prevLinkDestination,
     resolveAuthView,
 } from '@/utils/account';
 
@@ -112,12 +112,17 @@ export const useAccountStore = defineStore('account', () => {
     }
 
     function goPrevStep(current) {
-        const step = prevLinkStep(current);
-        if (step) {
-            goStep(step);
-        } else {
-            router.back();
+        const target = prevLinkDestination(current);
+        if (target.type === 'step') {
+            goStep(target.step);
+            return;
         }
+        /*
+         * 첫 단계에서는 플로우 밖으로 나간다. router.back() 은 쓰지 않는다 —
+         * 이유는 utils/account.js 의 prevLinkDestination 주석 참고.
+         * replace 로 나가야 나간 뒤 다시 뒤로가기를 눌렀을 때 이 화면으로 되돌아오지 않는다.
+         */
+        router.replace({ name: target.name });
     }
 
     async function run(task) {
