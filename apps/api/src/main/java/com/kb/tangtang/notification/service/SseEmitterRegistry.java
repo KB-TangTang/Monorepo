@@ -24,7 +24,14 @@ public class SseEmitterRegistry {
 
     public SseEmitter register(long userId) {
         SseEmitter emitter = new SseEmitter(TIMEOUT_MS);
-        emitters.computeIfAbsent(userId, key -> new CopyOnWriteArrayList<>()).add(emitter);
+        // compute 로 list 생성/조회와 emitter 추가를 원자적으로 처리한다.
+        // register 와 remove 가 동시에 실행되면 새 emitter 가 빠지는 레이스 조건을 방지한다.
+        emitters.compute(userId, (key, list) -> {
+            CopyOnWriteArrayList<SseEmitter> target = (list == null) ? new CopyOnWriteArrayList<>() : list;
+            target.add(emitter);
+            return target;
+        });
+        // 콜백은 compute 블록 밖에서 등록해 deadlock 을 방지한다
         emitter.onCompletion(() -> remove(userId, emitter));
         emitter.onTimeout(() -> remove(userId, emitter));
         emitter.onError(error -> remove(userId, emitter));
@@ -37,8 +44,10 @@ public class SseEmitterRegistry {
     }
 
     public void remove(long userId, SseEmitter emitter) {
-        // computeIfPresent 로 list 제거를 원자적으로 처리해 다른 스레드의 register 와 경합하지 않게 한다.
-        // 예: remove 와 register 가 동시에 실행되면 새 emitter 가 삭제되는 레이스 조건을 방지
+        // computeIfPresent 로 list 제거를 원자적으로 처리한다.
+        // register() 의 compute() 와 쌍을 이루어 양방향 레이스를 방지한다:
+        // - register 의 compute 블록 안에서 emitter 추가, remove 의 computeIfPresent 안에서 제거
+        // 둘 중 하나라도 원자성을 잃으면 orphaned 연결이 생긴다
         emitters.computeIfPresent(userId, (key, list) -> {
             list.remove(emitter);
             return list.isEmpty() ? null : list;
