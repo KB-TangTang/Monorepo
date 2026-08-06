@@ -25,6 +25,7 @@ import {
     filterTransactionsByTab,
     groupTransactionsByDate,
     resolveAnchorDate,
+    resolveDefaultLedgerPeriod,
     resolveLedgerState,
 } from '@/utils/ledger';
 
@@ -179,6 +180,9 @@ function openReport() {
 onMounted(async () => {
     try {
         months.value = await fetchLedgerMonths();
+        if (period.value && !months.value.some((m) => m.value === period.value)) {
+            period.value = resolveDefaultLedgerPeriod(months.value);
+        }
         if (!period.value) {
             errorMessage.value = '조회할 월 정보가 없습니다.';
             loading.value = false;

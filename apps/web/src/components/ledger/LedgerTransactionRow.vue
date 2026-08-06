@@ -1,7 +1,7 @@
 <!--
   용도: 거래내역 목록의 한 행. 카테고리 아이콘 배지 + 가맹점명 + 카테고리·결제수단 + 금액.
   탭하면 카테고리 선택 팝업을 열도록 click 이벤트를 emit 한다.
-  언제 쓰는지: LedgerView 의 날짜별 그룹 안에서 반복 렌더한다.
+  언제 쓰는지: LedgerView, LedgerMonthTransactionsView 의 날짜별 그룹 안에서 반복 렌더한다.
 -->
 <script setup>
 import CategoryIcon from '@/components/common/CategoryIcon.vue';

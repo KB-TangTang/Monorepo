@@ -2,7 +2,7 @@
   용도: 거래내역 카테고리를 재분류하는 바텀시트. 지출은 대분류 아이콘 그리드 → 소분류 아코디언,
   수입은 소분류 없는 단일 그리드로 보여준다. 거래 방향(수입/지출)은 amount 부호로 정해지며
   사용자가 바꿀 수 없다(은행 데이터와 모순 방지).
-  언제 쓰는지: LedgerView 한 곳에서만 렌더한다.
+  언제 쓰는지: LedgerView, LedgerMonthTransactionsView 두 화면에서 렌더한다.
 -->
 <script setup>
 import { computed, ref, watch } from 'vue';

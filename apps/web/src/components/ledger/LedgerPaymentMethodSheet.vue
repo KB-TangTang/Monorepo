@@ -1,6 +1,6 @@
 <!--
   용도: 결제수단으로 거래내역을 좁히는 바텀시트. "전체 수단" + 이번 달에 실제로 쓰인 수단만 보여준다.
-  언제 쓰는지: LedgerView 한 곳에서만 렌더한다.
+  언제 쓰는지: LedgerView, LedgerMonthTransactionsView 두 화면에서 렌더한다.
 -->
 <script setup>
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';

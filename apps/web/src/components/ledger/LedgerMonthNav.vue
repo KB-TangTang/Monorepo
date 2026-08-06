@@ -1,6 +1,6 @@
 <!--
   용도: 조회 월 이동(‹ N년 M월 ›) + 결제수단 필터 진입 버튼.
-  언제 쓰는지: LedgerView 한 곳에서만 렌더한다.
+  언제 쓰는지: LedgerView, LedgerMonthTransactionsView 두 화면에서 렌더한다.
 -->
 <script setup>
 import { formatMonthLabel } from '@/utils/ledger';
