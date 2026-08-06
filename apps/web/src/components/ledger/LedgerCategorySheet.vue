@@ -7,12 +7,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
+import BaseButton from '@/components/common/BaseButton.vue';
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/fixtures/category';
 import {
     TONES,
     chunkCategories,
-    findExpenseParentByChildName,
+    findExpenseParentByName,
     resolveCategoryDirection,
 } from '@/utils/category';
 import { formatDayLabel, formatWon } from '@/utils/ledger';
@@ -26,6 +27,8 @@ const emit = defineEmits(['update:modelValue', 'select']);
 
 const expandedParentId = ref('');
 const applyToMerchant = ref(false);
+/* 탭으로 고른(아직 확정 전) 카테고리. '변경하기'를 눌러야 select 이벤트로 나간다. */
+const pendingCategoryName = ref('');
 
 const direction = computed(() =>
     props.transaction ? resolveCategoryDirection(props.transaction.amount) : 'expense',
@@ -36,7 +39,7 @@ const rows = computed(() => chunkCategories(categories.value, 4));
 
 const currentExpenseParent = computed(() =>
     props.transaction && isExpense.value
-        ? findExpenseParentByChildName(props.transaction.category)
+        ? findExpenseParentByName(props.transaction.category)
         : null,
 );
 
@@ -49,6 +52,7 @@ watch(
     (open) => {
         if (open) {
             expandedParentId.value = currentExpenseParent.value?.id ?? '';
+            pendingCategoryName.value = props.transaction?.category ?? '';
             applyToMerchant.value = false;
         }
     },
@@ -58,13 +62,12 @@ function toneAt(rowIndex, itemIndex) {
     return TONES[(rowIndex * 4 + itemIndex) % TONES.length];
 }
 
+/* 지출은 지금 펼쳐진 대분류를, 수입은 지금 고른 항목을 파란 테두리로 보여준다.
+ * 탭할 때마다 이 값이 바뀌므로, 마지막에 확정된 값이 아니라 '지금 누르고 있는 곳'을 따라간다. */
 function isActiveTile(item) {
-    if (!props.transaction) {
-        return false;
-    }
     return isExpense.value
-        ? currentExpenseParent.value?.id === item.id
-        : item.name === props.transaction.category;
+        ? expandedParentId.value === item.id
+        : pendingCategoryName.value === item.name;
 }
 
 function toggleParent(parent) {
@@ -72,24 +75,27 @@ function toggleParent(parent) {
 }
 
 function handleTileClick(item) {
+    pendingCategoryName.value = item.name;
     if (isExpense.value) {
         toggleParent(item);
-    } else {
-        chooseCategory(item.name);
     }
 }
 
 function chooseExpenseChild(child) {
-    chooseCategory(child.name);
+    pendingCategoryName.value = child.name;
 }
 
-function chooseCategory(categoryName) {
+function closeSheet() {
+    emit('update:modelValue', false);
+}
+
+function confirmSelection() {
     if (!props.transaction) {
         return;
     }
     emit('select', {
         transactionId: props.transaction.id,
-        categoryName,
+        categoryName: pendingCategoryName.value,
         applyToMerchant: applyToMerchant.value,
     });
     emit('update:modelValue', false);
@@ -102,6 +108,20 @@ function chooseCategory(categoryName) {
         title="카테고리 선택"
         @update:model-value="$emit('update:modelValue', $event)"
     >
+        <template #header>
+            <div class="category-sheet__header">
+                <h2 class="category-sheet__title">카테고리 선택</h2>
+                <button
+                    type="button"
+                    class="category-sheet__close"
+                    aria-label="닫기"
+                    @click="closeSheet"
+                >
+                    ✕
+                </button>
+            </div>
+        </template>
+
         <div v-if="transaction" class="category-sheet__summary">
             <p class="category-sheet__merchant">{{ transaction.merchant }}</p>
             <p class="category-sheet__meta">
@@ -158,9 +178,9 @@ function chooseCategory(categoryName) {
                         type="button"
                         class="category-sheet__chip"
                         :class="{
-                            'category-sheet__chip--active': child.name === transaction?.category,
+                            'category-sheet__chip--active': child.name === pendingCategoryName,
                         }"
-                        :aria-pressed="child.name === transaction?.category"
+                        :aria-pressed="child.name === pendingCategoryName"
                         @click="chooseExpenseChild(child)"
                     >
                         {{ child.name }}
@@ -168,10 +188,48 @@ function chooseCategory(categoryName) {
                 </div>
             </template>
         </div>
+
+        <template #footer>
+            <BaseButton variant="primary" block @click="confirmSelection">변경하기</BaseButton>
+        </template>
     </BaseBottomSheet>
 </template>
 
 <style scoped>
+.category-sheet__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--tt-space-3);
+}
+
+.category-sheet__title {
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-bold);
+    line-height: var(--tt-lh-snug);
+}
+
+.category-sheet__close {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    cursor: pointer;
+    background: var(--tt-bg-subtle);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-full);
+}
+
+.category-sheet__close:hover {
+    color: var(--tt-text);
+    background: var(--tt-border);
+}
+
 .category-sheet__summary {
     padding-bottom: var(--tt-space-4);
     margin-bottom: var(--tt-space-4);

@@ -5,6 +5,7 @@ import {
     TONES,
     chunkCategories,
     findExpenseParentByChildName,
+    findExpenseParentByName,
     resolveCategoryDirection,
     resolveCategoryIcon,
     resolveCategoryTone,
@@ -63,9 +64,23 @@ test('resolveCategoryDirection 은 0원을 지출로 취급한다', () => {
     assert.equal(resolveCategoryDirection(0), 'expense');
 });
 
+test('findExpenseParentByName 은 대분류 이름 자체로도 대분류를 찾는다', () => {
+    const parent = findExpenseParentByName('쇼핑');
+    assert.equal(parent.id, 'shopping');
+});
+
+test('findExpenseParentByName 은 소분류 이름으로도 대분류를 찾는다', () => {
+    const parent = findExpenseParentByName('카페/간식');
+    assert.equal(parent.id, 'food');
+});
+
 test('resolveCategoryTone 은 지출 소분류의 대분류 인덱스로 톤을 정한다', () => {
     assert.equal(resolveCategoryTone('음식점/외식'), TONES[0]);
     assert.equal(resolveCategoryTone('온라인쇼핑'), TONES[1]);
+});
+
+test('resolveCategoryTone 은 대분류 이름 자체도 해당 대분류 톤으로 처리한다', () => {
+    assert.equal(resolveCategoryTone('쇼핑'), TONES[1]);
 });
 
 test('resolveCategoryTone 은 수입 카테고리 인덱스로 톤을 정한다', () => {
@@ -79,6 +94,10 @@ test('resolveCategoryTone 은 못 찾으면 muted 를 반환한다', () => {
 
 test('resolveCategoryIcon 은 지출 소분류의 대분류 아이콘을 반환한다', () => {
     assert.equal(resolveCategoryIcon('택시/모빌리티'), 'Truck');
+});
+
+test('resolveCategoryIcon 은 대분류 이름 자체도 해당 대분류 아이콘으로 처리한다', () => {
+    assert.equal(resolveCategoryIcon('쇼핑'), 'ShoppingBag');
 });
 
 test('resolveCategoryIcon 은 수입 카테고리 아이콘을 반환한다', () => {
