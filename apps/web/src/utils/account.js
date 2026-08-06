@@ -17,7 +17,6 @@ export const INSTITUTION_GROUPS = [
     { key: 'banks', label: '은행' },
     { key: 'cards', label: '카드' },
     { key: 'securities', label: '증권' },
-    { key: 'insurances', label: '보험' },
 ];
 
 /** 계좌 종류. 목서버가 은행 자산을 이 두 값으로 구분한다. */
@@ -406,9 +405,6 @@ export function resolveInstitutionTone(code) {
     }
     if (prefix === '02') {
         return 'green'; // 증권
-    }
-    if (prefix === '05') {
-        return 'rose'; // 보험
     }
     return 'gold';
 }

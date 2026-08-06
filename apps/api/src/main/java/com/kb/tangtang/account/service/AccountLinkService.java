@@ -97,7 +97,6 @@ public class AccountLinkService {
                 .banks(onlySupported(catalog.banks(connected), supported))
                 .cards(onlySupported(catalog.cards(connected), supported))
                 .securities(onlySupported(catalog.securities(connected), supported))
-                .insurances(onlySupported(catalog.insurances(connected), supported))
                 .build();
     }
 

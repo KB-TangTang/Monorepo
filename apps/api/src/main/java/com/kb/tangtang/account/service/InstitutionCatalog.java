@@ -22,7 +22,6 @@ public class InstitutionCatalog {
     private static final Map<String, String[]> BANKS = new LinkedHashMap<>();
     private static final Map<String, String[]> CARDS = new LinkedHashMap<>();
     private static final Map<String, String[]> SECURITIES = new LinkedHashMap<>();
-    private static final Map<String, String[]> INSURANCES = new LinkedHashMap<>();
 
     static {
         BANKS.put("0004", new String[]{"KB국민은행", "KB"});
@@ -46,10 +45,6 @@ public class InstitutionCatalog {
         SECURITIES.put("0243", new String[]{"한국투자증권", "한투"});
         SECURITIES.put("0247", new String[]{"NH투자증권", "NH"});
         SECURITIES.put("0261", new String[]{"교보증권", "교보"});
-
-        INSURANCES.put("0501", new String[]{"삼성생명", "삼성"});
-        INSURANCES.put("0502", new String[]{"한화생명", "한화"});
-        INSURANCES.put("0511", new String[]{"DB손해보험", "DB"});
     }
 
     public List<InstitutionDto> banks(List<String> connectedCodes) {
@@ -64,13 +59,9 @@ public class InstitutionCatalog {
         return build(SECURITIES, connectedCodes);
     }
 
-    public List<InstitutionDto> insurances(List<String> connectedCodes) {
-        return build(INSURANCES, connectedCodes);
-    }
-
     /** 기관명. 알 수 없는 코드는 코드 그대로 돌려준다(화면이 빈칸이 되지 않게). */
     public String nameOf(String code) {
-        for (Map<String, String[]> group : List.of(BANKS, CARDS, SECURITIES, INSURANCES)) {
+        for (Map<String, String[]> group : List.of(BANKS, CARDS, SECURITIES)) {
             String[] found = group.get(code);
             if (found != null) {
                 return found[0];
@@ -80,7 +71,7 @@ public class InstitutionCatalog {
     }
 
     public String shortLabelOf(String code) {
-        for (Map<String, String[]> group : List.of(BANKS, CARDS, SECURITIES, INSURANCES)) {
+        for (Map<String, String[]> group : List.of(BANKS, CARDS, SECURITIES)) {
             String[] found = group.get(code);
             if (found != null) {
                 return found[1];
