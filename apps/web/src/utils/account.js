@@ -92,6 +92,31 @@ export function prevLinkStep(current) {
     return LINK_STEPS[index - 1];
 }
 
+/**
+ * 첫 단계에서 플로우를 빠져나갈 때 갈 화면.
+ *
+ * 연결 계좌 관리는 이 플로우의 실질적인 출발지다 — `기관 추가`·`재연동` 모두 거기서 들어온다.
+ * 최초 온보딩(금융 동의 → institutions)으로 들어온 사용자에게도 유효한 착지점이다.
+ */
+export const LINK_EXIT_ROUTE = 'connectedAccounts';
+
+/**
+ * "뒤로"를 눌렀을 때 어디로 갈지 판정한다.
+ *
+ * ⚠ 첫 단계에서 `router.back()` 을 쓰면 안 된다.
+ * `restartFlow()` 로 1단계에 되돌아온 경우 히스토리 **뒤쪽에 auth/progress/select 가 남아 있는데**,
+ * 그 화면들은 `meta.linkStep` 가드가 붙어 있고 restartFlow 가 상태를 비워둔 터라
+ * `canEnterLinkStep` 이 false → 가드가 곧바로 institutions 로 되돌려보낸다.
+ * 결과적으로 뒤로가기를 눌러도 **화면이 그대로인 것처럼 보인다**(2026-08-06 실제 발생).
+ * 그래서 히스토리에 기대지 않고 나갈 곳을 명시한다.
+ *
+ * @returns {{type: 'step', step: string} | {type: 'route', name: string}}
+ */
+export function prevLinkDestination(current) {
+    const step = prevLinkStep(current);
+    return step ? { type: 'step', step } : { type: 'route', name: LINK_EXIT_ROUTE };
+}
+
 /** 진행 표시용. 1부터 센다. */
 export function linkStepPosition(current) {
     const index = LINK_STEPS.indexOf(current);
