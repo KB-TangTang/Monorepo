@@ -8,6 +8,7 @@ import { onMounted, ref } from 'vue';
 import CatalogItem from '@/components/dev/CatalogItem.vue';
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
+import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
@@ -31,6 +32,7 @@ const SECTIONS = [
     { id: 'tabbar', label: 'TheTabBar' },
     { id: 'card', label: 'BaseCard' },
     { id: 'button', label: 'BaseButton' },
+    { id: 'back-header', label: 'BaseBackHeader' },
     { id: 'input', label: 'BaseInput' },
     { id: 'modal', label: 'BaseModal' },
     { id: 'sheet', label: 'BaseBottomSheet' },
@@ -200,6 +202,7 @@ const CODE = {
     button: `<BaseButton variant="primary" size="md" :loading="isSaving" block @click="save">
     기소하기
 </BaseButton>`,
+    backHeader: `<BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />`,
     input: `<BaseInput v-model="plea" label="변론" :maxlength="200" multiline
     hint="1회만 제출할 수 있습니다" />`,
     modal: `<BaseModal v-model="isOpen" title="정말 해지할까요?">
@@ -391,6 +394,17 @@ const CODE = {
                         기소하기
                     </BaseButton>
                 </div>
+            </CatalogItem>
+        </section>
+
+        <section id="back-header" class="catalog__section">
+            <h2 class="catalog__h2">BaseBackHeader</h2>
+            <CatalogItem
+                name="BaseBackHeader"
+                purpose="뒤로가기 + 제목만 담당하는 상세화면 상단 바. 클릭하면 router.back() 이 실행된다."
+                :code="CODE.backHeader"
+            >
+                <BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />
             </CatalogItem>
         </section>
 
