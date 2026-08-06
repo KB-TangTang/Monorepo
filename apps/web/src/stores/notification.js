@@ -25,7 +25,13 @@ export const useNotificationStore = defineStore('notification', () => {
     const nextCursor = ref(null);
     const unreadCount = ref(0);
     const loading = ref(false);
+    /*
+     * error 는 **목록을 못 불러온 것**만 담는다. 화면이 이걸로 통째로 에러 상태가 되기 때문이다.
+     * 읽음 처리 같은 액션 실패는 actionError 에 담는다 — 목록은 그대로 두고 인라인으로만 알린다.
+     * (한때 둘을 같이 썼더니 읽음 처리 한 번 실패에 목록 전체가 에러 화면으로 바뀌었다)
+     */
     const error = ref('');
+    const actionError = ref('');
     const streamState = ref('IDLE'); // IDLE | CONNECTING | LIVE | POLLING
 
     const hasMore = computed(() => nextCursor.value !== null);
@@ -38,6 +44,7 @@ export const useNotificationStore = defineStore('notification', () => {
     async function load() {
         loading.value = true;
         error.value = '';
+        actionError.value = '';
         try {
             const data = await fetchNotifications(null, 20);
             items.value = data.items;
@@ -83,12 +90,13 @@ export const useNotificationStore = defineStore('notification', () => {
             return;
         }
         target.isRead = true; // 낙관적 업데이트
+        actionError.value = '';
         try {
             const data = await markNotificationRead(id);
             unreadCount.value = data.unreadCount;
         } catch (err) {
             target.isRead = false; // 롤백
-            error.value = err.message ?? '읽음 처리에 실패했어요.';
+            actionError.value = err.message ?? '읽음 처리에 실패했어요.';
         }
     }
 
@@ -97,6 +105,7 @@ export const useNotificationStore = defineStore('notification', () => {
         items.value.forEach((item) => {
             item.isRead = true;
         });
+        actionError.value = '';
         try {
             const data = await markAllNotificationsRead();
             unreadCount.value = data.unreadCount;
@@ -104,7 +113,7 @@ export const useNotificationStore = defineStore('notification', () => {
             items.value.forEach((item, index) => {
                 item.isRead = before[index];
             });
-            error.value = err.message ?? '읽음 처리에 실패했어요.';
+            actionError.value = err.message ?? '읽음 처리에 실패했어요.';
         }
     }
 
@@ -204,6 +213,7 @@ export const useNotificationStore = defineStore('notification', () => {
         nextCursor.value = null;
         unreadCount.value = 0;
         error.value = '';
+        actionError.value = '';
     }
 
     return {
@@ -212,6 +222,7 @@ export const useNotificationStore = defineStore('notification', () => {
         unreadCount,
         loading,
         error,
+        actionError,
         streamState,
         hasMore,
         load,

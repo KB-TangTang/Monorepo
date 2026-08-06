@@ -16,7 +16,7 @@ import { groupByDay, resolveDeepLink } from '@/utils/notification';
 
 const router = useRouter();
 const store = useNotificationStore();
-const { items, unreadCount, loading, error, hasMore } = storeToRefs(store);
+const { items, unreadCount, loading, error, actionError, hasMore } = storeToRefs(store);
 
 const now = ref(new Date());
 const groups = computed(() => groupByDay(items.value, now.value));
@@ -51,6 +51,12 @@ async function open(notification) {
                 모두 읽음
             </button>
         </header>
+
+        <!--
+          읽음 처리 같은 액션 실패는 여기 인라인으로만 알린다.
+          목록을 StateError 로 덮으면 실패 한 번에 알림이 전부 사라진다.
+        -->
+        <p v-if="actionError" class="noti-list__action-error" role="alert">{{ actionError }}</p>
 
         <StateLoading v-if="loading && items.length === 0" message="알림을 불러오는 중" />
         <StateError v-else-if="error" :message="error" @retry="store.load()" />
@@ -121,6 +127,15 @@ async function open(notification) {
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
     cursor: pointer;
+}
+
+.noti-list__action-error {
+    padding: var(--tt-space-2) var(--tt-space-3);
+    border: 1px solid var(--tt-danger);
+    border-radius: var(--tt-radius-md);
+    background: var(--tt-bg);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-danger);
 }
 
 .noti-list__group {
