@@ -13,9 +13,6 @@ const props = defineProps({
 
 const changeCopy = computed(() => {
     const rate = props.summary.monthOverMonthRate;
-    if (rate === 0) {
-        return '지난달과 동일';
-    }
     return `지난달 ${rate > 0 ? '+' : ''}${rate}%`;
 });
 </script>
@@ -25,16 +22,16 @@ const changeCopy = computed(() => {
         <div class="ledger-summary__col">
             <p>{{ Number(summary.period.slice(5)) }}월 지출</p>
             <strong>{{ formatWon(summary.totalSpent) }}</strong>
-        </div>
-        <div class="ledger-summary__col">
-            <p>입금</p>
-            <strong>{{ formatWon(summary.totalDeposit) }}</strong>
             <BaseBadge
                 class="ledger-summary__change"
                 :variant="summary.monthOverMonthRate > 0 ? 'guilty' : 'innocent'"
             >
                 {{ changeCopy }}
             </BaseBadge>
+        </div>
+        <div class="ledger-summary__col">
+            <p>입금</p>
+            <strong>{{ formatWon(summary.totalDeposit) }}</strong>
         </div>
     </section>
 </template>
