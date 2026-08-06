@@ -1,13 +1,13 @@
 import { getLedgerMonths, getLedgerTransactions } from '@/fixtures/ledger';
 import { shiftPeriod } from '@/utils/ledger';
 
-function sumByDirection(transactions) {
+export function sumByDirection(transactions) {
     let totalSpent = 0;
     let totalDeposit = 0;
     for (const tx of transactions) {
-        if (tx.amount < 0) {
+        if (tx.classification === 'CONSUMPTION') {
             totalSpent += Math.abs(tx.amount);
-        } else {
+        } else if (tx.classification === 'INCOME') {
             totalDeposit += tx.amount;
         }
     }

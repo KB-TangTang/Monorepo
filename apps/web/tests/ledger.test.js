@@ -80,3 +80,23 @@ test('fixture 거래의 classification 은 amount 부호와 모순되지 않는�
         }
     }
 });
+
+import { sumByDirection } from '../src/api/ledger.js';
+
+test('sumByDirection: CONSUMPTION 만 지출로, INCOME 만 입금으로 합산한다', () => {
+    const result = sumByDirection([
+        { amount: -10000, classification: 'CONSUMPTION' },
+        { amount: -20000, classification: 'CONSUMPTION' },
+        { amount: 100000, classification: 'INCOME' },
+    ]);
+    assert.deepEqual(result, { totalSpent: 30000, totalDeposit: 100000 });
+});
+
+test('sumByDirection: TRANSFER 거래는 지출·입금 어느 합계에도 안 들어간다 (카드정산 중복집계 방지)', () => {
+    const result = sumByDirection([
+        { amount: -10000, classification: 'CONSUMPTION' },
+        { amount: -10000, classification: 'TRANSFER' },
+        { amount: 100000, classification: 'INCOME' },
+    ]);
+    assert.deepEqual(result, { totalSpent: 10000, totalDeposit: 100000 });
+});
