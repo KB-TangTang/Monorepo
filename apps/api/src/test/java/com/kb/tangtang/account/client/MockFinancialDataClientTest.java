@@ -129,6 +129,53 @@ class MockFinancialDataClientTest {
         server.verify();
     }
 
+    /*
+     * 목서버가 2026-08-06 v2 리팩토링에서 응답 필드명을 통째로 바꿨다.
+     *   bankCode → institutionCode · bankName → institutionName · accountName → productName
+     *   accountType(DEMAND_DEPOSIT/SAVINGS) → accountTypeCode('1001')
+     * 이걸 못 읽어 bankCode 가 null 이 되면 기관 필터가 전부 걸러내 "가져올 계좌가 없어요"가 뜬다.
+     * 위 filtersByOrganization 은 구버전 형태를 먹여서 계속 통과했다 — 그래서 못 잡았다.
+     */
+    @Test
+    @DisplayName("목서버 v2 필드명(institutionCode·productName)으로 와도 읽는다")
+    void readsV2FieldNames() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/accounts?scenarioKey=demo-normal-user"))
+                .andRespond(withSuccess("""
+                        {"code":"OK","message":"성공","data":{"accounts":[
+                          {"accountId":1,"institutionCode":"0004","institutionName":"KB Kookmin Bank",
+                           "accountTypeCode":"1001","accountStatusCode":"01",
+                           "productName":"KB Star Checking","accountNoMasked":"123456******7890",
+                           "currency":"KRW","balance":1244200,"availableAmount":1244200},
+                          {"accountId":2,"institutionCode":"0088","institutionName":"Shinhan Bank",
+                           "accountTypeCode":"1001","accountStatusCode":"01",
+                           "productName":"신한 주거래통장","accountNoMasked":"110-***-****23",
+                           "currency":"KRW","balance":500000,"availableAmount":500000}
+                        ]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialDataClient client = new MockFinancialDataClient(
+                restTemplate, BASE_URL, "demo-normal-user", fixed(0));
+
+        List<FinancialAccountDto> accounts = client.fetchAccounts("mock-1", "0004");
+
+        assertEquals(1, accounts.size());
+        FinancialAccountDto account = accounts.get(0);
+        assertEquals("0004", account.getOrganization());
+        assertEquals("KB Kookmin Bank", account.getBankName());
+        assertEquals("KB Star Checking", account.getAccountName());
+        assertEquals("123456******7890", account.getAccountNo());
+        /*
+         * v2 는 예적금을 deposit_account 로 분리했고 이 엔드포인트는 bank_account(입출금)만 준다.
+         * accountTypeCode('1001')는 우리 도메인 값이 아니므로 넘기지 않는다 —
+         * AccountLinkService 의 판정이 depositTypeCode 가 null 인 것을 보고 DEMAND_DEPOSIT 으로 정한다.
+         */
+        assertNull(account.getAccountType());
+        assertNull(account.getDepositTypeCode());
+        server.verify();
+    }
+
     @Test
     @DisplayName("목서버가 죽으면 기관 하나의 실패로 취급할 수 있게 업무 예외로 바꾼다")
     void serverDownBecomesBusinessException() {
