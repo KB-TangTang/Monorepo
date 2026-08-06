@@ -4,6 +4,7 @@ import com.kb.tangtang.notification.domain.NotificationDlqRow;
 import com.kb.tangtang.notification.mapper.NotificationDlqMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -29,10 +30,12 @@ public class NotificationDlqRetryScheduler {
     private final Clock clock;
 
     /*
-     * ⚠ 이 프로젝트에는 Clock 빈이 없다. AccountLinkService·LinkProgressStore 와 같은 방식으로
-     *   기본 생성자가 systemDefaultZone() 을 넘긴다. 이렇게 하지 않으면 스프링이 Clock 을
-     *   주입하지 못해 컨텍스트 기동이 실패한다 — 컴파일은 통과하므로 배포에서야 드러난다.
+     * ⚠ 생성자가 둘이다. **어느 쪽을 쓸지 명시해 둔다** —
+     *   인자 없는 생성자가 없는 상태에서 후보가 둘이면 Spring 이 고르지 못해 컨텍스트 로딩이 실패한다.
+     *   컴파일도 되고 단위 테스트도 생성자를 직접 부르므로 통과한다 — 배포에서만 드러난다.
+     *   LinkProgressStore·AccountLinkService 가 같은 이유로 @Autowired 를 달고 있다.
      */
+    @Autowired
     public NotificationDlqRetryScheduler(NotificationDlqMapper dlqMapper) {
         this(dlqMapper, Clock.systemDefaultZone());
     }
