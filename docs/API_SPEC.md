@@ -78,3 +78,24 @@
 | `CONSENT_TYPE_INVALID` | 400 | 알 수 없는 동의 항목·그룹이거나 해당 scope 밖의 항목 |
 | `CONSENT_NOT_WITHDRAWABLE` | 400 | `TERMS`·`PRIVACY` 철회 시도 (탈퇴에 해당) |
 | `NOT_FOUND` | 400 | 철회할 동의 내역 없음 |
+
+## 알림 (이슈 #58)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/notifications?cursor=&size=` | Bearer | `{ items:[{id,type,title,content,deepLinkUrl,isRead,createdAt}], nextCursor, unreadCount }` |
+| GET | `/api/notifications/unread-count` | Bearer | `{ unreadCount }` |
+| POST | `/api/notifications/{id}/read` | Bearer | `{ unreadCount }` |
+| POST | `/api/notifications/read-all` | Bearer | `{ unreadCount }` |
+| GET | `/api/notifications/stream` | Bearer | SSE. `connected` 1회 → 이후 `notification` 이벤트 |
+
+- `cursor` 없으면 최신부터. 있으면 `id < cursor` 부터 `id DESC`
+- `nextCursor` 는 마지막 항목의 `id`. 더 없으면 `null`
+- `size` 기본 20 · 최대 50 (초과는 50 으로 자른다)
+- SSE 는 스트림이라 `ApiResponse` 로 감싸지 않는다. 15초마다 `: ping` 주석 프레임을 보낸다
+
+### 알림 에러 코드
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `NOT_FOUND` | 400 | 없는 알림 또는 남의 알림 (구분해 알려주지 않는다) |
