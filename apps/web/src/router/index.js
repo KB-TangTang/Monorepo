@@ -89,6 +89,12 @@ const routes = [
         component: () => import('@/views/MyPageView.vue'),
         meta: { title: '마이' },
     },
+    {
+        path: '/my/consents',
+        name: 'myConsents',
+        component: () => import('@/views/my/ConsentManageView.vue'),
+        meta: { title: '동의 관리' },
+    },
     // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
     {
         path: '/group-challenges',

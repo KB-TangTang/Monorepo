@@ -4,6 +4,8 @@ import {
     buildAgreementState,
     buildAgreementStateFromConsents,
     canSubmit,
+    canWithdraw,
+    consentStatusText,
     isAllChecked,
     toAgreements,
     toggleAll,
@@ -112,4 +114,28 @@ test('카탈로그에는 있지만 기존 동의 행이 없는 항목은 미체�
     const state = buildAgreementStateFromConsents(ITEMS, myConsents);
     assert.equal(state.TERMS, true);
     assert.equal(state.MARKETING, false, '행이 없는 항목은 안전하게 미동의로 취급한다');
+});
+
+test('canWithdraw: 동의 중이면서 철회 가능한 항목만 끌 수 있다', () => {
+    assert.equal(canWithdraw({ agreed: true, withdrawable: true }), true);
+    assert.equal(
+        canWithdraw({ agreed: false, withdrawable: true }),
+        false,
+        '이미 철회된 항목은 잠근다',
+    );
+    assert.equal(canWithdraw({ agreed: true, withdrawable: false }), false, '필수 약관은 잠근다');
+    assert.equal(canWithdraw({ agreed: false, withdrawable: false }), false);
+});
+
+test('consentStatusText: 철회 상태면 철회함만 보여준다', () => {
+    assert.equal(consentStatusText({ agreed: false, termsVersion: 'v2.3' }), '철회함');
+});
+
+test('consentStatusText: 동의 상태면 버전·만료일을 이어 붙인다', () => {
+    assert.equal(consentStatusText({ agreed: true }), '동의함');
+    assert.equal(consentStatusText({ agreed: true, termsVersion: 'v2.3' }), '동의함 · v2.3');
+    assert.equal(
+        consentStatusText({ agreed: true, termsVersion: 'v2.3', expiresAt: '2027-08-06T10:00:00' }),
+        '동의함 · v2.3 · 만료 2027-08-06',
+    );
 });

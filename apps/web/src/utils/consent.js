@@ -51,3 +51,31 @@ export function buildAgreementStateFromConsents(items, myConsents) {
         return state;
     }, {});
 }
+
+/**
+ * 동의 관리 화면(ConsentManageView) 전용 헬퍼.
+ *
+ * GET /api/consents/me 의 MyConsentDto 에는 동의·철회 시각이 없다
+ * (백엔드 필드: type/required/label/termsUrl/agreed/withdrawable/termsVersion/expiresAt).
+ * 그래서 날짜 문구는 만료 예정일(expiresAt, FINANCIAL_DATA 동의 시에만 채워짐)만 쓴다.
+ */
+
+/** 토글 가능 여부. 동의 중이면서 철회 가능한 항목만 끌 수 있다. */
+export function canWithdraw(item) {
+    return Boolean(item?.agreed && item?.withdrawable);
+}
+
+/** 카드 하단에 보여줄 상태 문구. */
+export function consentStatusText(item) {
+    if (!item?.agreed) {
+        return '철회함';
+    }
+    const parts = ['동의함'];
+    if (item.termsVersion) {
+        parts.push(item.termsVersion);
+    }
+    if (item.expiresAt) {
+        parts.push(`만료 ${String(item.expiresAt).slice(0, 10)}`);
+    }
+    return parts.join(' · ');
+}
