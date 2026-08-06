@@ -51,7 +51,7 @@ class AccountLinkServiceTest {
         mapper = mock(ConnectedAccountMapper.class);
         store = new LinkProgressStore(CLOCK);
         service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
-                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), CLOCK);
+                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), event -> { }, CLOCK);
 
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
