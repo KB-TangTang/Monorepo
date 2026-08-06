@@ -5,33 +5,48 @@ const props = defineProps({
     challenge: { type: Object, required: true },
 });
 
-const STATUS_MAP = {
-    TRIAL_PENDING: { label: '판결 대기', bg: 'var(--tt-gold-soft)', color: 'var(--tt-gold-deep)', bar: 'var(--tt-gold)', life: 'var(--tt-gold)' },
-    OBJECTION: { label: '이의 심리', bg: 'var(--tt-blue-soft)', color: 'var(--tt-blue)', bar: 'var(--tt-blue)', life: 'var(--tt-blue)' },
-    PEACEFUL: { label: '평온', bg: 'var(--tt-bg-fill)', color: 'var(--tt-text-body)', bar: 'var(--tt-green)', life: 'var(--tt-green)' },
+/*
+ * 뱃지 상태 — "나"의 행동 기준으로 결정한다.
+ *   isDefendant        → 변론필요 (내가 피고인)
+ *   myVoteStatus='PENDING' → 투표중 (아직 투표 안 함)
+ *   myVoteStatus='DONE'    → 투표완료
+ *   그 외               → 순항중
+ */
+const BADGE_MAP = {
+    defendant: { label: '변론필요', bg: 'var(--tt-red-soft)',  color: 'var(--tt-red-deep)' },
+    voting:    { label: '투표중',   bg: 'var(--tt-gold-soft)', color: 'var(--tt-gold-deep)' },
+    voted:     { label: '투표완료', bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' },
+    cruising:  { label: '순항중',   bg: 'var(--tt-bg-fill)',   color: 'var(--tt-text-body)' },
 };
 
-const statusStyle = computed(() => STATUS_MAP[props.challenge.status] || STATUS_MAP.PEACEFUL);
-
-const badgeText = computed(() => {
-    const s = statusStyle.value;
-    if (props.challenge.status === 'TRIAL_PENDING' && props.challenge.trialCount > 0) {
-        return `${s.label} ${props.challenge.trialCount}`;
-    }
-    return s.label;
+const badgeKey = computed(() => {
+    const ch = props.challenge;
+    if (ch.isDefendant) return 'defendant';
+    if (ch.myVoteStatus === 'PENDING') return 'voting';
+    if (ch.myVoteStatus === 'DONE') return 'voted';
+    return 'cruising';
 });
 
-const progressPercent = computed(() => {
-    if (!props.challenge.totalDays) return 0;
-    return Math.round((props.challenge.currentDay / props.challenge.totalDays) * 100);
-});
+const badgeStyle = computed(() => BADGE_MAP[badgeKey.value]);
 
 const limitDesc = computed(() => {
     const ch = props.challenge;
     const type = ch.evalType === 'DAILY' ? '일일결산' : '기간평가';
-    if (ch.dailyLimit) return `${type} · 일 ${ch.dailyLimit.toLocaleString()}원`;
-    if (ch.totalLimit) return `${type} · 총 ${ch.totalLimit.toLocaleString()}원`;
+    if (ch.limitAmount > 0) {
+        const prefix = ch.evalType === 'DAILY' ? '일' : '총';
+        return `${type} · ${prefix} ${ch.limitAmount.toLocaleString()}원`;
+    }
     return type;
+});
+
+const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
+
+/** 채팅 안읽음 표시 텍스트 */
+const chatLabel = computed(() => {
+    const count = props.challenge.unreadChatCount;
+    if (count > 99) return '99+';
+    if (count > 0) return String(count);
+    return null;
 });
 </script>
 
@@ -39,42 +54,52 @@ const limitDesc = computed(() => {
     <div class="gac-card">
         <!-- 상단: 이름 + 상태 뱃지 -->
         <div class="gac-card__top">
-            <span class="gac-card__name">{{ challenge.name }}</span>
+            <span class="gac-card__name">{{ challenge.groupName }}</span>
             <span
                 class="gac-card__badge"
-                :style="{ background: statusStyle.bg, color: statusStyle.color }"
+                :style="{ background: badgeStyle.bg, color: badgeStyle.color }"
             >
-                {{ badgeText }}
+                {{ badgeStyle.label }}
             </span>
         </div>
 
-        <!-- 중간: 설명 + 진행률 + 목숨 -->
+        <!-- 중간: 설명 (평가타입 · 금액 · 진행일) -->
         <p class="gac-card__desc">
-            {{ limitDesc }} · {{ challenge.currentDay }}일차
+            {{ limitDesc }} · {{ challenge.currentDay }}/{{ challenge.totalDays }}일차
         </p>
-        <div class="gac-card__progress">
-            <div class="gac-progress-track">
-                <div
-                    class="gac-progress-fill"
-                    :style="{ width: progressPercent + '%', background: statusStyle.bar }"
-                />
-            </div>
-            <span class="gac-card__lives" :style="{ color: statusStyle.life }">
-                {{ challenge.lives }}/{{ challenge.maxLives }}
-            </span>
-        </div>
 
-        <!-- 하단: 마감/참여 -->
+        <!-- 하단: 멤버 아바타 + 채팅 -->
         <div class="gac-card__bottom">
-            <template v-if="challenge.deadlineLabel">
-                <span class="gac-card__deadline">
-                    마감 {{ challenge.deadlineLabel }}
+            <div class="gac-card__members">
+                <div class="gac-card__avatars">
+                    <span
+                        v-for="(m, i) in challenge.members"
+                        :key="m.userId"
+                        class="gac-card__avatar"
+                        :style="{
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
+                            marginLeft: i > 0 ? '-7px' : '0',
+                            zIndex: challenge.members.length - i,
+                        }"
+                    >
+                        {{ m.initial }}
+                    </span>
+                </div>
+                <span class="gac-card__member-count">{{ challenge.memberCount }}</span>
+            </div>
+            <div class="gac-card__chat">
+                <div class="gac-card__chat-top">
+                    <span class="gac-card__chat-time">
+                        {{ challenge.lastChatTime || '' }}
+                    </span>
+                    <span v-if="chatLabel" class="gac-card__chat-badge">
+                        {{ chatLabel }}
+                    </span>
+                </div>
+                <span class="gac-card__chat-text">
+                    {{ challenge.lastChatMessage || '대화 없음' }}
                 </span>
-            </template>
-            <template v-else>
-                <span class="gac-card__peaceful-label">열린 재판 없음</span>
-            </template>
-            <span class="gac-card__members">{{ challenge.memberCount }}명 참여 ›</span>
+            </div>
         </div>
     </div>
 </template>
@@ -105,6 +130,7 @@ const limitDesc = computed(() => {
     font-weight: var(--tt-fw-black);
     padding: 3px 9px;
     border-radius: var(--tt-radius-full);
+    flex: none;
 }
 
 .gac-card__desc {
@@ -114,32 +140,7 @@ const limitDesc = computed(() => {
     line-height: var(--tt-lh-normal);
 }
 
-.gac-card__progress {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-}
-
-.gac-progress-track {
-    flex: 1;
-    height: 8px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-border-track);
-    overflow: hidden;
-}
-
-.gac-progress-fill {
-    height: 100%;
-    border-radius: var(--tt-radius-full);
-    transition: width 0.3s ease;
-}
-
-.gac-card__lives {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-black);
-}
-
+/* ── 하단: 멤버 + 채팅 ────────── */
 .gac-card__bottom {
     display: flex;
     align-items: center;
@@ -147,20 +148,81 @@ const limitDesc = computed(() => {
     margin-top: 12px;
 }
 
-.gac-card__deadline {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-red-deep);
-}
-
-.gac-card__peaceful-label {
-    font-size: var(--tt-fs-caption);
-    color: var(--tt-text-muted);
-}
-
 .gac-card__members {
-    font-size: var(--tt-fs-caption);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.gac-card__avatars {
+    display: flex;
+    align-items: center;
+}
+
+.gac-card__avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-white);
+    border: 2px solid var(--tt-bg);
+    position: relative;
+}
+
+.gac-card__member-count {
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
+}
+
+/* ── 채팅 미리보기 (2줄) ────────── */
+.gac-card__chat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.gac-card__chat-top {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.gac-card__chat-time {
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
+}
+
+.gac-card__chat-badge {
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-danger);
+    color: var(--tt-white);
+    font-size: 10px;
+    font-weight: var(--tt-fw-black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.gac-card__chat-text {
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
 }
 </style>

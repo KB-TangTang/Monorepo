@@ -55,7 +55,7 @@ function goPrev() {
 
 function handleCreate() {
     // API 연동 전이므로 바로 성공 화면으로 전환
-    createdGroupId.value = 'mock-group-1';
+    createdGroupId.value = 1;
     currentStep.value = 4;
 }
 

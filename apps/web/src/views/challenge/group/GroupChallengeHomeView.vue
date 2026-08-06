@@ -114,7 +114,7 @@ function progressPercent(challenge) {
 }
 
 function livesColor(challenge) {
-    const ratio = challenge.lives / challenge.maxLives;
+    const ratio = challenge.livesCount / challenge.maxLives;
     if (ratio >= 0.8) return 'var(--tt-green)';
     if (ratio >= 0.4) return 'var(--tt-gold-deep)';
     return 'var(--tt-red-deep)';
@@ -199,7 +199,7 @@ function livesColor(challenge) {
                     class="gc-challenge-card"
                 >
                     <div class="gc-challenge-card__top">
-                        <span class="gc-challenge-card__name">{{ ch.name }}</span>
+                        <span class="gc-challenge-card__name">{{ ch.groupName }}</span>
                         <span class="gc-challenge-card__info">
                             {{ ch.evalType === 'DAILY' ? '일일결산' : '기간평가' }} · {{ ch.currentDay }}일차
                         </span>
@@ -215,7 +215,7 @@ function livesColor(challenge) {
                             class="gc-challenge-card__lives"
                             :style="{ color: livesColor(ch) }"
                         >
-                            {{ ch.lives }}/{{ ch.maxLives }}
+                            {{ ch.livesCount }}/{{ ch.maxLives }}
                         </span>
                     </div>
                 </div>

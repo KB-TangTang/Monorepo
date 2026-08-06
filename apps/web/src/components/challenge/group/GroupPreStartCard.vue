@@ -1,14 +1,22 @@
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
     challenge: { type: Object, required: true },
 });
+
+defineEmits(['invite']);
+
+const isFull = computed(() => props.challenge.memberCount >= props.challenge.maxMembers);
+
+const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
 </script>
 
 <template>
     <div class="gps-card">
         <!-- 상단: 이름 + D-N 뱃지 -->
         <div class="gps-card__top">
-            <span class="gps-card__name">{{ challenge.name }}</span>
+            <span class="gps-card__name">{{ challenge.groupName }}</span>
             <span class="gps-card__badge">시작 D-{{ challenge.daysUntilStart }}</span>
         </div>
 
@@ -16,24 +24,24 @@ defineProps({
         <p class="gps-card__desc">
             {{ challenge.evalType === 'DAILY' ? '일일결산' : '기간평가' }}
             · {{ challenge.totalDays }}일
-            <template v-if="challenge.dailyLimit > 0">
-                · 일 {{ challenge.dailyLimit.toLocaleString() }}원
+            <template v-if="challenge.limitAmount > 0">
+                · {{ challenge.evalType === 'DAILY' ? '일' : '총' }} {{ challenge.limitAmount.toLocaleString() }}원
             </template>
             <template v-else>
                 · 무지출
             </template>
         </p>
 
-        <!-- 하단: 멤버 + 참여코드/초대 -->
+        <!-- 하단: 멤버 + 초대/모집완료 -->
         <div class="gps-card__bottom">
             <div class="gps-card__members">
                 <div class="gps-card__avatars">
                     <span
                         v-for="(m, i) in challenge.members"
-                        :key="i"
+                        :key="m.userId"
                         class="gps-card__avatar"
                         :style="{
-                            background: `var(${m.color})`,
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
                             marginLeft: i > 0 ? '-7px' : '0',
                             zIndex: challenge.members.length - i,
                         }"
@@ -45,12 +53,10 @@ defineProps({
                     {{ challenge.memberCount }} / {{ challenge.maxMembers }}명
                 </span>
             </div>
-            <span v-if="challenge.inviteCode" class="gps-card__code">
-                참여코드 {{ challenge.inviteCode }}
-            </span>
-            <span v-else-if="challenge.isOwner" class="gps-card__invite">
+            <span v-if="isFull" class="gps-card__full">모집 완료</span>
+            <button v-else type="button" class="gps-card__invite" @click.stop="$emit('invite', challenge)">
                 친구 초대하기
-            </span>
+            </button>
         </div>
     </div>
 </template>
@@ -130,15 +136,20 @@ defineProps({
     color: var(--tt-text-muted);
 }
 
-.gps-card__code {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-blue);
-}
-
 .gps-card__invite {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-blue);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.gps-card__full {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-hint);
 }
 </style>

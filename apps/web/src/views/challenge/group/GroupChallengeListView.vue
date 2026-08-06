@@ -32,6 +32,10 @@ const tabCounts = computed(() => ({
 function goBack() {
     router.push({ name: 'groupChallenge' });
 }
+
+function handleInvite(challenge) {
+    router.push({ name: 'groupChallengeInvite', params: { groupId: challenge.id } });
+}
 </script>
 
 <template>
@@ -52,6 +56,7 @@ function goBack() {
                     v-for="ch in preStartList"
                     :key="ch.id"
                     :challenge="ch"
+                    @invite="handleInvite"
                 />
             </template>
 

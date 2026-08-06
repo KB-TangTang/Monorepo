@@ -5,7 +5,8 @@ function clone(value) {
 }
 
 export async function fetchGroupDetail(groupId) {
-    const group = MOCK_GROUPS[groupId];
+    const id = Number(groupId);
+    const group = MOCK_GROUPS[id];
     if (!group) {
         throw new Error('그룹을 찾을 수 없습니다.');
     }
@@ -26,9 +27,10 @@ export async function validateInviteCode(code) {
 }
 
 export async function joinGroup(groupId) {
-    const group = MOCK_GROUPS[groupId];
+    const id = Number(groupId);
+    const group = MOCK_GROUPS[id];
     if (!group) {
         throw new Error('그룹을 찾을 수 없습니다.');
     }
-    return { success: true, groupId };
+    return { success: true, groupId: id };
 }
