@@ -156,7 +156,7 @@ public class MockFinancialDataClient implements FinancialDataClient {
                 continue;
             }
             Map<?, ?> row = (Map<?, ?>) item;
-            String bankCode = text(row.get("bankCode"));
+            String bankCode = firstNonBlank(row, "institutionCode", "bankCode");
             /*
              * 목서버는 기관별 필터를 지원하지 않는다(scenarioKey 하나로 전체를 준다).
              * 우리 쪽에서 걸러야 기관별 진행 표시가 실제 데이터와 맞는다.
@@ -166,19 +166,25 @@ public class MockFinancialDataClient implements FinancialDataClient {
             }
             result.add(FinancialAccountDto.builder()
                     .organization(bankCode)
-                    .bankName(text(row.get("bankName")))
-                    .accountName(text(row.get("accountName")))
+                    .bankName(firstNonBlank(row, "institutionName", "bankName"))
+                    .accountName(firstNonBlank(row, "productName", "accountName"))
                     /*
                      * 목서버는 마스킹된 값을 준다. 실 CODEF 는 전체 계좌번호를 주므로
                      * 마스킹·암호화 책임은 어느 쪽이든 우리(AccountLinkService)에게 있다.
                      */
                     .accountNo(text(row.get("accountNoMasked")))
                     /*
-                     * 목서버는 계좌 종류를 이미 DEMAND_DEPOSIT / SAVINGS 로 판정해 내려준다.
+                     * 구버전 목서버는 계좌 종류를 DEMAND_DEPOSIT / SAVINGS 로 판정해 내려줬다.
+                     * v2 는 그 필드를 없애고 accountTypeCode('1001') 로 바꿨는데, 이건 우리 도메인 값이 아니라
+                     * 그대로 넘기면 안 된다. v2 는 예적금을 deposit_account 로 분리했고
+                     * 이 엔드포인트는 bank_account(입출금)만 주므로, 값이 없으면 아래 판정이
+                     * depositTypeCode == null 을 보고 DEMAND_DEPOSIT 으로 정한다
+                     * (AccountLinkService#accountType).
+                     *
                      * CODEF 의 숫자 코드(resAccountDeposit)가 아니므로 depositTypeCode 에 넣으면 안 된다
                      * — 그 컬럼은 VARCHAR(5) 라 저장이 깨진다.
                      */
-                    .accountType(text(row.get("accountType")))
+                    .accountType(domainAccountType(row))
                     .depositTypeCode(null)
                     .currency(text(row.get("currency")))
                     .balance(decimal(row.get("balance")))
@@ -191,6 +197,34 @@ public class MockFinancialDataClient implements FinancialDataClient {
 
     private static String text(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * 목서버 응답에서 값을 꺼낸다. 앞 키부터 보고 비어 있으면 다음 키로 넘어간다.
+     *
+     * 목서버가 2026-08-06 v2 리팩토링에서 필드명을 바꿨다
+     * (`bankCode`→`institutionCode`, `bankName`→`institutionName`, `accountName`→`productName`).
+     * 목서버는 별도 레포·별도 배포라 두 형태가 잠시 공존할 수 있어 둘 다 읽는다.
+     */
+    private static String firstNonBlank(Map<?, ?> row, String... keys) {
+        for (String key : keys) {
+            String value = text(row.get(key));
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 우리 도메인의 계좌 종류(`DEMAND_DEPOSIT`/`SAVINGS`)만 돌려준다.
+     *
+     * 구버전 목서버는 이 값을 그대로 줬다. v2 의 `accountTypeCode`('1001') 는 목서버 내부 코드라
+     * 의미를 알 수 없으므로 넘기지 않고 null 로 둔다 — 호출부가 그때 판정한다.
+     */
+    private static String domainAccountType(Map<?, ?> row) {
+        String given = text(row.get("accountType"));
+        return "DEMAND_DEPOSIT".equals(given) || "SAVINGS".equals(given) ? given : null;
     }
 
     private static BigDecimal decimal(Object value) {
