@@ -124,9 +124,19 @@ function openCategorySheet(tx) {
     isCategorySheetOpen.value = true;
 }
 
-function applyCategory({ transactionId, categoryName }) {
+function applyCategory({ transactionId, categoryName, applyToMerchant }) {
     const tx = transactions.value.find((item) => item.id === transactionId);
-    if (tx) {
+    if (!tx) {
+        return;
+    }
+    if (applyToMerchant) {
+        const merchant = tx.merchant;
+        transactions.value.forEach((item) => {
+            if (item.merchant === merchant) {
+                item.category = categoryName;
+            }
+        });
+    } else {
         tx.category = categoryName;
     }
 }

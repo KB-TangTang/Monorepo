@@ -25,6 +25,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'select']);
 
 const expandedParentId = ref('');
+const applyToMerchant = ref(false);
 
 const direction = computed(() =>
     props.transaction ? resolveCategoryDirection(props.transaction.amount) : 'expense',
@@ -48,6 +49,7 @@ watch(
     (open) => {
         if (open) {
             expandedParentId.value = currentExpenseParent.value?.id ?? '';
+            applyToMerchant.value = false;
         }
     },
 );
@@ -85,7 +87,11 @@ function chooseCategory(categoryName) {
     if (!props.transaction) {
         return;
     }
-    emit('select', { transactionId: props.transaction.id, categoryName });
+    emit('select', {
+        transactionId: props.transaction.id,
+        categoryName,
+        applyToMerchant: applyToMerchant.value,
+    });
     emit('update:modelValue', false);
 }
 </script>
@@ -105,6 +111,21 @@ function chooseCategory(categoryName) {
                 {{ isExpense ? '지출 카테고리' : '수입 카테고리' }}
             </p>
         </div>
+
+        <label v-if="transaction" class="category-sheet__merchant-toggle">
+            <span class="category-sheet__merchant-toggle-text">
+                <span class="category-sheet__merchant-toggle-label">이 가맹점에 항상 적용</span>
+                <span class="category-sheet__merchant-toggle-desc">
+                    같은 가맹점의 다른 거래에도 함께 적용돼요
+                </span>
+            </span>
+            <input
+                v-model="applyToMerchant"
+                type="checkbox"
+                role="switch"
+                class="category-sheet__switch"
+            />
+        </label>
 
         <div class="category-sheet__grid">
             <template v-for="(row, rowIndex) in rows" :key="rowIndex">
@@ -174,6 +195,68 @@ function chooseCategory(categoryName) {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
+}
+
+.category-sheet__merchant-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-3);
+    padding: var(--tt-space-3) 0;
+    margin-bottom: var(--tt-space-2);
+    cursor: pointer;
+}
+
+.category-sheet__merchant-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.category-sheet__merchant-toggle-label {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text);
+}
+
+.category-sheet__merchant-toggle-desc {
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.category-sheet__switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 44px;
+    height: 26px;
+    appearance: none;
+    background: var(--tt-border);
+    border: none;
+    border-radius: var(--tt-radius-full);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.category-sheet__switch::before {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    content: '';
+    background: var(--tt-bg);
+    border-radius: var(--tt-radius-full);
+    box-shadow: var(--tt-elevation-1);
+    transition: transform 0.15s ease;
+}
+
+.category-sheet__switch:checked {
+    background: var(--tt-primary);
+}
+
+.category-sheet__switch:checked::before {
+    transform: translateX(18px);
 }
 
 .category-sheet__grid {
