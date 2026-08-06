@@ -100,7 +100,7 @@ export const EXPENSE_CATEGORIES = [
     },
     {
         id: 'education',
-        name: '교육/자기계발',
+        name: '자기계발',
         icon: 'AcademicCap',
         children: [
             { id: 'education-academy', name: '학원' },

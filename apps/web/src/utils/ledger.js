@@ -17,6 +17,12 @@ export function formatDayLabel(dateStr) {
     return `${month}월 ${day}일 · ${WEEKDAY_LABELS[date.getDay()]}요일`;
 }
 
+/* 요일 없이 짧게. 검색 결과처럼 여러 날짜가 섞여 나오는 목록의 부제목에 쓴다. */
+export function formatShortDayLabel(dateStr) {
+    const [, month, day] = dateStr.split('-').map(Number);
+    return `${month}월 ${day}일`;
+}
+
 export function shiftPeriod(period, delta) {
     const [year, month] = period.split('-').map(Number);
     const shifted = new Date(year, month - 1 + delta, 1);
@@ -109,4 +115,13 @@ export function resolveAnchorDate(groupedTransactions, requestedDate) {
     }
     const exists = groupedTransactions.some((group) => group.date === requestedDate);
     return exists ? requestedDate : null;
+}
+
+/* 금액 범위 슬라이더의 최소·최대값. 실제 거래 금액 분포에 맞춰 1만원 단위로 올림한다. */
+export function resolveAmountBounds(transactions) {
+    if (transactions.length === 0) {
+        return { min: 0, max: 10000 };
+    }
+    const maxAbs = Math.max(...transactions.map((tx) => Math.abs(tx.amount)));
+    return { min: 0, max: Math.max(Math.ceil(maxAbs / 10000) * 10000, 10000) };
 }

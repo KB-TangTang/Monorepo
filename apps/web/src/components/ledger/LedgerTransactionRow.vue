@@ -10,6 +10,8 @@ import { formatWon } from '@/utils/ledger';
 
 defineProps({
     transaction: { type: Object, required: true },
+    /* 기본은 "카테고리 · 결제수단". 검색 결과처럼 날짜가 더 중요한 목록에서는 덮어쓴다. */
+    subtitle: { type: String, default: '' },
 });
 
 defineEmits(['click']);
@@ -28,7 +30,7 @@ defineEmits(['click']);
             <div class="ledger-row__info">
                 <p class="ledger-row__name">{{ transaction.merchant }}</p>
                 <p class="ledger-row__meta">
-                    {{ transaction.category }} · {{ transaction.paymentMethod }}
+                    {{ subtitle || `${transaction.category} · ${transaction.paymentMethod}` }}
                 </p>
             </div>
             <p

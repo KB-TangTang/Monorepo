@@ -8,7 +8,6 @@ import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchLedgerMonths, fetchLedgerTransactions } from '@/api/ledger';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
-import BaseInput from '@/components/common/BaseInput.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import LedgerCategoryFilterSheet from '@/components/ledger/LedgerCategoryFilterSheet.vue';
 import LedgerCategorySheet from '@/components/ledger/LedgerCategorySheet.vue';
@@ -19,6 +18,7 @@ import LedgerTransactionRow from '@/components/ledger/LedgerTransactionRow.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
+import { findExpenseParentByName } from '@/utils/category';
 import {
     formatDayLabel,
     formatWon,
@@ -38,7 +38,6 @@ const transactions = ref([]);
 const loading = ref(true);
 const errorMessage = ref('');
 
-const searchTerm = ref('');
 const activeTab = ref('ALL');
 const selectedCategory = ref('');
 const selectedPaymentMethod = ref('');
@@ -47,7 +46,7 @@ const isCategoryFilterSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
 
-const rootEl = ref(null);
+const scrollEl = ref(null);
 const groupRefs = ref({});
 let pendingAnchorDate = typeof route.query.date === 'string' ? route.query.date : '';
 
@@ -59,21 +58,17 @@ const paymentMethods = computed(() => [
     ...new Set(transactions.value.map((tx) => tx.paymentMethod)),
 ]);
 
-const categoriesInMonth = computed(() => [
-    ...new Set(transactions.value.map((tx) => tx.category)),
-]);
-
 const filteredTransactions = computed(() => {
     let list = filterTransactionsByTab(transactions.value, activeTab.value);
     if (selectedPaymentMethod.value) {
         list = list.filter((tx) => tx.paymentMethod === selectedPaymentMethod.value);
     }
     if (selectedCategory.value) {
-        list = list.filter((tx) => tx.category === selectedCategory.value);
-    }
-    const keyword = searchTerm.value.trim();
-    if (keyword !== '') {
-        list = list.filter((tx) => tx.merchant.includes(keyword));
+        list = list.filter(
+            (tx) =>
+                tx.category === selectedCategory.value ||
+                findExpenseParentByName(tx.category)?.name === selectedCategory.value,
+        );
     }
     return list;
 });
@@ -117,7 +112,7 @@ async function loadPeriod({ resetScroll } = { resetScroll: false }) {
     loading.value = false;
     if (resetScroll) {
         groupRefs.value = {};
-        rootEl.value?.scrollTo({ top: 0 });
+        scrollEl.value?.scrollTo({ top: 0 });
     } else {
         await scrollToAnchorIfNeeded();
     }
@@ -173,6 +168,10 @@ function goToLedger() {
     router.push({ name: 'ledger' });
 }
 
+function goToSearch() {
+    router.push({ name: 'ledgerSearch' });
+}
+
 function openReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: period.value } });
 }
@@ -197,66 +196,80 @@ onMounted(async () => {
 </script>
 
 <template>
-    <article ref="rootEl" class="ledger-month-view">
-        <BaseBackHeader title="거래 상세내역" back-label="전체 거래내역으로 돌아가기" />
+    <article class="ledger-month-view">
+        <div class="ledger-month-view__fixed">
+            <BaseBackHeader title="거래 상세내역" back-label="전체 거래내역으로 돌아가기" />
+
+            <template v-if="state === 'ready'">
+                <LedgerMonthNav
+                    :period="period"
+                    :disable-prev="disablePrev"
+                    :disable-next="disableNext"
+                    :payment-method-label="selectedPaymentMethod || '전체 수단'"
+                    @prev="changeMonth(-1)"
+                    @next="changeMonth(1)"
+                    @open-payment-filter="isPaymentSheetOpen = true"
+                />
+
+                <button
+                    type="button"
+                    class="ledger-month-view__search"
+                    aria-label="거래내역 검색으로 이동"
+                    @click="goToSearch"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                    </svg>
+                    <span>거래명이나 금액을 검색해보세요</span>
+                </button>
+
+                <LedgerDirectionTabs
+                    :active="activeTab"
+                    :category-label="selectedCategory || '카테고리'"
+                    :payment-label="selectedPaymentMethod || '수단'"
+                    @select="selectTab"
+                    @open-category-filter="isCategoryFilterSheetOpen = true"
+                    @open-payment-filter="isPaymentSheetOpen = true"
+                />
+            </template>
+        </div>
 
         <StateLoading v-if="state === 'loading'" size="lg" message="거래내역을 불러오는 중" />
         <StateError v-else-if="state === 'error'" :message="errorMessage" @retry="loadPeriod" />
-        <template v-else-if="state === 'ready'">
-            <LedgerMonthNav
-                :period="period"
-                :disable-prev="disablePrev"
-                :disable-next="disableNext"
-                :payment-method-label="selectedPaymentMethod || '전체 수단'"
-                @prev="changeMonth(-1)"
-                @next="changeMonth(1)"
-                @open-payment-filter="isPaymentSheetOpen = true"
+        <section
+            v-else-if="state === 'ready'"
+            ref="scrollEl"
+            class="ledger-month-view__list"
+            aria-label="이달 거래내역"
+        >
+            <StateEmpty
+                v-if="groupedTransactions.length === 0"
+                title="조건에 맞는 거래내역이 없어요"
+                description="필터나 검색어를 바꿔서 다시 확인해 보세요."
             />
-
-            <BaseInput
-                v-model="searchTerm"
-                placeholder="거래명이나 금액을 검색해보세요"
-                aria-label="거래명이나 금액으로 검색"
-            />
-
-            <LedgerDirectionTabs
-                :active="activeTab"
-                :category-label="selectedCategory || '카테고리'"
-                :payment-label="selectedPaymentMethod || '수단'"
-                @select="selectTab"
-                @open-category-filter="isCategoryFilterSheetOpen = true"
-                @open-payment-filter="isPaymentSheetOpen = true"
-            />
-
-            <section class="ledger-month-view__list" aria-label="이달 거래내역">
-                <StateEmpty
-                    v-if="groupedTransactions.length === 0"
-                    title="조건에 맞는 거래내역이 없어요"
-                    description="필터나 검색어를 바꿔서 다시 확인해 보세요."
-                />
-                <div
-                    v-for="group in groupedTransactions"
-                    :key="group.date"
-                    :ref="(el) => setGroupRef(group.date, el)"
-                    class="ledger-month-view__group"
-                >
-                    <div class="ledger-month-view__group-header">
-                        <h2>{{ formatDayLabel(group.date) }}</h2>
-                        <span :class="{ 'ledger-month-view__group-total--income': group.netAmount > 0 }">
-                            {{ formatWon(group.netAmount) }}
-                        </span>
-                    </div>
-                    <ul class="ledger-month-view__group-rows">
-                        <LedgerTransactionRow
-                            v-for="tx in group.items"
-                            :key="tx.id"
-                            :transaction="tx"
-                            @click="openCategorySheet(tx)"
-                        />
-                    </ul>
+            <div
+                v-for="group in groupedTransactions"
+                :key="group.date"
+                :ref="(el) => setGroupRef(group.date, el)"
+                class="ledger-month-view__group"
+            >
+                <div class="ledger-month-view__group-header">
+                    <h2>{{ formatDayLabel(group.date) }}</h2>
+                    <span :class="{ 'ledger-month-view__group-total--income': group.netAmount > 0 }">
+                        {{ formatWon(group.netAmount) }}
+                    </span>
                 </div>
-            </section>
-        </template>
+                <ul class="ledger-month-view__group-rows">
+                    <LedgerTransactionRow
+                        v-for="tx in group.items"
+                        :key="tx.id"
+                        :transaction="tx"
+                        @click="openCategorySheet(tx)"
+                    />
+                </ul>
+            </div>
+        </section>
 
         <LedgerPaymentMethodSheet
             v-model="isPaymentSheetOpen"
@@ -267,7 +280,7 @@ onMounted(async () => {
 
         <LedgerCategoryFilterSheet
             v-model="isCategoryFilterSheetOpen"
-            :categories="categoriesInMonth"
+            :is-income="activeTab === 'INCOME'"
             :selected="selectedCategory"
             @select="selectCategoryFilter"
         />
@@ -286,17 +299,59 @@ onMounted(async () => {
 .ledger-month-view {
     display: flex;
     flex-direction: column;
-    gap: var(--tt-space-3);
     height: calc(100vh - var(--tt-tabbar-height) - env(safe-area-inset-bottom) - var(--tt-space-4));
-    padding: var(--tt-space-3) var(--tt-space-5) calc(var(--tt-space-12) + 56px);
-    overflow-y: auto;
+    padding: var(--tt-space-3) var(--tt-space-5) 0;
     background: var(--tt-bg-subtle);
+}
+
+.ledger-month-view__fixed {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--tt-space-3);
+    padding-bottom: var(--tt-space-3);
+}
+
+.ledger-month-view__search {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--tt-space-3) var(--tt-space-4);
+    text-align: left;
+    cursor: pointer;
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-full);
+    gap: var(--tt-space-2);
+}
+
+.ledger-month-view__search svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: var(--tt-text-muted);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.ledger-month-view__search span {
+    overflow: hidden;
+    font-size: var(--tt-fs-body);
+    color: var(--tt-gray-500);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .ledger-month-view__list {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
+    min-height: 0;
     gap: var(--tt-space-4);
+    padding-bottom: calc(var(--tt-space-12) + 56px);
+    overflow-y: auto;
 }
 
 .ledger-month-view__group {

@@ -1,34 +1,9 @@
 <!--
-  용도: 전체 거래내역 화면 상단. 제목 + 가맹점 검색 토글을 담당한다.
+  용도: 전체 거래내역 화면 상단. 제목 + 검색 화면 진입 버튼을 담당한다.
   언제 쓰는지: LedgerView 한 곳에서만 렌더한다.
 -->
 <script setup>
-import { ref, watch } from 'vue';
-import BaseInput from '@/components/common/BaseInput.vue';
-
-const props = defineProps({
-    modelValue: { type: String, default: '' },
-});
-
-const emit = defineEmits(['update:modelValue']);
-
-const isSearchOpen = ref(false);
-
-function toggleSearch() {
-    isSearchOpen.value = !isSearchOpen.value;
-    if (!isSearchOpen.value) {
-        emit('update:modelValue', '');
-    }
-}
-
-watch(
-    () => props.modelValue,
-    (value) => {
-        if (value && !isSearchOpen.value) {
-            isSearchOpen.value = true;
-        }
-    },
-);
+defineEmits(['open-search']);
 </script>
 
 <template>
@@ -38,9 +13,8 @@ watch(
             <button
                 type="button"
                 class="ledger-header__search-toggle"
-                :aria-pressed="isSearchOpen"
-                aria-label="가맹점 검색"
-                @click="toggleSearch"
+                aria-label="거래내역 검색으로 이동"
+                @click="$emit('open-search')"
             >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="11" cy="11" r="6.5" />
@@ -48,14 +22,6 @@ watch(
                 </svg>
             </button>
         </div>
-
-        <BaseInput
-            v-if="isSearchOpen"
-            class="ledger-header__search"
-            :model-value="modelValue"
-            placeholder="가맹점명으로 검색"
-            @update:model-value="$emit('update:modelValue', $event)"
-        />
     </header>
 </template>
 
@@ -90,12 +56,6 @@ watch(
     border-radius: var(--tt-radius-full);
     cursor: pointer;
     place-items: center;
-}
-
-.ledger-header__search-toggle[aria-pressed='true'] {
-    color: var(--tt-primary);
-    background: var(--tt-primary-subtle);
-    border-color: var(--tt-primary-subtle);
 }
 
 .ledger-header__search-toggle svg {

@@ -40,3 +40,9 @@ export async function fetchLedgerSummary(period) {
 export async function fetchLedgerTransactions(period) {
     return getLedgerTransactions(period);
 }
+
+/* 검색 화면용. 데이터가 있는 모든 월의 거래를 합쳐서 반환한다 — 검색은 특정 월에 갇히지 않는다. */
+export async function fetchLedgerSearchTransactions() {
+    const months = getLedgerMonths().filter((month) => month.hasData);
+    return months.flatMap((month) => getLedgerTransactions(month.value));
+}

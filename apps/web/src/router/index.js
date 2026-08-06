@@ -88,6 +88,12 @@ const routes = [
         meta: { title: '해당월 거래내역' },
     },
     {
+        path: '/ledger/search',
+        name: 'ledgerSearch',
+        component: () => import('@/views/LedgerSearchView.vue'),
+        meta: { title: '거래내역 검색' },
+    },
+    {
         path: '/my',
         name: 'my',
         component: () => import('@/views/PlaceholderView.vue'),

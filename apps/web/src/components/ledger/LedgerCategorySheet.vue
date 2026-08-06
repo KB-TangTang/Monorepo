@@ -343,9 +343,13 @@ function confirmSelection() {
 }
 
 .category-sheet__tile span {
+    max-width: 100%;
+    overflow: hidden;
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .category-sheet__tile--active {

@@ -53,16 +53,19 @@ defineEmits(['select', 'open-category-filter', 'open-payment-filter']);
 .direction-tabs {
     display: flex;
     flex-shrink: 0;
-    gap: var(--tt-space-2);
-    overflow-x: auto;
+    gap: var(--tt-space-1);
 }
 
 .direction-tabs__pill {
-    flex-shrink: 0;
-    padding: var(--tt-space-2) var(--tt-space-4);
+    flex: 1 1 0;
+    min-width: 0;
+    padding: var(--tt-space-2) var(--tt-space-1);
+    overflow: hidden;
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
+    text-align: center;
+    text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
     background: var(--tt-bg);

@@ -33,7 +33,6 @@ const transactions = ref([]);
 const loading = ref(true);
 const errorMessage = ref('');
 
-const searchTerm = ref('');
 const selectedDate = ref(null);
 const selectedPaymentMethod = ref('');
 const isPaymentSheetOpen = ref(false);
@@ -61,15 +60,11 @@ const transactionsByDate = computed(() => {
     return byDate;
 });
 
-const visibleTransactions = computed(() => {
-    const keyword = searchTerm.value.trim();
-    return paymentFilteredTransactions.value.filter((tx) => {
-        if (selectedDate.value && tx.date !== selectedDate.value) {
-            return false;
-        }
-        return keyword === '' || tx.merchant.includes(keyword);
-    });
-});
+const visibleTransactions = computed(() =>
+    paymentFilteredTransactions.value.filter(
+        (tx) => !selectedDate.value || tx.date === selectedDate.value,
+    ),
+);
 
 const groupedTransactions = computed(() => groupTransactionsByDate(visibleTransactions.value));
 const currentDayGroup = computed(() => groupedTransactions.value[0] ?? null);
@@ -158,6 +153,10 @@ function openMonthTransactions() {
     });
 }
 
+function goToSearch() {
+    router.push({ name: 'ledgerSearch' });
+}
+
 onMounted(async () => {
     try {
         months.value = await fetchLedgerMonths();
@@ -175,7 +174,7 @@ onMounted(async () => {
 
 <template>
     <article class="ledger-view">
-        <LedgerPageHeader v-model="searchTerm" />
+        <LedgerPageHeader @open-search="goToSearch" />
 
         <StateLoading v-if="state === 'loading'" size="lg" message="거래내역을 불러오는 중" />
         <StateError v-else-if="state === 'error'" :message="errorMessage" @retry="loadPeriod" />
@@ -203,7 +202,7 @@ onMounted(async () => {
                 <StateEmpty
                     v-if="!currentDayGroup"
                     title="조건에 맞는 거래내역이 없어요"
-                    description="날짜나 결제수단, 검색어를 바꿔서 다시 확인해 보세요."
+                    description="날짜나 결제수단을 바꿔서 다시 확인해 보세요."
                 />
                 <div v-else class="ledger-view__group">
                     <div class="ledger-view__group-header">
