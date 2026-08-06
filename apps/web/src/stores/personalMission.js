@@ -93,6 +93,12 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.save();
         },
 
+        /** 마이페이지 > 튜토리얼 다시 보기. 플래그만 되돌리고 재생은 홈 화면이 한다 */
+        replayTutorial() {
+            this.hasSeenTutorial = false;
+            this.save();
+        },
+
         completeDifficultySetup() {
             this.hasCompletedSetup = true;
             this.save();

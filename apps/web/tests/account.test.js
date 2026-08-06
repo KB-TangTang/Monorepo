@@ -229,8 +229,9 @@ test('기관마다 로고 색조가 다르다 (Figma 확정본)', () => {
 test('매핑에 없는 기관은 업권으로 색조를 정한다', () => {
     assert.equal(resolveInstitutionTone('0381'), 'blue'); // 카드
     assert.equal(resolveInstitutionTone('0240'), 'green'); // 증권
-    assert.equal(resolveInstitutionTone('0501'), 'rose'); // 보험
     assert.equal(resolveInstitutionTone(null), 'gold');
+    // 보험(05)은 연동 범위에서 빠졌다. 남은 업권이 아니므로 기본 색조로 떨어진다
+    assert.equal(resolveInstitutionTone('0501'), 'gold');
 });
 
 test('휴대폰번호는 입력하는 대로 하이픈이 붙는다', () => {
