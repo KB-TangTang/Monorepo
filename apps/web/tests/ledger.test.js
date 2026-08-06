@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { filterTransactionsByTab, resolveAnchorDate } from '../src/utils/ledger.js';
+import { getLedgerTransactions } from '../src/fixtures/ledger.js';
 
 const SAMPLE = [
     { id: 't1', date: '2026-07-29', amount: -48900, classification: 'CONSUMPTION' },
@@ -51,4 +52,31 @@ test('resolveAnchorDate: 요청 날짜가 없으면 null 을 반환한다', () =
     const groups = [{ date: '2026-07-29' }];
     assert.equal(resolveAnchorDate(groups, null), null);
     assert.equal(resolveAnchorDate(groups, ''), null);
+});
+
+test('fixture 거래는 모두 유효한 classification 을 갖는다', () => {
+    const allTransactions = ['2026-06', '2026-07'].flatMap((period) =>
+        getLedgerTransactions(period),
+    );
+    assert.ok(allTransactions.length > 0);
+    for (const tx of allTransactions) {
+        assert.ok(
+            ['CONSUMPTION', 'TRANSFER', 'INCOME'].includes(tx.classification),
+            `${tx.id} has invalid classification: ${tx.classification}`,
+        );
+    }
+});
+
+test('fixture 거래의 classification 은 amount 부호와 모순되지 않는다', () => {
+    const allTransactions = ['2026-06', '2026-07'].flatMap((period) =>
+        getLedgerTransactions(period),
+    );
+    for (const tx of allTransactions) {
+        if (tx.classification === 'INCOME') {
+            assert.ok(tx.amount > 0, `${tx.id} is INCOME but amount <= 0`);
+        }
+        if (tx.classification === 'CONSUMPTION') {
+            assert.ok(tx.amount < 0, `${tx.id} is CONSUMPTION but amount >= 0`);
+        }
+    }
 });

@@ -13,6 +13,7 @@ const TRANSACTIONS = {
             merchant: '월급',
             category: '급여',
             paymentMethod: '입금',
+            classification: 'INCOME',
             amount: 3350000,
         },
         {
@@ -21,6 +22,7 @@ const TRANSACTIONS = {
             merchant: '스타벅스 성수역점',
             category: '카페/간식',
             paymentMethod: '신한카드',
+            classification: 'CONSUMPTION',
             amount: -6800,
         },
         {
@@ -29,6 +31,7 @@ const TRANSACTIONS = {
             merchant: '배민 · 연희동찌개',
             category: '배달앱',
             paymentMethod: 'KB국민카드',
+            classification: 'CONSUMPTION',
             amount: -23400,
         },
         {
@@ -37,6 +40,7 @@ const TRANSACTIONS = {
             merchant: '이마트 성수점',
             category: '장보기/마트',
             paymentMethod: '신한카드',
+            classification: 'CONSUMPTION',
             amount: -168200,
         },
         {
@@ -45,6 +49,7 @@ const TRANSACTIONS = {
             merchant: '지하철',
             category: '대중교통',
             paymentMethod: '체크카드',
+            classification: 'CONSUMPTION',
             amount: -12300,
         },
     ],
@@ -55,6 +60,7 @@ const TRANSACTIONS = {
             merchant: '오늘의집',
             category: '온라인쇼핑',
             paymentMethod: '신한카드',
+            classification: 'CONSUMPTION',
             amount: -48900,
         },
         {
@@ -63,6 +69,7 @@ const TRANSACTIONS = {
             merchant: 'CU 성수점',
             category: '편의점',
             paymentMethod: 'KB국민 302',
+            classification: 'CONSUMPTION',
             amount: -5400,
         },
         {
@@ -71,6 +78,7 @@ const TRANSACTIONS = {
             merchant: '월급',
             category: '급여',
             paymentMethod: '입금',
+            classification: 'INCOME',
             amount: 3420000,
         },
         {
@@ -79,6 +87,7 @@ const TRANSACTIONS = {
             merchant: '배민 · 연희동찌개',
             category: '배달앱',
             paymentMethod: 'KB국민카드',
+            classification: 'CONSUMPTION',
             amount: -19800,
         },
         {
@@ -87,6 +96,7 @@ const TRANSACTIONS = {
             merchant: '스타벅스 성수역점',
             category: '카페/간식',
             paymentMethod: '신한카드',
+            classification: 'CONSUMPTION',
             amount: -7200,
         },
         {
@@ -95,6 +105,7 @@ const TRANSACTIONS = {
             merchant: '지하철',
             category: '대중교통',
             paymentMethod: '체크카드',
+            classification: 'CONSUMPTION',
             amount: -14700,
         },
         {
@@ -103,6 +114,7 @@ const TRANSACTIONS = {
             merchant: 'CGV 용산아이파크몰',
             category: '영화·공연·전시',
             paymentMethod: '신한카드',
+            classification: 'CONSUMPTION',
             amount: -32000,
         },
         {
@@ -111,6 +123,7 @@ const TRANSACTIONS = {
             merchant: '이마트 성수점',
             category: '장보기/마트',
             paymentMethod: 'KB국민카드',
+            classification: 'CONSUMPTION',
             amount: -71600,
         },
         {
@@ -119,6 +132,7 @@ const TRANSACTIONS = {
             merchant: '올리브영 홍대점',
             category: '뷰티',
             paymentMethod: '체크카드',
+            classification: 'CONSUMPTION',
             amount: -29700,
         },
     ],
