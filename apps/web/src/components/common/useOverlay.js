@@ -120,7 +120,12 @@ export function useOverlay({ isOpen, panelRef, canCloseOnEsc, requestClose }) {
         unlockScroll();
         /* 내부 UI 로 닫은 경우에는 쌓아둔 히스토리 항목을 되돌린다.
          * popstate 로 닫힌 경우엔 이미 소비됐으므로 건드리지 않는다. */
-        if (pushedHistory) {
+        /*
+         * 바텀시트 CTA가 router.push()로 다음 화면으로 이동한 경우에는 새 라우트가
+         * overlay history 항목을 이미 대체한다. 이때 back()을 실행하면 막 이동한
+         * 화면이 다시 이전 화면으로 되돌아간다.
+         */
+        if (pushedHistory && window.history.state?.ttOverlay) {
             pushedHistory = false;
             window.history.back();
         }

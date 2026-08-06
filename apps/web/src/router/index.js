@@ -114,6 +114,42 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupJoinView.vue'),
         meta: { title: '그룹 참여', hideTabBar: true },
     },
+    // {
+    //     path: '/group-challenges/trials/:indictmentId',
+    //     name: 'trialIndictment',
+    //     component: () => import('@/components/challenge/group/trial/TrialIndictmentView.vue'),
+    //     meta: { title: '소비 기준 위반', hideTabBar: true },
+    // },
+    // {
+    //     path: '/group-challenges/trials/:indictmentId/burden',
+    //     name: 'trialBurden',
+    //     component: () => import('@/components/challenge/group/trial/TrialBurdenView.vue'),
+    //     meta: { title: '실제 부담금 입력', hideTabBar: true },
+    // },
+    // {
+    //     path: '/group-challenges/trials/:indictmentId/plea',
+    //     name: 'trialPlea',
+    //     component: () => import('@/components/challenge/group/trial/TrialPleaView.vue'),
+    //     meta: { title: '변론 작성', hideTabBar: true },
+    // },
+    // {
+    //     path: '/group-challenges/trials/:indictmentId/plea/complete',
+    //     name: 'trialPleaComplete',
+    //     component: () => import('@/components/challenge/group/trial/TrialPleaCompleteView.vue'),
+    //     meta: { title: '변론 완료', hideTabBar: true },
+    // },
+    // {
+    //     path: '/group-challenges/trials/:indictmentId/admission-complete',
+    //     name: 'trialAdmissionComplete',
+    //     component: () => import('@/components/challenge/group/trial/TrialAdmissionCompleteView.vue'),
+    //     meta: { title: '혐의 인정 완료', hideTabBar: true },
+    // },
+    // {
+    //     path: '/group-challenges/trial-placeholder',
+    //     name: 'trialPlaceholder',
+    //     component: () => import('@/components/challenge/group/trial/TrialPlaceholderView.vue'),
+    //     meta: { title: '안내', hideTabBar: true },
+    // },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',
