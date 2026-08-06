@@ -33,6 +33,10 @@ function goToTrend() {
     router.push({ name: 'assetNetWorthTrend' });
 }
 
+function goToConnectedAccounts() {
+    router.push({ name: 'connectedAccounts' });
+}
+
 onMounted(load);
 </script>
 
@@ -40,7 +44,9 @@ onMounted(load);
     <div class="asset-home">
         <header class="asset-home__header">
             <h1 class="asset-home__title">내 자산</h1>
-            <span class="asset-home__link">연결 관리 ›</span>
+            <button type="button" class="asset-home__link" @click="goToConnectedAccounts">
+                연결 관리 ›
+            </button>
         </header>
 
         <StateLoading v-if="loading" message="자산 정보를 불러오는 중" />
@@ -81,8 +87,15 @@ onMounted(load);
 }
 
 .asset-home__link {
+    /* 터치 영역을 넓히되, 음수 마진으로 글자 위치는 기존 span 과 같게 둔다. */
+    margin-right: calc(var(--tt-space-2) * -1);
+    padding: var(--tt-space-2);
+    border: 0;
+    background: none;
+    font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
+    cursor: pointer;
 }
 </style>
