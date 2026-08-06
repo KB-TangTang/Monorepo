@@ -33,6 +33,7 @@ export const useNotificationStore = defineStore('notification', () => {
     let controller = null;
     let pollTimer = null;
     let retryTimer = null;
+    let stopping = false; // disconnect() 로 인한 의도적 중단인지 — abort 로 인한 catch/루프종료를 실패로 오인하지 않기 위함
 
     async function load() {
         loading.value = true;
@@ -123,6 +124,7 @@ export const useNotificationStore = defineStore('notification', () => {
 
     async function connect() {
         disconnect();
+        stopping = false; // 새 연결을 시작하므로 직전 disconnect() 의 중단 표시를 해제한다
         const auth = useAuthStore();
         if (!auth.isLoggedIn) {
             return;
@@ -160,8 +162,14 @@ export const useNotificationStore = defineStore('notification', () => {
                     }
                 }
             }
-            startPolling(); // 서버가 끊었다
-        } catch {
+            if (!stopping) {
+                startPolling(); // 서버가 끊었다
+            }
+        } catch (err) {
+            /* 의도적인 disconnect() 는 실패가 아니다. 여기서 폴링을 다시 걸면 방금 끊은 타이머가 되살아난다 */
+            if (stopping || err?.name === 'AbortError') {
+                return;
+            }
             startPolling(); // 연결 자체가 안 됐다 (프록시 차단 포함)
         }
     }
@@ -177,10 +185,17 @@ export const useNotificationStore = defineStore('notification', () => {
     }
 
     function disconnect() {
+        stopping = true;
         controller?.abort();
         controller = null;
         stopPolling();
         streamState.value = 'IDLE';
+        /* 사용자 단위 데이터를 비운다. Pinia 스토어는 싱글턴이라
+           그대로 두면 다음 로그인 사용자에게 이전 사용자의 알림이 그대로 보인다 */
+        items.value = [];
+        nextCursor.value = null;
+        unreadCount.value = 0;
+        error.value = '';
     }
 
     return {
