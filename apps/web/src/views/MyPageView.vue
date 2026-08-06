@@ -33,6 +33,8 @@ const errorMessage = ref('');
 const tutorialSheetOpen = ref(false);
 const logoutSheetOpen = ref(false);
 const loggingOut = ref(false);
+const tutorialSheet = ref(null);
+const logoutSheet = ref(null);
 
 /*
  * 인증 스토어의 user 를 쓰지 않고 직접 조회한다.
@@ -62,17 +64,27 @@ function onSelect(key) {
     }
 }
 
-/* 튜토리얼 컴포넌트를 여기에 복제하지 않는다. 플래그를 되돌리고 해당 홈으로 보낸다 */
+/*
+ * 튜토리얼 컴포넌트를 여기에 복제하지 않는다. 플래그를 되돌리고 해당 홈으로 보낸다.
+ *
+ * 시트 안에서 이동할 때는 releaseHistory() 로 시트가 쌓아둔 히스토리 항목을 넘겨받은 뒤
+ * push 가 아닌 replace 로 옮긴다. 그러지 않으면 시트가 닫히며 실행하는 history.back() 이
+ * 방금 한 이동을 되감아 이 화면에 그대로 남는다. (useOverlay 의 releaseHistory 주석 참고)
+ */
+function leaveViaSheet(routeName) {
+    tutorialSheet.value?.releaseHistory();
+    tutorialSheetOpen.value = false;
+    router.replace({ name: routeName });
+}
+
 function replayPersonal() {
     personalMission.replayTutorial();
-    tutorialSheetOpen.value = false;
-    router.push({ name: 'personalMissionChallenge' });
+    leaveViaSheet('personalMissionChallenge');
 }
 
 function replayGroup() {
     resetGroupTutorial();
-    tutorialSheetOpen.value = false;
-    router.push({ name: 'groupChallenge' });
+    leaveViaSheet('groupChallenge');
 }
 
 async function confirmLogout() {
@@ -84,6 +96,9 @@ async function confirmLogout() {
     } finally {
         auth.clear();
         loggingOut.value = false;
+        /* 튜토리얼 시트와 같은 이유로 히스토리 소유권을 넘겨받고 나간다 */
+        logoutSheet.value?.releaseHistory();
+        logoutSheetOpen.value = false;
         router.replace({ name: 'login' });
     }
 }
@@ -116,14 +131,18 @@ async function confirmLogout() {
             </div>
         </template>
 
-        <BaseBottomSheet v-model="tutorialSheetOpen" title="어떤 튜토리얼을 다시 볼까요?">
+        <BaseBottomSheet
+            ref="tutorialSheet"
+            v-model="tutorialSheetOpen"
+            title="어떤 튜토리얼을 다시 볼까요?"
+        >
             <div class="my-page__sheet">
                 <BaseButton variant="secondary" block @click="replayPersonal">개인 미션</BaseButton>
                 <BaseButton variant="secondary" block @click="replayGroup">그룹 챌린지</BaseButton>
             </div>
         </BaseBottomSheet>
 
-        <BaseBottomSheet v-model="logoutSheetOpen" title="로그아웃할까요?">
+        <BaseBottomSheet ref="logoutSheet" v-model="logoutSheetOpen" title="로그아웃할까요?">
             <div class="my-page__sheet">
                 <p class="my-page__sheet-text">다시 이용하려면 구글 로그인을 한 번 더 해야 해요.</p>
                 <BaseButton variant="dark" block :disabled="loggingOut" @click="confirmLogout">
