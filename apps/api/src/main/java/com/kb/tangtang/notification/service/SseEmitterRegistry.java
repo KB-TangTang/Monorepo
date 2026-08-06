@@ -32,18 +32,17 @@ public class SseEmitterRegistry {
     }
 
     public List<SseEmitter> emittersOf(long userId) {
-        return List.copyOf(emitters.getOrDefault(userId, new CopyOnWriteArrayList<>()));
+        CopyOnWriteArrayList<SseEmitter> list = emitters.get(userId);
+        return list == null ? List.of() : List.copyOf(list);
     }
 
     public void remove(long userId, SseEmitter emitter) {
-        CopyOnWriteArrayList<SseEmitter> list = emitters.get(userId);
-        if (list == null) {
-            return;
-        }
-        list.remove(emitter);
-        if (list.isEmpty()) {
-            emitters.remove(userId);
-        }
+        // computeIfPresent 로 list 제거를 원자적으로 처리해 다른 스레드의 register 와 경합하지 않게 한다.
+        // 예: remove 와 register 가 동시에 실행되면 새 emitter 가 삭제되는 레이스 조건을 방지
+        emitters.computeIfPresent(userId, (key, list) -> {
+            list.remove(emitter);
+            return list.isEmpty() ? null : list;
+        });
     }
 
     public int connectionCount(long userId) {
