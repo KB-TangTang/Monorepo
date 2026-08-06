@@ -15,6 +15,7 @@ import BaseModal from '@/components/common/BaseModal.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import BentoStats from '@/components/common/cards/BentoStats.vue';
 import JudgmentCard from '@/components/common/cards/JudgmentCard.vue';
 import LifeGauge from '@/components/common/cards/LifeGauge.vue';
@@ -35,6 +36,7 @@ const SECTIONS = [
     { id: 'sheet', label: 'BaseBottomSheet' },
     { id: 'badge', label: 'BaseBadge' },
     { id: 'state', label: '상태 3종' },
+    { id: 'bell', label: 'TheNotificationBell' },
     { id: 'cards', label: '카드 라이브러리 7종' },
 ];
 
@@ -218,6 +220,8 @@ const CODE = {
 <StateEmpty v-else-if="!items.length" title="아직 기소된 지출이 없어요">
     <template #action><BaseButton size="sm">계좌 연동하기</BaseButton></template>
 </StateEmpty>`,
+    bell: `<TheNotificationBell />
+<!-- store 의 unreadCount 를 읽어 배지를 그리고, 클릭하면 /notifications 로 보낸다 -->`,
     record: `<RecordCard
     case-no="TT-2026-0815"
     title="야식 금지 챌린지"
@@ -533,6 +537,17 @@ const CODE = {
                         </template>
                     </StateEmpty>
                 </div>
+            </CatalogItem>
+        </section>
+
+        <section id="bell" class="catalog__section">
+            <h2 class="catalog__h2">TheNotificationBell</h2>
+            <CatalogItem
+                name="TheNotificationBell"
+                purpose="안 읽은 알림 개수를 배지로 보여주고 누르면 /notifications 로 이동한다. common/ 에 두어 홈 담당자가 그대로 옮겨 붙인다."
+                :code="CODE.bell"
+            >
+                <TheNotificationBell />
             </CatalogItem>
         </section>
 
