@@ -138,6 +138,18 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupChallengeListView.vue'),
         meta: { title: '재판 전체보기' },
     },
+    {
+        path: '/group-challenges/:id',
+        name: 'groupChallengeDetail',
+        component: () => import('@/views/challenge/group/GroupChallengeDetailView.vue'),
+        meta: { title: '그룹 챌린지 상세', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/ranking',
+        name: 'groupChallengeRanking',
+        component: () => import('@/views/challenge/group/GroupHonorCourtView.vue'),
+        meta: { title: '명예 법정', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',
