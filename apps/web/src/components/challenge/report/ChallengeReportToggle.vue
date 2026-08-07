@@ -1,20 +1,34 @@
 <script setup>
+defineProps({
+    active: {
+        type: String,
+        default: 'report',
+        validator: (v) => ['transactions', 'report'].includes(v),
+    },
+});
+
 defineEmits(['open-transactions', 'open-monthly-report']);
 </script>
 
 <template>
     <nav class="report-toggle" aria-label="자료실 화면 전환">
-        <button type="button" @click="$emit('open-transactions')">
+        <button
+            type="button"
+            :class="{ 'report-toggle__active': active === 'transactions' }"
+            :aria-current="active === 'transactions' ? 'page' : undefined"
+            @click="$emit('open-transactions')"
+        >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2z" />
                 <path d="M9 8h6M9 12h6" />
             </svg>
             <span>거래내역</span>
+            <i v-if="active === 'transactions'" aria-hidden="true"></i>
         </button>
         <button
             type="button"
-            class="report-toggle__active"
-            aria-current="page"
+            :class="{ 'report-toggle__active': active === 'report' }"
+            :aria-current="active === 'report' ? 'page' : undefined"
             @click="$emit('open-monthly-report')"
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -22,7 +36,7 @@ defineEmits(['open-transactions', 'open-monthly-report']);
                 <path d="M15 3.5v4h4M9 16v-3M12 16V9M15 16v-5" />
             </svg>
             <span>리포트</span>
-            <i aria-hidden="true"></i>
+            <i v-if="active === 'report'" aria-hidden="true"></i>
         </button>
     </nav>
 </template>

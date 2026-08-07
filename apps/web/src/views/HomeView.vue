@@ -11,6 +11,7 @@ import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import { MOCK_HOME_ACTIVE } from '@/fixtures/home';
 import { clampHomeProgress, formatHomeAmount, formatHomeRate } from '@/utils/home';
 import challengeImage from '@/assets/images/tang_home.png';
@@ -82,15 +83,7 @@ onMounted(loadHome);
                 <div class="home__status-row">
                     <BaseBadge class="home__date" variant="progress">{{ dateLabel }}</BaseBadge>
 
-                    <div class="home__notification">
-                        <span>알림</span>
-                        <span
-                            v-if="homeData?.notificationCount > 0"
-                            class="home__notification-count"
-                        >
-                            {{ homeData.notificationCount }}
-                        </span>
-                    </div>
+                    <TheNotificationBell />
                 </div>
 
                 <h1 class="home__title">{{ homeData?.userName ?? '사용자' }}님, 오늘도 탕탕!</h1>

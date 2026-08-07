@@ -29,6 +29,25 @@ config          앱 전역 설정 (RootConfig / ServletConfig / WebConfig)
 - 공용 유틸·응답 래퍼·공통 예외는 **`common` 에만** 둔다. 모듈끼리 복사하지 않는다.
 - 새 모듈을 만들 필요는 없다. 위 9개 안에서 해결한다.
 
+### 알림 보내기 — `notification` 모듈을 고치지 말 것
+
+알림이 필요하면 **`NotificationRequestedEvent` 하나만 발행한다.** 리스너를 새로 만들지 않는다.
+
+```java
+events.publishEvent(new NotificationRequestedEvent(
+        userId,
+        NotificationType.MISSION_DEADLINE,
+        Map.of("content", "무지출 미션 · 자정까지"),   // 문구 템플릿의 치환값
+        "/mission/personal"));                      // 딥링크는 발행하는 도메인이 안다
+```
+
+- **문구는 `NotificationType` enum 이 소유한다.** 발행자는 치환값만 넘긴다
+  (팀 결정 2026-08-07. 문구가 6개 모듈에 흩어지면 톤이 제각각이 된다)
+- 자기 알림 문구가 정해지면 `NotificationType` 의 템플릿을 채운다.
+  아직 `{content}` 인 종류는 **완성 문구를 `content` 키로 넘기면 그대로 나간다**
+- 치환값이 빠지면 알림을 저장하지 않고 DLQ 로 보낸다 — 반쪽짜리 문구를 사용자에게 보이지 않기 위함
+- 리스너는 `@Async` 다. 알림이 실패해도 발행자의 작업은 성공한다
+
 ## 스프링 설정 (건드리기 전에 읽을 것)
 
 - 스캔이 두 컨텍스트로 나뉘어 있다.

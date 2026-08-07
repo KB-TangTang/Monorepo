@@ -6,7 +6,9 @@ import com.kb.tangtang.user.dto.ConsentAgreementDto;
 import com.kb.tangtang.user.dto.ConsentRecordDto;
 import com.kb.tangtang.user.dto.MyConsentDto;
 import com.kb.tangtang.user.dto.MyConsentRowDto;
+import com.kb.tangtang.user.domain.ConsentWithdrawnEvent;
 import com.kb.tangtang.user.mapper.ConsentMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,13 +38,16 @@ class ConsentServiceTest {
 
     @Mock private ConsentMapper consentMapper;
 
+    /* 금융데이터 철회 시 계좌 연동 해제 이벤트가 나가는지 확인하기 위해 함께 목으로 둔다. */
+    @Mock private ApplicationEventPublisher events;
+
     private ConsentCatalog catalog() {
         return new ConsentCatalog("v1.0", "u/terms", "u/privacy", "u/financial",
                 "u/third", "u/ai", "u/marketing");
     }
 
     private ConsentService service() {
-        return new ConsentService(consentMapper, catalog());
+        return new ConsentService(consentMapper, catalog(), events);
     }
 
     @Test
@@ -215,6 +220,33 @@ class ConsentServiceTest {
     }
 
     @Test
+    @DisplayName("FINANCIAL_DATA 철회는 계좌 연동 해제 이벤트를 발행한다 (이슈 #12)")
+    void withdrawFinancialDataPublishesEvent() {
+        when(consentMapper.withdraw(eq(1L), eq(List.of("FINANCIAL_DATA", "THIRD_PARTY")), any(LocalDateTime.class)))
+                .thenReturn(2);
+        when(consentMapper.countActive(anyLong(), any(), any(LocalDateTime.class))).thenReturn(2);
+
+        service().withdraw(1L, "FINANCIAL_DATA");
+
+        ArgumentCaptor<ConsentWithdrawnEvent> captor =
+                ArgumentCaptor.forClass(ConsentWithdrawnEvent.class);
+        verify(events).publishEvent(captor.capture());
+        assertEquals(1L, captor.getValue().userId());
+        assertEquals("FINANCIAL_DATA", captor.getValue().consentType());
+    }
+
+    @Test
+    @DisplayName("선택 항목 철회는 연동 해제 이벤트를 발행하지 않는다")
+    void withdrawOptionalDoesNotPublishEvent() {
+        when(consentMapper.withdraw(eq(1L), eq(List.of("AI_USAGE")), any(LocalDateTime.class))).thenReturn(1);
+        when(consentMapper.countActive(anyLong(), any(), any(LocalDateTime.class))).thenReturn(3);
+
+        service().withdraw(1L, "AI_USAGE");
+
+        verify(events, never()).publishEvent(any(ConsentWithdrawnEvent.class));
+    }
+
+    @Test
     @DisplayName("AI_USAGE 는 자기 하나만 철회한다")
     void withdrawOptionalOnly() {
         when(consentMapper.withdraw(eq(1L), eq(List.of("AI_USAGE")), any(LocalDateTime.class))).thenReturn(1);
@@ -251,5 +283,22 @@ class ConsentServiceTest {
         assertFalse(terms.isWithdrawable());
         assertFalse(marketing.isAgreed(), "행이 없으면 미동의");
         assertTrue(marketing.isWithdrawable());
+    }
+
+    @Test
+    @DisplayName("내 동의 현황은 항목이 속한 scope 를 함께 알려준다 — 화면의 재동의가 scope 단위 저장을 쓴다")
+    void myConsentsCarriesScope() {
+        when(consentMapper.findByUserId(1L)).thenReturn(List.of());
+
+        List<MyConsentDto> result = service().myConsents(1L);
+
+        assertEquals("SIGNUP", find(result, "MARKETING").getScope());
+        assertEquals("SIGNUP", find(result, "FINANCIAL_DATA").getScope());
+        assertEquals("FINANCIAL", find(result, "THIRD_PARTY").getScope(),
+                "CODEF 제3자 제공은 FINANCIAL 묶음이다. SIGNUP 으로 저장하면 요청이 거부된다");
+    }
+
+    private MyConsentDto find(List<MyConsentDto> items, String type) {
+        return items.stream().filter(d -> type.equals(d.getType())).findFirst().orElseThrow();
     }
 }

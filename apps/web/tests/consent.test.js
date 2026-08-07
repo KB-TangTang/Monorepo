@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    buildAgreeAgainPayload,
     buildAgreementState,
     buildAgreementStateFromConsents,
+    canAgreeAgain,
     canSubmit,
+    canWithdraw,
+    consentStatusText,
     isAllChecked,
     toAgreements,
     toggleAll,
@@ -112,4 +116,83 @@ test('카탈로그에는 있지만 기존 동의 행이 없는 항목은 미체�
     const state = buildAgreementStateFromConsents(ITEMS, myConsents);
     assert.equal(state.TERMS, true);
     assert.equal(state.MARKETING, false, '행이 없는 항목은 안전하게 미동의로 취급한다');
+});
+
+test('canWithdraw: 동의 중이면서 철회 가능한 항목만 끌 수 있다', () => {
+    assert.equal(canWithdraw({ agreed: true, withdrawable: true }), true);
+    assert.equal(
+        canWithdraw({ agreed: false, withdrawable: true }),
+        false,
+        '이미 철회된 항목은 잠근다',
+    );
+    assert.equal(canWithdraw({ agreed: true, withdrawable: false }), false, '필수 약관은 잠근다');
+    assert.equal(canWithdraw({ agreed: false, withdrawable: false }), false);
+});
+
+test('consentStatusText: 철회 상태면 철회함만 보여준다', () => {
+    assert.equal(consentStatusText({ agreed: false, termsVersion: 'v2.3' }), '철회함');
+});
+
+test('consentStatusText: 동의 상태면 버전·만료일을 이어 붙인다', () => {
+    assert.equal(consentStatusText({ agreed: true }), '동의함');
+    assert.equal(consentStatusText({ agreed: true, termsVersion: 'v2.3' }), '동의함 · v2.3');
+    assert.equal(
+        consentStatusText({ agreed: true, termsVersion: 'v2.3', expiresAt: '2027-08-06T10:00:00' }),
+        '동의함 · v2.3 · 만료 2027-08-06',
+    );
+});
+
+test('canAgreeAgain: 철회한 항목만 다시 켤 수 있다', () => {
+    assert.equal(canAgreeAgain({ agreed: false, withdrawable: true, scope: 'SIGNUP' }), true);
+    assert.equal(
+        canAgreeAgain({ agreed: true, withdrawable: true, scope: 'SIGNUP' }),
+        false,
+        '이미 동의 중이면 켤 게 없다',
+    );
+    assert.equal(
+        canAgreeAgain({ agreed: false, withdrawable: false, scope: 'SIGNUP' }),
+        false,
+        '철회 불가 항목은 이 화면에서 되살리지 않는다',
+    );
+    assert.equal(
+        canAgreeAgain({ agreed: false, withdrawable: true }),
+        false,
+        'scope 를 모르면 어느 묶음으로 저장할지 알 수 없다',
+    );
+});
+
+test('buildAgreeAgainPayload: 같은 scope 항목을 현재 상태 그대로 싣고 대상만 켠다', () => {
+    const myConsents = [
+        { type: 'TERMS', scope: 'SIGNUP', agreed: true },
+        { type: 'PRIVACY', scope: 'SIGNUP', agreed: true },
+        { type: 'FINANCIAL_DATA', scope: 'SIGNUP', agreed: true },
+        { type: 'AI_USAGE', scope: 'SIGNUP', agreed: false },
+        { type: 'MARKETING', scope: 'SIGNUP', agreed: false },
+        { type: 'THIRD_PARTY', scope: 'FINANCIAL', agreed: true },
+    ];
+
+    const payload = buildAgreeAgainPayload(myConsents, { type: 'MARKETING', scope: 'SIGNUP' });
+
+    assert.deepEqual(payload, [
+        { type: 'TERMS', agreed: true },
+        { type: 'PRIVACY', agreed: true },
+        { type: 'FINANCIAL_DATA', agreed: true },
+        { type: 'AI_USAGE', agreed: false },
+        { type: 'MARKETING', agreed: true },
+    ]);
+});
+
+test('buildAgreeAgainPayload: 다른 scope 항목은 건드리지 않는다', () => {
+    const myConsents = [
+        { type: 'MARKETING', scope: 'SIGNUP', agreed: true },
+        { type: 'THIRD_PARTY', scope: 'FINANCIAL', agreed: false },
+    ];
+
+    const payload = buildAgreeAgainPayload(myConsents, { type: 'THIRD_PARTY', scope: 'FINANCIAL' });
+
+    assert.deepEqual(
+        payload,
+        [{ type: 'THIRD_PARTY', agreed: true }],
+        'FINANCIAL 저장이 SIGNUP 의 마케팅 동의를 끄면 안 된다',
+    );
 });

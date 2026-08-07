@@ -100,14 +100,28 @@ public class AuthController {
         response.sendRedirect(frontUrl + "/auth/callback");
     }
 
-    /** 액세스 토큰 재발급. 리프레시 토큰은 회전하며 새 쿠키로 덮어쓴다. */
+    /**
+     * 액세스 토큰 재발급. 리프레시 토큰은 회전하며 새 쿠키로 덮어쓴다.
+     *
+     * REFRESH_TOKEN_REUSED 시 쿠키를 지워야 한다.
+     * httpOnly 쿠키는 서버의 Set-Cookie 로만 삭제할 수 있으므로,
+     * 여기서 지우지 않으면 브라우저가 매 요청마다 stale 쿠키를 보내
+     * 프론트엔드 세션 복원(main.js) 과 맞물려 무한 리다이렉트가 발생한다.
+     */
     @PostMapping("/refresh")
     public ApiResponse<LoginResponseDto> refresh(HttpServletRequest request, HttpServletResponse response) {
         String rawToken = cookieWriter.read(request, AuthCookieWriter.REFRESH_TOKEN).orElse(null);
 
-        AuthResultDto result = authService.refresh(rawToken);
-        cookieWriter.writeRefreshToken(response, result.getRefreshToken());
-        return ApiResponse.ok(result.getResponse());
+        try {
+            AuthResultDto result = authService.refresh(rawToken);
+            cookieWriter.writeRefreshToken(response, result.getRefreshToken());
+            return ApiResponse.ok(result.getResponse());
+        } catch (BusinessException ex) {
+            if ("REFRESH_TOKEN_REUSED".equals(ex.getCode())) {
+                cookieWriter.clearRefreshToken(response);
+            }
+            throw ex;
+        }
     }
 
     @PostMapping("/logout")

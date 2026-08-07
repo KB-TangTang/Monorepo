@@ -170,7 +170,13 @@ CREATE TABLE tbl_connected_account (
   codef_connected_id   VARCHAR(100)  NULL COMMENT 'CODEF 커넥티드아이디',
   bank_code            VARCHAR(10)   NULL COMMENT '금융기관 코드(은행/증권사)',
   bank_name            VARCHAR(50)   NULL,
-  account_no_encrypted VARCHAR(200)  NULL COMMENT '계좌번호 암호화 저장',
+  account_name         VARCHAR(100)  NULL COMMENT '계좌 상품명 (CODEF resAccountName)',
+                                          -- [ADD 0805·#12] 상품명 컬럼이 없어 관리 화면이 "입출금" 같은
+                                          -- 일반 라벨밖에 못 그렸다. migration/20260805_add_account_name_to_connected_account.sql
+  account_no_encrypted VARCHAR(200)  NULL COMMENT '계좌번호 HMAC-SHA256 (결정적·단방향). 중복 검사 전용',
+  account_no_masked    VARCHAR(30)   NULL COMMENT '표시용 마스킹 계좌번호 (110-***-****23)',
+                                          -- [ADD 0805·#12] 원본 계좌번호는 서버에 남기지 않는다.
+                                          -- UNIQUE KEY 가 이 암호값을 쓰므로 결정적이어야 한다(랜덤 IV 금지).
   account_type         VARCHAR(20)   NOT NULL COMMENT '입출금/예적금/펀드/페이머니/SECURITIES',
   deposit_type_code    VARCHAR(5)    NULL COMMENT '은행 전용 CODEF resAccountDeposit 코드',
   provider             VARCHAR(20)   NULL COMMENT '페이머니 전용: KAKAOPAY/NAVERPAY',

@@ -26,16 +26,28 @@ services:
     build:
       context: ../Financial-Mock-Server
       dockerfile: Dockerfile
+    environment:
+      # 목서버는 자기 DB(financial_mock)를 이 db 컨테이너에서 쓴다.
+      # 이 값을 주지 않으면 목서버가 자기 컨테이너의 localhost 를 찾다가 DB 에 못 붙는다.
+      JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+      JDBC_URL: jdbc:log4jdbc:mysql://db:3306/financial_mock?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      JDBC_USERNAME: root
+      JDBC_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
     ports:
       - "8081:8080"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080 || exit 1"]
+      # 실제 조회 API 로 확인한다. 루트(/)는 목서버가 DB 에 못 붙어도 404 를 돌려주므로
+      # 깨진 목서버를 healthy 로 보고해 버린다 (실제로 그래서 장애를 놓쳤다).
+      test: ["CMD-SHELL", "curl -f 'http://localhost:8080/api/v1/assets/accounts?scenarioKey=demo-normal-user' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # 톰캣 war 기동에 시간이 걸린다. 이 구간의 실패는 재시도 횟수로 세지 않는다.
+      start_period: 60s
 
   # === 3. 본서버 (비즈니스 로직) ===
   api:
@@ -68,8 +80,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # 목서버는 기동만 확인하고 넘어간다(service_healthy 아님).
+      # 목서버는 계좌 연동에만 쓰이는데, healthy 를 요구하면 목서버가 깨졌을 때
+      # api 컨테이너가 아예 시작하지 못해 서비스 전체가 내려간다.
+      # 2026-08-06 실제로 목서버 매퍼 XML 오류 하나로 전면 502 가 났다.
       mock:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
