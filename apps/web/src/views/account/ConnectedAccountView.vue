@@ -14,6 +14,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
@@ -132,7 +133,14 @@ function leaveTo(target) {
 
 <template>
     <div class="connected-accounts">
-        <h1 class="connected-accounts__title">연결 계좌 관리</h1>
+        <!--
+          자산 홈과 마이페이지 양쪽에서 들어온다. to 를 주면 어디서 왔든 한 곳으로만 나가므로
+          목적지를 고정하지 않는다 (router.back()).
+        -->
+        <header class="connected-accounts__head">
+            <BaseBackButton label="이전 화면으로 돌아가기" />
+            <h1 class="connected-accounts__title">연결 계좌 관리</h1>
+        </header>
 
         <!-- 확정본의 연파랑 상태 카드 -->
         <div v-if="hasAccounts" class="connected-accounts__summary">
@@ -219,6 +227,13 @@ function leaveTo(target) {
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-6));
     background: var(--tt-bg-subtle);
     overflow: hidden;
+}
+
+/* 뒤로가기와 제목을 한 줄에. 알림 목록(.noti-list__header)과 같은 배치를 쓴다 */
+.connected-accounts__head {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
 }
 
 .connected-accounts__title {

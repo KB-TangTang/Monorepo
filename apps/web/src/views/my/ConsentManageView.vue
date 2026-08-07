@@ -7,6 +7,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import StateError from '@/components/common/StateError.vue';
@@ -122,7 +123,11 @@ function closeSheet() {
 <template>
     <div class="consent-manage">
         <header class="consent-manage__header">
-            <h1 class="consent-manage__title">동의 관리</h1>
+            <!-- to 를 주지 않는다 — router.back() 이라야 들어온 자리로 돌아간다 -->
+            <div class="consent-manage__head-row">
+                <BaseBackButton label="이전 화면으로 돌아가기" />
+                <h1 class="consent-manage__title">동의 관리</h1>
+            </div>
             <p class="consent-manage__lead">
                 현재 동의 상태를 확인하고 철회하거나 다시 동의할 수 있어요.
             </p>
@@ -213,6 +218,13 @@ function closeSheet() {
     min-height: calc(100vh - var(--tt-tabbar-height));
     padding: var(--tt-space-5);
     background: var(--tt-bg-subtle);
+}
+
+/* 뒤로가기와 제목을 한 줄에. 알림 목록(.noti-list__header)과 같은 배치를 쓴다 */
+.consent-manage__head-row {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
 }
 
 .consent-manage__title {
