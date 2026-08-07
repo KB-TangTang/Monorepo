@@ -1,6 +1,6 @@
 .home {
     min-height: 100%;
-    padding: var(--tt-space-8) var(--tt-space-5) var(--tt-space-10);
+    padding: var(--tt-space-8) var(--tt-screen-padding) var(--tt-space-12);
     background: var(--tt-bg-subtle);
 }
 
@@ -17,7 +17,7 @@
     height: 190px;
     content: '';
     pointer-events: none;
-    background: var(--tt-primary-subtle);
+    background: var(--tt-info-subtle);
     border-radius: var(--tt-radius-full);
     opacity: 0.42;
 }
@@ -33,27 +33,10 @@
 .home__date {
     padding: var(--tt-space-1) var(--tt-space-3);
     font-size: var(--tt-fs-body);
-}
-
-.home__notification {
-    display: flex;
-    align-items: center;
-    gap: var(--tt-space-2);
-    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-primary);
-}
-
-.home__notification-count {
-    display: inline-grid;
-    width: 24px;
-    height: 24px;
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-caption);
-    color: var(--tt-text-inverse);
-    background: var(--tt-danger);
-    border-radius: var(--tt-radius-full);
-    place-items: center;
+    color: var(--tt-info);
+    background: var(--tt-info-subtle);
+    border-color: var(--tt-info-subtle);
 }
 
 .home__title {
@@ -82,13 +65,14 @@
     color: var(--tt-text-inverse);
     background: var(--tt-surface-inverse);
     border-color: var(--tt-surface-inverse);
-    border-radius: var(--tt-radius-lg);
+    border-radius: var(--tt-radius-xl);
     box-shadow: var(--tt-elevation-3);
 }
 
 .challenge-card__badge {
     color: var(--tt-text-inverse);
-    background: var(--tt-surface-strong-muted);
+    background: var(--tt-surface-raised);
+    border-color: var(--tt-surface-raised);
 }
 
 .challenge-card__title {
@@ -101,7 +85,7 @@
 .challenge-card__summary {
     margin-top: var(--tt-space-1);
     font-size: var(--tt-fs-body);
-    color: var(--tt-border-strong);
+    color: var(--tt-text-hint);
 }
 
 .challenge-card__summary strong {
@@ -116,7 +100,7 @@
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-border-strong);
+    color: var(--tt-text-hint);
 }
 
 .challenge-card__progress-info strong {
@@ -129,7 +113,7 @@
     height: 12px;
     margin-top: var(--tt-space-2);
     overflow: hidden;
-    background: var(--tt-surface-strong-muted);
+    background: var(--tt-surface-raised);
     border-radius: var(--tt-radius-full);
 }
 
@@ -138,24 +122,25 @@
     height: 100%;
     background: var(--tt-accent);
     border-radius: inherit;
+    transform-origin: left center;
+    animation: home-progress-fill 1.4s 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.challenge-card__pagination {
-    display: flex;
-    justify-content: center;
-    gap: var(--tt-space-1);
-    margin-top: var(--tt-space-2);
+@keyframes home-progress-fill {
+    from {
+        transform: scaleX(0);
+    }
+
+    to {
+        transform: scaleX(1);
+    }
 }
 
-.challenge-card__pagination span {
-    width: 8px;
-    height: 8px;
-    background: var(--tt-border-strong);
-    border-radius: var(--tt-radius-full);
-}
-
-.challenge-card__pagination .challenge-card__pagination-dot--active {
-    background: var(--tt-text);
+@media (prefers-reduced-motion: reduce) {
+    .challenge-card__progress-value {
+        animation-duration: 400ms;
+        animation-delay: 100ms;
+    }
 }
 
 .challenge-card--empty {
@@ -200,9 +185,33 @@
 
 .challenge-card__button {
     margin-top: auto;
+    font-size: var(--tt-fs-label);
     color: var(--tt-text);
     background: var(--tt-accent);
     border-radius: var(--tt-radius-full);
+    box-shadow: var(--tt-elevation-0);
+    transition:
+        box-shadow 0.15s ease,
+        filter 0.15s ease,
+        transform 0.15s ease;
+}
+
+.challenge-card__button :deep(.tt-btn__label) {
+    font-weight: var(--tt-fw-black);
+}
+
+.challenge-card__button.tt-btn--primary:not(:disabled):hover {
+    color: var(--tt-text);
+    background: var(--tt-accent);
+    box-shadow: var(--tt-elevation-3);
+    filter: brightness(1.06);
+    transform: translateY(-2px);
+}
+
+.challenge-card__button.tt-btn--primary:not(:disabled):active {
+    box-shadow: var(--tt-elevation-1);
+    filter: brightness(0.98);
+    transform: translateY(1px) scale(0.98);
 }
 
 .home-summary {
@@ -223,8 +232,11 @@
 }
 
 .home-summary__grid > * {
-    min-height: 104px;
+    min-height: 112px;
+    background: var(--tt-bg);
+    border-color: var(--tt-border);
     border-radius: var(--tt-radius-lg);
+    box-shadow: var(--tt-elevation-1);
 }
 
 .summary-card__label {
@@ -284,17 +296,44 @@
 }
 
 .honor-court {
+    position: relative;
+    display: flex;
+    align-items: center;
     min-height: 108px;
     margin-top: var(--tt-space-4);
-    background: var(--tt-primary-subtle);
-    border-color: var(--tt-primary-subtle);
+    overflow: hidden;
+    background: var(--tt-info-subtle);
+    border-color: var(--tt-info-subtle);
     border-radius: var(--tt-radius-lg);
     box-shadow: var(--tt-elevation-0);
 }
 
+.honor-court__content {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    padding-right: 96px;
+}
+
+.honor-court__empty-title {
+    margin: 0;
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
+}
+
+.honor-court__empty-description {
+    margin-top: var(--tt-space-2);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-info);
+}
+
 .honor-court__title {
     font-size: var(--tt-fs-body);
-    color: var(--tt-primary);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-info-deep);
 }
 
 .honor-court__ranking {
@@ -314,13 +353,22 @@
 .honor-court__ranking span {
     font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-primary);
+    color: var(--tt-info);
 }
 
 .honor-court__description {
     margin-top: var(--tt-space-1);
     font-size: var(--tt-fs-caption);
-    color: var(--tt-primary);
+    color: var(--tt-info);
+}
+
+.honor-court__image {
+    position: absolute;
+    right: var(--tt-space-3);
+    bottom: var(--tt-space-3);
+    width: 92px;
+    height: 92px;
+    object-fit: contain;
 }
 
 @media (max-width: 380px) {
@@ -340,5 +388,16 @@
     .challenge-card__empty-title,
     .challenge-card__title {
         font-size: var(--tt-fs-section);
+    }
+
+    .honor-court__content {
+        padding-right: 80px;
+    }
+
+    .honor-court__image {
+        right: var(--tt-space-2);
+        bottom: var(--tt-space-3);
+        width: 82px;
+        height: 82px;
     }
 }

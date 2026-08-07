@@ -3,8 +3,8 @@
   챌린지 데이터 유무에 따라 참여 유도 카드와 진행 현황 카드를 전환한다.
 -->
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { fetchHome } from '@/api/home';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -12,16 +12,21 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
-import { MOCK_HOME_ACTIVE } from '@/fixtures/home';
+import { MOCK_HOME_ACTIVE, MOCK_HOME_EMPTY } from '@/fixtures/home';
 import { clampHomeProgress, formatHomeAmount, formatHomeRate } from '@/utils/home';
 import challengeImage from '@/assets/images/tang_home.png';
+import honorCourtImage from '@/assets/images/emotions/56_with_trophy_ver4.png';
 
 const router = useRouter();
+const route = useRoute();
 
 const homeData = ref(null);
 const isLoading = ref(false);
 const errorMessage = ref('');
+const animatedProgress = ref(0);
 const isDevelopment = import.meta.env.DEV;
+let progressAnimationFrame = 0;
+let progressAnimationTimer = 0;
 
 const challenge = computed(() => homeData.value?.challenge ?? null);
 const pendingVote = computed(() => homeData.value?.pendingVote ?? null);
@@ -38,10 +43,46 @@ const challengeProgress = computed(() => {
     return clampHomeProgress(challenge.value?.progressRate);
 });
 
+function stopProgressAnimation() {
+    window.clearTimeout(progressAnimationTimer);
+    window.cancelAnimationFrame(progressAnimationFrame);
+}
+
+function animateProgress(targetProgress) {
+    stopProgressAnimation();
+    animatedProgress.value = 0;
+
+    if (targetProgress <= 0) {
+        return;
+    }
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration = reduceMotion ? 400 : 1400;
+    const delay = reduceMotion ? 100 : 200;
+
+    progressAnimationTimer = window.setTimeout(() => {
+        const startedAt = performance.now();
+
+        function updateProgress(now) {
+            const elapsedRatio = Math.min((now - startedAt) / duration, 1);
+            const easedRatio = 1 - Math.pow(1 - elapsedRatio, 3);
+            animatedProgress.value = Math.round(targetProgress * easedRatio);
+
+            if (elapsedRatio < 1) {
+                progressAnimationFrame = window.requestAnimationFrame(updateProgress);
+            }
+        }
+
+        progressAnimationFrame = window.requestAnimationFrame(updateProgress);
+    }, delay);
+}
+
+watch(challengeProgress, animateProgress, { immediate: true });
+
 async function loadHome() {
     // 백엔드 홈 API가 준비되기 전까지 개발 환경에서는 데이터가 있는 시안을 기본으로 보여준다.
     if (isDevelopment) {
-        homeData.value = MOCK_HOME_ACTIVE;
+        homeData.value = route.query.homeState === 'empty' ? MOCK_HOME_EMPTY : MOCK_HOME_ACTIVE;
         return;
     }
 
@@ -58,18 +99,23 @@ async function loadHome() {
 }
 
 function goToPersonalChallenge() {
-    router.push('/mission/personal');
+    router.push({ name: 'personalMissionChallenge' });
 }
 
 function goToGroupChallenge() {
-    router.push('/group-challenges');
+    router.push({ name: 'groupChallengeList' });
 }
 
 function goToAsset() {
-    router.push('/asset');
+    router.push({ name: 'asset' });
+}
+
+function goToPersonalRanking() {
+    router.push({ name: 'personalRanking' });
 }
 
 onMounted(loadHome);
+onBeforeUnmount(stopProgressAnimation);
 </script>
 
 <template>
@@ -94,7 +140,13 @@ onMounted(loadHome);
                 </p>
             </header>
 
-            <BaseCard v-if="challenge" class="challenge-card" padding="lg">
+            <BaseCard
+                v-if="challenge"
+                class="challenge-card"
+                clickable
+                padding="lg"
+                @click="goToPersonalChallenge"
+            >
                 <BaseBadge class="challenge-card__badge">오늘의 메인 챌린지</BaseBadge>
 
                 <h2 class="challenge-card__title">{{ challenge.title }}</h2>
@@ -109,7 +161,7 @@ onMounted(loadHome);
                         {{ formatHomeAmount(challenge.spentAmount) }} /
                         {{ formatHomeAmount(challenge.limitAmount) }}원
                     </span>
-                    <strong>{{ challengeProgress }}%</strong>
+                    <strong>{{ animatedProgress }}%</strong>
                 </div>
 
                 <div
@@ -149,11 +201,6 @@ onMounted(loadHome);
                     </BaseButton>
                 </div>
             </BaseCard>
-
-            <div v-if="challenge" class="challenge-card__pagination" aria-hidden="true">
-                <span></span>
-                <span class="challenge-card__pagination-dot--active"></span>
-            </div>
 
             <section class="home-summary" aria-labelledby="home-summary-title">
                 <h2 id="home-summary-title" class="home-summary__title">지금 확인할 것</h2>
@@ -229,17 +276,35 @@ onMounted(loadHome);
                 </div>
             </section>
 
-            <BaseCard v-if="honorCourt" class="honor-court" padding="md">
-                <h2 class="honor-court__title">{{ honorCourt.month }}월 명예 법정</h2>
+            <BaseCard
+                v-if="honorCourt || !challenge"
+                class="honor-court"
+                :class="{ 'honor-court--empty': !challenge }"
+                clickable
+                padding="md"
+                @click="challenge ? goToPersonalRanking() : goToPersonalChallenge()"
+            >
+                <div v-if="honorCourt && challenge" class="honor-court__content">
+                    <h2 class="honor-court__title">{{ honorCourt.month }}월 명예의 전당</h2>
 
-                <div class="honor-court__ranking">
-                    <strong>{{ honorCourt.rank }}위</strong>
-                    <span>상위 {{ honorCourt.topPercent }}%</span>
+                    <div class="honor-court__ranking">
+                        <strong>{{ honorCourt.rank }}위</strong>
+                        <span>상위 {{ honorCourt.topPercent }}%</span>
+                    </div>
+
+                    <p class="honor-court__description">
+                        월간 판결문이 {{ honorCourt.reportOpenDays }}일 후 열려요
+                    </p>
                 </div>
 
-                <p class="honor-court__description">
-                    월간 판결문이 {{ honorCourt.reportOpenDays }}일 후 열려요
-                </p>
+                <div v-else class="honor-court__content honor-court__empty-content">
+                    <h2 class="honor-court__empty-title">명예의 전당에 도전하세요</h2>
+                    <p class="honor-court__empty-description">
+                        미션에 참여해 순위에 이름을 올려보세요
+                    </p>
+                </div>
+
+                <img class="honor-court__image" :src="honorCourtImage" alt="" />
             </BaseCard>
         </template>
     </main>
