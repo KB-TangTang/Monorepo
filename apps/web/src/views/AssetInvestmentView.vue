@@ -5,7 +5,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { fetchInvestmentAccountDetail } from '@/api/asset';
-import AssetDetailHeader from '@/components/asset/AssetDetailHeader.vue';
+import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import AssetTotalCard from '@/components/asset/AssetTotalCard.vue';
 import AssetHoldingRow from '@/components/asset/AssetHoldingRow.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
@@ -42,7 +42,7 @@ onMounted(load);
 
 <template>
     <div class="asset-investment">
-        <AssetDetailHeader title="투자증권" />
+        <BaseBackHeader title="투자증권" back-label="자산 홈으로 돌아가기" />
 
         <StateLoading v-if="loading" message="투자증권 정보를 불러오는 중" />
         <StateError v-else-if="errorMessage" :message="errorMessage" @retry="load" />

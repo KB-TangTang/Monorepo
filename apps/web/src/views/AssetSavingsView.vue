@@ -5,7 +5,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { fetchSavingsAccountDetail } from '@/api/asset';
-import AssetDetailHeader from '@/components/asset/AssetDetailHeader.vue';
+import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import AssetTotalCard from '@/components/asset/AssetTotalCard.vue';
 import AssetAccountRow from '@/components/asset/AssetAccountRow.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
@@ -32,7 +32,7 @@ onMounted(load);
 
 <template>
     <div class="asset-savings">
-        <AssetDetailHeader title="예적금" />
+        <BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />
 
         <StateLoading v-if="loading" message="예적금 정보를 불러오는 중" />
         <StateError v-else-if="errorMessage" :message="errorMessage" @retry="load" />

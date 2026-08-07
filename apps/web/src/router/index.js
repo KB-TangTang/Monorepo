@@ -80,8 +80,20 @@ const routes = [
     {
         path: '/ledger',
         name: 'ledger',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '장부' },
+        component: () => import('@/views/LedgerView.vue'),
+        meta: { title: '전체 거래내역' },
+    },
+    {
+        path: '/ledger/transactions',
+        name: 'ledgerMonthTransactions',
+        component: () => import('@/views/LedgerMonthTransactionsView.vue'),
+        meta: { title: '해당월 거래내역' },
+    },
+    {
+        path: '/ledger/search',
+        name: 'ledgerSearch',
+        component: () => import('@/views/LedgerSearchView.vue'),
+        meta: { title: '거래내역 검색' },
     },
     {
         path: '/my',
