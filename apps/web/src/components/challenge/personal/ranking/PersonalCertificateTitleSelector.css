@@ -82,6 +82,6 @@
 
 .certificate-title-selector__options button.is-selected {
     color: var(--tt-text);
-    background: var(--tt-primary-subtle);
-    border-color: var(--tt-primary-subtle);
+    background: var(--tt-info-subtle);
+    border-color: var(--tt-info-subtle);
 }

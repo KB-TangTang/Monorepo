@@ -114,7 +114,7 @@ function isActive(tab) {
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-medium);
-    color: var(--tt-text-muted);
+    color: var(--tt-tab-inactive);
     text-decoration: none;
     transition: color 0.15s ease;
 }
@@ -126,7 +126,7 @@ function isActive(tab) {
 
 /* 활성 탭 — 활성 판정은 스크립트의 isActive() 한 곳에서만 한다 */
 .tt-tabbar__item--active {
-    color: var(--tt-primary);
+    color: var(--tt-tab-active);
 }
 
 .tt-tabbar__item--active .tt-tabbar__icon {

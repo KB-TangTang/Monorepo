@@ -1,5 +1,6 @@
 .honor-certificate {
     display: flex;
+    box-sizing: border-box;
     overflow: hidden;
     flex-direction: column;
     background: var(--tt-bg);
@@ -21,6 +22,7 @@
 }
 
 .honor-certificate__court {
+    flex: none;
     padding: clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-mono-chip);
@@ -153,7 +155,7 @@
 }
 
 .honor-certificate__stats div:nth-child(2) dd {
-    color: var(--tt-primary);
+    color: var(--tt-info);
 }
 
 .honor-certificate__stats div:nth-child(3) dd {
@@ -281,20 +283,45 @@
     height: 119px;
 }
 
-@media (max-width: 390px) {
+.honor-certificate--square .honor-certificate__meta {
+    padding-top: var(--tt-space-2);
+}
+
+@media (max-width: 480px) {
     .honor-certificate__court {
+        padding: var(--tt-space-3);
         letter-spacing: 0.16em;
     }
 
-    .honor-certificate__rank {
+    .honor-certificate__content {
+        gap: var(--tt-space-2);
         padding: var(--tt-space-3);
+    }
+
+    .honor-certificate__heading h2 {
+        font-size: var(--tt-fs-section);
+    }
+
+    .honor-certificate__heading p {
+        margin-top: var(--tt-space-1);
+        font-size: var(--tt-fs-caption);
+    }
+
+    .honor-certificate__rank {
+        padding: var(--tt-space-2) var(--tt-space-3);
+    }
+
+    .honor-certificate__rank strong {
+        margin-top: var(--tt-space-1);
+        font-size: var(--tt-fs-title);
     }
 
     .honor-certificate__rank > b {
         right: -4px;
-        width: clamp(60px, 20vw, 72px);
+        width: clamp(56px, 18vw, 68px);
         height: auto;
         aspect-ratio: 1;
+        font-size: var(--tt-fs-body);
     }
 
     .honor-certificate__stats div {
@@ -309,6 +336,98 @@
     .honor-certificate__verdict p {
         min-width: 0;
         margin-left: 0;
+    }
+
+    .honor-certificate__signature {
+        height: 60px;
+    }
+
+    .honor-certificate__signature img {
+        top: -22px;
+        height: 108px;
+    }
+
+    .honor-certificate__meta {
+        padding-top: var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__court {
+        padding: var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__content {
+        gap: var(--tt-space-1);
+        padding: var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__heading h2 {
+        font-size: var(--tt-fs-label);
+        line-height: var(--tt-lh-tight);
+    }
+
+    .honor-certificate--square .honor-certificate__heading p {
+        margin-top: 0;
+        font-size: var(--tt-fs-mono-chip);
+        line-height: var(--tt-lh-tight);
+    }
+
+    .honor-certificate--square .honor-certificate__rank {
+        padding: var(--tt-space-1) var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__rank small {
+        font-size: var(--tt-fs-mono-chip);
+    }
+
+    .honor-certificate--square .honor-certificate__rank strong {
+        margin-top: 0;
+        font-size: var(--tt-fs-section);
+        line-height: var(--tt-lh-tight);
+    }
+
+    .honor-certificate--square .honor-certificate__rank > b {
+        top: -8px;
+        width: 48px;
+        height: 48px;
+        font-size: var(--tt-fs-caption);
+        border-width: 2px;
+    }
+
+    .honor-certificate--square .honor-certificate__stats div {
+        padding: var(--tt-space-1);
+    }
+
+    .honor-certificate--square .honor-certificate__stats dd,
+    .honor-certificate--square .honor-certificate__stats dd small,
+    .honor-certificate--square .honor-certificate__stats dt {
+        font-size: var(--tt-fs-mono-chip);
+        line-height: var(--tt-lh-tight);
+    }
+
+    .honor-certificate--square .honor-certificate__verdict {
+        grid-template-columns: minmax(0, 1fr) minmax(76px, 34%);
+        padding: 0 var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__verdict p {
+        margin-left: 0;
+        font-size: var(--tt-fs-mono-chip);
+        line-height: var(--tt-lh-snug);
+    }
+
+    .honor-certificate--square .honor-certificate__signature {
+        height: 44px;
+    }
+
+    .honor-certificate--square .honor-certificate__signature img {
+        top: -17px;
+        height: 84px;
+    }
+
+    .honor-certificate--square .honor-certificate__meta {
+        padding-top: var(--tt-space-1);
+        font-size: var(--tt-fs-mono-chip);
+        line-height: var(--tt-lh-tight);
     }
 }
 
@@ -395,8 +514,4 @@
     .honor-certificate--square .honor-certificate__meta {
         padding-top: var(--tt-space-1);
     }
-}
-
-.honor-certificate--square .honor-certificate__meta {
-    padding-top: var(--tt-space-2);
 }
