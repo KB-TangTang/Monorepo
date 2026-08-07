@@ -56,10 +56,23 @@ function textColor(percent, isExceeded) {
                         {{ m.initial }}
                     </div>
                     <span class="member-table__name">{{ m.nickname }}</span>
-                    <span
+                    <svg
                         v-if="m.isExceeded"
-                        class="member-table__exceeded-badge"
-                    >초과</span>
+                        class="member-table__siren"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                    >
+                        <!-- 빛줄기 좌 -->
+                        <line x1="5" y1="10" x2="2.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
+                        <!-- 빛줄기 우 -->
+                        <line x1="19" y1="10" x2="21.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
+                        <!-- 경광등 돔 -->
+                        <path d="M8 14c0-4 2-7 4-7s4 3 4 7" fill="currentColor" />
+                        <!-- 경광등 몸체 -->
+                        <rect x="6" y="14" width="12" height="3" rx="1" fill="currentColor" />
+                        <!-- 받침대 -->
+                        <rect x="4.5" y="17" width="15" height="2.5" rx="1" fill="var(--tt-text-hint)" />
+                    </svg>
                     <span
                         class="member-table__amount"
                         :style="{ color: textColor(m.usagePercent, m.isExceeded) }"
@@ -116,7 +129,7 @@ function textColor(percent, isExceeded) {
 }
 
 .member-table__row {
-    padding: 3px 13px;
+    padding: 10px 13px;
 }
 
 .member-table__row--bordered {
@@ -152,13 +165,17 @@ function textColor(percent, isExceeded) {
     color: var(--tt-text);
 }
 
-.member-table__exceeded-badge {
-    background: var(--tt-red-soft);
+.member-table__siren {
+    width: 18px;
+    height: 18px;
     color: var(--tt-red-deep);
-    font-size: 9px;
-    font-weight: var(--tt-fw-black);
-    padding: 1px 5px;
-    border-radius: var(--tt-radius-full);
+    flex: none;
+    animation: siren-flash 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes siren-flash {
+    0% { color: var(--tt-red-deep); opacity: 1; }
+    100% { color: var(--tt-red); opacity: 0.4; }
 }
 
 .member-table__amount {

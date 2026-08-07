@@ -14,7 +14,7 @@
 /* ── 멤버 아바타 색상 (팀 표준) ────────────────────────────── */
 const AVATAR = {
     1: { nickname: '나',    initial: '나', avatarColor: '#232842' },
-    2: { nickname: '김수현', initial: '김', avatarColor: '#3E63D6' },
+    2: { nickname: '유현', initial: '유', avatarColor: '#3E63D6' },
     3: { nickname: '준서',   initial: '준', avatarColor: '#2E9E6B' },
     4: { nickname: '세영',   initial: '세', avatarColor: '#E7A70C' },
     5: { nickname: '민지',   initial: '민', avatarColor: '#E0664B' },
@@ -62,7 +62,7 @@ export const MOCK_CHALLENGE_DETAILS = {
 
         /* 약속 메모 */
         memo: '하루 배달 1회 이하, 커피는 허용',
-        memoAuthor: '김수현',
+        memoAuthor: '유현',
         memoDate: '7월 30일',
 
         /* 멤버 (tbl_group_member + tbl_user) — groupChallenge.js 와 동일 */
@@ -457,7 +457,7 @@ export const MOCK_CHALLENGE_DETAILS = {
         maxLives: 5,
 
         memo: '밤 9시 이후 지출 금지!',
-        memoAuthor: '김수현',
+        memoAuthor: '유현',
         memoDate: '8월 5일',
 
         memberCount: 3,
@@ -619,7 +619,7 @@ export const MOCK_CHALLENGE_RANKINGS = {
         lastSettlementDate: '8월 6일',
 
         memo: '하루 배달 1회 이하, 커피는 허용',
-        memoAuthor: '김수현',
+        memoAuthor: '유현',
         memoDate: '7월 30일',
 
         podium: [

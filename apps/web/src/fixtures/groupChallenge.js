@@ -265,7 +265,7 @@ export const MOCK_PRE_START_CHALLENGES = [
         isOwner: true,                // adminId === CURRENT_USER_ID
         members: [                    // tbl_group_member JOIN tbl_user
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
             { userId: 4, nickname: '세영', initial: '세' },
         ],
@@ -307,7 +307,7 @@ export const MOCK_PRE_START_CHALLENGES = [
         isOwner: false,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
         ],
     },
@@ -363,7 +363,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         /* --- 멤버 목록 --- */
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
             { userId: 5, nickname: '민지', initial: '민' },
             { userId: 6, nickname: '하은', initial: '하' },
@@ -413,7 +413,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         isDefendant: false,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
             { userId: 4, nickname: '세영', initial: '세' },
             { userId: 5, nickname: '민지', initial: '민' },
@@ -439,12 +439,12 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         isDefendant: false,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 4, nickname: '세영', initial: '세' },
             { userId: 5, nickname: '민지', initial: '민' },
         ],
         unreadChatCount: 5,
-        lastChatMessage: '김수현: 배달 참느라 힘들다...',
+        lastChatMessage: '유현: 배달 참느라 힘들다...',
         lastChatTime: '오후 3:22',
     },
 ];
@@ -473,7 +473,7 @@ export const MOCK_ENDED_CHALLENGES = [
         savingsAmount: 128000,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
             { userId: 4, nickname: '세영', initial: '세' },
             { userId: 5, nickname: '민지', initial: '민' },
@@ -495,7 +495,7 @@ export const MOCK_ENDED_CHALLENGES = [
         savingsAmount: null,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
-            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
             { userId: 5, nickname: '민지', initial: '민' },
             { userId: 6, nickname: '하은', initial: '하' },
