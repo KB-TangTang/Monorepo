@@ -284,4 +284,21 @@ class ConsentServiceTest {
         assertFalse(marketing.isAgreed(), "행이 없으면 미동의");
         assertTrue(marketing.isWithdrawable());
     }
+
+    @Test
+    @DisplayName("내 동의 현황은 항목이 속한 scope 를 함께 알려준다 — 화면의 재동의가 scope 단위 저장을 쓴다")
+    void myConsentsCarriesScope() {
+        when(consentMapper.findByUserId(1L)).thenReturn(List.of());
+
+        List<MyConsentDto> result = service().myConsents(1L);
+
+        assertEquals("SIGNUP", find(result, "MARKETING").getScope());
+        assertEquals("SIGNUP", find(result, "FINANCIAL_DATA").getScope());
+        assertEquals("FINANCIAL", find(result, "THIRD_PARTY").getScope(),
+                "CODEF 제3자 제공은 FINANCIAL 묶음이다. SIGNUP 으로 저장하면 요청이 거부된다");
+    }
+
+    private MyConsentDto find(List<MyConsentDto> items, String type) {
+        return items.stream().filter(d -> type.equals(d.getType())).findFirst().orElseThrow();
+    }
 }

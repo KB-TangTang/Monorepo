@@ -1,12 +1,13 @@
 <!--
-  용도: 자산 상세 화면(입출금·예적금·투자증권·대출) 공통 상단 바. 뒤로가기 + 화면 제목만 담당한다.
-  언제 쓰는지: AssetHomeView 의 자산 목록 항목을 눌러 진입하는 4개 상세 화면 전용.
+  용도: 뒤로가기 + 화면 제목만 담당하는 공용 상세화면 상단 바.
+  언제 쓰는지: 자산 상세 4개 화면, 장부 상세내역 화면 등 "뒤로가기 헤더"가 필요한 모든 화면.
 -->
 <script setup>
 import { useRouter } from 'vue-router';
 
 defineProps({
     title: { type: String, required: true },
+    backLabel: { type: String, default: '뒤로가기' },
 });
 
 const router = useRouter();
@@ -17,30 +18,30 @@ function goBack() {
 </script>
 
 <template>
-    <header class="asset-detail-header">
+    <header class="base-back-header">
         <button
             type="button"
-            class="asset-detail-header__back"
-            aria-label="자산 홈으로 돌아가기"
+            class="base-back-header__back"
+            :aria-label="backLabel"
             @click="goBack"
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m15 4-8 8 8 8" />
             </svg>
         </button>
-        <h1 class="asset-detail-header__title">{{ title }}</h1>
+        <h1 class="base-back-header__title">{{ title }}</h1>
     </header>
 </template>
 
 <style scoped>
-.asset-detail-header {
+.base-back-header {
     display: flex;
     align-items: center;
     gap: var(--tt-space-3);
     margin-bottom: var(--tt-space-4);
 }
 
-.asset-detail-header__back {
+.base-back-header__back {
     display: grid;
     flex: 0 0 32px;
     width: 32px;
@@ -53,7 +54,7 @@ function goBack() {
     place-items: center;
 }
 
-.asset-detail-header__back svg {
+.base-back-header__back svg {
     width: 28px;
     height: 28px;
     fill: none;
@@ -63,7 +64,7 @@ function goBack() {
     stroke-linejoin: round;
 }
 
-.asset-detail-header__title {
+.base-back-header__title {
     font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);

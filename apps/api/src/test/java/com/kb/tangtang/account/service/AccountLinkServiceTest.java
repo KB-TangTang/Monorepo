@@ -4,6 +4,8 @@ import com.kb.tangtang.account.client.FinancialDataClient;
 import com.kb.tangtang.account.client.dto.ConnectionRequest;
 import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
@@ -13,6 +15,7 @@ import com.kb.tangtang.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -45,13 +48,17 @@ class AccountLinkServiceTest {
     private LinkProgressStore store;
     private AccountLinkService service;
 
+    /* 발행된 이벤트를 모아두는 퍼블리셔. 계좌별로 정확히 한 번 발행되는지 검증한다 */
+    private final List<Object> publishedEvents = new ArrayList<>();
+    private final ApplicationEventPublisher capturingPublisher = publishedEvents::add;
+
     @BeforeEach
     void setUp() {
         client = mock(FinancialDataClient.class);
         mapper = mock(ConnectedAccountMapper.class);
         store = new LinkProgressStore(CLOCK);
         service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
-                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), CLOCK);
+                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), capturingPublisher, CLOCK);
 
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
@@ -485,6 +492,122 @@ class AccountLinkServiceTest {
         assertEquals("NEED_RECONNECT", result.getInstitutions().get(0).getSyncStatus());
         verify(mapper).updateSync(eq(9L), eq(USER_ID), eq("NEED_RECONNECT"), any(), any());
         verify(mapper, never()).updateSynced(anyLong(), anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[예외 분기] 연결이 끊긴 기관의 계좌마다 재연동 이벤트가 하나씩 발행된다")
+    void publishesReconnectEventPerAccountWhenConnectionGone() {
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
+                linked(9L, "0003", policy.hash("0003", "111"), "100"),
+                linked(10L, "0003", policy.hash("0003", "222"), "200")));
+        when(client.fetchAccounts("conn-1", "0003"))
+                .thenThrow(new BusinessException("CONNECTION_NOT_FOUND", "연결 정보를 찾을 수 없어요."));
+
+        RefreshResultDto result = service.refresh(USER_ID);
+
+        /*
+         * owned 두 계좌가 모두 NEED_RECONNECT 로 확정되므로, 반환값(SyncStatus) 하나가 아니라
+         * 계좌마다 이벤트가 나가야 한다 — "sync 실행당 한 번"이 아니라 "계좌마다 한 번".
+         */
+        assertEquals("NEED_RECONNECT", result.getInstitutions().get(0).getSyncStatus());
+        assertEquals(2, publishedEvents.size());
+        List<NotificationRequestedEvent> events = publishedEvents.stream()
+                .map(NotificationRequestedEvent.class::cast)
+                .toList();
+        assertEquals(List.of("/asset/accounts/9/reconnect", "/asset/accounts/10/reconnect"),
+                events.stream().map(NotificationRequestedEvent::deepLinkUrl).toList());
+        assertTrue(events.stream().allMatch(e ->
+                e.userId().equals(USER_ID)
+                        && e.type() == NotificationType.ACCOUNT_RECONNECT
+                        && "IBK기업은행".equals(e.params().get("bankName"))));
+    }
+
+    @Test
+    @DisplayName("[잔액 누락 분기] 응답에 없는 계좌는 그 계좌 하나만 재연동 이벤트가 발행된다")
+    void publishesReconnectEventWhenAccountMissingFromResponse() {
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        ConnectedAccount account = linked(11L, "0003", policy.hash("0003", "111"), "100");
+        when(mapper.findByIdAndUser(11L, USER_ID)).thenReturn(account);
+        /* 기관 응답에 이 계좌가 없다 — 해지 등으로 사라진 경우 */
+        when(client.fetchAccounts("conn-1", "0003")).thenReturn(List.of());
+
+        ResyncResultDto result = service.resync(USER_ID, 11L);
+
+        /*
+         * ⚠ 예전에는 이 분기에서도 응답이 NORMAL 이었다 — DB 와 알림은 "재연동 필요" 인데
+         * 화면만 "정상" 으로 보이는 모순이었다 (이슈 #70).
+         */
+        assertEquals("NEED_RECONNECT", result.getSyncStatus());
+
+        verify(mapper).updateSync(eq(11L), eq(USER_ID), eq("NEED_RECONNECT"), any(),
+                eq("금융기관에서 이 계좌를 찾지 못했어요."));
+        verify(mapper, never()).updateSynced(eq(11L), anyLong(), any(), any());
+        assertEquals(1, publishedEvents.size());
+        NotificationRequestedEvent event = (NotificationRequestedEvent) publishedEvents.get(0);
+        assertEquals(USER_ID, event.userId().longValue());
+        assertEquals(NotificationType.ACCOUNT_RECONNECT, event.type());
+        assertEquals("IBK기업은행", event.params().get("bankName"));
+        assertEquals("/asset/accounts/11/reconnect", event.deepLinkUrl());
+    }
+
+    @Test
+    @DisplayName("[집계] 한 계좌라도 재연동이 필요하면 기관 결과도 NEED_RECONNECT 다")
+    void institutionStatusReflectsWorstAccount() {
+        /*
+         * 같은 기관에 계좌가 둘인데 하나만 응답에서 사라진 경우다.
+         * 예전에는 성공 경로 끝에서 무조건 NORMAL 을 돌려줘, 한 계좌가 재연동 대상이 돼도
+         * 즉시 조회 화면은 "정상" 으로 보였다 (이슈 #70).
+         */
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        String presentHash = policy.hash("0003", "110123456723");
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
+                linked(7L, "0003", presentHash, "100"),
+                linked(8L, "0003", policy.hash("0003", "999"), "200")));
+        when(client.fetchAccounts("conn-1", "0003"))
+                .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
+
+        RefreshResultDto result = service.refresh(USER_ID);
+
+        assertEquals("NEED_RECONNECT", result.getInstitutions().get(0).getSyncStatus());
+        /* 살아 있는 계좌는 그대로 갱신된다 — 하나가 실패했다고 나머지를 버리지 않는다 */
+        verify(mapper).updateSynced(eq(7L), eq(USER_ID), any(), any());
+        verify(mapper).updateSync(eq(8L), eq(USER_ID), eq("NEED_RECONNECT"), any(), any());
+    }
+
+    @Test
+    @DisplayName("[정상 동기화] NORMAL 로 끝나면 재연동 이벤트를 발행하지 않는다")
+    void doesNotPublishReconnectEventWhenSyncNormal() {
+        /* 거짓 알림 방지 가드 — 가장 중요한 케이스다. refreshCallsProvider 와 같은 픽스처를 쓴다. */
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        String hash = policy.hash("0003", "110123456723");
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(linked(7L, "0003", hash, "100")));
+        when(client.fetchAccounts("conn-1", "0003"))
+                .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
+
+        RefreshResultDto result = service.refresh(USER_ID);
+
+        assertEquals("NORMAL", result.getInstitutions().get(0).getSyncStatus());
+        assertTrue(publishedEvents.isEmpty());
+    }
+
+    @Test
+    @DisplayName("[예외 분기 - FAILED] 일시적 실패는 재연동 이벤트를 발행하지 않는다")
+    void doesNotPublishReconnectEventOnTransientFailure() {
+        /*
+         * CONNECTION_NOT_FOUND·TOKEN_EXPIRED 가 아닌 코드는 FAILED 로 갈린다 (oneFailureDoesNotStopTheRest 와 같은 픽스처).
+         * FAILED 는 "다시 눌러보면 되는" 일시적 실패라 재연동 알림 대상이 아니다.
+         */
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
+                linked(12L, "0003", policy.hash("0003", "111"), "100")));
+        when(client.fetchAccounts("conn-1", "0003"))
+                .thenThrow(new BusinessException("EXTERNAL_API_UNAVAILABLE", "점검 중"));
+
+        RefreshResultDto result = service.refresh(USER_ID);
+
+        assertEquals("FAILED", result.getInstitutions().get(0).getSyncStatus());
+        assertTrue(publishedEvents.isEmpty());
     }
 
     private FinancialAccountDto balanced(String organization, String no, String balance) {

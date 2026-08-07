@@ -31,12 +31,15 @@ function onOverlayClick() {
     }
 }
 
-useOverlay({
+const { releaseHistory } = useOverlay({
     isOpen,
     panelRef: panel,
     canCloseOnEsc: () => props.closeOnEsc,
     requestClose: close,
 });
+
+/* 모달 안에서 다른 화면으로 이동하는 경우에만 쓴다. useOverlay 의 releaseHistory 주석 참고. */
+defineExpose({ releaseHistory });
 </script>
 
 <template>

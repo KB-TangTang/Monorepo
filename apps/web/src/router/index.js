@@ -80,14 +80,32 @@ const routes = [
     {
         path: '/ledger',
         name: 'ledger',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '장부' },
+        component: () => import('@/views/LedgerView.vue'),
+        meta: { title: '전체 거래내역' },
+    },
+    {
+        path: '/ledger/transactions',
+        name: 'ledgerMonthTransactions',
+        component: () => import('@/views/LedgerMonthTransactionsView.vue'),
+        meta: { title: '해당월 거래내역' },
+    },
+    {
+        path: '/ledger/search',
+        name: 'ledgerSearch',
+        component: () => import('@/views/LedgerSearchView.vue'),
+        meta: { title: '거래내역 검색' },
     },
     {
         path: '/my',
         name: 'my',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/MyPageView.vue'),
         meta: { title: '마이' },
+    },
+    {
+        path: '/my/consents',
+        name: 'myConsents',
+        component: () => import('@/views/my/ConsentManageView.vue'),
+        meta: { title: '동의 관리' },
     },
     // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
     {
@@ -211,6 +229,13 @@ const routes = [
         name: 'accountRefresh',
         component: () => import('@/views/account/AccountRefreshView.vue'),
         meta: { title: '계좌 즉시 조회' },
+    },
+    // ↓ 알림 목록(이슈 #58). 탭바는 숨기지 않는다 — 화면에 뒤로가기 버튼이 없다.
+    {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationListView.vue'),
+        meta: { title: '알림' },
     },
 ];
 

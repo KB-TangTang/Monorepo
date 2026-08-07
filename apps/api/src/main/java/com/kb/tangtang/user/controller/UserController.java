@@ -34,6 +34,7 @@ public class UserController {
                 .id(user.getId())
                 .nickname(user.getNickname())
                 .email(user.getEmail())
+                .socialProvider(user.getSocialProvider())
                 .build());
     }
 }
