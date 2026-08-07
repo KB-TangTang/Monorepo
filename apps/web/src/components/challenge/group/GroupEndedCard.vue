@@ -6,83 +6,84 @@ const props = defineProps({
 });
 
 const isWin = computed(() => props.challenge.finalOutcome === 'SURVIVED');
-const resultLabel = computed(() => (isWin.value ? '승소' : '패소'));
-const resultBg = computed(() => (isWin.value ? 'var(--tt-green-soft)' : 'var(--tt-red-soft)'));
-const resultColor = computed(() => (isWin.value ? 'var(--tt-green)' : 'var(--tt-red-deep)'));
-const livesColor = computed(() => (isWin.value ? 'var(--tt-green)' : 'var(--tt-red-deep)'));
 
-const formattedSavings = computed(() => {
-    if (!props.challenge.savingsAmount) return null;
-    return props.challenge.savingsAmount.toLocaleString();
+const rankBadgeBg = computed(() => (isWin.value ? 'var(--tt-green-soft)' : 'var(--tt-red-soft)'));
+const rankBadgeColor = computed(() => (isWin.value ? 'var(--tt-green)' : 'var(--tt-red-deep)'));
+
+/** 날짜 범위: 07.22 ~ 07.28 */
+const dateRange = computed(() => {
+    const fmt = (iso) => {
+        if (!iso) return '';
+        const [, m, d] = iso.split('-');
+        return `${m}.${d}`;
+    };
+    return `${fmt(props.challenge.startDate)} ~ ${fmt(props.challenge.endDate)}`;
 });
 
-/** ISO 날짜(2026-07-28)를 표시용(2026.07.28)으로 변환 */
-const formattedEndDate = computed(() => {
-    if (!props.challenge.endDate) return '';
-    return props.challenge.endDate.replace(/-/g, '.');
-});
-
-/** 비피쳐 카드용 요약 텍스트를 데이터 필드에서 생성 */
-const summaryText = computed(() => {
+/** 하단 우측: 절약액 또는 벌금 */
+const outcomeText = computed(() => {
     const ch = props.challenge;
-    const livesStr = `목숨 ${ch.livesCount} / ${ch.maxLives}`;
-    if (isWin.value) {
-        const parts = [livesStr];
-        if (ch.finalRank) parts.push(`${ch.finalRank}위`);
-        if (ch.savingsAmount) parts.push(`절약 ${ch.savingsAmount.toLocaleString()}원`);
-        return parts.join(' · ');
+    if (isWin.value && ch.savingsAmount > 0) {
+        return `절약 ${ch.savingsAmount.toLocaleString()}원`;
     }
-    const parts = [livesStr];
-    if (ch.finalChargeAmount > 0) {
-        parts.push(`벌금 ${ch.finalChargeAmount.toLocaleString()}원 정산 완료`);
+    if (!isWin.value && ch.finalChargeAmount > 0) {
+        return `초과 ${ch.finalChargeAmount.toLocaleString()}원`;
     }
-    return parts.join(' · ');
+    return null;
 });
+
+const evalDesc = computed(() =>
+    props.challenge.evalType === 'DAILY' ? '일일결산' : '기간평가',
+);
+
+const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
 </script>
 
 <template>
     <div class="gec-card">
-        <!-- 상단: 이름 + 결과 뱃지 -->
+        <!-- 상단: 이름 + 순위 뱃지 -->
         <div class="gec-card__top">
             <span class="gec-card__name">{{ challenge.groupName }}</span>
             <span
                 class="gec-card__badge"
-                :style="{ background: resultBg, color: resultColor }"
+                :style="{ background: rankBadgeBg, color: rankBadgeColor }"
             >
-                {{ resultLabel }}
+                {{ challenge.finalRank }}위
             </span>
         </div>
 
-        <!-- 중간: 종료 날짜 · 기간 · 멤버수 -->
+        <!-- 중간: 평가타입 · 날짜 범위 -->
         <p class="gec-card__desc">
-            {{ formattedEndDate }} · {{ challenge.totalDays }}일 · {{ challenge.memberCount }}명
+            {{ evalDesc }} · {{ dateRange }}
         </p>
 
-        <!-- 하단 (스탯 그리드 — isFeatured) -->
-        <div v-if="challenge.isFeatured" class="gec-card__stats">
-            <div class="gec-stat">
-                <span class="gec-stat__label">최종 순위</span>
-                <span class="gec-stat__value">
-                    {{ challenge.finalRank }}위
-                    <span class="gec-stat__sub">/ {{ challenge.totalMembers }}명</span>
-                </span>
+        <!-- 하단: 멤버 아바타 + 결과 금액 -->
+        <div class="gec-card__bottom">
+            <div class="gec-card__members">
+                <div class="gec-card__avatars">
+                    <span
+                        v-for="(m, i) in challenge.members"
+                        :key="m.userId"
+                        class="gec-card__avatar"
+                        :style="{
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
+                            marginLeft: i > 0 ? '-7px' : '0',
+                            zIndex: challenge.members.length - i,
+                        }"
+                    >
+                        {{ m.initial }}
+                    </span>
+                </div>
+                <span class="gec-card__member-count">{{ challenge.memberCount }}</span>
             </div>
-            <div class="gec-stat">
-                <span class="gec-stat__label">남은 목숨</span>
-                <span class="gec-stat__value" :style="{ color: livesColor }">
-                    {{ challenge.livesCount }} / {{ challenge.maxLives }}
-                </span>
-            </div>
-            <div class="gec-stat">
-                <span class="gec-stat__label">절약액</span>
-                <span class="gec-stat__value">{{ formattedSavings }}원</span>
-            </div>
-        </div>
-
-        <!-- 하단 (요약 + 판결기록 — !isFeatured) -->
-        <div v-else class="gec-card__summary">
-            <span class="gec-card__summary-text">{{ summaryText }}</span>
-            <span class="gec-card__link">판결기록 ›</span>
+            <span
+                v-if="outcomeText"
+                class="gec-card__outcome"
+                :class="isWin ? 'gec-card__outcome--win' : 'gec-card__outcome--lose'"
+            >
+                {{ outcomeText }}
+            </span>
+            <span v-else class="gec-card__link">판결기록 ›</span>
         </div>
     </div>
 </template>
@@ -109,10 +110,11 @@ const summaryText = computed(() => {
 }
 
 .gec-card__badge {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
-    padding: 3px 9px;
+    padding: 4px 10px;
     border-radius: var(--tt-radius-full);
+    flex: none;
 }
 
 .gec-card__desc {
@@ -122,50 +124,58 @@ const summaryText = computed(() => {
     line-height: var(--tt-lh-normal);
 }
 
-/* ── 스탯 그리드 ────────────── */
-.gec-card__stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-top: 12px;
-}
-
-.gec-stat {
-    background: var(--tt-bg-subtle);
-    border-radius: var(--tt-radius-sm);
-    padding: 10px 8px;
-    text-align: center;
-}
-
-.gec-stat__label {
-    display: block;
-    font-size: var(--tt-fs-overline);
-    color: var(--tt-text-muted);
-    margin-bottom: 4px;
-}
-
-.gec-stat__value {
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
-}
-
-.gec-stat__sub {
-    font-weight: var(--tt-fw-regular);
-    color: var(--tt-text-muted);
-}
-
-/* ── 요약 한 줄 ────────────── */
-.gec-card__summary {
+/* ── 하단: 멤버 + 결과 ────────── */
+.gec-card__bottom {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-top: 12px;
 }
 
-.gec-card__summary-text {
-    font-size: var(--tt-fs-caption);
+.gec-card__members {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.gec-card__avatars {
+    display: flex;
+    align-items: center;
+}
+
+.gec-card__avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-white);
+    border: 2px solid var(--tt-bg);
+    position: relative;
+}
+
+.gec-card__member-count {
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
+}
+
+.gec-card__outcome {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    white-space: nowrap;
+}
+
+.gec-card__outcome--win {
+    color: var(--tt-green);
+}
+
+.gec-card__outcome--lose {
+    color: var(--tt-red-deep);
 }
 
 .gec-card__link {

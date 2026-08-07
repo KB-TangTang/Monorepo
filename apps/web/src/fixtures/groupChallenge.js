@@ -338,17 +338,22 @@ export const MOCK_ENDED_CHALLENGES = [
         startDate: '2026-07-22',
         endDate: '2026-07-28',
         /* --- tbl_group_member (본인) --- */
-        finalOutcome: 'SURVIVED',     // 승소
+        finalOutcome: 'SURVIVED',
         finalRank: 2,
-        livesCount: 5,
         finalChargeAmount: 0,
         /* --- 파생 필드 --- */
         totalDays: 7,
-        maxLives: 7,
         memberCount: 6,
-        totalMembers: 6,              // = memberCount (종료 시점 확정)
-        savingsAmount: 128000,        // limitAmount × totalDays − 실 소비 합계
-        isFeatured: true,             // 프론트: 첫 번째 카드에만 스탯 그리드 표시
+        totalMembers: 6,
+        savingsAmount: 128000,
+        members: [
+            { userId: 1, nickname: '나', initial: '나' },
+            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 3, nickname: '준서', initial: '준' },
+            { userId: 4, nickname: '세영', initial: '세' },
+            { userId: 5, nickname: '민지', initial: '민' },
+            { userId: 6, nickname: '하은', initial: '하' },
+        ],
     },
     {
         id: 7,
@@ -357,16 +362,20 @@ export const MOCK_ENDED_CHALLENGES = [
         limitAmount: 5000,
         startDate: '2026-07-08',
         endDate: '2026-07-14',
-        finalOutcome: 'ELIMINATED',   // 패소
+        finalOutcome: 'ELIMINATED',
         finalRank: 5,
-        livesCount: 0,
         finalChargeAmount: 12000,
         totalDays: 7,
-        maxLives: 7,
         memberCount: 5,
         totalMembers: 5,
         savingsAmount: null,
-        isFeatured: false,
+        members: [
+            { userId: 1, nickname: '나', initial: '나' },
+            { userId: 2, nickname: '김수현', initial: '김' },
+            { userId: 3, nickname: '준서', initial: '준' },
+            { userId: 5, nickname: '민지', initial: '민' },
+            { userId: 6, nickname: '하은', initial: '하' },
+        ],
     },
     {
         id: 8,
@@ -377,14 +386,17 @@ export const MOCK_ENDED_CHALLENGES = [
         endDate: '2026-06-30',
         finalOutcome: 'SURVIVED',
         finalRank: 1,
-        livesCount: 7,
         finalChargeAmount: 0,
         totalDays: 7,
-        maxLives: 7,
         memberCount: 4,
         totalMembers: 4,
         savingsAmount: 96000,
-        isFeatured: false,
+        members: [
+            { userId: 1, nickname: '나', initial: '나' },
+            { userId: 3, nickname: '준서', initial: '준' },
+            { userId: 4, nickname: '세영', initial: '세' },
+            { userId: 6, nickname: '하은', initial: '하' },
+        ],
     },
 ];
 
