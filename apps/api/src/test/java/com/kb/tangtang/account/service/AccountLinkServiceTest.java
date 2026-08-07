@@ -4,7 +4,8 @@ import com.kb.tangtang.account.client.FinancialDataClient;
 import com.kb.tangtang.account.client.dto.ConnectionRequest;
 import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
-import com.kb.tangtang.account.domain.AccountReconnectRequiredEvent;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
@@ -511,13 +512,15 @@ class AccountLinkServiceTest {
          */
         assertEquals("NEED_RECONNECT", result.getInstitutions().get(0).getSyncStatus());
         assertEquals(2, publishedEvents.size());
-        List<AccountReconnectRequiredEvent> events = publishedEvents.stream()
-                .map(AccountReconnectRequiredEvent.class::cast)
+        List<NotificationRequestedEvent> events = publishedEvents.stream()
+                .map(NotificationRequestedEvent.class::cast)
                 .toList();
-        assertEquals(List.of(9L, 10L),
-                events.stream().map(AccountReconnectRequiredEvent::accountId).toList());
+        assertEquals(List.of("/asset/accounts/9/reconnect", "/asset/accounts/10/reconnect"),
+                events.stream().map(NotificationRequestedEvent::deepLinkUrl).toList());
         assertTrue(events.stream().allMatch(e ->
-                e.userId().equals(USER_ID) && "IBK기업은행".equals(e.bankName())));
+                e.userId().equals(USER_ID)
+                        && e.type() == NotificationType.ACCOUNT_RECONNECT
+                        && "IBK기업은행".equals(e.params().get("bankName"))));
     }
 
     @Test
@@ -540,10 +543,11 @@ class AccountLinkServiceTest {
                 eq("금융기관에서 이 계좌를 찾지 못했어요."));
         verify(mapper, never()).updateSynced(eq(11L), anyLong(), any(), any());
         assertEquals(1, publishedEvents.size());
-        AccountReconnectRequiredEvent event = (AccountReconnectRequiredEvent) publishedEvents.get(0);
+        NotificationRequestedEvent event = (NotificationRequestedEvent) publishedEvents.get(0);
         assertEquals(USER_ID, event.userId().longValue());
-        assertEquals(11L, event.accountId().longValue());
-        assertEquals("IBK기업은행", event.bankName());
+        assertEquals(NotificationType.ACCOUNT_RECONNECT, event.type());
+        assertEquals("IBK기업은행", event.params().get("bankName"));
+        assertEquals("/asset/accounts/11/reconnect", event.deepLinkUrl());
     }
 
     @Test

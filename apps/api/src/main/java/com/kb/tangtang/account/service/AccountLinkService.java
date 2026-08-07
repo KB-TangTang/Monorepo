@@ -6,7 +6,6 @@ import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.CredentialDto;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
 import com.kb.tangtang.account.client.dto.IdentityDto;
-import com.kb.tangtang.account.domain.AccountReconnectRequiredEvent;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
@@ -15,6 +14,8 @@ import com.kb.tangtang.account.domain.SyncStatus;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -514,8 +515,7 @@ public class AccountLinkService {
             for (ConnectedAccount account : owned) {
                 mapper.updateSync(account.getId(), userId, status.name(), now, e.getMessage());
                 if (status == SyncStatus.NEED_RECONNECT) {
-                    events.publishEvent(new AccountReconnectRequiredEvent(
-                            userId, account.getId(), account.getBankName()));
+                    events.publishEvent(reconnectNotification(userId, account));
                 }
             }
             return status;
@@ -527,14 +527,28 @@ public class AccountLinkService {
                 /* 기관에서 사라진 계좌(해지 등). 잔액을 지어내지 않고 재연동 대상으로 둔다. */
                 mapper.updateSync(account.getId(), userId, SyncStatus.NEED_RECONNECT.name(), now,
                         "금융기관에서 이 계좌를 찾지 못했어요.");
-                events.publishEvent(new AccountReconnectRequiredEvent(
-                        userId, account.getId(), account.getBankName()));
+                events.publishEvent(reconnectNotification(userId, account));
                 continue;
             }
             mapper.updateSynced(account.getId(), userId, balance, now);
             account.setBalance(balance);
         }
         return SyncStatus.NORMAL;
+    }
+
+    /**
+     * 재연동이 필요하다는 알림 요청.
+     *
+     * 문구 자체는 {@link NotificationType} 이 소유한다 — 여기서는 은행명만 넘긴다 (이슈 #68).
+     * 딥링크 경로는 계좌 화면을 아는 이 모듈이 만든다.
+     */
+    private static NotificationRequestedEvent reconnectNotification(long userId,
+                                                                    ConnectedAccount account) {
+        return new NotificationRequestedEvent(
+                userId,
+                NotificationType.ACCOUNT_RECONNECT,
+                Map.of("bankName", account.getBankName()),
+                "/asset/accounts/" + account.getId() + "/reconnect");
     }
 
     /** 금융정보 동의 철회 시 모든 연동을 해제한다 (이슈 #13 이 남긴 TODO(#12)). */
