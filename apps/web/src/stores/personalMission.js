@@ -8,6 +8,7 @@ import {
 import {
     hasEnoughPersonalMissionData,
     selectPersonalMissionType,
+    shouldShowPersonalMissionUnlock,
 } from '@/services/personalMissionFlow';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
@@ -23,6 +24,8 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
         hasSeenTutorial: false,
+        wasDataInsufficient: false,
+        hasSeenDataUnlock: false,
         hasCompletedSetup: false,
         selectedDifficultyId: 'NORMAL',
         missionType: 'ABSOLUTE',
@@ -32,6 +35,15 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     getters: {
         hasEnoughData(state) {
             return hasEnoughPersonalMissionData(state.profile);
+        },
+
+        shouldShowDataUnlock() {
+            return shouldShowPersonalMissionUnlock({
+                hasAgreed: this.hasAgreed,
+                hasEnoughData: this.hasEnoughData,
+                wasDataInsufficient: this.wasDataInsufficient,
+                hasSeenDataUnlock: this.hasSeenDataUnlock,
+            });
         },
 
         selectedDifficulty(state) {
@@ -60,6 +72,10 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.hasAgreed = savedState.hasAgreed ?? false;
             this.hasSeenTutorial = savedState.hasSeenTutorial ?? false;
             this.hasCompletedSetup = savedState.hasCompletedSetup ?? false;
+            this.wasDataInsufficient =
+                savedState.wasDataInsufficient ??
+                (this.hasAgreed && !this.hasSeenTutorial && !this.hasCompletedSetup);
+            this.hasSeenDataUnlock = savedState.hasSeenDataUnlock ?? false;
             this.selectedDifficultyId = savedState.selectedDifficultyId ?? 'NORMAL';
             this.missionType = savedState.missionType ?? selectPersonalMissionType(this.profile);
             this.isHydrated = true;
@@ -71,6 +87,8 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
                 JSON.stringify({
                     hasAgreed: this.hasAgreed,
                     hasSeenTutorial: this.hasSeenTutorial,
+                    wasDataInsufficient: this.wasDataInsufficient,
+                    hasSeenDataUnlock: this.hasSeenDataUnlock,
                     hasCompletedSetup: this.hasCompletedSetup,
                     selectedDifficultyId: this.selectedDifficultyId,
                     missionType: this.missionType,
@@ -80,7 +98,15 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         agree() {
             this.hasAgreed = true;
+            this.wasDataInsufficient = !this.hasEnoughData;
             this.missionType = selectPersonalMissionType(this.profile);
+            this.save();
+        },
+
+        acknowledgeDataUnlock() {
+            this.hasSeenDataUnlock = true;
+            this.hasSeenTutorial = true;
+            this.missionType = 'RELATIVE';
             this.save();
         },
 
@@ -96,6 +122,8 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         /** 마이페이지 > 튜토리얼 다시 보기. 플래그만 되돌리고 재생은 홈 화면이 한다 */
         replayTutorial() {
             this.hasSeenTutorial = false;
+            this.wasDataInsufficient = false;
+            this.hasSeenDataUnlock = false;
             this.save();
         },
 

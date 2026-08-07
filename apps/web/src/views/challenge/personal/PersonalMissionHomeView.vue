@@ -8,6 +8,7 @@ import PersonalMissionDataGuide from '@/components/challenge/personal/PersonalMi
 import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalMissionStreakCard from '@/components/challenge/personal/PersonalMissionStreakCard.vue';
 import PersonalMissionTutorialModal from '@/components/challenge/personal/PersonalMissionTutorialModal.vue';
+import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
 import { MOCK_PERSONAL_MISSION_STREAK } from '@/fixtures/personalMission';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 
@@ -15,6 +16,7 @@ const router = useRouter();
 const challengeStore = usePersonalMissionChallengeStore();
 const isConsentOpen = ref(false);
 const isTutorialOpen = ref(false);
+const isDataUnlockOpen = ref(false);
 const isDevelopment = import.meta.env.DEV;
 
 /*
@@ -36,6 +38,11 @@ onMounted(() => {
 
     if (!challengeStore.hasAgreed) {
         isConsentOpen.value = true;
+        return;
+    }
+
+    if (challengeStore.shouldShowDataUnlock) {
+        isDataUnlockOpen.value = true;
         return;
     }
 
@@ -69,6 +76,20 @@ function finishTutorial() {
     });
 }
 
+function setUnlockedMissionDifficulty() {
+    challengeStore.acknowledgeDataUnlock();
+    isDataUnlockOpen.value = false;
+    afterOverlayClosed(() => {
+        router.push({ name: 'personalMissionChallengeDifficulty' });
+    });
+}
+
+function viewUnlockedMission() {
+    challengeStore.acknowledgeDataUnlock();
+    challengeStore.completeDifficultySetup();
+    isDataUnlockOpen.value = false;
+}
+
 function resetDemo() {
     challengeStore.resetDemo();
     isConsentOpen.value = true;
@@ -76,6 +97,10 @@ function resetDemo() {
 
 function openPersonalRanking() {
     router.push({ name: 'personalRanking' });
+}
+
+function linkMoreAccounts() {
+    router.push({ name: 'accountLinkInstitutions', query: { mode: 'add' } });
 }
 </script>
 
@@ -87,9 +112,15 @@ function openPersonalRanking() {
             @complete="finishTutorial"
             @skip="finishTutorial"
         />
+        <PersonalMissionUnlockSheet
+            v-model="isDataUnlockOpen"
+            :difficulty="challengeStore.selectedDifficulty"
+            @set-difficulty="setUnlockedMissionDifficulty"
+            @view-mission="viewUnlockedMission"
+        />
 
         <header class="personal-mission-home__hero">
-            <p>오늘의 개인 챌린지 · 7월 29일</p>
+            <p>오늘의 재판 · 7월 29일</p>
 
             <h1 v-if="challengeStore.hasEnoughData">오늘의 미션이<br />도착했어요</h1>
 
@@ -111,6 +142,7 @@ function openPersonalRanking() {
             <PersonalMissionDataGuide
                 v-if="!challengeStore.hasEnoughData"
                 :profile="challengeStore.profile"
+                @link-account="linkMoreAccounts"
             />
 
             <PersonalMissionStreakCard v-else :days="MOCK_PERSONAL_MISSION_STREAK" />

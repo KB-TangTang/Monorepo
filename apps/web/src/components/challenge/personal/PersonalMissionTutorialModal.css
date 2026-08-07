@@ -46,7 +46,7 @@
     font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-inverse);
-    background: var(--tt-primary);
+    background: var(--tt-info);
     border-radius: var(--tt-radius-md);
 }
 
@@ -56,7 +56,10 @@
     border-radius: var(--tt-radius-lg);
 }
 
-.tutorial__visual--mission,
+.tutorial__visual--mission {
+    background: var(--tt-info-subtle);
+}
+
 .tutorial__visual--difficulty {
     background: var(--tt-primary-subtle);
 }

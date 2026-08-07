@@ -34,10 +34,19 @@ const remainingAmount = computed(() => {
 <template>
     <BaseCard class="personal-mission-card" padding="lg">
         <article class="mission-card">
+            <div class="mission-card__rail" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
             <header>
                 <span>
-                    {{ personalized ? difficulty.label : '공통 미션' }}
-                    · {{ mission.missionTypeLabel }}
+                    {{
+                        personalized
+                            ? `${difficulty.label} · ${difficulty.shortLabel}`
+                            : '공통 미션'
+                    }}
                 </span>
 
                 <small>2026-미션-0729</small>
@@ -48,6 +57,7 @@ const remainingAmount = computed(() => {
 
             <template v-if="personalized">
                 <div class="mission-card__amount">
+                    <span class="mission-card__current-label">현재</span>
                     <strong>{{ formatWon(mission.currentAmount) }}</strong>
                     <span>/ 목표 {{ formatWon(targetAmount) }}</span>
                     <em>여유 {{ formatWon(remainingAmount) }}</em>
@@ -78,6 +88,30 @@ const remainingAmount = computed(() => {
 </template>
 
 <style scoped>
+.personal-mission-card {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--tt-bg);
+    background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--tt-space-10) - 1px),
+        var(--tt-border) var(--tt-space-10)
+    );
+    border-radius: var(--tt-radius-sm);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.personal-mission-card::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--tt-space-10);
+    width: 1px;
+    content: '';
+    background: var(--tt-info-subtle);
+}
+
 .mission-card header {
     display: flex;
     gap: var(--tt-space-2);
@@ -85,23 +119,54 @@ const remainingAmount = computed(() => {
     color: var(--tt-text-muted);
 }
 
+.mission-card {
+    position: relative;
+    padding-left: var(--tt-space-5);
+}
+
+.mission-card__rail {
+    position: absolute;
+    top: var(--tt-space-12);
+    bottom: var(--tt-space-8);
+    left: calc(var(--tt-space-1) * -1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 2px;
+    background: transparent;
+}
+
+.mission-card__rail span {
+    width: var(--tt-space-3);
+    height: var(--tt-space-3);
+    background: var(--tt-bg-fill);
+    border: 2px solid var(--tt-border);
+    box-shadow: inset 0 1px 2px var(--tt-border);
+    border-radius: var(--tt-radius-full);
+    transform: translateX(calc((var(--tt-space-3) - 2px) / -2));
+}
+
 .mission-card header span {
     min-width: 0;
     padding: var(--tt-space-1) var(--tt-space-2);
     font-size: var(--tt-fs-mono-chip);
-    color: var(--tt-primary);
-    background: var(--tt-primary-subtle);
+    color: var(--tt-info-deep);
+    background: var(--tt-info-subtle);
     border-radius: var(--tt-radius-full);
 }
 
 .mission-card header small {
     flex: none;
     font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
 }
 
 .mission-card h2 {
     margin: var(--tt-space-4) 0 var(--tt-space-1);
-    font-size: var(--tt-fs-section);
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
 }
 
 .mission-card > p {
@@ -114,6 +179,17 @@ const remainingAmount = computed(() => {
     gap: var(--tt-space-1);
     align-items: baseline;
     margin-top: var(--tt-space-5);
+    color: var(--tt-text-body);
+}
+
+.mission-card__amount strong {
+    font-family: var(--tt-font-mono);
+    color: var(--tt-text);
+}
+
+.mission-card__amount .mission-card__current-label {
+    flex: none;
+    color: var(--tt-text-body);
 }
 
 .mission-card__amount span {
@@ -125,14 +201,14 @@ const remainingAmount = computed(() => {
     margin-left: auto;
     font-style: normal;
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-success);
+    color: var(--tt-success-deep);
 }
 
 .mission-card__progress {
     height: 8px;
     margin-top: var(--tt-space-3);
     overflow: hidden;
-    background: var(--tt-border);
+    background: var(--tt-border-track);
     border-radius: var(--tt-radius-full);
 }
 
@@ -141,6 +217,7 @@ const remainingAmount = computed(() => {
     height: 100%;
     background: var(--tt-success);
     border-radius: inherit;
+    transition: width 0.45s ease;
 }
 
 .mission-card__reward,
@@ -148,8 +225,11 @@ const remainingAmount = computed(() => {
     margin-top: var(--tt-space-4);
     padding: var(--tt-space-3);
     font-weight: var(--tt-fw-bold);
+    color: var(--tt-accent-deep);
     background: var(--tt-accent-subtle);
+    border: 1px solid var(--tt-accent);
     border-radius: var(--tt-radius-md);
+    text-align: center;
 }
 
 .mission-card__common-result strong {
@@ -166,13 +246,7 @@ const remainingAmount = computed(() => {
     }
 
     .mission-card__amount {
-        flex-wrap: wrap;
-    }
-
-    .mission-card__amount em {
-        flex-basis: 100%;
-        margin-left: 0;
-        text-align: right;
+        font-size: var(--tt-fs-caption);
     }
 }
 
@@ -181,12 +255,22 @@ const remainingAmount = computed(() => {
         padding: var(--tt-space-3);
     }
 
+    .mission-card {
+        padding-left: var(--tt-space-3);
+    }
+
     .mission-card__reward,
     .mission-card__common-result {
         padding: var(--tt-space-2);
         font-size: calc(var(--tt-fs-mono-chip) * 0.92);
         letter-spacing: -0.04em;
         white-space: nowrap;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mission-card__progress span {
+        transition: none;
     }
 }
 </style>

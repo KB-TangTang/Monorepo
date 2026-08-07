@@ -6,21 +6,41 @@
 }
 
 .personal-mission-home__hero {
+    position: relative;
     min-height: 172px;
-    padding: var(--tt-space-6) clamp(var(--tt-space-4), 5vw, var(--tt-space-5));
+    padding: var(--tt-space-6) var(--tt-screen-padding) var(--tt-space-10);
+    overflow: hidden;
     color: var(--tt-text-inverse);
-    background: var(--tt-text);
+    background: var(--tt-surface-inverse);
+    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
+}
+
+.personal-mission-home__hero::after {
+    position: absolute;
+    top: calc(var(--tt-space-3) * -1);
+    right: calc(var(--tt-space-12) * -1);
+    width: 156px;
+    height: 156px;
+    content: '';
+    background: var(--tt-surface-raised);
+    border-radius: var(--tt-radius-full);
 }
 
 .personal-mission-home__hero p {
+    position: relative;
+    z-index: 1;
     margin: 0;
-    font-size: var(--tt-fs-caption);
-    opacity: 0.72;
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-semibold);
+    letter-spacing: 0.04em;
+    color: var(--tt-tab-inactive);
 }
 
 .personal-mission-home__hero h1 {
+    position: relative;
+    z-index: 1;
     margin: var(--tt-space-3) 0 0;
-    font-size: var(--tt-fs-title);
+    font-size: var(--tt-fs-stat);
     font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-tight);
 }
@@ -28,15 +48,20 @@
 .personal-mission-home__content {
     display: flex;
     flex-direction: column;
-    gap: var(--tt-space-4);
-    padding: 0 clamp(var(--tt-space-3), 5vw, var(--tt-space-5))
+    gap: var(--tt-card-gap);
+    padding: 0 var(--tt-screen-padding)
         calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
     transform: translateY(-24px);
 }
 
 @media (max-width: 390px) {
     .personal-mission-home__hero h1 {
-        font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
+        font-size: clamp(var(--tt-fs-title), 7.5vw, var(--tt-fs-stat));
+    }
+
+    .personal-mission-home__content {
+        padding-right: var(--tt-space-4);
+        padding-left: var(--tt-space-4);
     }
 }
 
