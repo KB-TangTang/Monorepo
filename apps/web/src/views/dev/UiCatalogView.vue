@@ -6,8 +6,10 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import CatalogItem from '@/components/dev/CatalogItem.vue';
+import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
+import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
@@ -32,10 +34,12 @@ const SECTIONS = [
     { id: 'tabbar', label: 'TheTabBar' },
     { id: 'card', label: 'BaseCard' },
     { id: 'button', label: 'BaseButton' },
+    { id: 'back-header', label: 'BaseBackHeader' },
     { id: 'input', label: 'BaseInput' },
     { id: 'modal', label: 'BaseModal' },
     { id: 'sheet', label: 'BaseBottomSheet' },
     { id: 'badge', label: 'BaseBadge' },
+    { id: 'category-icon', label: 'CategoryIcon' },
     { id: 'state', label: '상태 3종' },
     { id: 'bell', label: 'TheNotificationBell' },
     { id: 'back', label: 'BaseBackButton' },
@@ -202,6 +206,7 @@ const CODE = {
     button: `<BaseButton variant="primary" size="md" :loading="isSaving" block @click="save">
     기소하기
 </BaseButton>`,
+    backHeader: `<BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />`,
     input: `<BaseInput v-model="plea" label="변론" :maxlength="200" multiline
     hint="1회만 제출할 수 있습니다" />`,
     modal: `<BaseModal v-model="isOpen" title="정말 해지할까요?">
@@ -217,6 +222,9 @@ const CODE = {
     badge: `<BaseBadge variant="progress">진행 중 3</BaseBadge>
 <BaseBadge variant="deadline">마감 02:14:03</BaseBadge>
 <BaseBadge variant="guilty">유죄</BaseBadge>`,
+    categoryIcon: `<CategoryIcon icon="Cake" />
+<CategoryIcon icon="ShoppingBag" />
+<CategoryIcon icon="Banknotes" />`,
     state: `<StateLoading v-if="isLoading" message="불러오는 중" />
 <StateError v-else-if="error" :message="error" @retry="load" />
 <StateEmpty v-else-if="!items.length" title="아직 기소된 지출이 없어요">
@@ -402,6 +410,17 @@ const CODE = {
             </CatalogItem>
         </section>
 
+        <section id="back-header" class="catalog__section">
+            <h2 class="catalog__h2">BaseBackHeader</h2>
+            <CatalogItem
+                name="BaseBackHeader"
+                purpose="뒤로가기 + 제목만 담당하는 상세화면 상단 바. 클릭하면 router.back() 이 실행된다."
+                :code="CODE.backHeader"
+            >
+                <BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />
+            </CatalogItem>
+        </section>
+
         <section id="input" class="catalog__section">
             <h2 class="catalog__h2">BaseInput</h2>
             <CatalogItem
@@ -507,6 +526,25 @@ const CODE = {
                     <BaseBadge variant="deadline">마감 02:14:03</BaseBadge>
                     <BaseBadge variant="guilty">유죄</BaseBadge>
                     <BaseBadge variant="innocent">무혐의 처분</BaseBadge>
+                </div>
+            </CatalogItem>
+        </section>
+
+        <section id="category-icon" class="catalog__section">
+            <h2 class="catalog__h2">CategoryIcon</h2>
+            <CatalogItem
+                name="CategoryIcon"
+                purpose="카테고리 아이콘 키 → heroicons 매핑. 못 찾는 키는 기타(EllipsisHorizontalCircle)로 폴백."
+                :code="CODE.categoryIcon"
+            >
+                <div class="demo__row">
+                    <CategoryIcon icon="Cake" />
+                    <CategoryIcon icon="ShoppingBag" />
+                    <CategoryIcon icon="Truck" />
+                    <CategoryIcon icon="Home" />
+                    <CategoryIcon icon="Banknotes" />
+                    <CategoryIcon icon="Gift" />
+                    <CategoryIcon icon="존재하지않는키" />
                 </div>
             </CatalogItem>
         </section>
