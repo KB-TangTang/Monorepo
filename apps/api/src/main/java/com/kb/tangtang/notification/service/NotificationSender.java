@@ -1,6 +1,8 @@
 package com.kb.tangtang.notification.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.notification.domain.Notification;
+import com.kb.tangtang.notification.domain.NotificationDlqPayload;
 import com.kb.tangtang.notification.dto.NotificationDto;
 import com.kb.tangtang.notification.mapper.NotificationDlqMapper;
 import org.slf4j.Logger;
@@ -16,7 +18,7 @@ import java.io.IOException;
  * ⚠ NT_01_04: **사용자의 SSE 미연결은 실패가 아니다.** DLQ 에 넣지 않는다.
  *   넣으면 로그인하지 않은 사용자 수만큼 DLQ 가 쌓인다.
  *   전송 중 연결이 끊기는 것(IOException·IllegalStateException)도 실패가 아니다 — 그 연결만 정리한다.
- *   DLQ 대상은 DB 저장·메시지 변환·사용자 조회 실패다. 그래서 catch 를 둘로 나눠 둔다.
+ *   DLQ 대상은 DB 저장·메시지 변환·사용자 조회 실패다.
  *
  * ⚠ 이 클래스는 **예외를 밖으로 던지지 않는다.** 발행자(계좌 동기화)가 알림 때문에 죽으면 안 된다.
  */
@@ -24,6 +26,7 @@ import java.io.IOException;
 public class NotificationSender {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationSender.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final SseEmitterRegistry registry;
     private final NotificationDlqMapper dlqMapper;
@@ -33,44 +36,60 @@ public class NotificationSender {
         this.dlqMapper = dlqMapper;
     }
 
+    /** 실패하면 DLQ 에 남긴다. 처음 보낼 때 쓰는 경로다. */
+    public void send(Notification notification) {
+        try {
+            deliver(notification);
+        } catch (Exception e) {
+            log.error("알림 전송 실패 notificationId={} userId={}",
+                    notification.getId(), notification.getUserId(), e);
+            sendFailure(notification.getType(), payloadOf(notification), e.getMessage());
+        }
+    }
+
+    /**
+     * 실패해도 DLQ 에 새로 쌓지 않고 성공 여부만 알려준다. **DLQ 재처리**가 쓰는 경로다
+     * (여기서 DLQ 에 또 넣으면 재시도할 때마다 행이 불어난다).
+     *
+     * @return 실패가 없었으면 true. 수신자가 접속해 있지 않은 것은 실패가 아니라 true 다 (NT_01_04)
+     */
+    public boolean trySend(Notification notification) {
+        try {
+            deliver(notification);
+            return true;
+        } catch (Exception e) {
+            log.error("알림 재전송 실패 notificationId={} userId={}",
+                    notification.getId(), notification.getUserId(), e);
+            return false;
+        }
+    }
+
     /**
      * 접속 중인 모든 연결에 푸시한다.
      *
      * 내려보내는 모양은 REST 목록과 **완전히 같다**(NotificationDto). 도메인을 그대로 실어 보내면
      * 두 경로의 필드 이름·형식이 갈라진다.
      */
-    public void send(Notification notification) {
-        try {
-            NotificationDto payload = NotificationDto.from(notification);
+    private void deliver(Notification notification) {
+        NotificationDto payload = NotificationDto.from(notification);
 
-            for (SseEmitter emitter : registry.emittersOf(notification.getUserId())) {
-                try {
-                    emitter.send(SseEmitter.event().name("notification").data(payload));
-                } catch (IOException | IllegalStateException e) {
-                    /*
-                     * 끊긴(혹은 이미 완료된) 연결이다. 실패가 아니라 정리 대상이다 (NT_01_04).
-                     * ⚠ 여기를 catch(Exception) 으로 넓히지 말 것 — 직렬화·변환 실패까지
-                     *   "연결이 끊겼네" 로 삼켜져 DLQ 에 아무것도 남지 않는다.
-                     */
-                    registry.remove(notification.getUserId(), emitter);
-                } catch (Exception e) {
-                    /* 직렬화·메시지 변환 실패. 이건 진짜 실패다 → DLQ */
-                    log.error("알림 전송 실패 notificationId={} userId={}",
-                            notification.getId(), notification.getUserId(), e);
-                    sendFailure(notification.getType(), payloadOf(notification), e.getMessage());
-                }
+        for (SseEmitter emitter : registry.emittersOf(notification.getUserId())) {
+            try {
+                emitter.send(SseEmitter.event().name("notification").data(payload));
+            } catch (IOException | IllegalStateException e) {
+                /*
+                 * 끊긴(혹은 이미 완료된) 연결이다. 실패가 아니라 정리 대상이다 (NT_01_04).
+                 * ⚠ 여기를 catch(Exception) 으로 넓히지 말 것 — 직렬화·변환 실패까지
+                 *   "연결이 끊겼네" 로 삼켜져 DLQ 에 아무것도 남지 않는다.
+                 */
+                registry.remove(notification.getUserId(), emitter);
             }
-        } catch (Exception e) {
-            /* 변환 자체가 깨졌거나 예상 못한 실패다. 발행자에게는 절대 던지지 않는다 */
-            log.error("알림 전송 준비 실패 notificationId={} userId={}",
-                    notification.getId(), notification.getUserId(), e);
-            sendFailure(notification.getType(), payloadOf(notification), e.getMessage());
         }
     }
 
-    /** DLQ 에 남길 최소 식별자. 본문은 이미 tbl_notification 에 있다 */
+    /** 재처리에 필요한 최소 정보. 본문은 이미 tbl_notification 에 있다 */
     private String payloadOf(Notification n) {
-        return "{\"notificationId\":" + n.getId() + ",\"userId\":" + n.getUserId() + "}";
+        return toJson(NotificationDlqPayload.ofSaved(n));
     }
 
     /** DB 저장·변환·조회 실패를 DLQ 에 남긴다. 이 메서드도 예외를 던지지 않는다. */
@@ -79,6 +98,16 @@ public class NotificationSender {
             dlqMapper.insert(eventType, payloadJson, errorMessage);
         } catch (Exception e) {
             log.error("DLQ 적재마저 실패했다. eventType={} error={}", eventType, errorMessage, e);
+        }
+    }
+
+    /** 직렬화가 깨져도 DLQ 적재 자체는 막지 않는다 — 최소한 실패 사실은 남겨야 한다 */
+    static String toJson(NotificationDlqPayload payload) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(payload);
+        } catch (Exception e) {
+            log.error("DLQ payload 직렬화 실패", e);
+            return "{}";
         }
     }
 }

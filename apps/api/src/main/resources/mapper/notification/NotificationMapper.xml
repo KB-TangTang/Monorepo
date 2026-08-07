@@ -36,6 +36,12 @@
         LIMIT #{size}
     </select>
 
+    <select id="findById" resultType="com.kb.tangtang.notification.domain.Notification">
+        SELECT <include refid="columns"/>
+        FROM tbl_notification
+        WHERE id = #{id} AND user_id = #{userId}
+    </select>
+
     <select id="countUnread" resultType="int">
         SELECT COUNT(*) FROM tbl_notification
         WHERE user_id = #{userId} AND is_read = 0

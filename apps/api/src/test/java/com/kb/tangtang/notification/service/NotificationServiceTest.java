@@ -31,6 +31,7 @@ class NotificationServiceTest {
 
         @Override public int insert(Notification n) { saved.add(n); return 1; }
         @Override public List<Notification> findPage(long userId, Long cursor, int size) { return page; }
+        @Override public Notification findById(long id, long userId) { return null; }
         @Override public int countUnread(long userId) { return unread; }
         @Override public int markRead(long id, long userId) { return markReadResult; }
         @Override public int markAllRead(long userId) { return markAllReadResult; }
