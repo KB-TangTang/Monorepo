@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,6 +31,7 @@ class NotificationRequestedListenerTest {
     private static class RecordingService extends NotificationService {
         final List<String> created = new ArrayList<>();
         boolean explode = false;
+        boolean duplicate = false;
 
         RecordingService() {
             super((NotificationMapper) null);
@@ -42,6 +44,13 @@ class NotificationRequestedListenerTest {
             }
             created.add(userId + "|" + type + "|" + content + "|" + deepLink);
             return Notification.builder().id(1L).userId(userId).type(type.name()).build();
+        }
+
+        @Override
+        public Optional<Notification> createUnlessDuplicate(long userId, NotificationType type,
+                                                            String content, String deepLink) {
+            return duplicate ? Optional.empty()
+                    : Optional.of(create(userId, type, content, deepLink));
         }
 
         @Override public NotificationListDto list(long u, Long c, Integer s) { return null; }
@@ -124,5 +133,20 @@ class NotificationRequestedListenerTest {
         assertEquals(List.of("ACCOUNT_RECONNECT"), dlq.insertedTypes);
         assertTrue(dlq.insertedErrors.get(0).contains("bankName"),
                 "무엇이 빠졌는지 DLQ 에 남아야 한다: " + dlq.insertedErrors.get(0));
+    }
+
+    @Test
+    @DisplayName("같은 알림이 이미 안 읽은 채로 있으면 만들지 않는다 — 반복 호출로 알림이 쌓이지 않게")
+    void skipsDuplicateNotification() {
+        RecordingService service = new RecordingService();
+        service.duplicate = true;
+        FakeDlqMapper dlq = new FakeDlqMapper();
+
+        listenerWith(service, dlq).onNotificationRequested(
+                new NotificationRequestedEvent(7L, NotificationType.ACCOUNT_RECONNECT,
+                        Map.of("bankName", "국민은행"), "/asset/accounts/9/reconnect"));
+
+        assertTrue(service.created.isEmpty(), "중복이면 저장하지 않는다");
+        assertEquals(List.of(), dlq.insertedTypes, "중복 건너뛰기는 실패가 아니다 — DLQ 대상이 아니다");
     }
 }

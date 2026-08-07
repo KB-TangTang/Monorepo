@@ -134,9 +134,14 @@ public class NotificationDlqRetryScheduler {
             return false;
         }
 
-        Notification recreated = notificationService.create(
-                payload.userId(), type, payload.content(), payload.deepLinkUrl());
-        return sender.trySend(recreated);
+        /*
+         * 재시도 사이에 같은 알림이 이미 만들어졌을 수 있다(예: 즉시 조회를 다시 눌렀을 때).
+         * 그때는 또 만들지 않고 행만 지운다 — 목적은 이미 달성됐다 (이슈 #70).
+         */
+        return notificationService
+                .createUnlessDuplicate(payload.userId(), type, payload.content(), payload.deepLinkUrl())
+                .map(sender::trySend)
+                .orElse(true);
     }
 
     private NotificationDlqPayload parse(String payloadJson) {

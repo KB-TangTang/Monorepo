@@ -532,13 +532,14 @@ class AccountLinkServiceTest {
         /* 기관 응답에 이 계좌가 없다 — 해지 등으로 사라진 경우 */
         when(client.fetchAccounts("conn-1", "0003")).thenReturn(List.of());
 
-        service.resync(USER_ID, 11L);
+        ResyncResultDto result = service.resync(USER_ID, 11L);
 
         /*
-         * ⚠ 이 분기의 반환값(SyncStatus)은 성공 경로 끝에서 항상 NORMAL 이다 — 계좌 하나가
-         * NEED_RECONNECT 로 DB 에 갱신돼도 syncInstitution 의 집계 리턴값에는 반영되지 않는다
-         * (기존 코드 동작, 이 작업의 범위 밖). 그래서 결과는 mapper 호출과 발행된 이벤트로 검증한다.
+         * ⚠ 예전에는 이 분기에서도 응답이 NORMAL 이었다 — DB 와 알림은 "재연동 필요" 인데
+         * 화면만 "정상" 으로 보이는 모순이었다 (이슈 #70).
          */
+        assertEquals("NEED_RECONNECT", result.getSyncStatus());
+
         verify(mapper).updateSync(eq(11L), eq(USER_ID), eq("NEED_RECONNECT"), any(),
                 eq("금융기관에서 이 계좌를 찾지 못했어요."));
         verify(mapper, never()).updateSynced(eq(11L), anyLong(), any(), any());
@@ -548,6 +549,30 @@ class AccountLinkServiceTest {
         assertEquals(NotificationType.ACCOUNT_RECONNECT, event.type());
         assertEquals("IBK기업은행", event.params().get("bankName"));
         assertEquals("/asset/accounts/11/reconnect", event.deepLinkUrl());
+    }
+
+    @Test
+    @DisplayName("[집계] 한 계좌라도 재연동이 필요하면 기관 결과도 NEED_RECONNECT 다")
+    void institutionStatusReflectsWorstAccount() {
+        /*
+         * 같은 기관에 계좌가 둘인데 하나만 응답에서 사라진 경우다.
+         * 예전에는 성공 경로 끝에서 무조건 NORMAL 을 돌려줘, 한 계좌가 재연동 대상이 돼도
+         * 즉시 조회 화면은 "정상" 으로 보였다 (이슈 #70).
+         */
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        String presentHash = policy.hash("0003", "110123456723");
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
+                linked(7L, "0003", presentHash, "100"),
+                linked(8L, "0003", policy.hash("0003", "999"), "200")));
+        when(client.fetchAccounts("conn-1", "0003"))
+                .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
+
+        RefreshResultDto result = service.refresh(USER_ID);
+
+        assertEquals("NEED_RECONNECT", result.getInstitutions().get(0).getSyncStatus());
+        /* 살아 있는 계좌는 그대로 갱신된다 — 하나가 실패했다고 나머지를 버리지 않는다 */
+        verify(mapper).updateSynced(eq(7L), eq(USER_ID), any(), any());
+        verify(mapper).updateSync(eq(8L), eq(USER_ID), eq("NEED_RECONNECT"), any(), any());
     }
 
     @Test

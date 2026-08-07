@@ -13,11 +13,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NotificationServiceTest {
 
@@ -28,11 +30,17 @@ class NotificationServiceTest {
         int unread = 0;
         int markReadResult = 1;
         int markAllReadResult = 0;
+        int unreadSame = 0;
+        final List<String> unreadSameArgs = new ArrayList<>();
 
         @Override public int insert(Notification n) { saved.add(n); return 1; }
         @Override public List<Notification> findPage(long userId, Long cursor, int size) { return page; }
         @Override public Notification findById(long id, long userId) { return null; }
         @Override public int countUnread(long userId) { return unread; }
+        @Override public int countUnreadSame(long userId, String type, String deepLinkUrl) {
+            unreadSameArgs.add(userId + "|" + type + "|" + deepLinkUrl);
+            return unreadSame;
+        }
         @Override public int markRead(long id, long userId) { return markReadResult; }
         @Override public int markAllRead(long userId) { return markAllReadResult; }
     }
@@ -126,5 +134,48 @@ class NotificationServiceTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> new NotificationService(mapper).markRead(1L, 999L));
         assertEquals("NOT_FOUND", e.getCode());
+    }
+
+    @Test
+    @DisplayName("같은 종류·같은 딥링크의 안 읽은 알림이 있으면 새로 만들지 않는다")
+    void skipsWhenUnreadDuplicateExists() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.unreadSame = 1;
+        NotificationService service = new NotificationService(mapper);
+
+        Optional<Notification> created = service.createUnlessDuplicate(
+                1L, NotificationType.ACCOUNT_RECONNECT, "국민은행 · 인증이 만료됐어요",
+                "/asset/accounts/9/reconnect");
+
+        assertTrue(created.isEmpty());
+        assertEquals(List.of(), mapper.saved);
+        assertEquals(List.of("1|ACCOUNT_RECONNECT|/asset/accounts/9/reconnect"), mapper.unreadSameArgs);
+    }
+
+    @Test
+    @DisplayName("안 읽은 중복이 없으면 평소대로 만든다")
+    void createsWhenNoUnreadDuplicate() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.unreadSame = 0;
+        NotificationService service = new NotificationService(mapper);
+
+        Optional<Notification> created = service.createUnlessDuplicate(
+                1L, NotificationType.ACCOUNT_RECONNECT, "국민은행 · 인증이 만료됐어요",
+                "/asset/accounts/9/reconnect");
+
+        assertTrue(created.isPresent());
+        assertEquals(1, mapper.saved.size());
+    }
+
+    @Test
+    @DisplayName("중복 판정은 딥링크까지 본다 — 다른 계좌의 재연동 알림은 각각 온다")
+    void duplicateCheckIncludesDeepLink() {
+        FakeMapper mapper = new FakeMapper();
+        NotificationService service = new NotificationService(mapper);
+
+        service.createUnlessDuplicate(1L, NotificationType.ACCOUNT_RECONNECT, "신한은행 · 인증이 만료됐어요",
+                "/asset/accounts/10/reconnect");
+
+        assertEquals(List.of("1|ACCOUNT_RECONNECT|/asset/accounts/10/reconnect"), mapper.unreadSameArgs);
     }
 }

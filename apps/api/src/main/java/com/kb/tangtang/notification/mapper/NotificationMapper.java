@@ -34,6 +34,16 @@ public interface NotificationMapper {
 
     int countUnread(@Param("userId") long userId);
 
+    /**
+     * 같은 종류·같은 딥링크의 **안 읽은** 알림 수. 중복 알림 억제에 쓴다 (이슈 #70).
+     *
+     * 딥링크까지 보는 이유는 계좌마다 재연동 알림이 따로 가야 하기 때문이다 —
+     * 종류만 보면 국민은행 알림이 떠 있는 동안 신한은행 알림이 막힌다.
+     */
+    int countUnreadSame(@Param("userId") long userId,
+                        @Param("type") String type,
+                        @Param("deepLinkUrl") String deepLinkUrl);
+
     /** 남의 알림이면 0 을 돌려준다 — 서비스가 이것으로 NOT_FOUND 를 판정한다 */
     int markRead(@Param("id") long id, @Param("userId") long userId);
 

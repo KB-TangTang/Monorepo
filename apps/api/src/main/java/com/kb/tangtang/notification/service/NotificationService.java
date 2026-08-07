@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 알림 저장·조회·읽음 처리. 트랜잭션 경계는 여기다.
@@ -64,6 +65,24 @@ public class NotificationService {
                 .build();
         mapper.insert(notification);
         return notification;
+    }
+
+    /**
+     * 같은 알림이 이미 안 읽은 채로 있으면 만들지 않는다 (이슈 #70).
+     *
+     * 「즉시 조회」를 반복하면 같은 재연동 알림이 누를 때마다 쌓이던 문제를 막는다.
+     * 판정 기준은 **종류 + 딥링크**다 — 계좌마다 알림이 따로 가야 하므로 종류만 보면 안 된다.
+     * 이미 읽은 알림은 막지 않는다. 사용자가 확인했는데도 문제가 남아 있으면 다시 알릴 값어치가 있다.
+     *
+     * @return 만들었으면 그 알림, 중복이라 건너뛰었으면 비어 있음
+     */
+    @Transactional
+    public Optional<Notification> createUnlessDuplicate(long userId, NotificationType type,
+                                                        String content, String deepLinkUrl) {
+        if (mapper.countUnreadSame(userId, type.name(), deepLinkUrl) > 0) {
+            return Optional.empty();
+        }
+        return Optional.of(create(userId, type, content, deepLinkUrl));
     }
 
     @Transactional(readOnly = true)
