@@ -1,0 +1,80 @@
+/*
+ * v1 → v2 하위 호환 별칭.
+ *
+ * tokens.css 가 v2 체계로 바뀌면서 사라진 v1 변수명을 v2 값으로 매핑한다.
+ * 팀원 코드(고정지출 · 월간리포트 · 공통 컴포넌트)가 마이그레이션되면
+ * 이 파일을 통째로 삭제한다.
+ *
+ * ─ 매핑 원칙 ─
+ *   • v2 에 의미가 일치하는 토큰이 있으면 var() 로 연결한다.
+ *   • v2 에 대응 토큰이 없거나, 용도가 복합적(텍스트+보더+배경)이라
+ *     단일 v2 토큰으로 안전하게 대체할 수 없는 경우 HEX 를 직접 적는다.
+ *   • 고정지출 화면 전용 색상(candidate · category)은 도메인 특화 값이므로
+ *     v1 원본 HEX 를 그대로 유지한다.
+ */
+:root {
+    /* ── Brand → Blue ──────────────────────────────────── */
+    --tt-brand-900: var(--tt-blue-deep);     /* v1 #1E3E9C → v2 #3E5299 */
+    --tt-brand-700: var(--tt-blue);          /* v1 #2F5AD0 → v2 #3E63D6 */
+    --tt-brand-500: #6B80B8;                 /* v1 #5B7BC4 — 직접 매핑 없음 */
+    --tt-brand-200: #C8D3EE;                 /* v1 #BFD2F6 — 직접 매핑 없음 */
+    --tt-brand-100: var(--tt-blue-soft);     /* v1 #DAE7FB → v2 #EAF0FF */
+    --tt-brand-50: var(--tt-blue-soft);      /* v1 #EAF0FB → v2 #EAF0FF */
+
+    /* ── Accent (Gold) ─────────────────────────────────── */
+    --tt-accent-700: var(--tt-gold-deep);    /* v1 #8A6410 → v2 #B67D06 */
+    --tt-accent-500: var(--tt-gold);         /* v1 #FFC338 → v2 #F5B921 */
+    --tt-accent-50: var(--tt-gold-soft);     /* v1 #FFF6E0 → v2 #FFF3D1 */
+
+    /* ── Gray → Neutral ────────────────────────────────── */
+    --tt-gray-50: var(--tt-neutral-paper);   /* v1 #F8FAFD → v2 #F7F8FA */
+    --tt-gray-100: var(--tt-neutral-fill);   /* v1 #F1F4F9 → v2 #EFF1F5 */
+    --tt-gray-200: var(--tt-neutral-border); /* v1 #E5EAF2 → v2 #E5E8EF */
+    --tt-gray-300: var(--tt-neutral-track);  /* v1 #D3DAE7 → v2 #E9ECF2 */
+    --tt-gray-400: #B5B9C7;                  /* v1 #B8C2D3 — 직접 매핑 없음 */
+    --tt-gray-500: var(--tt-neutral-hint);   /* v1 #9DA8BD → v2 #A6A9B6 */
+    --tt-gray-600: var(--tt-neutral-muted);  /* v1 #8792AE → v2 #8A8FA3 */
+    --tt-gray-700: var(--tt-neutral-body);   /* v1 #68728F → v2 #5A6076 */
+    --tt-gray-800: #3E4458;                  /* v1 #444C68 — 직접 매핑 없음 */
+    --tt-gray-900: var(--tt-neutral-text);   /* v1 #252B42 → v2 #232842 */
+
+    /* ── Guilty → Red ──────────────────────────────────── */
+    --tt-guilty-700: var(--tt-red);          /* v1 #C7515A → v2 #E0664B */
+    --tt-guilty-300: var(--tt-red-soft);     /* v1 #F0D4D7 → v2 #FBE9E4 */
+    --tt-guilty-50: #FDF2F0;                 /* v1 #FBEDEE — red-soft 보다 연한 톤 */
+
+    /* ── Innocent → Green ──────────────────────────────── */
+    --tt-innocent-800: var(--tt-green-deep); /* v1 #2F7A62 → v2 #1F6B48 */
+    --tt-innocent-700: var(--tt-green);      /* v1 #3E9B7E → v2 #2E9E6B */
+    --tt-innocent-300: var(--tt-green-soft); /* v1 #CDE5D9 → v2 #E4F4EC */
+    --tt-innocent-50: #EFF7F3;               /* v1 #E7F2ED — green-soft 보다 연한 톤 */
+
+    /* ── 의미 토큰 별칭 ────────────────────────────────── */
+    --tt-accent-strong: var(--tt-gold-deep);       /* v1 #8A6410 → v2 #B67D06 */
+    --tt-text-subtle: var(--tt-neutral-muted);     /* v1 #8792AE → v2 #8A8FA3 */
+    --tt-text-soft: var(--tt-neutral-hint);        /* v1 #9DA8BD → v2 #A6A9B6 */
+    --tt-success-strong: var(--tt-green-deep);     /* v1 #2F7A62 → v2 #1F6B48 */
+
+    /*
+     * --tt-border-strong: 팀원 코드에서 border · text color · background 세 가지
+     * 용도로 혼용되고 있어 단일 v2 토큰으로 대체 불가.
+     * v1 #B8C2D3 에서 블루 틴트를 줄인 warm 값을 직접 지정한다.
+     */
+    --tt-border-strong: #B8BCC9;
+
+    /*
+     * --tt-success-bright: 어두운 Ink 배경 위 텍스트로 사용됨.
+     * v2 --tt-green(#2E9E6B) 은 어두운 배경에서 대비가 부족하므로
+     * 밝기를 유지하면서 v2 톤에 맞춘 값을 직접 지정한다.
+     */
+    --tt-success-bright: #5CC89A;
+
+    /* ── 고정지출 화면 전용 (도메인 특화 — v1 원본값 유지) ── */
+    --tt-surface-strong-muted: var(--tt-ink-raised); /* v1 #3A4160 → v2 #2E3556 */
+    --tt-surface-row: var(--tt-neutral-paper);       /* v1 #EEF2F8 → v2 #F7F8FA */
+    --tt-surface-candidate: #FFFBF0;                 /* 탐지 후보 배경 */
+    --tt-surface-candidate-strong: #F6ECD2;          /* 탐지 후보 강조 배경 */
+    --tt-border-candidate: #F6E4B0;                  /* 탐지 후보 테두리 */
+    --tt-category-subscription: var(--tt-gold-soft); /* v1 #FFF0C8 → v2 #FFF3D1 */
+    --tt-category-living: var(--tt-green-soft);      /* v1 #EAF3EE → v2 #E4F4EC */
+}

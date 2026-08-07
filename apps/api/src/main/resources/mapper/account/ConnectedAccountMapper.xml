@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType / parameterType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  컬럼은 db/schema.sql 이 기준이다. account_name · account_no_masked 는
+  2026-08-05 migration/20260805_add_account_name_to_connected_account.sql 로 추가됐다.
+-->
+<mapper namespace="com.kb.tangtang.account.mapper.ConnectedAccountMapper">
+
+    <sql id="columns">
+        id, user_id, codef_connected_id, bank_code, bank_name, account_name,
+        account_no_encrypted, account_no_masked, account_type, deposit_type_code,
+        provider, balance, sync_status, last_sync_at, sync_fail_reason,
+        is_active, expires_at
+    </sql>
+
+    <select id="findActiveByUser" resultType="com.kb.tangtang.account.domain.ConnectedAccount">
+        SELECT <include refid="columns"/>
+        FROM tbl_connected_account
+        WHERE user_id = #{userId}
+          AND is_active = 1
+        ORDER BY bank_name, id
+    </select>
+
+    <select id="findActiveHashes" resultType="java.lang.String">
+        SELECT account_no_encrypted
+        FROM tbl_connected_account
+        WHERE user_id = #{userId}
+          AND is_active = 1
+    </select>
+
+    <select id="findByIdAndUser" resultType="com.kb.tangtang.account.domain.ConnectedAccount">
+        SELECT <include refid="columns"/>
+        FROM tbl_connected_account
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </select>
+
+    <insert id="insert" parameterType="com.kb.tangtang.account.domain.ConnectedAccount"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_connected_account
+            (user_id, codef_connected_id, bank_code, bank_name, account_name,
+             account_no_encrypted, account_no_masked, account_type, deposit_type_code,
+             provider, balance, sync_status, last_sync_at, sync_fail_reason,
+             is_active, expires_at)
+        VALUES
+            (#{userId}, #{codefConnectedId}, #{bankCode}, #{bankName}, #{accountName},
+             #{accountNoEncrypted}, #{accountNoMasked}, #{accountType}, #{depositTypeCode},
+             #{provider}, #{balance}, #{syncStatus}, #{lastSyncAt}, #{syncFailReason},
+             1, #{expiresAt})
+    </insert>
+
+    <!--
+      해제했던 계좌를 다시 연결하는 경우. UNIQUE KEY (user_id, account_no_encrypted) 때문에
+      새 행을 만들 수 없으므로 기존 행을 되살린다. 연결 이력을 새로 쌓지 않는 편이
+      "같은 계좌"라는 사실을 유지해 거래내역 연결도 끊기지 않는다.
+    -->
+    <update id="reactivate" parameterType="com.kb.tangtang.account.domain.ConnectedAccount">
+        UPDATE tbl_connected_account
+        SET codef_connected_id = #{codefConnectedId},
+            bank_name          = #{bankName},
+            account_name       = #{accountName},
+            account_no_masked  = #{accountNoMasked},
+            account_type       = #{accountType},
+            deposit_type_code  = #{depositTypeCode},
+            balance            = #{balance},
+            sync_status        = #{syncStatus},
+            last_sync_at       = #{lastSyncAt},
+            sync_fail_reason   = NULL,
+            is_active          = 1,
+            expires_at         = #{expiresAt}
+        WHERE user_id = #{userId}
+          AND account_no_encrypted = #{accountNoEncrypted}
+    </update>
+
+    <update id="deactivate">
+        UPDATE tbl_connected_account
+        SET is_active = 0
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </update>
+
+    <update id="deactivateAllByUser">
+        UPDATE tbl_connected_account
+        SET is_active = 0
+        WHERE user_id = #{userId}
+          AND is_active = 1
+    </update>
+
+    <update id="updateSync">
+        UPDATE tbl_connected_account
+        SET sync_status      = #{syncStatus},
+            last_sync_at     = #{lastSyncAt},
+            sync_fail_reason = #{syncFailReason}
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </update>
+
+    <update id="updateSynced">
+        UPDATE tbl_connected_account
+        SET sync_status      = 'NORMAL',
+            sync_fail_reason = NULL,
+            balance          = #{balance},
+            last_sync_at     = #{lastSyncAt}
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </update>
+
+</mapper>

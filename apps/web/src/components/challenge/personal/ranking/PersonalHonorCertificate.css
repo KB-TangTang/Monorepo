@@ -21,7 +21,7 @@
 }
 
 .honor-certificate__court {
-    padding: var(--tt-space-5);
+    padding: clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-bold);
@@ -38,7 +38,7 @@
     flex-direction: column;
     justify-content: space-between;
     gap: var(--tt-space-3);
-    padding: var(--tt-space-5);
+    padding: clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
     text-align: center;
 }
 
@@ -48,7 +48,7 @@
 }
 
 .honor-certificate__heading h2 {
-    font-size: var(--tt-fs-title);
+    font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
 }
 
 .honor-certificate__heading p {
@@ -114,7 +114,7 @@
 
 .honor-certificate__stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--tt-space-2);
     margin: 0;
 }
@@ -162,7 +162,7 @@
 
 .honor-certificate__verdict {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 160px;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 42%);
     align-items: center;
     gap: var(--tt-space-2);
     margin-top: 0;
@@ -187,15 +187,15 @@
     position: relative;
     display: block;
     overflow: hidden;
-    width: 160px;
+    width: 100%;
     height: 84px;
 }
 
 .honor-certificate__signature img {
     position: absolute;
     top: -24px;
-    left: -60px;
-    width: 236px;
+    left: -38%;
+    width: 148%;
     max-width: none;
     height: 133px;
     object-fit: contain;
@@ -259,7 +259,7 @@
 }
 
 .honor-certificate--square .honor-certificate__verdict {
-    grid-template-columns: minmax(0, 1fr) 128px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 38%);
     gap: var(--tt-space-1);
     padding: 0 var(--tt-space-6);
 }
@@ -270,15 +270,131 @@
 
 .honor-certificate--square .honor-certificate__signature {
     overflow: visible;
-    width: 128px;
+    width: 100%;
     height: 64px;
 }
 
 .honor-certificate--square .honor-certificate__signature img {
     top: -22px;
-    left: -58px;
-    width: 212px;
+    left: -45%;
+    width: 166%;
     height: 119px;
+}
+
+@media (max-width: 390px) {
+    .honor-certificate__court {
+        letter-spacing: 0.16em;
+    }
+
+    .honor-certificate__rank {
+        padding: var(--tt-space-3);
+    }
+
+    .honor-certificate__rank > b {
+        right: -4px;
+        width: clamp(60px, 20vw, 72px);
+        height: auto;
+        aspect-ratio: 1;
+    }
+
+    .honor-certificate__stats div {
+        min-width: 0;
+        padding: var(--tt-space-2) var(--tt-space-1);
+    }
+
+    .honor-certificate__verdict {
+        padding: 0;
+    }
+
+    .honor-certificate__verdict p {
+        min-width: 0;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 359px) {
+    .honor-certificate__content {
+        gap: var(--tt-space-2);
+        padding: var(--tt-space-3);
+    }
+
+    .honor-certificate__heading p,
+    .honor-certificate__rank small,
+    .honor-certificate__verdict p,
+    .honor-certificate__meta {
+        font-size: var(--tt-fs-mono-chip);
+    }
+
+    .honor-certificate__rank strong {
+        font-size: var(--tt-fs-title);
+    }
+
+    .honor-certificate__stats dd {
+        font-size: var(--tt-fs-body);
+    }
+
+    .honor-certificate__signature {
+        height: 72px;
+    }
+
+    .honor-certificate--square .honor-certificate__court {
+        padding: var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__content {
+        gap: 2px;
+        padding: var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__heading h2 {
+        font-size: var(--tt-fs-body);
+    }
+
+    .honor-certificate--square .honor-certificate__heading p {
+        margin-top: 0;
+    }
+
+    .honor-certificate--square .honor-certificate__rank {
+        padding: var(--tt-space-1) var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__rank strong {
+        margin-top: 0;
+        font-size: var(--tt-fs-section);
+    }
+
+    .honor-certificate--square .honor-certificate__rank > b {
+        top: -8px;
+        width: 48px;
+        height: 48px;
+        font-size: var(--tt-fs-caption);
+    }
+
+    .honor-certificate--square .honor-certificate__stats div {
+        padding: var(--tt-space-1);
+    }
+
+    .honor-certificate--square .honor-certificate__stats dd {
+        font-size: var(--tt-fs-caption);
+    }
+
+    .honor-certificate--square .honor-certificate__verdict {
+        grid-template-columns: minmax(0, 1fr) minmax(84px, 36%);
+        padding: 0 var(--tt-space-2);
+    }
+
+    .honor-certificate--square .honor-certificate__signature {
+        height: 48px;
+    }
+
+    .honor-certificate--square .honor-certificate__signature img {
+        top: -18px;
+        height: 92px;
+    }
+
+    .honor-certificate--square .honor-certificate__meta {
+        padding-top: var(--tt-space-1);
+    }
 }
 
 .honor-certificate--square .honor-certificate__meta {

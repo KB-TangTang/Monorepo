@@ -45,6 +45,20 @@ export const useConsentStore = defineStore('consent', () => {
         }
     }
 
+    /**
+     * 철회한 항목을 다시 켠다. 전용 엔드포인트 없이 scope 단위 저장(POST /consents)을 쓴다.
+     * agreements 는 같은 scope 전량이어야 한다 — buildAgreeAgainPayload 가 만들어 준다.
+     */
+    async function agreeAgain(scope, agreements) {
+        const result = await save(scope, agreements);
+        try {
+            await loadMyConsents();
+        } catch {
+            // 서버 저장은 이미 성공했다. 목록 갱신 실패로 작업 전체를 실패로 보고하지 않는다.
+        }
+        return result;
+    }
+
     async function withdraw(type) {
         const result = await withdrawConsent(type);
         useAuthStore().needsConsent = result.needsConsent;
@@ -56,5 +70,14 @@ export const useConsentStore = defineStore('consent', () => {
         return result;
     }
 
-    return { catalog, myConsents, isLoading, loadCatalog, save, loadMyConsents, withdraw };
+    return {
+        catalog,
+        myConsents,
+        isLoading,
+        loadCatalog,
+        save,
+        loadMyConsents,
+        agreeAgain,
+        withdraw,
+    };
 });

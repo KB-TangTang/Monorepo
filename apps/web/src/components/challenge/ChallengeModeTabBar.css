@@ -1,32 +1,33 @@
 .challenge-mode {
     position: fixed;
-    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-3));
+    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-2));
     left: 50%;
     z-index: var(--tt-z-sticky);
     display: flex;
+    gap: 2px;
     padding: var(--tt-space-1);
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
-    box-shadow: var(--tt-elevation-2);
+    box-shadow: 0 8px 20px rgba(35, 40, 66, 0.1);
     transform: translateX(-50%);
 }
 
 .challenge-mode a {
     display: flex;
-    gap: var(--tt-space-2);
     align-items: center;
     justify-content: center;
-    min-width: 96px;
-    min-height: 44px;
-    padding: 0 var(--tt-space-4);
+    padding: 6px var(--tt-space-4);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     text-decoration: none;
     border-radius: var(--tt-radius-full);
+    cursor: pointer;
 }
 
 .challenge-mode .challenge-mode__link--active {
-    color: var(--tt-text);
-    background: var(--tt-accent);
+    background: var(--tt-primary-gold);
+    color: var(--tt-primary);
+    font-weight: var(--tt-fw-black);
 }

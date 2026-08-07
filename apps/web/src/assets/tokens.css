@@ -1,135 +1,162 @@
 /*
- * 탕탕(지갑재판소) 디자인 토큰 — 팀 디자인시스템(Figma) 기준.
+ * 탕탕(지갑재판소) 디자인 토큰 v2 — Claude Design 디자인시스템 v2 기준.
+ *
+ * v1 대비 변경점:
+ *  - 브랜드 팔레트: Trust Blue → Ink/Gold 이원 체계
+ *  - 중립색: Cool Gray(블루틴트) → Warm Neutral(따뜻한 회색)
+ *  - 상태색: 4색 체계(Green/Gold/Red/Blue), 각각 진한값+옅은값+deep 3단
+ *  - 타이포: 스케일 재조정 (38/30/23/19/15/13.5/12/11)
+ *  - 라운드: 7단계로 세분화 (8/12/14/18/22/30/999)
+ *  - 그림자: 4단계로 확장, Navy 톤 유지
+ *  - 버튼: Ink Primary + Gold Primary 이원화
  *
  * 규칙
- *  1. 색상·폰트·간격은 반드시 이 변수를 통해 쓴다. 컴포넌트에 HEX 하드코딩 금지.
- *  2. 컴포넌트는 「의미 토큰」(--tt-primary, --tt-text, --tt-bg …)만 참조한다.
- *     원시 팔레트(--tt-brand-700 등)는 이 파일의 의미 토큰 정의에서만 쓴다.
+ *  1. 색상/폰트/간격은 반드시 이 변수를 통해 쓴다. 컴포넌트에 HEX 하드코딩 금지.
+ *  2. 컴포넌트는 "의미 토큰"(--tt-primary, --tt-text, --tt-bg ...)만 참조한다.
+ *     원시 팔레트(--tt-ink, --tt-gold 등)는 이 파일의 의미 토큰 정의에서만 쓴다.
  *  3. 값을 바꿔야 하면 docs/DESIGN_SYSTEM.md 도 같이 고친다.
  */
 :root {
-    /* ── Brand (Trust Blue) ─────────────────────────────── */
-    --tt-brand-900: #1e3e9c; /* hover · pressed */
-    --tt-brand-700: #2f5ad0; /* Primary — 메인 액션 */
-    --tt-brand-500: #5b7bc4;
-    --tt-brand-200: #bfd2f6; /* border */
-    --tt-brand-100: #dae7fb; /* Secondary — 선택 상태 */
-    --tt-brand-50: #eaf0fb; /* bg */
+    /* ── Brand (Ink + Gold 이원 체계) ─────────────────── */
+    --tt-ink: #232842;          /* 헤더 / 본문 텍스트 / 스탯 카드 */
+    --tt-ink-raised: #2E3556;   /* Ink 위에 겹치는 블록 */
+    --tt-gold: #F5B921;         /* 주요 CTA / 진행바 / 목숨 */
+    --tt-gold-soft: #FFF3D1;    /* 뱃지 배경 / 후광 */
+    --tt-gold-deep: #B67D06;    /* Gold soft 위 텍스트 */
 
-    /* ── Accent (Gold · 배지 · 판사봉) ──────────────────── */
-    --tt-accent-700: #8a6410; /* 텍스트용 진한 골드 */
-    --tt-accent-500: #ffc338; /* Accent */
-    --tt-accent-50: #fff6e0; /* bg */
+    /* ── 중립 / 종이 (따뜻한 값) ──────────────────────── */
+    --tt-neutral-text: #232842;   /* 최고 대비 텍스트 */
+    --tt-neutral-body: #5A6076;   /* 본문 */
+    --tt-neutral-muted: #8A8FA3;  /* 보조 설명 */
+    --tt-neutral-hint: #A6A9B6;   /* 힌트 / placeholder */
+    --tt-neutral-surface: #FFFFFF; /* 카드 배경 */
+    --tt-neutral-paper: #F7F8FA;  /* 섹션 배경 */
+    --tt-neutral-fill: #EFF1F5;   /* 입력 필드 배경 / 비활성 */
+    --tt-neutral-border: #E5E8EF; /* 구분선 / 카드 테두리 */
+    --tt-neutral-track: #E9ECF2;  /* 진행바 트랙 */
+    --tt-neutral-desk: #D9D7D2;   /* 디자인 문서 캔버스 전용 */
+    --tt-white: #FFFFFF;
 
-    /* ── Cool Gray 10단계 ───────────────────────────────── */
-    --tt-gray-50: #f8fafd;
-    --tt-gray-100: #f1f4f9;
-    --tt-gray-200: #e5eaf2;
-    --tt-gray-300: #d3dae7;
-    --tt-gray-400: #b8c2d3;
-    --tt-gray-500: #9da8bd;
-    --tt-gray-600: #8792ae;
-    --tt-gray-700: #68728f;
-    --tt-gray-800: #444c68;
-    --tt-gray-900: #252b42; /* Navy — 수치카드 · CTA */
-    --tt-ink: #1b2138; /* 최고 대비 텍스트 */
-    --tt-white: #ffffff;
+    /* ── 탭바 전용 ────────────────────────────────────── */
+    --tt-tab-active: #F5B921;     /* 활성 탭 아이콘 + 라벨 */
+    --tt-tab-inactive: #AEB0BC;   /* 비활성 탭 아이콘 + 라벨 */
 
-    /* ── 시맨틱 · 판정 ──────────────────────────────────── */
-    --tt-guilty-700: #c7515a; /* 유죄 · 초과 · 위험 */
-    --tt-guilty-300: #f0d4d7;
-    --tt-guilty-50: #fbedee;
-    --tt-innocent-800: #2f7a62;
-    --tt-innocent-700: #3e9b7e; /* 무죄 · 절약 · 성공 */
-    --tt-innocent-300: #cde5d9;
-    --tt-innocent-50: #e7f2ed;
+    /* ── 상태 — 4색 체계 (진한값 / 옅은값 / deep) ─────── */
+    /* Green: 성공 / 안전 / 무죄 */
+    --tt-green: #2E9E6B;
+    --tt-green-soft: #E4F4EC;
+    --tt-green-deep: #1F6B48;
 
-    /* ── 종이 · 목재 (절제 사용) ────────────────────────── */
-    /* 판사봉 · 인장 · 종이 질감에만 쓴다. 일반 UI 배경·텍스트에 쓰지 말 것. */
+    /* Gold: 주의 / 진행 중 (= 브랜드 Gold 공유) */
+    /* --tt-gold, --tt-gold-soft, --tt-gold-deep 은 위에서 정의 */
+
+    /* Red: 초과 / 탈락 / 유죄 */
+    --tt-red: #E0664B;
+    --tt-red-soft: #FBE9E4;
+    --tt-red-deep: #C24B31;
+
+    /* Blue: 정보 / 링크 / 기간 */
+    --tt-blue: #3E63D6;
+    --tt-blue-soft: #EAF0FF;
+    --tt-blue-deep: #3E5299;
+
+    /* ── 종이 / 목재 (절제 사용) ────────────────────────── */
+    /* 판사봉 / 인장 / 종이 질감에만 쓴다. 일반 UI 배경/텍스트에 쓰지 말 것. */
     --tt-wood: #9c7b54;
     --tt-kraft: #efe7d8;
 
     /* ── 의미 토큰 (컴포넌트는 이쪽만 참조한다) ─────────── */
-    --tt-primary: var(--tt-brand-700);
-    --tt-primary-hover: var(--tt-brand-900);
-    --tt-primary-subtle: var(--tt-brand-100);
-    --tt-danger: var(--tt-guilty-700);
-    --tt-danger-subtle: var(--tt-guilty-50);
-    --tt-success: var(--tt-innocent-700);
-    --tt-success-subtle: var(--tt-innocent-50);
-    --tt-accent: var(--tt-accent-500);
-    --tt-accent-subtle: var(--tt-accent-50);
+    --tt-primary: var(--tt-ink);             /* 주 CTA (Ink 버튼) */
+    --tt-primary-hover: var(--tt-ink-raised);
+    --tt-primary-gold: var(--tt-gold);       /* 게임 시작 / 다음 라운드 CTA */
+    --tt-primary-subtle: var(--tt-neutral-fill);
 
-    --tt-text: var(--tt-ink);
-    --tt-text-muted: var(--tt-gray-700);
+    --tt-danger: var(--tt-red);
+    --tt-danger-deep: var(--tt-red-deep);
+    --tt-danger-subtle: var(--tt-red-soft);
+
+    --tt-success: var(--tt-green);
+    --tt-success-deep: var(--tt-green-deep);
+    --tt-success-subtle: var(--tt-green-soft);
+
+    --tt-info: var(--tt-blue);
+    --tt-info-deep: var(--tt-blue-deep);
+    --tt-info-subtle: var(--tt-blue-soft);
+
+    --tt-accent: var(--tt-gold);
+    --tt-accent-deep: var(--tt-gold-deep);
+    --tt-accent-subtle: var(--tt-gold-soft);
+
+    --tt-text: var(--tt-neutral-text);
+    --tt-text-body: var(--tt-neutral-body);
+    --tt-text-muted: var(--tt-neutral-muted);
+    --tt-text-hint: var(--tt-neutral-hint);
     --tt-text-inverse: var(--tt-white);
 
-    --tt-surface-inverse: var(
-        --tt-ink
-    ); /* 강조 바·역전 배경 — --tt-text-inverse 텍스트를 올리는 어두운 surface. 텍스트 토큰을 surface로 오용하면 디자인이 깨지므로 명확한 의도로 분리한다. */
+    --tt-surface-inverse: var(--tt-ink);     /* Ink 스탯 카드 / 역전 배경 */
+    --tt-surface-raised: var(--tt-ink-raised); /* Ink 위에 겹치는 블록 */
 
-    --tt-bg: var(--tt-white);
-    --tt-bg-subtle: var(--tt-gray-50);
-    --tt-border: var(--tt-gray-200);
-    --tt-border-strong: var(--tt-gray-400);
+    --tt-bg: var(--tt-neutral-surface);      /* 카드 배경 */
+    --tt-bg-subtle: var(--tt-neutral-paper); /* 페이지 배경 / 섹션 배경 */
+    --tt-bg-fill: var(--tt-neutral-fill);    /* 입력 필드 / 비활성 배경 */
 
-    /* 고정지출 화면 — 원본의 네이비 요약면 · 명세 · 탐지 후보 상태 */
-    --tt-surface-strong: var(--tt-gray-900);
-    --tt-surface-strong-deep: #1f263d;
-    --tt-surface-strong-muted: #3a4160;
-    --tt-surface-row: #eef2f8;
-    --tt-surface-candidate: #fffbf0;
-    --tt-surface-candidate-strong: #f6ecd2;
-    --tt-border-candidate: #f6e4b0;
-    --tt-category-subscription: #fff0c8;
-    --tt-category-living: #eaf3ee;
-    --tt-text-subtle: var(--tt-gray-600);
-    --tt-text-soft: var(--tt-gray-500);
-    --tt-accent-strong: var(--tt-accent-700);
-    --tt-success-strong: var(--tt-innocent-800);
-    --tt-success-bright: #7fd1b4;
+    --tt-border: var(--tt-neutral-border);
+    --tt-border-track: var(--tt-neutral-track); /* 진행바 트랙 */
 
-    /* 모달·바텀시트 뒤에 까는 딤. --tt-ink 의 rgb 값에 투명도를 준 것 —
-     * CSS 변수는 색상 채널만 따로 꺼내 쓸 수 없어 값을 직접 적는다. */
-    --tt-overlay-dim: rgba(27, 33, 56, 0.48);
-    /* 카드 가장자리를 파낸 노치(영수증 절취선·소환장 펀치홀)를 칠하는 색.
-     * "카드 뒤에 보이는 배경"이어야 한다. 흰 배경 화면에서는 화면 쪽에서
-     * --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
+    /* 고정지출 화면 — 하위 호환 (필요 시 제거 예정) */
+    --tt-surface-strong: var(--tt-ink);
+    --tt-surface-strong-deep: var(--tt-ink-raised);
+
+    /* 모달/바텀시트 뒤에 까는 딤 */
+    --tt-overlay-dim: rgba(35, 40, 66, 0.48);
+
+    /* 카드 노치(영수증 절취선/소환장 펀치홀) */
     --tt-notch-bg: var(--tt-bg-subtle);
 
     /* ── 타이포 ─────────────────────────────────────────── */
     --tt-font-sans:
         'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
         'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-    --tt-font-mono: 'Roboto Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    --tt-font-mono: ui-monospace, Menlo, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
-    /* 스케일 — display / title / section / body / caption / numeric / mono-chip */
-    --tt-fs-display: 44px;
-    --tt-fs-title: 26px;
-    --tt-fs-numeric: 34px;
-    --tt-fs-section: 18px;
-    --tt-fs-body: 15px;
-    --tt-fs-caption: 13px;
-    --tt-fs-mono-chip: 12px;
+    /* 스케일 — v2 기준 (결과수치 / 스탯 / H1 / H2 / 라벨 / 본문 / 보조 / 오버라인 / 모노) */
+    --tt-fs-hero: 38px;       /* 결과 수치 / 순위 */
+    --tt-fs-stat: 30px;       /* 스탯 카드 숫자 */
+    --tt-fs-title: 23px;      /* 화면 제목 (H1) */
+    --tt-fs-subtitle: 19px;   /* 카드 제목 (H2) */
+    --tt-fs-label: 15px;      /* 섹션 라벨 / 리스트 이름 */
+    --tt-fs-body: 13.5px;     /* 본문 설명 */
+    --tt-fs-caption: 12px;    /* 보조 설명 / 뱃지 */
+    --tt-fs-overline: 11px;   /* 오버라인 / 사건번호 */
+    --tt-fs-badge: 11.5px;    /* 뱃지 텍스트 */
+    --tt-fs-button: 14.5px;   /* 버튼 라벨 */
+
+    /* 하위 호환 매핑 */
+    --tt-fs-display: var(--tt-fs-hero);
+    --tt-fs-numeric: var(--tt-fs-stat);
+    --tt-fs-section: var(--tt-fs-subtitle);
+    --tt-fs-mono-chip: var(--tt-fs-overline);
 
     --tt-fw-regular: 400;
     --tt-fw-medium: 500;
+    --tt-fw-semibold: 600;   /* v2 추가 */
     --tt-fw-bold: 700;
     --tt-fw-black: 800;
 
-    --tt-lh-tight: 1.2; /* display · title · numeric */
-    --tt-lh-snug: 1.4; /* section */
-    --tt-lh-normal: 1.6; /* body · caption */
+    --tt-lh-tight: 1.1;      /* hero / stat 수치 */
+    --tt-lh-snug: 1.25;      /* 제목 (H1, H2) */
+    --tt-lh-normal: 1.6;     /* 본문 / caption */
 
-    /* ── Radius ─────────────────────────────────────────── */
-    --tt-radius-xs: 4px;
-    --tt-radius-sm: 6px;
-    --tt-radius-md: 12px;
-    --tt-radius-lg: 20px;
-    --tt-radius-xl: 28px;
-    --tt-radius-full: 999px;
+    /* ── Radius (7단계) ────────────────────────────────── */
+    --tt-radius-xs: 8px;      /* 태그 */
+    --tt-radius-sm: 12px;     /* 내부 요소 */
+    --tt-radius-md: 14px;     /* 버튼 */
+    --tt-radius-lg: 18px;     /* 리스트 행 / 배너 */
+    --tt-radius-xl: 22px;     /* 카드 */
+    --tt-radius-2xl: 30px;    /* 헤더 하단 곡률 */
+    --tt-radius-full: 999px;  /* pill / 뱃지 */
 
-    /* ── Spacing (4px 그리드) ───────────────────────────── */
+    /* ── Spacing (모바일 328px 기준) ───────────────────── */
     --tt-space-1: 4px;
     --tt-space-2: 8px;
     --tt-space-3: 12px;
@@ -140,23 +167,29 @@
     --tt-space-10: 40px;
     --tt-space-12: 48px;
 
-    /* ── Elevation (Navy 계열 그림자) ───────────────────── */
+    --tt-screen-padding: 20px;     /* 화면 좌우 패딩 */
+    --tt-card-padding: 16px;       /* 카드 내부 패딩 */
+    --tt-card-gap: 10px;           /* 카드 사이 간격 */
+    --tt-list-gap: 8px;            /* 리스트 행 간격 */
+    --tt-touch-min: 44px;          /* 최소 터치 영역 */
+
+    /* ── Elevation (Navy 계열 그림자, 4단) ───────────── */
     --tt-elevation-0: none;
-    --tt-elevation-1: 0 1px 2px rgba(37, 43, 66, 0.06);
-    --tt-elevation-2: 0 2px 8px rgba(37, 43, 66, 0.08);
-    --tt-elevation-3: 0 8px 24px rgba(37, 43, 66, 0.12);
+    --tt-elevation-1: 0 6px 16px rgba(35, 40, 66, 0.04);   /* 리스트 행 */
+    --tt-elevation-2: 0 8px 22px rgba(35, 40, 66, 0.05);   /* 일반 카드 */
+    --tt-elevation-3: 0 12px 28px rgba(35, 40, 66, 0.10);  /* 겹치는 카드 / 토글 */
+    --tt-elevation-4: 0 14px 30px -16px rgba(35, 40, 66, 0.55); /* Ink 스탯 카드 */
 
     /* ── z-index ────────────────────────────────────────
-     * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다.
-     * 각자 숫자를 쓰면 화면마다 겹침 순서가 달라진다. */
+     * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다. */
     --tt-z-base: 0;
-    --tt-z-sticky: 100; /* 화면 상단 고정 헤더 */
-    --tt-z-tabbar: 200; /* 하단 탭바 */
-    --tt-z-overlay: 900; /* 모달 · 바텀시트 뒤 딤 */
-    --tt-z-modal: 1000; /* 모달 · 바텀시트 패널 */
-    --tt-z-toast: 1100; /* 토스트 · 스낵바 */
+    --tt-z-sticky: 100;
+    --tt-z-tabbar: 200;
+    --tt-z-overlay: 900;
+    --tt-z-modal: 1000;
+    --tt-z-toast: 1100;
 
     /* ── 레이아웃 ───────────────────────────────────────── */
-    --tt-tabbar-height: 60px;
-    --tt-content-max: 480px; /* 모바일 웹 우선 — 본문 최대 폭 */
+    --tt-tabbar-height: 64px;      /* v2: 60 → 64 */
+    --tt-content-max: 480px;
 }

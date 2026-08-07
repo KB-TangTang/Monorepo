@@ -28,7 +28,7 @@ function openCandidate(candidateId) {
 }
 
 function goBack() {
-    router.push('/asset/fixed-expenses/savings');
+    router.back();
 }
 
 onMounted(() => store.loadOverview());

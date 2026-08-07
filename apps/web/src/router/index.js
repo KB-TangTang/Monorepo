@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useAccountStore } from '@/stores/account';
+import { canEnterLinkStep } from '@/utils/account';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -96,8 +98,39 @@ const routes = [
     {
         path: '/my',
         name: 'my',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/MyPageView.vue'),
         meta: { title: '마이' },
+    },
+    {
+        path: '/my/consents',
+        name: 'myConsents',
+        component: () => import('@/views/my/ConsentManageView.vue'),
+        meta: { title: '동의 관리' },
+    },
+    // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
+    {
+        path: '/group-challenges',
+        name: 'groupChallenge',
+        component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
+        meta: { title: '그룹 챌린지' },
+    },
+    {
+        path: '/group-challenges/create',
+        name: 'groupChallengeCreate',
+        component: () => import('@/views/challenge/group/GroupCreateView.vue'),
+        meta: { title: '그룹 만들기', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/invite/:groupId',
+        name: 'groupChallengeInvite',
+        component: () => import('@/views/challenge/group/GroupInviteView.vue'),
+        meta: { title: '친구 초대', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/join/:code?',
+        name: 'groupChallengeJoin',
+        component: () => import('@/views/challenge/group/GroupJoinView.vue'),
+        meta: { title: '그룹 참여', hideTabBar: true },
     },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
@@ -141,6 +174,62 @@ const routes = [
         name: 'fixedExpenseDetail',
         component: () => import('@/views/fixed-expense/FixedExpenseDetailView.vue'),
         meta: { title: '고정지출 상세' },
+    },
+    // ↓ 계좌 연동(이슈 #12). 단계 순서는 stores/account.js 가 utils/account.js 의 LINK_STEPS 로 결정한다.
+    {
+        path: '/accounts/link/institutions',
+        name: 'accountLinkInstitutions',
+        component: () => import('@/views/account/InstitutionSelectView.vue'),
+        meta: { title: '금융기관 연결', hideTabBar: true },
+    },
+    {
+        path: '/accounts/link/auth',
+        name: 'accountLinkAuth',
+        component: () => import('@/views/account/AuthStepView.vue'),
+        meta: { title: '본인 인증', hideTabBar: true, linkStep: 'auth' },
+    },
+    {
+        path: '/accounts/link/progress',
+        name: 'accountLinkProgress',
+        component: () => import('@/views/account/LinkProgressView.vue'),
+        meta: { title: '자산 연결 중', hideTabBar: true, linkStep: 'progress' },
+    },
+    {
+        path: '/accounts/link/select',
+        name: 'accountLinkSelect',
+        component: () => import('@/views/account/AccountSelectView.vue'),
+        meta: { title: '연결할 계좌 선택', hideTabBar: true, linkStep: 'select' },
+    },
+    {
+        path: '/accounts/link/done',
+        name: 'accountLinkDone',
+        component: () => import('@/views/account/LinkDoneView.vue'),
+        meta: { title: '계좌 연결 완료', hideTabBar: true, linkStep: 'done' },
+    },
+    {
+        path: '/asset/accounts',
+        name: 'connectedAccounts',
+        component: () => import('@/views/account/ConnectedAccountView.vue'),
+        meta: { title: '연결 계좌 관리' },
+    },
+    {
+        path: '/asset/accounts/:accountId/reconnect',
+        name: 'accountReconnect',
+        component: () => import('@/views/account/AccountReconnectView.vue'),
+        meta: { title: '계좌 재연동', hideTabBar: true },
+    },
+    {
+        path: '/asset/accounts/refresh',
+        name: 'accountRefresh',
+        component: () => import('@/views/account/AccountRefreshView.vue'),
+        meta: { title: '계좌 즉시 조회' },
+    },
+    // ↓ 알림 목록(이슈 #58). 탭바는 숨기지 않는다 — 화면에 뒤로가기 버튼이 없다.
+    {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationListView.vue'),
+        meta: { title: '알림' },
     },
 ];
 
@@ -188,6 +277,24 @@ router.beforeEach((to) => {
      */
     if (auth.needsConsent && to.name !== 'consent') {
         return { name: 'consent' };
+    }
+
+    /*
+     * 계좌 연결 플로우 중간 단계 직접 진입 차단 (이슈 #12).
+     * 북마크·새로고침으로 /accounts/link/select 에 바로 들어오면 이전 단계 결과가 없어 빈 화면이 된다.
+     * meta.linkStep 이 붙은 라우트만 검사하므로 다른 화면에는 영향이 없다.
+     */
+    if (to.meta.linkStep) {
+        const account = useAccountStore();
+        const canEnter = canEnterLinkStep(to.meta.linkStep, {
+            selectedCount: account.selectedCount,
+            hasConnection: account.hasConnection,
+            linkedCount: account.linkedCount,
+            progressDone: account.progressDone,
+        });
+        if (!canEnter) {
+            return { name: 'accountLinkInstitutions' };
+        }
     }
 
     return true;

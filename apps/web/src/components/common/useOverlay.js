@@ -119,7 +119,8 @@ export function useOverlay({ isOpen, panelRef, canCloseOnEsc, requestClose }) {
         window.removeEventListener('popstate', onPopState);
         unlockScroll();
         /* 내부 UI 로 닫은 경우에는 쌓아둔 히스토리 항목을 되돌린다.
-         * popstate 로 닫힌 경우엔 이미 소비됐으므로 건드리지 않는다. */
+         * popstate 로 닫힌 경우엔 이미 소비됐으므로 건드리지 않는다.
+         * releaseHistory() 로 소유권을 넘긴 경우에도 건드리지 않는다. */
         if (pushedHistory) {
             pushedHistory = false;
             window.history.back();
@@ -128,6 +129,23 @@ export function useOverlay({ isOpen, panelRef, canCloseOnEsc, requestClose }) {
         lastFocused = null;
     }
 
+    /*
+     * 오버레이 안에서 다른 화면으로 이동할 때 쓴다. 쌓아둔 히스토리 항목의 소유권을 호출부에 넘긴다.
+     *
+     * 이걸 부르지 않고 오버레이 안에서 router.push 를 하면 이동이 취소된다.
+     * 닫히면서 실행되는 history.back() 이 라우터가 방금 쌓은 항목을 그대로 되감기 때문이다.
+     * 라우터의 pushState 는 라우트 컴포넌트의 동적 import 가 끝난 뒤에 일어나서
+     * 항상 back() 보다 늦다 — 순서로는 절대 피할 수 없다.
+     *
+     * 호출한 쪽은 push 가 아니라 **router.replace** 로 이동한다.
+     * 그래야 남겨진 오버레이 항목을 새 화면이 덮어써서 뒤로가기가 한 번에 원래 화면으로 간다.
+     */
+    function releaseHistory() {
+        pushedHistory = false;
+    }
+
     watch(isOpen, (open) => (open ? activate() : deactivate()), { immediate: true });
     onBeforeUnmount(deactivate);
+
+    return { releaseHistory };
 }

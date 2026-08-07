@@ -7,6 +7,7 @@
 import { onMounted, ref } from 'vue';
 import CatalogItem from '@/components/dev/CatalogItem.vue';
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
@@ -17,6 +18,7 @@ import BaseModal from '@/components/common/BaseModal.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import BentoStats from '@/components/common/cards/BentoStats.vue';
 import JudgmentCard from '@/components/common/cards/JudgmentCard.vue';
 import LifeGauge from '@/components/common/cards/LifeGauge.vue';
@@ -39,6 +41,8 @@ const SECTIONS = [
     { id: 'badge', label: 'BaseBadge' },
     { id: 'category-icon', label: 'CategoryIcon' },
     { id: 'state', label: '상태 3종' },
+    { id: 'bell', label: 'TheNotificationBell' },
+    { id: 'back', label: 'BaseBackButton' },
     { id: 'cards', label: '카드 라이브러리 7종' },
 ];
 
@@ -226,6 +230,11 @@ const CODE = {
 <StateEmpty v-else-if="!items.length" title="아직 기소된 지출이 없어요">
     <template #action><BaseButton size="sm">계좌 연동하기</BaseButton></template>
 </StateEmpty>`,
+    back: `<BaseBackButton label="자산 홈으로 돌아가기" />
+<!-- to 를 주면 히스토리 대신 그 경로로 보낸다 -->
+<BaseBackButton to="/asset" />`,
+    bell: `<TheNotificationBell />
+<!-- store 의 unreadCount 를 읽어 배지를 그리고, 클릭하면 /notifications 로 보낸다 -->`,
     record: `<RecordCard
     case-no="TT-2026-0815"
     title="야식 금지 챌린지"
@@ -375,10 +384,14 @@ const CODE = {
             <h2 class="catalog__h2">BaseButton</h2>
             <CatalogItem
                 name="BaseButton"
-                purpose="모든 액션 버튼. variant 4종 × size 3종 + block · disabled · loading."
+                purpose="모든 액션 버튼. variant 6종 × size 3종 + block · disabled · loading."
                 :code="CODE.button"
             >
-                <div v-for="v in ['primary', 'secondary', 'ghost', 'danger']" :key="v" class="demo">
+                <div
+                    v-for="v in ['primary', 'secondary', 'ghost', 'danger', 'dark', 'accent']"
+                    :key="v"
+                    class="demo"
+                >
                     <span class="demo__label">variant="{{ v }}"</span>
                     <div class="demo__row">
                         <BaseButton v-for="s in ['sm', 'md', 'lg']" :key="s" :variant="v" :size="s">
@@ -567,6 +580,29 @@ const CODE = {
                         </template>
                     </StateEmpty>
                 </div>
+            </CatalogItem>
+        </section>
+
+        <section id="bell" class="catalog__section">
+            <h2 class="catalog__h2">TheNotificationBell</h2>
+            <CatalogItem
+                name="TheNotificationBell"
+                purpose="안 읽은 알림 개수를 배지로 보여주고 누르면 /notifications 로 이동한다. common/ 에 두어 홈 담당자가 그대로 옮겨 붙인다."
+                :code="CODE.bell"
+            >
+                <TheNotificationBell />
+            </CatalogItem>
+        </section>
+
+        <!-- ── BaseBackButton ────────────────────────── -->
+        <section id="back" class="catalog__section">
+            <h2 class="catalog__h2">BaseBackButton</h2>
+            <CatalogItem
+                name="BaseBackButton"
+                purpose="화면 좌측 상단의 뒤로가기. 기본은 router.back() 이고, to 를 주면 그 경로로 보낸다. 히스토리 뒤가 라우터 가드에 막히는 화면에서는 to 를 명시할 것."
+                :code="CODE.back"
+            >
+                <BaseBackButton label="예시 뒤로 가기" />
             </CatalogItem>
         </section>
 

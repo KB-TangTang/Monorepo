@@ -1,6 +1,6 @@
 .difficulty {
     min-height: 100vh;
-    padding: var(--tt-space-6) var(--tt-space-5);
+    padding: var(--tt-space-6) clamp(var(--tt-space-3), 5vw, var(--tt-space-5));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
     background: var(--tt-bg-subtle);
@@ -56,4 +56,10 @@
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-md);
+}
+
+@media (max-width: 390px) {
+    .difficulty__title h1 {
+        font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
+    }
 }
