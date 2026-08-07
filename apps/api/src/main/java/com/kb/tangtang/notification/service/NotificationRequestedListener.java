@@ -1,6 +1,5 @@
 package com.kb.tangtang.notification.service;
 
-import com.kb.tangtang.notification.domain.Notification;
 import com.kb.tangtang.notification.domain.NotificationDlqPayload;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import org.springframework.context.event.EventListener;
@@ -43,9 +42,14 @@ public class NotificationRequestedListener {
         String content = null;
         try {
             content = event.type().render(event.params());
-            Notification saved = notificationService.create(
-                    event.userId(), event.type(), content, event.deepLinkUrl());
-            sender.send(saved);
+            /*
+             * 같은 알림이 안 읽은 채로 남아 있으면 만들지 않는다 (이슈 #70).
+             * 「즉시 조회」를 반복하면 같은 재연동 알림이 누를 때마다 쌓이던 문제를 여기서 막는다 —
+             * 발행 경로가 이 리스너 하나로 모였으므로 억제도 한 곳이면 된다.
+             */
+            notificationService.createUnlessDuplicate(
+                    event.userId(), event.type(), content, event.deepLinkUrl())
+                    .ifPresent(sender::send);
         } catch (Exception e) {
             /* 발행자를 죽이지 않는다. 실패는 DLQ 로만 남긴다 (NT_01_04) */
             sender.sendFailure(event.type().name(),

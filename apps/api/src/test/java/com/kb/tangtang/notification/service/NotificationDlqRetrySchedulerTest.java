@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,6 +41,7 @@ class NotificationDlqRetrySchedulerTest {
         @Override public int insert(Notification n) { return 1; }
         @Override public List<Notification> findPage(long u, Long c, int s) { return List.of(); }
         @Override public int countUnread(long u) { return 0; }
+        @Override public int countUnreadSame(long u, String t, String d) { return 0; }
         @Override public int markRead(long i, long u) { return 1; }
         @Override public int markAllRead(long u) { return 1; }
         @Override public Notification findById(long id, long userId) {
@@ -50,7 +52,17 @@ class NotificationDlqRetrySchedulerTest {
     private static class RecordingService extends NotificationService {
         final List<String> created = new ArrayList<>();
         boolean explode = false;
+        boolean duplicate = false;
         RecordingService() { super((NotificationMapper) null); }
+        @Override
+        public Optional<Notification> createUnlessDuplicate(long userId, NotificationType type,
+                                                            String content, String deepLink) {
+            if (explode) {
+                throw new IllegalStateException("DB down");
+            }
+            return duplicate ? Optional.empty()
+                    : Optional.of(create(userId, type, content, deepLink));
+        }
         @Override
         public Notification create(long userId, NotificationType type, String content, String deepLink) {
             if (explode) {
@@ -237,5 +249,22 @@ class NotificationDlqRetrySchedulerTest {
 
         assertEquals(List.of(), dlq.increased);
         assertEquals(List.of(), dlq.deleted);
+    }
+
+    @Test
+    @DisplayName("재처리하려는 알림이 그 사이 이미 만들어졌으면 또 만들지 않고 행만 지운다")
+    void doesNotDuplicateWhenNotificationAlreadyExists() {
+        FakeDlqMapper dlq = new FakeDlqMapper();
+        dlq.rows = List.of(row(1L, 0, """
+                {"userId":7,"type":"ACCOUNT_RECONNECT","content":"국민은행 · 인증이 만료됐어요",                "deepLinkUrl":"/asset/accounts/9/reconnect"}"""));
+        RecordingService service = new RecordingService();
+        service.duplicate = true;
+        FakeSender sender = new FakeSender(dlq);
+
+        scheduler(dlq, new FakeNotificationMapper(), service, sender, BASE.plusMinutes(2)).retryDue();
+
+        assertTrue(service.created.isEmpty(), "이미 있는 알림을 또 만들면 중복이 된다");
+        assertEquals(List.of(), sender.sent);
+        assertEquals(List.of(1L), dlq.deleted, "목적은 달성됐으므로 행은 지운다");
     }
 }

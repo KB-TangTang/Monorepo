@@ -521,6 +521,12 @@ public class AccountLinkService {
             return status;
         }
 
+        /*
+         * ⚠ 계좌 하나라도 재연동 대상이 되면 기관 결과도 NEED_RECONNECT 다 (이슈 #70).
+         *   예전에는 이 아래에서 무조건 NORMAL 을 돌려줘, DB·알림은 "재연동 필요" 인데
+         *   화면만 "정상" 으로 보이는 모순이 있었다.
+         */
+        SyncStatus aggregate = SyncStatus.NORMAL;
         for (ConnectedAccount account : owned) {
             BigDecimal balance = fresh.get(account.getAccountNoEncrypted());
             if (balance == null) {
@@ -528,12 +534,14 @@ public class AccountLinkService {
                 mapper.updateSync(account.getId(), userId, SyncStatus.NEED_RECONNECT.name(), now,
                         "금융기관에서 이 계좌를 찾지 못했어요.");
                 events.publishEvent(reconnectNotification(userId, account));
+                aggregate = SyncStatus.NEED_RECONNECT;
                 continue;
             }
+            /* 살아 있는 계좌는 그대로 갱신한다 — 하나가 실패했다고 나머지를 버리지 않는다 */
             mapper.updateSynced(account.getId(), userId, balance, now);
             account.setBalance(balance);
         }
-        return SyncStatus.NORMAL;
+        return aggregate;
     }
 
     /**

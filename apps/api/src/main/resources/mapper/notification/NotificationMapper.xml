@@ -47,6 +47,20 @@
         WHERE user_id = #{userId} AND is_read = 0
     </select>
 
+    <!--
+      중복 알림 억제용 (이슈 #70). deep_link_url 은 NULL 일 수 있으므로 = 비교만으로는 안 된다.
+      MySQL 의 null-safe 비교 연산자를 쓰지 않는 이유는 그 기호에 원시 부등호가 들어가
+      XML 파싱을 깨뜨릴 수 있어서다 — IS NULL 조합으로 같은 결과를 낸다.
+    -->
+    <select id="countUnreadSame" resultType="int">
+        SELECT COUNT(*) FROM tbl_notification
+        WHERE user_id = #{userId}
+          AND type = #{type}
+          AND is_read = 0
+          AND ((deep_link_url IS NULL AND #{deepLinkUrl} IS NULL)
+               OR deep_link_url = #{deepLinkUrl})
+    </select>
+
     <update id="markRead">
         UPDATE tbl_notification
         SET is_read = 1
