@@ -344,7 +344,6 @@ export const MOCK_ENDED_CHALLENGES = [
         /* --- 파생 필드 --- */
         totalDays: 7,
         memberCount: 6,
-        totalMembers: 6,
         savingsAmount: 128000,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
@@ -367,7 +366,6 @@ export const MOCK_ENDED_CHALLENGES = [
         finalChargeAmount: 12000,
         totalDays: 7,
         memberCount: 5,
-        totalMembers: 5,
         savingsAmount: null,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
@@ -389,7 +387,6 @@ export const MOCK_ENDED_CHALLENGES = [
         finalChargeAmount: 0,
         totalDays: 7,
         memberCount: 4,
-        totalMembers: 4,
         savingsAmount: 96000,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
