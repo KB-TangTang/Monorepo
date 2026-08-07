@@ -18,6 +18,7 @@ import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import BaseBackButton from '@/components/common/BaseBackButton.vue';
 import AccountActionSheet from '@/components/account/AccountActionSheet.vue';
 import ConnectedAccountRow from '@/components/account/ConnectedAccountRow.vue';
 import DisconnectConfirmSheet from '@/components/account/DisconnectConfirmSheet.vue';
@@ -132,7 +133,10 @@ function leaveTo(target) {
 
 <template>
     <div class="connected-accounts">
-        <h1 class="connected-accounts__title">연결 계좌 관리</h1>
+        <header class="connected-accounts__header">
+            <BaseBackButton label="이전 화면으로 돌아가기" />
+            <h1 class="connected-accounts__title">연결 계좌 관리</h1>
+        </header>
 
         <!-- 확정본의 연파랑 상태 카드 -->
         <div v-if="hasAccounts" class="connected-accounts__summary">
@@ -221,8 +225,14 @@ function leaveTo(target) {
     overflow: hidden;
 }
 
-.connected-accounts__title {
+.connected-accounts__header {
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
+}
+
+.connected-accounts__title {
     margin: 0;
     font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
@@ -237,13 +247,13 @@ function leaveTo(target) {
     gap: var(--tt-space-1);
     padding: var(--tt-space-5);
     border-radius: var(--tt-radius-lg);
-    background: var(--tt-primary-subtle);
+    background: var(--tt-info-subtle);
 }
 
 .connected-accounts__summary-label {
     margin: 0;
     font-size: var(--tt-fs-caption);
-    color: var(--tt-primary);
+    color: var(--tt-info-deep);
 }
 
 .connected-accounts__summary-value {
@@ -297,17 +307,17 @@ function leaveTo(target) {
 
 .connected-accounts__add {
     height: 56px;
-    border: 1px dashed var(--tt-primary);
+    border: 1px dashed var(--tt-info);
     border-radius: var(--tt-radius-lg);
     background: transparent;
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-primary);
+    color: var(--tt-info);
     cursor: pointer;
 }
 
 .connected-accounts__add:hover {
-    background: var(--tt-primary-subtle);
+    background: var(--tt-info-subtle);
 }
 </style>
