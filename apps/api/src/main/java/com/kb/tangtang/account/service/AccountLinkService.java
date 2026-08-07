@@ -559,6 +559,21 @@ public class AccountLinkService {
                 "/asset/accounts/" + account.getId() + "/reconnect");
     }
 
+    /**
+     * 재연동이 필요하다는 알림 요청.
+     *
+     * 문구 자체는 {@link NotificationType} 이 소유한다 — 여기서는 은행명만 넘긴다 (이슈 #68).
+     * 딥링크 경로는 계좌 화면을 아는 이 모듈이 만든다.
+     */
+    private static NotificationRequestedEvent reconnectNotification(long userId,
+                                                                    ConnectedAccount account) {
+        return new NotificationRequestedEvent(
+                userId,
+                NotificationType.ACCOUNT_RECONNECT,
+                Map.of("bankName", account.getBankName()),
+                "/asset/accounts/" + account.getId() + "/reconnect");
+    }
+
     /** 금융정보 동의 철회 시 모든 연동을 해제한다 (이슈 #13 이 남긴 TODO(#12)). */
     @Transactional
     public int disconnectAll(long userId) {
