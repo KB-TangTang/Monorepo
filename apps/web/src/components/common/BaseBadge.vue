@@ -38,7 +38,7 @@ defineProps({
 /* 기본 — 중립 라벨 */
 .tt-badge--default {
     color: var(--tt-text-muted);
-    background: var(--tt-gray-100);
+    background: var(--tt-bg-fill);
 }
 
 /* 진행 중 N — 브랜드 톤 */
@@ -73,7 +73,7 @@ defineProps({
 .tt-badge--guilty {
     color: var(--tt-danger);
     background: var(--tt-danger-subtle);
-    border-color: var(--tt-guilty-300);
+    border-color: var(--tt-danger);
 }
 
 /* 무혐의 처분 */

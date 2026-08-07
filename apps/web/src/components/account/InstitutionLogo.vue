@@ -97,8 +97,8 @@ const tone = computed(() => resolveInstitutionTone(props.code));
 }
 
 .institution-logo--blue {
-    background: var(--tt-primary-subtle);
-    color: var(--tt-primary);
+    background: var(--tt-info-subtle);
+    color: var(--tt-info);
 }
 
 .institution-logo--green {

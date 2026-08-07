@@ -13,6 +13,7 @@
 <script setup>
 import { computed } from 'vue';
 import AccountSyncBadge from '@/components/account/AccountSyncBadge.vue';
+import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import { consentExpiryLabel, formatAmount, needsReconnect } from '@/utils/account';
 
 const props = defineProps({
@@ -121,7 +122,7 @@ const alert = computed(() => needsReconnect(props.account.syncStatus));
     background: var(--tt-accent-subtle);
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-accent-strong);
+    color: var(--tt-accent-deep);
 }
 
 .connected-row__more {
@@ -133,7 +134,7 @@ const alert = computed(() => needsReconnect(props.account.syncStatus));
     background: none;
     font-size: var(--tt-fs-section);
     line-height: 1;
-    color: var(--tt-text-soft);
+    color: var(--tt-text-muted);
     cursor: pointer;
 }
 
