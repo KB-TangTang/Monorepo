@@ -1,6 +1,7 @@
 package com.kb.tangtang.notification.service;
 
 import com.kb.tangtang.notification.domain.Notification;
+import com.kb.tangtang.notification.domain.NotificationDlqPayload;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -32,25 +33,25 @@ public class NotificationRequestedListener {
     @Async
     @EventListener
     public void onNotificationRequested(NotificationRequestedEvent event) {
+        /*
+         * 문구를 먼저 만든다. 치환값이 빠지면 여기서 예외가 나고 알림은 저장되지 않는다 —
+         * "{bankName} · 인증이 만료됐어요" 같은 반쪽짜리 문구를 사용자에게 보이지 않기 위함이다.
+         *
+         * ⚠ render 를 try 밖으로 뺄 수 없다(예외를 발행자에게 던지게 된다). 대신 content 를
+         *   밖에 두어 **실패 시 DLQ payload 에 지금까지 만든 것을 담는다** — 재처리가 이걸로 알림을 만든다.
+         */
+        String content = null;
         try {
-            /*
-             * 문구를 먼저 만든다. 치환값이 빠지면 여기서 예외가 나고 알림은 저장되지 않는다 —
-             * "{bankName} · 인증이 만료됐어요" 같은 반쪽짜리 문구를 사용자에게 보이지 않기 위함이다.
-             */
-            String content = event.type().render(event.params());
+            content = event.type().render(event.params());
             Notification saved = notificationService.create(
                     event.userId(), event.type(), content, event.deepLinkUrl());
             sender.send(saved);
         } catch (Exception e) {
             /* 발행자를 죽이지 않는다. 실패는 DLQ 로만 남긴다 (NT_01_04) */
-            sender.sendFailure(event.type().name(), payloadOf(event), e.getMessage());
+            sender.sendFailure(event.type().name(),
+                    NotificationSender.toJson(NotificationDlqPayload.ofRequest(
+                            event.userId(), event.type(), content, event.deepLinkUrl())),
+                    e.getMessage());
         }
-    }
-
-    /** 재처리에 필요한 최소 정보. 본문은 아직 없으므로 요청 자체를 남긴다 */
-    private String payloadOf(NotificationRequestedEvent event) {
-        return "{\"userId\":" + event.userId()
-                + ",\"type\":\"" + event.type().name() + "\""
-                + ",\"deepLinkUrl\":\"" + event.deepLinkUrl() + "\"}";
     }
 }

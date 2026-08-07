@@ -26,6 +26,12 @@ public interface NotificationMapper {
                                 @Param("cursor") Long cursor,
                                 @Param("size") int size);
 
+    /**
+     * 알림 1건. 남의 알림이면 null 이다.
+     * DLQ 재처리가 "이미 저장된 알림을 다시 푸시" 할 때 쓴다 — createdAt·isRead 를 지어내지 않기 위해 DB 에서 읽는다.
+     */
+    Notification findById(@Param("id") long id, @Param("userId") long userId);
+
     int countUnread(@Param("userId") long userId);
 
     /** 남의 알림이면 0 을 돌려준다 — 서비스가 이것으로 NOT_FOUND 를 판정한다 */
