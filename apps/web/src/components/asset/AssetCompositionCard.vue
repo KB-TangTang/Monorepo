@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import {
-    formatWon,
+    formatAssetHomeWon,
     formatCompactWon,
     getCompositionTotal,
     getCompositionRatios,
@@ -64,7 +64,7 @@ const segments = computed(() => getCompositionRatios(props.composition));
                     ></span>
                     <span class="asset-composition__legend-label">{{ item.label }}</span>
                     <span class="asset-composition__legend-amount">{{
-                        formatWon(item.amount)
+                        formatAssetHomeWon(item.amount)
                     }}</span>
                 </li>
             </ul>

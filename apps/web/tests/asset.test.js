@@ -4,6 +4,7 @@ import {
     formatWon,
     formatSignedWon,
     formatCompactWon,
+    formatAssetHomeWon,
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,
@@ -33,6 +34,13 @@ test('formatCompactWon 은 반올림으로 1억을 넘는 값도 억 단위로 �
     assert.equal(formatCompactWon(99995000), '1.0억원');
     assert.equal(formatCompactWon(10000), '1만원');
     assert.equal(formatCompactWon(100000000), '1.0억원');
+});
+
+test('formatAssetHomeWon 은 천만원 이상 금액을 만원/억 단위로 줄인다', () => {
+    assert.equal(formatAssetHomeWon(9999999), '9,999,999원');
+    assert.equal(formatAssetHomeWon(10000000), '1000만원');
+    assert.equal(formatAssetHomeWon(21320000000), '213억2000만원');
+    assert.equal(formatAssetHomeWon(-150000000), '-1억5000만원');
 });
 
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {

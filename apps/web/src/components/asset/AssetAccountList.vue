@@ -4,7 +4,7 @@
 -->
 <script setup>
 import { useRouter } from 'vue-router';
-import { formatWon, toneColor } from '@/utils/asset';
+import { formatAssetHomeWon, toneColor } from '@/utils/asset';
 
 defineProps({
     accounts: { type: Array, required: true },
@@ -48,7 +48,7 @@ function goToDetail(account) {
                         class="asset-accounts__amount"
                         :class="{ 'asset-accounts__amount--negative': account.amount < 0 }"
                     >
-                        {{ formatWon(account.amount) }}
+                        {{ formatAssetHomeWon(account.amount) }}
                     </p>
                 </button>
             </li>
