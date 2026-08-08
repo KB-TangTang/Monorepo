@@ -8,7 +8,8 @@ const ASSET_SUMMARY = {
         { code: 'checking', label: '입출금', amount: 2066800, tone: 'navy' },
         { code: 'savings', label: '예적금', amount: 5420000, tone: 'blue' },
         { code: 'investment', label: '투자', amount: 3214200, tone: 'teal' },
-        { code: 'etc', label: '포인트·기타', amount: 244500000000, tone: 'gray' },
+        { code: 'paymoney', label: '페이머니', amount: 244500, tone: 'gray' },
+        { code: 'loan', label: '대출', amount: -1500000, tone: 'danger' },
     ],
     accounts: [
         {
@@ -34,6 +35,14 @@ const ASSET_SUMMARY = {
             count: 1,
             amount: 3214200,
             tone: 'teal',
+        },
+        {
+            code: 'paymoney',
+            label: '페이머니',
+            badge: 'P',
+            count: 1,
+            amount: 244500,
+            tone: 'gray',
         },
         {
             code: 'loan',
