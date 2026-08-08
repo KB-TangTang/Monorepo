@@ -72,6 +72,7 @@ defineProps({
 .streak header span {
     padding: var(--tt-space-1) var(--tt-space-3);
     font-weight: var(--tt-fw-bold);
+    color: var(--tt-accent-deep);
     background: var(--tt-accent-subtle);
     border-radius: var(--tt-radius-full);
 }
@@ -109,22 +110,27 @@ defineProps({
 }
 
 .streak__day--success > span {
-    color: var(--tt-success);
+    color: var(--tt-success-deep);
+    background: var(--tt-success-subtle);
     border: 2px solid var(--tt-success);
 }
 
 .streak__day--failed > span {
-    color: var(--tt-danger);
+    color: var(--tt-danger-deep);
+    background: var(--tt-danger-subtle);
     border: 2px solid var(--tt-danger);
 }
 
 .streak__day--today > span {
+    color: var(--tt-accent-deep);
     background: var(--tt-accent-subtle);
     border: 2px dashed var(--tt-accent);
 }
 
 .streak__day--pending > span {
-    background: var(--tt-bg-subtle);
+    color: var(--tt-text-hint);
+    background: var(--tt-bg-fill);
+    border-color: var(--tt-border);
 }
 
 .streak__summary {
@@ -138,7 +144,7 @@ defineProps({
     display: flex;
     flex-direction: column;
     padding: var(--tt-space-3);
-    background: var(--tt-bg-subtle);
+    background: var(--tt-bg-fill);
     border-radius: var(--tt-radius-md);
 }
 

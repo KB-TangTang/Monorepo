@@ -175,8 +175,8 @@ const emit = defineEmits(['select']);
 
 .difficulty-option--normal .difficulty-option__heading small,
 .difficulty-option--normal .difficulty-option__points {
-    color: var(--tt-primary);
-    background: var(--tt-primary-subtle);
+    color: var(--tt-info);
+    background: var(--tt-info-subtle);
 }
 
 .difficulty-option--hard .difficulty-option__heading small,

@@ -1,10 +1,10 @@
 <!--
-  용도: 개인 미션 홈에서 월간 명예법정 랭킹으로 이동시키는 티켓형 배너
+  용도: 개인 미션 홈에서 월간 명예의 전당 랭킹으로 이동시키는 티켓형 배너
   양옆 노치는 이미지가 아니라 카드 뒤 배경색을 칠한 원으로 표현
 -->
 <script setup>
 defineProps({
-    title: { type: String, default: '명예법정' },
+    title: { type: String, default: '명예의 전당' },
     description: { type: String, default: '월간 랭킹 순위를 확인해보세요.' },
     buttonLabel: { type: String, default: '확인하기' },
 });
@@ -33,16 +33,19 @@ defineEmits(['open']);
     --tt-notch-bg: var(--tt-bg-subtle);
 
     position: relative;
-    display: flex;
-    gap: var(--tt-space-4);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: var(--tt-space-4);
+    row-gap: var(--tt-space-1);
     align-items: center;
     min-height: 100px;
     padding: var(--tt-space-5);
     overflow: hidden;
     color: var(--tt-text-inverse);
-    background: var(--tt-primary);
+    background: var(--tt-info);
     border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-1);
+    box-shadow: var(--tt-elevation-3);
 }
 
 /* 양옆의 원을 카드 바깥으로 절반 밀어 티켓 모양의 반원 홈을 만든다. */
@@ -67,11 +70,12 @@ defineEmits(['open']);
 }
 
 .honor-banner__content {
-    flex: 1;
-    min-width: 0;
+    display: contents;
 }
 
 .honor-banner__heading {
+    grid-row: 1;
+    grid-column: 1 / -1;
     display: flex;
     gap: var(--tt-space-3);
     align-items: center;
@@ -88,26 +92,29 @@ defineEmits(['open']);
 .honor-banner__heading span {
     flex: 1;
     min-width: var(--tt-space-5);
-    border-top: 1px dashed var(--tt-primary-subtle);
+    border-top: 1px dashed var(--tt-info-subtle);
     opacity: 0.72;
 }
 
 .honor-banner__content p {
-    margin: var(--tt-space-1) 0 0;
-    font-size: var(--tt-fs-caption);
+    grid-row: 2;
+    grid-column: 1;
+    margin: 0;
+    font-size: var(--tt-fs-body);
     line-height: var(--tt-lh-normal);
-    color: var(--tt-primary-subtle);
+    color: var(--tt-info-subtle);
 }
 
 .honor-banner__button {
-    flex: 0 0 auto;
+    grid-row: 2;
+    grid-column: 2;
     min-height: 40px;
     padding: 0 var(--tt-space-4);
     font-family: var(--tt-font-sans);
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
+    font-size: var(--tt-fs-button);
+    font-weight: var(--tt-fw-black);
     color: var(--tt-text);
-    background: var(--tt-accent);
+    background: var(--tt-primary-gold);
     border: 0;
     border-radius: var(--tt-radius-sm);
     cursor: pointer;

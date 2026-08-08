@@ -23,6 +23,15 @@ export function hasEnoughPersonalMissionData(profile) {
     );
 }
 
+export function shouldShowPersonalMissionUnlock({
+    hasAgreed,
+    hasEnoughData,
+    wasDataInsufficient,
+    hasSeenDataUnlock,
+}) {
+    return hasAgreed && hasEnoughData && wasDataInsufficient && !hasSeenDataUnlock;
+}
+
 /*
  * 데이터가 부족하면 무조건 절대형 미션을 반환
  * 데이터가 충분하면 절대형과 상대형 중 하나를 임시로 선택

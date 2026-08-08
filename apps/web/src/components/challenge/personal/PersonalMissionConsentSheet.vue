@@ -46,7 +46,12 @@ function later() {
 
             <section class="consent__benefits">
                 <div>
-                    <span class="consent__icon">⚖</span>
+                    <span class="consent__icon consent__icon--mission">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path class="consent__gavel-head" d="m13 4 4 4M5 12l4 4" />
+                            <path d="m9 8 10 10" />
+                        </svg>
+                    </span>
 
                     <p>
                         <strong>매일 개인 미션 1건 배정</strong>
@@ -55,7 +60,13 @@ function later() {
                 </div>
 
                 <div>
-                    <span class="consent__icon">☆</span>
+                    <span class="consent__icon consent__icon--honor">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                                d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"
+                            />
+                        </svg>
+                    </span>
 
                     <p>
                         <strong>성공하면 명예 점수 적립</strong>
@@ -64,7 +75,15 @@ function later() {
                 </div>
 
                 <div>
-                    <span class="consent__icon">◎</span>
+                    <span class="consent__icon consent__icon--ranking">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M8 3h3l1 5-3 2-3-7h2M16 3h-3l-1 5 3 2 3-7z" />
+                            <circle cx="12" cy="15" r="6" />
+                            <path
+                                d="m12 11 1.2 2.4 2.7.4-2 1.9.5 2.7-2.4-1.3-2.4 1.3.5-2.7-2-1.9 2.7-.4z"
+                            />
+                        </svg>
+                    </span>
 
                     <p>
                         <strong>월간 개인 챌린지 랭킹</strong>
@@ -152,9 +171,39 @@ function later() {
     justify-content: center;
     width: 40px;
     height: 40px;
-    color: var(--tt-primary);
-    background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-md);
+}
+
+.consent__icon svg {
+    width: var(--tt-space-6);
+    height: var(--tt-space-6);
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.consent__icon--mission {
+    color: var(--tt-info);
+    background: var(--tt-info-subtle);
+}
+
+.consent__icon--mission svg {
+    stroke-width: 3.4;
+}
+
+.consent__icon--mission .consent__gavel-head {
+    stroke-width: 5;
+}
+
+.consent__icon--honor {
+    color: var(--tt-accent-deep);
+    background: var(--tt-accent-subtle);
+}
+
+.consent__icon--ranking {
+    color: var(--tt-success-deep);
+    background: var(--tt-success-subtle);
 }
 
 .consent__benefits p {

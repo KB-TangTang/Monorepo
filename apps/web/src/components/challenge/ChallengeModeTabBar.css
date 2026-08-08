@@ -9,21 +9,32 @@
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
-    box-shadow: 0 8px 20px rgba(35, 40, 66, 0.1);
+    box-shadow: var(--tt-elevation-3);
     transform: translateX(-50%);
 }
 
 .challenge-mode a {
     display: flex;
+    gap: var(--tt-space-1);
     align-items: center;
     justify-content: center;
-    padding: 6px var(--tt-space-4);
+    min-height: var(--tt-touch-min);
+    padding: var(--tt-space-2) var(--tt-space-4);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     text-decoration: none;
     border-radius: var(--tt-radius-full);
     cursor: pointer;
+}
+
+.challenge-mode svg {
+    width: var(--tt-space-5);
+    height: var(--tt-space-5);
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .challenge-mode .challenge-mode__link--active {
