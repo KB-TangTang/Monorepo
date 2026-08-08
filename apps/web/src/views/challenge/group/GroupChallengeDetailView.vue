@@ -8,15 +8,19 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchGroupChallengeDetail } from '@/api/groupChallenge';
 
-import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
+import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import GroupDetailInkCard from '@/components/challenge/group/GroupDetailInkCard.vue';
 import GroupDetailLivesBar from '@/components/challenge/group/GroupDetailLivesBar.vue';
 import GroupDetailPeriodBar from '@/components/challenge/group/GroupDetailPeriodBar.vue';
 import GroupDetailPromise from '@/components/challenge/group/GroupDetailPromise.vue';
 import GroupDetailMemberGrid from '@/components/challenge/group/GroupDetailMemberGrid.vue';
 import GroupDetailMemberTable from '@/components/challenge/group/GroupDetailMemberTable.vue';
+import GroupDetailTrialCarousel from '@/components/challenge/group/GroupDetailTrialCarousel.vue';
+import GroupDetailPodium from '@/components/challenge/group/GroupDetailPodium.vue';
+import GroupDetailRankingTable from '@/components/challenge/group/GroupDetailRankingTable.vue';
 
-import mascotHappy from '@/assets/images/emotions/01_happy.png';
+import { ChevronRightIcon } from '@heroicons/vue/24/solid';
+import mascotChat from '@/assets/images/emotions/57_chat.png';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,9 +43,6 @@ const isRecruiting = computed(() => ch.value?.status === 'RECRUITING');
 const isActive = computed(() => ch.value?.status === 'ACTIVE');
 const isClosed = computed(() => ch.value?.status === 'CLOSED');
 const isDaily = computed(() => ch.value?.evalType === 'DAILY');
-
-/* 헤더 우측 링크 텍스트 */
-const headerRight = computed(() => isClosed.value ? '최종 순위' : '재판');
 
 /* 종료 결과 텍스트 */
 const outcomeLabel = computed(() => {
@@ -116,6 +117,12 @@ function goToRanking() {
 function goToInvite() {
     router.push({ name: 'groupChallengeInvite', params: { groupId: ch.value.id } });
 }
+
+function goToChat() {
+    router.push({ name: 'groupChallengeChat', params: { id: ch.value.id } });
+}
+
+const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 </script>
 
 <template>
@@ -127,35 +134,29 @@ function goToInvite() {
         <!-- ── 히어로 영역 (장식 원 + 헤더 + 상태) ── -->
         <div class="gc-detail__hero">
             <div class="gc-detail__deco gc-detail__deco--lg"></div>
-            <div
-                v-if="isRecruiting"
-                class="gc-detail__deco gc-detail__deco--sm"
-            ></div>
 
             <!-- 내비게이션 헤더 -->
-            <div class="gc-detail__nav">
-                <div class="gc-detail__nav-left" @click="goBack">
-                    <svg
-                        class="gc-detail__back-icon"
-                        viewBox="0 0 9 16"
-                        fill="none"
-                    >
-                        <path
-                            d="M8 1L1 8l7 7"
-                            stroke="currentColor"
-                            stroke-width="2.2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        />
-                    </svg>
-                    <span class="gc-detail__nav-title">그룹 챌린지</span>
-                </div>
+            <ChallengePageHeader
+                title="그룹 챌린지"
+                class="gc-detail__nav"
+                @back="goBack"
+            >
+                <template v-if="isClosed" #action>
+                    <span class="gc-detail__nav-right" @click="goToRanking">최종 순위</span>
+                </template>
+            </ChallengePageHeader>
+
+            <!-- 채팅 이동 버튼 (종료 제외) -->
+            <div
+                v-if="!isClosed"
+                class="gc-detail__chat-btn"
+                @click="goToChat"
+            >
+                <img :src="mascotChat" alt="채팅" class="gc-detail__chat-btn-img">
                 <span
-                    class="gc-detail__nav-right"
-                    @click="goToRanking"
-                >
-                    {{ headerRight }}
-                </span>
+                    class="gc-detail__chat-btn-badge"
+                    :class="{ 'gc-detail__chat-btn-badge--zero': !unreadCount }"
+                >{{ unreadCount }}</span>
             </div>
 
             <!-- 상태 뱃지 + 챌린지 이름 -->
@@ -173,20 +174,19 @@ function goToInvite() {
                 <h2 class="gc-detail__name">{{ ch.groupName }}</h2>
                 <p class="gc-detail__period">{{ periodText }}</p>
             </div>
-
-            <!-- 탕이 마스코트 (시작 전에만 히어로에 표시) -->
-            <img
-                v-if="isRecruiting"
-                :src="mascotHappy"
-                alt="탕이 환영"
-                class="gc-detail__mascot"
-            >
         </div>
 
         <!-- ── 콘텐츠 영역 ── -->
         <div class="gc-detail__content">
-            <!-- 종료: 최종 결과 카드 -->
+            <!-- 종료: 시상대 + 결과 + 약속 + 순위 + 재판 기록 -->
             <template v-if="isClosed">
+                <!-- 시상대 (3명 이상일 때) -->
+                <GroupDetailPodium
+                    v-if="ch.finalMembers?.length >= 3"
+                    :members="ch.finalMembers"
+                />
+
+                <!-- 최종 결과 요약 -->
                 <div class="gc-detail__result-card">
                     <div class="gc-detail__result-header">
                         <span class="gc-detail__result-title">최종 결과</span>
@@ -200,7 +200,6 @@ function goToInvite() {
                             {{ outcomeLabel }}
                         </span>
                     </div>
-
                     <div class="gc-detail__result-stats">
                         <div class="gc-detail__result-stat">
                             <span class="gc-detail__result-label">최종 순위</span>
@@ -222,45 +221,44 @@ function goToInvite() {
                             </span>
                         </div>
                     </div>
+                </div>
 
-                    <!-- 최종 멤버 순위 -->
-                    <div v-if="ch.finalMembers" class="gc-detail__final-list">
-                        <div
-                            v-for="m in ch.finalMembers"
-                            :key="m.userId"
-                            class="gc-detail__final-row"
-                            :class="{
-                                'gc-detail__final-row--me': m.userId === 1,
-                                'gc-detail__final-row--eliminated': m.finalOutcome === 'ELIMINATED',
-                            }"
-                        >
-                            <span class="gc-detail__final-rank">{{ m.finalRank }}</span>
-                            <div
-                                class="gc-detail__final-avatar"
-                                :style="{ background: m.avatarColor }"
-                            >
-                                {{ m.initial }}
-                            </div>
-                            <span
-                                class="gc-detail__final-name"
-                                :class="{ 'gc-detail__final-name--dim': m.finalOutcome === 'ELIMINATED' }"
-                            >
-                                {{ m.nickname }}
-                            </span>
-                            <span v-if="m.userId === 1" class="gc-detail__final-me">나</span>
-                            <span
-                                class="gc-detail__final-outcome"
-                                :style="{
-                                    background: m.finalOutcome === 'SURVIVED'
-                                        ? 'var(--tt-green-soft)' : 'var(--tt-red-soft)',
-                                    color: m.finalOutcome === 'SURVIVED'
-                                        ? 'var(--tt-green)' : 'var(--tt-red-deep)',
-                                }"
-                            >
-                                {{ m.finalOutcome === 'SURVIVED' ? '승소' : '패소' }}
-                            </span>
-                        </div>
+                <!-- 약속 아코디언 -->
+                <GroupDetailPromise
+                    v-if="ch.memo"
+                    :memo="ch.memo"
+                    :memo-author="ch.memoAuthor"
+                    :memo-date="ch.memoDate"
+                />
+
+                <!-- 전체 피고인 현황 -->
+                <GroupDetailRankingTable
+                    v-if="ch.finalMembers"
+                    :members="ch.finalMembers"
+                    :eval-type="ch.evalType"
+                    :max-lives="ch.maxLives"
+                />
+
+                <!-- 재판 기록 보기 -->
+                <div
+                    v-if="ch.trialStats && ch.trialStats.totalTrials > 0"
+                    class="gc-detail__trial-link"
+                    @click="goToRanking"
+                >
+                    <div class="gc-detail__trial-link-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="19" height="19">
+                            <path d="M17.29 5.71a1 1 0 0 0-1.41 0L13.5 8.09l-1.8-1.8a1 1 0 0 0-1.41 1.42l.38.38-5.3 5.3a1 1 0 0 0 0 1.41l2.83 2.83a1 1 0 0 0 1.41 0l5.3-5.3.38.38a1 1 0 0 0 1.42-1.42l-1.8-1.8 2.38-2.37a1 1 0 0 0 0-1.41ZM9.7 15.22 7.78 13.3l4.6-4.6 1.91 1.92ZM18 19H3v2h15Z" />
+                        </svg>
                     </div>
+                    <div class="gc-detail__trial-link-body">
+                        <span class="gc-detail__trial-link-title">재판 기록 보기</span>
+                        <span class="gc-detail__trial-link-sub">
+                            이 챌린지 재판 {{ ch.trialStats.totalTrials }}건
+                            · 무죄 {{ ch.trialStats.innocentCount }}
+                            · 유죄 {{ ch.trialStats.guiltyCount }}
+                        </span>
+                    </div>
+                    <ChevronRightIcon class="gc-detail__trial-link-arrow" />
                 </div>
             </template>
 
@@ -294,6 +292,12 @@ function goToInvite() {
                     :current-day="ch.currentDay || 0"
                 />
 
+                <!-- 재판 캐러셀 (일일결산 진행 중 + 기소 건이 있을 때) -->
+                <GroupDetailTrialCarousel
+                    v-if="isActive && isDaily && ch.indictments?.length"
+                    :indictments="ch.indictments"
+                />
+
                 <!-- 약속 아코디언 -->
                 <GroupDetailPromise
                     :memo="ch.memo"
@@ -317,6 +321,7 @@ function goToInvite() {
                     :members="ch.dailyMembers"
                     :eval-type="ch.evalType"
                     :limit-amount="ch.limitAmount"
+                    :chat="ch.chat"
                 />
             </template>
         </div>
@@ -332,18 +337,21 @@ function goToInvite() {
                     소환
                 </button>
                 <button
-                    class="gc-detail__btn"
-                    :class="{
-                        'gc-detail__btn--primary': isActive,
-                        'gc-detail__btn--outline': isRecruiting || isClosed,
-                    }"
+                    v-if="isActive"
+                    class="gc-detail__btn gc-detail__btn--primary"
+                    @click="goToRanking"
+                >
+                    재판 기록
+                </button>
+                <button
+                    v-if="!isActive"
+                    class="gc-detail__btn gc-detail__btn--outline"
                     @click="goToList"
                 >
                     그룹 목록으로
                 </button>
             </div>
 
-            <ChallengeModeTabBar active-mode="group" />
         </div>
     </div>
 </template>
@@ -395,41 +403,11 @@ function goToInvite() {
     background: #E9EEFB;
 }
 
-.gc-detail__deco--sm {
-    top: 44px;
-    right: 40px;
-    width: 56px;
-    height: 56px;
-    background: #F4EBD4;
-}
-
-/* ── 네비게이션 ── */
+/* ── 네비게이션 (ChallengePageHeader) ── */
 .gc-detail__nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 22px 0;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
     position: relative;
     z-index: 2;
-}
-
-.gc-detail__nav-left {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    cursor: pointer;
-}
-
-.gc-detail__back-icon {
-    width: 9px;
-    height: 16px;
-    color: var(--tt-text);
-}
-
-.gc-detail__nav-title {
-    font-size: var(--tt-fs-label);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
 }
 
 .gc-detail__nav-right {
@@ -439,9 +417,47 @@ function goToInvite() {
     cursor: pointer;
 }
 
+/* ── 채팅 버튼 (히어로 우측 절대 배치) ── */
+.gc-detail__chat-btn {
+    position: absolute;
+    right: var(--tt-screen-padding);
+    top: 78px;
+    z-index: 3;
+    cursor: pointer;
+}
+
+.gc-detail__chat-btn-img {
+    width: 40px;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 4px 8px rgba(35, 40, 66, 0.12));
+}
+
+.gc-detail__chat-btn-badge {
+    position: absolute;
+    top: -5px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-red);
+    color: var(--tt-white);
+    font-size: 10px;
+    font-weight: var(--tt-fw-black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.gc-detail__chat-btn-badge--zero {
+    background: var(--tt-border-strong);
+}
+
 /* ── 상태 + 제목 ── */
 .gc-detail__status {
-    padding: 12px 22px 0;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
     position: relative;
     z-index: 2;
 }
@@ -472,24 +488,6 @@ function goToInvite() {
     margin-top: 4px;
 }
 
-/* ── 마스코트 (시작 전) ── */
-.gc-detail__mascot {
-    position: absolute;
-    right: 18px;
-    top: 56px;
-    width: 74px;
-    height: 74px;
-    object-fit: contain;
-    z-index: 2;
-    filter: drop-shadow(0 6px 12px rgba(35, 40, 66, 0.16));
-    animation: tt-mascot-float 4s ease-in-out infinite;
-}
-
-@keyframes tt-mascot-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
-}
-
 /* ── 콘텐츠 ── */
 .gc-detail__content {
     flex: 1;
@@ -503,7 +501,7 @@ function goToInvite() {
 /* ── 하단 ── */
 .gc-detail__footer {
     flex: none;
-    padding: 10px var(--tt-screen-padding) 0;
+    padding: 10px var(--tt-screen-padding) 24px;
     background: var(--tt-bg-subtle);
 }
 
@@ -610,77 +608,58 @@ function goToInvite() {
     color: var(--tt-red-deep);
 }
 
-/* ── 최종 멤버 순위 ── */
-.gc-detail__final-list {
-    margin-top: 16px;
-    border-top: 1px solid var(--tt-border);
-    padding-top: 12px;
-}
-
-.gc-detail__final-row {
+/* ── 재판 기록 링크 카드 ── */
+.gc-detail__trial-link {
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: 16px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 0;
+    gap: 11px;
+    cursor: pointer;
+    box-shadow: var(--tt-elevation-2);
 }
 
-.gc-detail__final-row + .gc-detail__final-row {
-    border-top: 1px solid var(--tt-bg-fill);
-}
-
-.gc-detail__final-row--me {
-    background: var(--tt-bg-subtle);
-    border-radius: var(--tt-radius-sm);
-    padding: 8px 6px;
-    margin: 0 -6px;
-}
-
-.gc-detail__final-rank {
-    width: 16px;
-    text-align: center;
-    font-size: 12.5px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text-hint);
-}
-
-.gc-detail__final-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
+.gc-detail__trial-link-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    background: var(--tt-gold-soft);
     display: flex;
     align-items: center;
     justify-content: center;
     flex: none;
 }
 
-.gc-detail__final-name {
+.gc-detail__trial-link-icon svg {
+    color: var(--tt-gold-deep);
+}
+
+.gc-detail__trial-link-body {
     flex: 1;
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-bold);
+    min-width: 0;
+}
+
+.gc-detail__trial-link-title {
+    display: block;
+    font-size: 13.5px;
+    font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
-.gc-detail__final-name--dim {
-    color: var(--tt-text-muted);
+.gc-detail__trial-link-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-hint);
+    margin-top: 2px;
 }
 
-.gc-detail__final-me {
-    background: var(--tt-gold-soft);
-    color: var(--tt-gold-deep);
-    font-size: 9.5px;
-    font-weight: var(--tt-fw-black);
-    padding: 2px 6px;
-    border-radius: var(--tt-radius-full);
-}
-
-.gc-detail__final-outcome {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    padding: 4px 10px;
-    border-radius: var(--tt-radius-full);
+.gc-detail__trial-link-arrow {
+    width: 20px;
+    height: 20px;
+    color: var(--tt-border-strong);
     flex: none;
 }
 </style>

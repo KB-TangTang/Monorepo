@@ -2,7 +2,8 @@
  * 그룹 챌린지 상세화면 목데이터.
  *
  * 상세 API 가 반환할 형태를 그대로 목업한다.
- * tbl_challenge_group + tbl_group_member + tbl_group_challenge_daily_result 를 조인해
+ * tbl_challenge_group + tbl_group_member + tbl_group_challenge_daily_result +
+ * tbl_indictment + tbl_defense + tbl_vote 를 조인해
  * 서버가 계산할 파생 필드를 포함한다.
  *
  * 키 = groupId (DB BIGINT).
@@ -75,6 +76,88 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
+        /* 채팅 (그룹 채팅방 요약) */
+        chat: {
+            unreadCount: 3,
+            lastMessage: { sender: '유현', text: '나 오늘 진짜 참았다' },
+        },
+
+        /*
+         * 재판 캐러셀 (tbl_indictment + tbl_defense + tbl_vote)
+         * 일일결산 ACTIVE 에서만 노출.
+         * 카드 4종:
+         *   DEFENSE_WAIT + 내가 피고 → "내 변론이 필요해요"
+         *   VOTING + 내가 피고     → "내 재판" (변론 제출됨)
+         *   VOTING + 내가 투표자   → "재판이 열렸어요" (투표 필요/투표 완료)
+         */
+        indictments: [
+            {
+                id: 101,
+                groupId: 1,
+                userId: 1, /* 피기소자 = 나 */
+                nickname: '나',
+                initial: '나',
+                avatarColor: '#232842',
+                status: 'DEFENSE_WAIT',
+                settlementDate: '8월 5일',
+                exceededAmount: 3600,
+                defenseDeadline: '02:14:03',
+                isMine: true,
+                hasDefended: false,
+                voteCount: 0,
+                totalVoters: 3,
+                myVote: null,
+            },
+            {
+                id: 102,
+                groupId: 1,
+                userId: 5, /* 민지 */
+                ...AVATAR[5],
+                status: 'VOTING',
+                settlementDate: '8월 4일',
+                exceededAmount: 2400,
+                defenseDeadline: null,
+                voteDeadline: '21:40:12',
+                isMine: false,
+                hasDefended: true,
+                voteCount: 1,
+                totalVoters: 3,
+                myVote: null, /* 아직 내가 투표 안 함 */
+            },
+            {
+                id: 103,
+                groupId: 1,
+                userId: 3, /* 준서 */
+                ...AVATAR[3],
+                status: 'VOTING',
+                settlementDate: '8월 3일',
+                exceededAmount: 9120,
+                defenseDeadline: null,
+                voteDeadline: '04:18:33',
+                isMine: false,
+                hasDefended: true,
+                voteCount: 2,
+                totalVoters: 3,
+                myVote: null,
+            },
+            {
+                id: 104,
+                groupId: 1,
+                userId: 2, /* 유현 */
+                ...AVATAR[2],
+                status: 'VOTING',
+                settlementDate: '8월 3일',
+                exceededAmount: 1800,
+                defenseDeadline: null,
+                voteDeadline: '03:52:06',
+                isMine: false,
+                hasDefended: true,
+                voteCount: 0,
+                totalVoters: 3,
+                myVote: null,
+            },
+        ],
+
         /* 다른 멤버 오늘 소비 상태 (나 제외) */
         dailyMembers: [
             {
@@ -82,24 +165,28 @@ export const MOCK_CHALLENGE_DETAILS = {
                 dailyAmount: 5900,
                 usagePercent: 39,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 3, ...AVATAR[3],
                 dailyAmount: 8550,
                 usagePercent: 57,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 5, ...AVATAR[5],
                 dailyAmount: 16500,
                 usagePercent: 110,
                 isExceeded: true,
+                trialStatus: 'VOTING', /* 재판중 */
             },
             {
                 userId: 6, ...AVATAR[6],
                 dailyAmount: 11200,
                 usagePercent: 75,
                 isExceeded: false,
+                trialStatus: null,
             },
         ],
     },
@@ -204,24 +291,51 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
+        chat: {
+            unreadCount: 1,
+            lastMessage: { sender: '세영', text: '오늘 택시 안 탔다!' },
+        },
+
+        indictments: [
+            {
+                id: 201,
+                groupId: 4,
+                userId: 6, /* 하은 */
+                ...AVATAR[6],
+                status: 'VOTING',
+                settlementDate: '8월 4일',
+                exceededAmount: 1200,
+                defenseDeadline: null,
+                voteDeadline: '18:30:00',
+                isMine: false,
+                hasDefended: true,
+                voteCount: 1,
+                totalVoters: 2,
+                myVote: null,
+            },
+        ],
+
         dailyMembers: [
             {
                 userId: 3, ...AVATAR[3],
                 dailyAmount: 2100,
                 usagePercent: 26,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 4, ...AVATAR[4],
                 dailyAmount: 6400,
                 usagePercent: 80,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 6, ...AVATAR[6],
                 dailyAmount: 9200,
                 usagePercent: 115,
                 isExceeded: true,
+                trialStatus: 'VOTING',
             },
         ],
     },
@@ -266,36 +380,46 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
+        chat: {
+            unreadCount: 5,
+            lastMessage: { sender: '세영', text: '편의점 들렸는데 참았다 ㅋㅋ' },
+        },
+
         dailyMembers: [
             {
                 userId: 2, ...AVATAR[2],
                 dailyAmount: 10500,
                 usagePercent: 35,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 3, ...AVATAR[3],
                 dailyAmount: 12900,
                 usagePercent: 43,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 4, ...AVATAR[4],
                 dailyAmount: 29100,
                 usagePercent: 97,
                 isExceeded: false,
+                trialStatus: null, /* 97%지만 기간결산이라 아직 초과 아님 */
             },
             {
                 userId: 5, ...AVATAR[5],
                 dailyAmount: 18600,
                 usagePercent: 62,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 6, ...AVATAR[6],
                 dailyAmount: 31200,
                 usagePercent: 104,
                 isExceeded: true,
+                trialStatus: null, /* 기간결산은 종료 후 판정이라 진행 중 재판 없음 */
             },
         ],
     },
@@ -323,6 +447,9 @@ export const MOCK_CHALLENGE_DETAILS = {
         finalRank: 2,
         finalChargeAmount: 0,
         savingsAmount: 128000,
+
+        /* 재판 통계 (tbl_indictment 집계) */
+        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
 
         memo: null,
         memoAuthor: null,
@@ -372,6 +499,8 @@ export const MOCK_CHALLENGE_DETAILS = {
         finalChargeAmount: 12000,
         savingsAmount: null,
 
+        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
+
         memo: null,
         memoAuthor: null,
         memoDate: null,
@@ -416,6 +545,8 @@ export const MOCK_CHALLENGE_DETAILS = {
         finalRank: 1,
         finalChargeAmount: 0,
         savingsAmount: 86000,
+
+        trialStats: { totalTrials: 1, guiltyCount: 1, innocentCount: 0 },
 
         memo: '카페는 주 3회까지만!',
         memoAuthor: '준서',
@@ -537,24 +668,32 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(5),
         ],
 
+        chat: {
+            unreadCount: 0,
+            lastMessage: { sender: '민지', text: '배달 시켜먹고 싶다...' },
+        },
+
         dailyMembers: [
             {
                 userId: 2, ...AVATAR[2],
                 dailyAmount: 22100,
                 usagePercent: 44,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 4, ...AVATAR[4],
                 dailyAmount: 47800,
                 usagePercent: 96,
                 isExceeded: false,
+                trialStatus: null,
             },
             {
                 userId: 5, ...AVATAR[5],
                 dailyAmount: 51200,
                 usagePercent: 102,
                 isExceeded: true,
+                trialStatus: null, /* 기간결산이라 종료 후 재판 */
             },
         ],
     },
@@ -581,6 +720,8 @@ export const MOCK_CHALLENGE_DETAILS = {
         finalRank: 4,
         finalChargeAmount: 8500,
         savingsAmount: null,
+
+        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
 
         memo: null,
         memoAuthor: null,
@@ -617,6 +758,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         groupName: '배달 소비 줄이기',
         evalType: 'DAILY',
         lastSettlementDate: '8월 6일',
+
+        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
 
         memo: '하루 배달 1회 이하, 커피는 허용',
         memoAuthor: '유현',
@@ -664,6 +807,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         evalType: 'DAILY',
         lastSettlementDate: '8월 5일',
 
+        trialStats: { totalTrials: 1, guiltyCount: 0, innocentCount: 1 },
+
         memo: null,
         memoAuthor: null,
         memoDate: null,
@@ -705,6 +850,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         evalType: 'PERIOD',
         limitAmount: 30000,
         lastSettlementDate: '8월 7일',
+
+        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
 
         memo: null,
         memoAuthor: null,
@@ -750,6 +897,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         groupName: '편의점 커피 끊기',
         evalType: 'DAILY',
         lastSettlementDate: '7월 28일',
+
+        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
 
         memo: null,
         memoAuthor: null,
@@ -802,6 +951,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         evalType: 'DAILY',
         lastSettlementDate: '7월 14일',
 
+        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
+
         memo: null,
         memoAuthor: null,
         memoDate: null,
@@ -849,6 +1000,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         limitAmount: 50000,
         lastSettlementDate: '7월 1일',
 
+        trialStats: { totalTrials: 1, guiltyCount: 1, innocentCount: 0 },
+
         memo: '카페는 주 3회까지만!',
         memoAuthor: '준서',
         memoDate: '6월 22일',
@@ -887,6 +1040,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         limitAmount: 50000,
         lastSettlementDate: '8월 7일',
 
+        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
+
         memo: '배달은 주 2회까지!',
         memoAuthor: '나',
         memoDate: '7월 30일',
@@ -924,6 +1079,8 @@ export const MOCK_CHALLENGE_RANKINGS = {
         evalType: 'PERIOD',
         limitAmount: 40000,
         lastSettlementDate: '7월 8일',
+
+        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
 
         memo: null,
         memoAuthor: null,
