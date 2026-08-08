@@ -17,6 +17,7 @@ const DETAIL_ROUTE_NAMES = {
     savings: 'assetSavings',
     investment: 'assetInvestment',
     loan: 'assetLoan',
+    paymoney: 'assetPaymoney',
 };
 
 function goToDetail(account) {
