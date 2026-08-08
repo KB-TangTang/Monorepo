@@ -107,7 +107,7 @@ function statusBadge(m) {
 }
 
 .ranking-table__sub {
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -143,7 +143,7 @@ function statusBadge(m) {
 .ranking-table__rank {
     width: 13px;
     text-align: center;
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
     flex: none;
@@ -154,7 +154,7 @@ function statusBadge(m) {
     height: 28px;
     border-radius: 50%;
     color: var(--tt-white);
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     display: flex;
     align-items: center;
@@ -174,7 +174,7 @@ function statusBadge(m) {
 }
 
 .ranking-table__name {
-    font-size: 13px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
@@ -205,7 +205,7 @@ function statusBadge(m) {
 }
 
 .ranking-table__badge {
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
     border-radius: var(--tt-radius-full);

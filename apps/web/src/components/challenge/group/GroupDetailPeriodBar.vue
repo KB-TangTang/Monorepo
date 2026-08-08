@@ -133,13 +133,13 @@ const endShort = computed(() => {
 }
 
 .period-bar__date-label {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-bold);
 }
 
 .period-bar__date-value {
-    font-size: 13.5px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     margin-top: 2px;
@@ -175,7 +175,7 @@ const endShort = computed(() => {
 }
 
 .period-bar__label {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-bold);
 }

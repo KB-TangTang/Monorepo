@@ -107,7 +107,7 @@ const recruitLabel = computed(() =>
 }
 
 .member-grid__name {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-body);
     font-weight: var(--tt-fw-bold);
 }
@@ -131,7 +131,7 @@ const recruitLabel = computed(() =>
 }
 
 .member-grid__invite-label {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-blue);
     font-weight: var(--tt-fw-black);
 }

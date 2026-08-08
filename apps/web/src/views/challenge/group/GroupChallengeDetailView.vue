@@ -146,19 +146,6 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                 </template>
             </ChallengePageHeader>
 
-            <!-- 채팅 이동 버튼 (종료 제외) -->
-            <div
-                v-if="!isClosed"
-                class="gc-detail__chat-btn"
-                @click="goToChat"
-            >
-                <img :src="mascotChat" alt="채팅" class="gc-detail__chat-btn-img">
-                <span
-                    class="gc-detail__chat-btn-badge"
-                    :class="{ 'gc-detail__chat-btn-badge--zero': !unreadCount }"
-                >{{ unreadCount }}</span>
-            </div>
-
             <!-- 상태 뱃지 + 챌린지 이름 -->
             <div class="gc-detail__status">
                 <div class="gc-detail__badges">
@@ -321,7 +308,6 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                     :members="ch.dailyMembers"
                     :eval-type="ch.evalType"
                     :limit-amount="ch.limitAmount"
-                    :chat="ch.chat"
                 />
             </template>
         </div>
@@ -352,6 +338,21 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                 </button>
             </div>
 
+        </div>
+
+        <!-- 채팅 플로팅 버튼 (종료 제외) -->
+        <div
+            v-if="!isClosed"
+            class="gc-detail__chat-fab"
+            @click="goToChat"
+        >
+            <div class="gc-detail__chat-fab-circle">
+                <img :src="mascotChat" alt="채팅" class="gc-detail__chat-fab-img">
+            </div>
+            <span
+                class="gc-detail__chat-fab-badge"
+                :class="{ 'gc-detail__chat-fab-badge--zero': !unreadCount }"
+            >{{ unreadCount }}</span>
         </div>
     </div>
 </template>
@@ -411,35 +412,45 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 }
 
 .gc-detail__nav-right {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-blue);
     cursor: pointer;
 }
 
-/* ── 채팅 버튼 (히어로 우측 절대 배치) ── */
-.gc-detail__chat-btn {
-    position: absolute;
+/* ── 채팅 플로팅 버튼 (좌측 하단 고정) ── */
+.gc-detail__chat-fab {
+    position: fixed;
     right: var(--tt-screen-padding);
-    top: 78px;
-    z-index: 3;
+    bottom: 90px;
+    z-index: 10;
     cursor: pointer;
 }
 
-.gc-detail__chat-btn-img {
-    width: 40px;
-    height: auto;
-    display: block;
-    filter: drop-shadow(0 4px 8px rgba(35, 40, 66, 0.12));
+.gc-detail__chat-fab-circle {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--tt-bg);
+    border: 1.5px solid var(--tt-border);
+    box-shadow: 0 4px 12px rgba(35, 40, 66, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.gc-detail__chat-btn-badge {
+.gc-detail__chat-fab-img {
+    width: 34px;
+    height: auto;
+}
+
+.gc-detail__chat-fab-badge {
     position: absolute;
-    top: -5px;
-    right: -7px;
+    top: -3px;
+    right: -5px;
     min-width: 18px;
     height: 18px;
-    padding: 0 4px;
+    padding: 0 5px;
     border-radius: var(--tt-radius-full);
     background: var(--tt-red);
     color: var(--tt-white);
@@ -451,7 +462,7 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-.gc-detail__chat-btn-badge--zero {
+.gc-detail__chat-fab-badge--zero {
     background: var(--tt-border-strong);
 }
 
@@ -483,7 +494,7 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 }
 
 .gc-detail__period {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     margin-top: 4px;
 }
@@ -643,14 +654,14 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 
 .gc-detail__trial-link-title {
     display: block;
-    font-size: 13.5px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
 .gc-detail__trial-link-sub {
     display: block;
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
     margin-top: 2px;

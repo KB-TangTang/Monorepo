@@ -134,7 +134,7 @@ function toggle() {
 }
 
 .promise__meta {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-hint);
     font-weight: var(--tt-fw-bold);
     margin-top: 8px;

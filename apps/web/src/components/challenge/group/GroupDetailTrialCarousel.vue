@@ -16,8 +16,9 @@ const currentSlide = ref(0);
 const scrollEl = ref(null);
 
 function onScroll() {
-    if (!scrollEl.value) return;
-    const idx = Math.round(scrollEl.value.scrollLeft / 276);
+    if (!scrollEl.value || !scrollEl.value.firstElementChild) return;
+    const cardW = scrollEl.value.firstElementChild.offsetWidth + 10; // card + gap
+    const idx = Math.round(scrollEl.value.scrollLeft / cardW);
     currentSlide.value = Math.min(idx, props.indictments.length - 1);
 }
 
@@ -242,7 +243,7 @@ function deadline(item) {
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    padding: 2px calc(50% - 133px) 8px;
+    padding: 2px calc(var(--tt-screen-padding) + 10px) 8px;
 }
 
 .trial-carousel__track::-webkit-scrollbar {
@@ -252,7 +253,7 @@ function deadline(item) {
 /* ── 카드 공통 ── */
 .trial-carousel__card {
     flex: none;
-    width: 266px;
+    width: calc(100vw - 2 * var(--tt-screen-padding) - 20px);
     scroll-snap-align: center;
     border-radius: var(--tt-radius-lg);
     display: flex;
@@ -265,7 +266,7 @@ function deadline(item) {
     border: 1px solid #F0D2C9;
     box-shadow: 0 10px 26px rgba(224, 102, 75, 0.16);
     padding: 11px 14px 13px;
-    min-height: 166px;
+    aspect-ratio: 1.75 / 1;
 }
 
 .trial-carousel__card--muted {
@@ -273,7 +274,7 @@ function deadline(item) {
     border: 1px solid var(--tt-border);
     box-shadow: var(--tt-elevation-2);
     padding: 13px 14px;
-    min-height: 166px;
+    aspect-ratio: 1.75 / 1;
     cursor: pointer;
 }
 
@@ -298,13 +299,13 @@ function deadline(item) {
 }
 
 .trial-carousel__title--urgent {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-button);
     font-weight: var(--tt-fw-black);
     color: var(--tt-red-deep);
 }
 
 .trial-carousel__title--muted {
-    font-size: 13.5px;
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-body);
 }
@@ -313,7 +314,7 @@ function deadline(item) {
     margin-left: auto;
     background: #FBE9E4;
     color: var(--tt-red-deep);
-    font-size: 10.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 3px 9px;
     border-radius: var(--tt-radius-full);
@@ -334,7 +335,7 @@ function deadline(item) {
 
 .trial-carousel__sub {
     margin-top: 3px;
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-hint);
     font-weight: var(--tt-fw-bold);
 }
@@ -353,7 +354,7 @@ function deadline(item) {
     justify-content: center;
     transform: rotate(-11deg);
     opacity: 0.72;
-    font-size: 13px;
+    font-size: var(--tt-fs-button);
     font-weight: var(--tt-fw-black);
     line-height: 1.15;
     letter-spacing: -0.02em;
@@ -408,13 +409,13 @@ function deadline(item) {
 }
 
 .trial-carousel__person-title {
-    font-size: 13.5px;
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
 }
 
 .trial-carousel__person-sub {
     margin-top: 3px;
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-bold);
 }
@@ -431,7 +432,7 @@ function deadline(item) {
 }
 
 .trial-carousel__vote-label {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-muted);
 }
@@ -454,7 +455,7 @@ function deadline(item) {
 }
 
 .trial-carousel__vote-count {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-blue);
 }
@@ -468,7 +469,7 @@ function deadline(item) {
     width: 100%;
     padding: 12px;
     border-radius: var(--tt-radius-sm);
-    font-size: 14px;
+    font-size: var(--tt-fs-button);
     font-weight: var(--tt-fw-black);
     text-align: center;
     border: none;
@@ -486,7 +487,7 @@ function deadline(item) {
 
 /* ── 마감 (done 카드 하단) ── */
 .trial-carousel__deadline-bottom {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }

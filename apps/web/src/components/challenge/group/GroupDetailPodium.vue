@@ -116,13 +116,13 @@ const podiumOrder = [
 }
 
 .podium__name {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-white);
 }
 
 .podium__name--first {
-    font-size: 13px;
+    font-size: var(--tt-fs-body);
 }
 
 .podium__me-badge {

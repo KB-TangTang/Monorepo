@@ -2,18 +2,14 @@
   멤버 소비 상태 테이블 — 진행 중 상세화면에서
   다른 멤버(나 제외)의 소비 금액/비율/프로그레스를 리스트로 표시한다.
   초과(일일) · 위험(기간 ≥80%) 멤버는 배경이 빨갛게 하이라이트된다.
-  하단에 그룹 채팅 바로가기 행이 붙는다.
 -->
 <script setup>
 import { computed } from 'vue';
-import { ChevronRightIcon } from '@heroicons/vue/24/solid';
-import mascotChat from '@/assets/images/emotions/57_chat.png';
 
 const props = defineProps({
     members: { type: Array, required: true },
     evalType: { type: String, default: 'DAILY' },
     limitAmount: { type: Number, default: 0 },
-    chat: { type: Object, default: null },
 });
 
 const isDaily = computed(() => props.evalType === 'DAILY');
@@ -116,20 +112,6 @@ function textColor(m) {
                 </div>
             </div>
 
-            <!-- 그룹 채팅 링크 -->
-            <div v-if="chat" class="member-table__chat-link">
-                <img :src="mascotChat" alt="채팅" class="member-table__chat-icon">
-                <div class="member-table__chat-body">
-                    <span class="member-table__chat-title">그룹 채팅</span>
-                    <span v-if="chat.lastMessage" class="member-table__chat-preview">
-                        {{ chat.lastMessage.sender }}: {{ chat.lastMessage.text }}
-                    </span>
-                </div>
-                <span v-if="chat.unreadCount" class="member-table__chat-badge">
-                    {{ chat.unreadCount }}
-                </span>
-                <ChevronRightIcon class="member-table__chat-arrow" />
-            </div>
         </div>
     </div>
 </template>
@@ -148,7 +130,7 @@ function textColor(m) {
 }
 
 .member-table__sub {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
 }
@@ -194,7 +176,7 @@ function textColor(m) {
 }
 
 .member-table__name {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
@@ -236,7 +218,7 @@ function textColor(m) {
 }
 
 .member-table__percent {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     width: 34px;
     text-align: right;
@@ -260,66 +242,4 @@ function textColor(m) {
     transition: width 0.6s ease;
 }
 
-/* ── 그룹 채팅 링크 ── */
-.member-table__chat-link {
-    padding: 11px 13px;
-    border-top: 1px solid var(--tt-bg-fill);
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    cursor: pointer;
-    background: var(--tt-bg);
-}
-
-.member-table__chat-icon {
-    width: 28px;
-    height: 22px;
-    object-fit: contain;
-    flex: none;
-}
-
-.member-table__chat-body {
-    flex: 1;
-    min-width: 0;
-}
-
-.member-table__chat-title {
-    display: block;
-    font-size: 12px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
-}
-
-.member-table__chat-preview {
-    display: block;
-    font-size: 11px;
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-hint);
-    margin-top: 2px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.member-table__chat-badge {
-    flex: none;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 5px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-red);
-    color: var(--tt-white);
-    font-size: 10px;
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.member-table__chat-arrow {
-    width: 18px;
-    height: 18px;
-    color: var(--tt-border-strong);
-    flex: none;
-}
 </style>
