@@ -1,5 +1,6 @@
 const EOK = 100000000;
 const MAN = 10000;
+const TEN_MILLION = 10000000;
 
 const TONE_COLORS = {
     navy: 'var(--tt-gray-900)',
@@ -43,6 +44,26 @@ function formatCompactWon(amount) {
         return `${sign}${man.toLocaleString('ko-KR')}만원`;
     }
     return formatWon(amount);
+}
+
+function formatAssetHomeWon(amount) {
+    const sign = amount < 0 ? '-' : '';
+    const abs = Math.abs(Math.trunc(amount));
+    if (abs < TEN_MILLION) {
+        return formatWon(amount);
+    }
+
+    const totalMan = Math.round(abs / MAN);
+    const eok = Math.floor(totalMan / MAN);
+    const man = totalMan % MAN;
+
+    if (eok > 0 && man > 0) {
+        return `${sign}${eok}억${man}만원`;
+    }
+    if (eok > 0) {
+        return `${sign}${eok}억원`;
+    }
+    return `${sign}${totalMan}만원`;
 }
 
 function getCompositionTotal(composition) {
@@ -102,6 +123,7 @@ export {
     formatSignedWon,
     formatSignedPercent,
     formatCompactWon,
+    formatAssetHomeWon,
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,

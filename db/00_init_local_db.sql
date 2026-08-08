@@ -19,8 +19,8 @@ CREATE DATABASE IF NOT EXISTS tangtang
 
 -- CREATE 는 계정이 이미 있으면 아무 일도 하지 않는다(비밀번호도 그대로).
 -- 그래서 ALTER 를 뒤에 붙여 재실행할 때도 비밀번호가 확실히 갱신되게 한다.
-CREATE USER IF NOT EXISTS 'tangtang'@'localhost' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
-ALTER  USER              'tangtang'@'localhost' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'tangtang'@'localhost' IDENTIFIED BY 'tangtang1234';
+ALTER  USER              'tangtang'@'localhost' IDENTIFIED BY 'tangtang1234';
 GRANT ALL PRIVILEGES ON tangtang.* TO 'tangtang'@'localhost';
 FLUSH PRIVILEGES;
 
