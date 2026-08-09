@@ -72,6 +72,12 @@ const routes = [
         meta: { title: '대출' },
     },
     {
+        path: '/asset/paymoney',
+        name: 'assetPaymoney',
+        component: () => import('@/views/AssetPaymoneyView.vue'),
+        meta: { title: '페이머니' },
+    },
+    {
         path: '/asset/trend',
         name: 'assetNetWorthTrend',
         component: () => import('@/views/NetWorthTrendView.vue'),

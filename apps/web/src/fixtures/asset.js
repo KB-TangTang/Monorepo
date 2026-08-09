@@ -8,7 +8,8 @@ const ASSET_SUMMARY = {
         { code: 'checking', label: '입출금', amount: 2066800, tone: 'navy' },
         { code: 'savings', label: '예적금', amount: 5420000, tone: 'blue' },
         { code: 'investment', label: '투자', amount: 3214200, tone: 'teal' },
-        { code: 'etc', label: '포인트·기타', amount: 244500000000, tone: 'gray' },
+        { code: 'paymoney', label: '페이머니', amount: 244500, tone: 'gray' },
+        { code: 'loan', label: '대출', amount: -1500000, tone: 'danger' },
     ],
     accounts: [
         {
@@ -34,6 +35,14 @@ const ASSET_SUMMARY = {
             count: 1,
             amount: 3214200,
             tone: 'teal',
+        },
+        {
+            code: 'paymoney',
+            label: '페이머니',
+            badge: 'P',
+            count: 1,
+            amount: 244500,
+            tone: 'gray',
         },
         {
             code: 'loan',
@@ -157,4 +166,34 @@ const LOAN_DETAIL = {
     ],
 };
 
-export { ASSET_SUMMARY, CHECKING_DETAIL, SAVINGS_DETAIL, INVESTMENT_DETAIL, LOAN_DETAIL };
+const PAYMONEY_DETAIL = {
+    total: 244500,
+    syncedLabel: '방금 동기화',
+    accounts: [
+        {
+            code: 'kakaopay-paymoney',
+            label: '카카오페이머니',
+            meta: '충전형 포인트머니',
+            amount: 150000,
+            badge: '카',
+            tone: 'accent',
+        },
+        {
+            code: 'toss-paymoney',
+            label: '토스페이머니',
+            meta: '충전형 포인트머니',
+            amount: 94500,
+            badge: '토',
+            tone: 'gray',
+        },
+    ],
+};
+
+export {
+    ASSET_SUMMARY,
+    CHECKING_DETAIL,
+    SAVINGS_DETAIL,
+    INVESTMENT_DETAIL,
+    LOAN_DETAIL,
+    PAYMONEY_DETAIL,
+};

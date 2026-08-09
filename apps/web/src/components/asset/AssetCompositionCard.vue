@@ -1,6 +1,7 @@
 <!--
   용도: 자산 홈 화면의 자산 구성 도넛 차트 + 범례. composition 배열의 amount 비율을 시각화한다.
-  언제 쓰는지: AssetHomeView 중단 한 곳. 대출 등 부채는 여기 포함하지 않는다(도넛 = 총 자산 구성비).
+  언제 쓰는지: AssetHomeView 중단 한 곳. 도넛(파이 조각)은 자산 항목(양수)만으로 100%를 채우고,
+  중앙 "총 자산" 값은 대출 등 부채(음수 항목)까지 합산해 보여준다. 범례에는 부채 항목도 그대로 노출한다.
 -->
 <script setup>
 import { computed } from 'vue';
@@ -21,7 +22,9 @@ const RADIUS = 54;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const total = computed(() => getCompositionTotal(props.composition));
-const segments = computed(() => getCompositionRatios(props.composition));
+const segments = computed(() =>
+    getCompositionRatios(props.composition.filter((item) => item.amount > 0)),
+);
 </script>
 
 <template>

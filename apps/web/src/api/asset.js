@@ -4,6 +4,7 @@ import {
     SAVINGS_DETAIL,
     INVESTMENT_DETAIL,
     LOAN_DETAIL,
+    PAYMONEY_DETAIL,
 } from '@/fixtures/asset';
 
 function clone(value) {
@@ -28,6 +29,10 @@ export async function fetchInvestmentAccountDetail() {
 
 export async function fetchLoanAccountDetail() {
     return clone(LOAN_DETAIL);
+}
+
+export async function fetchPaymoneyDetail() {
+    return clone(PAYMONEY_DETAIL);
 }
 
 export async function fetchNetWorthTrend() {
