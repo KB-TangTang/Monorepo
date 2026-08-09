@@ -14,12 +14,12 @@
 
 /* ── 멤버 아바타 색상 (팀 표준) ────────────────────────────── */
 const AVATAR = {
-    1: { nickname: '나',    initial: '나', avatarColor: '#232842' },
-    2: { nickname: '유현', initial: '유', avatarColor: '#3E63D6' },
-    3: { nickname: '준서',   initial: '준', avatarColor: '#2E9E6B' },
-    4: { nickname: '세영',   initial: '세', avatarColor: '#E7A70C' },
-    5: { nickname: '민지',   initial: '민', avatarColor: '#E0664B' },
-    6: { nickname: '하은',   initial: '하', avatarColor: '#8B5CF6' },
+    1: { nickname: '나',    initial: '나', avatarColor: '#232842', profileImage: new URL('@/assets/images/profile_ex/profile1.png', import.meta.url).href },
+    2: { nickname: '유현', initial: '유', avatarColor: '#3E63D6', profileImage: new URL('@/assets/images/profile_ex/profile2.png', import.meta.url).href },
+    3: { nickname: '준서',   initial: '준', avatarColor: '#2E9E6B', profileImage: new URL('@/assets/images/profile_ex/profile3.png', import.meta.url).href },
+    4: { nickname: '세영',   initial: '세', avatarColor: '#E7A70C', profileImage: new URL('@/assets/images/profile_ex/profile4.png', import.meta.url).href },
+    5: { nickname: '민지',   initial: '민', avatarColor: '#E0664B', profileImage: new URL('@/assets/images/profile_ex/profile5.png', import.meta.url).href },
+    6: { nickname: '하은',   initial: '하', avatarColor: '#8B5CF6', profileImage: new URL('@/assets/images/profile_ex/profile6.png', import.meta.url).href },
 };
 
 function member(userId, isAdmin = false) {

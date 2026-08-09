@@ -307,7 +307,6 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                     v-if="isActive && ch.dailyMembers"
                     :members="ch.dailyMembers"
                     :eval-type="ch.evalType"
-                    :limit-amount="ch.limitAmount"
                 />
             </template>
         </div>
