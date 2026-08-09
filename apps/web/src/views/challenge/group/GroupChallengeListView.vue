@@ -36,6 +36,10 @@ function goBack() {
 function handleInvite(challenge) {
     router.push({ name: 'groupChallengeInvite', params: { groupId: challenge.id } });
 }
+
+function goToDetail(challenge) {
+    router.push({ name: 'groupChallengeDetail', params: { id: challenge.id } });
+}
 </script>
 
 <template>
@@ -57,6 +61,7 @@ function handleInvite(challenge) {
                     :key="ch.id"
                     :challenge="ch"
                     @invite="handleInvite"
+                    @click="goToDetail(ch)"
                 />
             </template>
 
@@ -66,6 +71,7 @@ function handleInvite(challenge) {
                     v-for="ch in activeList"
                     :key="ch.id"
                     :challenge="ch"
+                    @click="goToDetail(ch)"
                 />
             </template>
 
@@ -75,6 +81,7 @@ function handleInvite(challenge) {
                     v-for="ch in endedList"
                     :key="ch.id"
                     :challenge="ch"
+                    @click="goToDetail(ch)"
                 />
             </template>
         </section>
@@ -121,6 +128,10 @@ function handleInvite(challenge) {
     display: flex;
     flex-direction: column;
     gap: var(--tt-space-3);
+}
+
+.gcl-body > * {
+    cursor: pointer;
 }
 
 /* ── 참여코드 CTA 배너 ────────── */
