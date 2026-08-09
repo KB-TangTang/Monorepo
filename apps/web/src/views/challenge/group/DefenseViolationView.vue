@@ -4,7 +4,7 @@
   탭바를 숨기고 Court Bar 헤더로 이탈 경로를 제한한다.
 -->
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
@@ -72,7 +72,8 @@ const overPercent = computed(() => 100 - withinPercent.value);
 
 /* ── 혐의 인정 확인 바텀시트 (05a) ── */
 const showAdmitSheet = ref(false);
-const admitSheetRef = ref(null);
+const HISTORY_SETTLE_MS = 100;
+const pendingNav = ref(null);
 
 const livesAfterAdmit = computed(() => indictment.value.lives.current - 1);
 
@@ -81,24 +82,33 @@ function openAdmitSheet() {
 }
 
 function confirmAdmit() {
-    admitSheetRef.value?.releaseHistory();
+    pendingNav.value = 'defenseAdmitDone';
     showAdmitSheet.value = false;
-    router.replace({
-        name: 'defenseAdmitDone',
-        params: {
-            id: route.params.id,
-            indictmentId: route.params.indictmentId,
-        },
-    });
 }
 
 function cancelAdmit() {
     showAdmitSheet.value = false;
 }
 
+watch(showAdmitSheet, (val) => {
+    if (!val && pendingNav.value) {
+        const nav = pendingNav.value;
+        pendingNav.value = null;
+        setTimeout(() => {
+            router.replace({
+                name: nav,
+                params: {
+                    id: route.params.id,
+                    indictmentId: route.params.indictmentId,
+                },
+            });
+        }, HISTORY_SETTLE_MS);
+    }
+});
+
 /* ── 변론 작성 진입 ── */
 function startDefense() {
-    router.push({
+    router.replace({
         name: 'defenseActualCost',
         params: {
             id: route.params.id,
@@ -228,7 +238,6 @@ function startDefense() {
 
         <!-- ── 05a · 혐의 인정 확인 바텀시트 ── -->
         <BaseBottomSheet
-            ref="admitSheetRef"
             v-model="showAdmitSheet"
             close-on-overlay
             close-on-esc

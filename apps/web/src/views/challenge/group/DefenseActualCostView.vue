@@ -5,7 +5,7 @@
   02b 에서 혐의 인정 선택 시 05a 확인 시트를 거친다.
 -->
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
@@ -113,9 +113,16 @@ const adjustedMargin = computed(() => indictment.value.limitAmount - adjustedTot
 const showOverSheet = ref(false);
 const showSafeSheet = ref(false);
 const showAdmitSheet = ref(false);
-const overSheetRef = ref(null);
-const safeSheetRef = ref(null);
-const admitSheetRef = ref(null);
+
+/*
+ * 시트 내부에서 라우트를 이동할 때의 전략:
+ *   1. 시트를 정상적으로 닫는다 (useOverlay 가 pushState 를 history.back() 으로 정리)
+ *   2. back() 이 완료된 뒤(setTimeout) router.replace 를 호출한다.
+ * 이렇게 하면 overlay 가 쌓은 히스토리가 깨끗이 제거되고,
+ * replace 가 현재 라우트 항목(DAC)을 교체하므로 스택에 잔여 항목이 남지 않는다.
+ */
+const HISTORY_SETTLE_MS = 100;
+const pendingNav = ref(null);
 
 function onConfirm() {
     if (!inputValue.value) return;
@@ -127,44 +134,49 @@ function onConfirm() {
 }
 
 function goToDefenseWrite() {
-    /* useOverlay 가 쌓은 히스토리 소유권을 넘긴 뒤 replace 로 이동해야
-       history.back() 과 경쟁하지 않는다. */
-    overSheetRef.value?.releaseHistory();
-    safeSheetRef.value?.releaseHistory();
+    pendingNav.value = 'defenseWrite';
     showOverSheet.value = false;
     showSafeSheet.value = false;
-    router.replace({
-        name: 'defenseWrite',
-        params: {
-            id: route.params.id,
-            indictmentId: route.params.indictmentId,
-        },
-    });
 }
 
 function openAdmitFromOver() {
-    overSheetRef.value?.releaseHistory();
+    pendingNav.value = 'openAdmit';
     showOverSheet.value = false;
-    showAdmitSheet.value = true;
 }
 
 const livesAfterAdmit = computed(() => indictment.value.lives.current - 1);
 
 function confirmAdmit() {
-    admitSheetRef.value?.releaseHistory();
+    pendingNav.value = 'defenseAdmitDone';
     showAdmitSheet.value = false;
-    router.replace({
-        name: 'defenseAdmitDone',
-        params: {
-            id: route.params.id,
-            indictmentId: route.params.indictmentId,
-        },
-    });
 }
 
 function cancelAdmit() {
     showAdmitSheet.value = false;
 }
+
+/* 시트가 닫힌 뒤 overlay 의 history.back() 이 처리될 시간을 두고 네비게이션 */
+watch([showOverSheet, showSafeSheet, showAdmitSheet], () => {
+    if (!pendingNav.value) return;
+    if (showOverSheet.value || showSafeSheet.value || showAdmitSheet.value) return;
+
+    const nav = pendingNav.value;
+    pendingNav.value = null;
+
+    setTimeout(() => {
+        if (nav === 'openAdmit') {
+            showAdmitSheet.value = true;
+        } else {
+            router.replace({
+                name: nav,
+                params: {
+                    id: route.params.id,
+                    indictmentId: route.params.indictmentId,
+                },
+            });
+        }
+    }, HISTORY_SETTLE_MS);
+});
 
 const merchantInitial = computed(() => indictment.value.transaction.merchantName.charAt(0));
 </script>
@@ -306,7 +318,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </div>
 
         <!-- ══════ 02b · 부담금 반영 후에도 초과 ══════ -->
-        <BaseBottomSheet ref="overSheetRef" v-model="showOverSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet v-model="showOverSheet" close-on-overlay close-on-esc>
             <div class="over-sheet">
                 <div class="over-sheet__top">
                     <img :src="mascotWorried" alt="탕이" class="over-sheet__mascot">
@@ -357,7 +369,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </BaseBottomSheet>
 
         <!-- ══════ 02c · 부담금 반영 시 기준 내 ══════ -->
-        <BaseBottomSheet ref="safeSheetRef" v-model="showSafeSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet v-model="showSafeSheet" close-on-overlay close-on-esc>
             <div class="safe-sheet">
                 <div class="safe-sheet__mascot-wrap">
                     <div class="safe-sheet__glow"></div>
@@ -399,7 +411,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </BaseBottomSheet>
 
         <!-- ══════ 05a · 혐의 인정 확인 ══════ -->
-        <BaseBottomSheet ref="admitSheetRef" v-model="showAdmitSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet v-model="showAdmitSheet" close-on-overlay close-on-esc>
             <div class="admit-sheet">
                 <div class="admit-sheet__top">
                     <img :src="mascotApology" alt="탕이" class="admit-sheet__mascot">

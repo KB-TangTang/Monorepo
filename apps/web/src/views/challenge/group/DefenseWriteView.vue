@@ -125,7 +125,7 @@ const canSubmit = computed(() => defenseText.value.trim().length > 0);
 
 function submitDefense() {
     if (!canSubmit.value) return;
-    router.push({
+    router.replace({
         name: 'defenseDone',
         params: {
             id: route.params.id,
