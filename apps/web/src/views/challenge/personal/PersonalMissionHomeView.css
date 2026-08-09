@@ -1,86 +1,249 @@
-.personal-mission-home {
+.personal-home {
     min-height: calc(100vh - var(--tt-tabbar-height));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
     background: var(--tt-bg-subtle);
 }
 
-.personal-mission-home__hero {
-    position: relative;
-    min-height: 172px;
-    padding: var(--tt-space-6) var(--tt-screen-padding) var(--tt-space-10);
-    overflow: hidden;
-    color: var(--tt-text-inverse);
-    background: var(--tt-surface-inverse);
-    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
-}
-
-.personal-mission-home__hero::after {
-    position: absolute;
-    top: calc(var(--tt-space-3) * -1);
-    right: calc(var(--tt-space-12) * -1);
-    width: 156px;
-    height: 156px;
-    content: '';
-    background: var(--tt-surface-raised);
-    border-radius: var(--tt-radius-full);
-}
-
-.personal-mission-home__hero p {
-    position: relative;
-    z-index: 1;
-    margin: 0;
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-semibold);
-    letter-spacing: 0.04em;
-    color: var(--tt-tab-inactive);
-}
-
-.personal-mission-home__hero h1 {
-    position: relative;
-    z-index: 1;
-    margin: var(--tt-space-3) 0 0;
-    font-size: var(--tt-fs-stat);
-    font-weight: var(--tt-fw-black);
-    line-height: var(--tt-lh-tight);
-}
-
-.personal-mission-home__content {
+.personal-home__content {
     display: flex;
     flex-direction: column;
     gap: var(--tt-card-gap);
-    padding: 0 var(--tt-screen-padding)
+    padding: var(--tt-space-3) var(--tt-screen-padding)
         calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
-    transform: translateY(-24px);
 }
 
-@media (max-width: 390px) {
-    .personal-mission-home__hero h1 {
-        font-size: clamp(var(--tt-fs-title), 7.5vw, var(--tt-fs-stat));
-    }
-
-    .personal-mission-home__content {
-        padding-right: var(--tt-space-4);
-        padding-left: var(--tt-space-4);
-    }
+/* ── 판정 안내 텍스트 ──────────────────────────────── */
+.personal-home__verdict-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-2);
+    padding: 2px 0 0;
 }
 
-@media (max-width: 359px) {
-    .personal-mission-home__reset {
-        display: none;
-    }
+.personal-home__gavel-icon {
+    flex: none;
+    color: var(--tt-text-hint);
 }
 
-.personal-mission-home__reset {
+.personal-home__verdict-info span:last-child {
+    font-size: 11.5px;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-hint);
+}
+
+/* ── 화면 05: 증거 부족 배너 ────────────────────────── */
+.personal-home__insufficient-banner {
+    background: var(--tt-accent-subtle);
+    border: 1px solid var(--tt-accent-subtle-border);
+    border-radius: var(--tt-radius-lg);
+    padding: 13px 15px;
+    display: flex;
+    gap: 11px;
+    align-items: center;
+}
+
+.personal-home__insufficient-tangi {
+    width: 58px;
+    height: 58px;
+    object-fit: contain;
+    flex: none;
+}
+
+.personal-home__insufficient-title {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    line-height: 1.4;
+}
+
+.personal-home__insufficient-sub {
+    font-size: 11.5px;
+    color: var(--tt-accent-warn);
+    font-weight: var(--tt-fw-semibold);
+    margin-top: 5px;
+    line-height: 1.5;
+    word-break: keep-all;
+}
+
+/* ── 화면 05: 조건 체크리스트 ───────────────────────── */
+.personal-home__conditions-card {
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: 20px;
+    padding: 14px var(--tt-space-4);
+    box-shadow: var(--tt-elevation-3);
+}
+
+.personal-home__conditions-title {
+    font-size: 14px;
+    font-weight: var(--tt-fw-black);
+}
+
+.personal-home__conditions-list {
+    margin-top: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.personal-home__condition {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-3);
+}
+
+.personal-home__condition-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--tt-radius-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.personal-home__condition-icon--done {
+    background: var(--tt-success-subtle);
+}
+
+.personal-home__condition-icon--progress {
+    background: var(--tt-accent-subtle);
+}
+
+.personal-home__condition-icon--pending {
+    background: var(--tt-bg-fill);
+}
+
+.personal-home__condition-label {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-body);
+}
+
+.personal-home__condition-value {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-black);
+    font-family: var(--tt-font-mono);
+}
+
+.personal-home__condition-value--done {
+    color: var(--tt-success);
+}
+
+.personal-home__condition-value--progress {
+    color: var(--tt-accent-deep);
+}
+
+.personal-home__condition-value--pending {
+    color: var(--tt-text-muted);
+}
+
+.personal-home__progress-bar {
+    margin-top: var(--tt-space-3);
+    height: 8px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-border-track);
+    overflow: hidden;
+}
+
+.personal-home__progress-fill {
+    height: 100%;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-accent);
+    transition: width 0.4s ease;
+}
+
+.personal-home__link-more {
+    display: block;
+    margin: var(--tt-space-3) auto 0;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12.5px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-info);
+    cursor: pointer;
+    font-family: var(--tt-font-sans);
+}
+
+/* ── 화면 05: 공통 사건 카드 ────────────────────────── */
+.personal-home__common-mission {
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-lg);
+    padding: 14px var(--tt-space-4);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.personal-home__common-badge {
+    background: var(--tt-bg-fill);
+    color: #6b6f82;
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    padding: 4px 10px;
+    border-radius: var(--tt-radius-full);
+}
+
+.personal-home__common-title {
+    font-size: 16px;
+    font-weight: var(--tt-fw-black);
+    margin-top: 9px;
+    letter-spacing: -0.01em;
+}
+
+.personal-home__common-status {
+    margin-top: 9px;
+    background: var(--tt-bg-fill);
+    border-radius: var(--tt-radius-sm);
+    padding: 9px var(--tt-space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-body);
+}
+
+.personal-home__common-status b {
+    color: var(--tt-success);
+    font-family: var(--tt-font-mono);
+}
+
+/* ── 데모 버튼 ──────────────────────────────────── */
+.personal-home__dev-controls {
     position: fixed;
     right: var(--tt-space-3);
     bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
     z-index: var(--tt-z-sticky);
-    padding: var(--tt-space-2);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.personal-home__dev-btn {
+    padding: var(--tt-space-1) var(--tt-space-2);
     font: inherit;
     font-size: var(--tt-fs-mono-chip);
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
     cursor: pointer;
+    white-space: nowrap;
+}
+
+/* ── 반응형 ─────────────────────────────────────── */
+@media (max-width: 390px) {
+    .personal-home__content {
+        padding-right: var(--tt-space-4);
+        padding-left: var(--tt-space-4);
+    }
+}
+
+@media (max-width: 359px) {
+    .personal-home__dev-controls {
+        display: none;
+    }
 }
