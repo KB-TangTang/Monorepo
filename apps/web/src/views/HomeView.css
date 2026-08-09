@@ -1,6 +1,7 @@
 .home {
     min-height: 100%;
     padding: var(--tt-space-8) var(--tt-screen-padding) var(--tt-space-12);
+    overflow-x: hidden;
     background: var(--tt-bg-subtle);
 }
 
