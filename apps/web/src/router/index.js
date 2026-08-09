@@ -156,6 +156,37 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupHonorCourtView.vue'),
         meta: { title: '명예 법정', hideTabBar: true },
     },
+    // ↓ 변론 플로우 (#GC_07). 기소 상세 → 실제 부담금 → 변론 작성 → 완료 / 혐의 인정.
+    {
+        path: '/group-challenges/:id/defense/:indictmentId',
+        name: 'defenseViolation',
+        component: () => import('@/views/challenge/group/DefenseViolationView.vue'),
+        meta: { title: '소비 기준 위반', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/cost',
+        name: 'defenseActualCost',
+        component: () => import('@/views/challenge/group/DefenseActualCostView.vue'),
+        meta: { title: '실제 부담금 입력', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/write',
+        name: 'defenseWrite',
+        component: () => import('@/views/challenge/group/DefenseWriteView.vue'),
+        meta: { title: '변론 작성', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/done',
+        name: 'defenseDone',
+        component: () => import('@/views/challenge/group/DefenseDoneView.vue'),
+        meta: { title: '변론 완료', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/admit',
+        name: 'defenseAdmitDone',
+        component: () => import('@/views/challenge/group/DefenseAdmitDoneView.vue'),
+        meta: { title: '혐의 인정', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',

@@ -100,8 +100,12 @@ function reopenTutorial() {
 }
 
 function onEventAction(type) {
-    // TODO: 추후 라우트 연결 (투표 목록 / 기소 응답 화면)
-    console.log('event action', type);
+    if (activeChallenges.value.length) {
+        router.push({
+            name: 'groupChallengeDetail',
+            params: { id: activeChallenges.value[0].id },
+        });
+    }
 }
 
 function goToAllChallenges() {
