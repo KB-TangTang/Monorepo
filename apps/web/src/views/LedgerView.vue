@@ -6,7 +6,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { fetchLedgerMonths, fetchLedgerSummary, fetchLedgerTransactions } from '@/api/ledger';
-import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
+import AssetLedgerToggle from '@/components/asset/AssetLedgerToggle.vue';
 import LedgerCalendar from '@/components/ledger/LedgerCalendar.vue';
 import LedgerMonthNav from '@/components/ledger/LedgerMonthNav.vue';
 import LedgerPageHeader from '@/components/ledger/LedgerPageHeader.vue';
@@ -142,10 +142,6 @@ function applyCategory({ transactionId, categoryName, applyToMerchant }) {
     }
 }
 
-function openReport() {
-    router.push({ name: 'monthlyConsumptionReport', query: { month: period.value } });
-}
-
 function openMonthTransactions() {
     router.push({
         name: 'ledgerMonthTransactions',
@@ -155,6 +151,10 @@ function openMonthTransactions() {
 
 function goToSearch() {
     router.push({ name: 'ledgerSearch' });
+}
+
+function goToAsset() {
+    router.push({ name: 'asset' });
 }
 
 onMounted(async () => {
@@ -234,7 +234,7 @@ onMounted(async () => {
             @select="applyCategory"
         />
 
-        <ChallengeReportToggle active="transactions" @open-monthly-report="openReport" />
+        <AssetLedgerToggle active="ledger" @open-asset="goToAsset" />
     </article>
 </template>
 
