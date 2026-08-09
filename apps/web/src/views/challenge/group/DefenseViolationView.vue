@@ -72,6 +72,7 @@ const overPercent = computed(() => 100 - withinPercent.value);
 
 /* ── 혐의 인정 확인 바텀시트 (05a) ── */
 const showAdmitSheet = ref(false);
+const admitSheetRef = ref(null);
 
 const livesAfterAdmit = computed(() => indictment.value.lives.current - 1);
 
@@ -80,8 +81,9 @@ function openAdmitSheet() {
 }
 
 function confirmAdmit() {
+    admitSheetRef.value?.releaseHistory();
     showAdmitSheet.value = false;
-    router.push({
+    router.replace({
         name: 'defenseAdmitDone',
         params: {
             id: route.params.id,
@@ -226,6 +228,7 @@ function startDefense() {
 
         <!-- ── 05a · 혐의 인정 확인 바텀시트 ── -->
         <BaseBottomSheet
+            ref="admitSheetRef"
             v-model="showAdmitSheet"
             close-on-overlay
             close-on-esc

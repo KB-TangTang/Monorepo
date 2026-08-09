@@ -113,6 +113,9 @@ const adjustedMargin = computed(() => indictment.value.limitAmount - adjustedTot
 const showOverSheet = ref(false);
 const showSafeSheet = ref(false);
 const showAdmitSheet = ref(false);
+const overSheetRef = ref(null);
+const safeSheetRef = ref(null);
+const admitSheetRef = ref(null);
 
 function onConfirm() {
     if (!inputValue.value) return;
@@ -124,9 +127,13 @@ function onConfirm() {
 }
 
 function goToDefenseWrite() {
+    /* useOverlay 가 쌓은 히스토리 소유권을 넘긴 뒤 replace 로 이동해야
+       history.back() 과 경쟁하지 않는다. */
+    overSheetRef.value?.releaseHistory();
+    safeSheetRef.value?.releaseHistory();
     showOverSheet.value = false;
     showSafeSheet.value = false;
-    router.push({
+    router.replace({
         name: 'defenseWrite',
         params: {
             id: route.params.id,
@@ -136,6 +143,7 @@ function goToDefenseWrite() {
 }
 
 function openAdmitFromOver() {
+    overSheetRef.value?.releaseHistory();
     showOverSheet.value = false;
     showAdmitSheet.value = true;
 }
@@ -143,8 +151,9 @@ function openAdmitFromOver() {
 const livesAfterAdmit = computed(() => indictment.value.lives.current - 1);
 
 function confirmAdmit() {
+    admitSheetRef.value?.releaseHistory();
     showAdmitSheet.value = false;
-    router.push({
+    router.replace({
         name: 'defenseAdmitDone',
         params: {
             id: route.params.id,
@@ -297,7 +306,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </div>
 
         <!-- ══════ 02b · 부담금 반영 후에도 초과 ══════ -->
-        <BaseBottomSheet v-model="showOverSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet ref="overSheetRef" v-model="showOverSheet" close-on-overlay close-on-esc>
             <div class="over-sheet">
                 <div class="over-sheet__top">
                     <img :src="mascotWorried" alt="탕이" class="over-sheet__mascot">
@@ -348,7 +357,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </BaseBottomSheet>
 
         <!-- ══════ 02c · 부담금 반영 시 기준 내 ══════ -->
-        <BaseBottomSheet v-model="showSafeSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet ref="safeSheetRef" v-model="showSafeSheet" close-on-overlay close-on-esc>
             <div class="safe-sheet">
                 <div class="safe-sheet__mascot-wrap">
                     <div class="safe-sheet__glow"></div>
@@ -380,7 +389,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
             <template #footer>
                 <div class="safe-sheet__footer">
                     <BaseButton variant="dark" size="lg" block @click="goToDefenseWrite">
-                        확인
+                        다음으로
                     </BaseButton>
                     <p class="safe-sheet__notice">
                         최종 판단은 그룹원 투표로 결정돼요.
@@ -390,7 +399,7 @@ const merchantInitial = computed(() => indictment.value.transaction.merchantName
         </BaseBottomSheet>
 
         <!-- ══════ 05a · 혐의 인정 확인 ══════ -->
-        <BaseBottomSheet v-model="showAdmitSheet" close-on-overlay close-on-esc>
+        <BaseBottomSheet ref="admitSheetRef" v-model="showAdmitSheet" close-on-overlay close-on-esc>
             <div class="admit-sheet">
                 <div class="admit-sheet__top">
                     <img :src="mascotApology" alt="탕이" class="admit-sheet__mascot">
