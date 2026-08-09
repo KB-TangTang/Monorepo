@@ -12,6 +12,12 @@
 
 html {
     -webkit-text-size-adjust: 100%;
+    /*
+     * 화면마다 세로 스크롤 필요 여부가 달라(자산 홈은 페이지 스크롤, 장부는 내부
+     * 고정 높이) 스크롤바가 생겼다 사라졌다 하면, 가운데 정렬된 .tt-app 이
+     * 스크롤바 너비만큼 좌우로 밀려 보인다. 항상 자리를 예약해 그 흔들림을 없앤다.
+     */
+    scrollbar-gutter: stable;
 }
 
 body {
@@ -73,6 +79,11 @@ ol {
 
 /* 마스코트 플로팅 애니메이션 */
 @keyframes tt-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
 }

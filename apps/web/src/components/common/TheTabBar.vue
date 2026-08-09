@@ -33,7 +33,7 @@ const TABS = [
     {
         name: 'ledger',
         label: '자료실',
-        to: '/ledger',
+        to: '/reports/monthly',
         paths: [
             'M6 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z',
             'M8 8.5h6',
@@ -51,9 +51,15 @@ const TABS = [
 
 const route = useRoute();
 
-/* 홈(/)만 정확 매칭. 나머지는 하위 경로에서도 활성으로 본다. */
+/*
+ * 홈(/)만 정확 매칭. 나머지는 하위 경로에서도 활성으로 본다.
+ * /ledger 는 자산 홈의 토글로만 들어가는 화면이라 "자산" 탭을 활성으로 유지한다.
+ */
 function isActive(tab) {
     if (tab.name === 'ledger' && route.path.startsWith('/reports')) {
+        return true;
+    }
+    if (tab.name === 'asset' && route.path.startsWith('/ledger')) {
         return true;
     }
     return tab.to === '/' ? route.path === '/' : route.path.startsWith(tab.to);

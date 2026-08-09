@@ -9,6 +9,7 @@ import { fetchAssetSummary } from '@/api/asset';
 import AssetNetWorthCard from '@/components/asset/AssetNetWorthCard.vue';
 import AssetCompositionCard from '@/components/asset/AssetCompositionCard.vue';
 import AssetAccountList from '@/components/asset/AssetAccountList.vue';
+import AssetLedgerToggle from '@/components/asset/AssetLedgerToggle.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import StateError from '@/components/common/StateError.vue';
 
@@ -37,6 +38,10 @@ function goToConnectedAccounts() {
     router.push({ name: 'connectedAccounts' });
 }
 
+function goToLedger() {
+    router.push({ name: 'ledger' });
+}
+
 onMounted(load);
 </script>
 
@@ -61,6 +66,8 @@ onMounted(load);
             <AssetCompositionCard :composition="summary.composition" />
             <AssetAccountList :accounts="summary.accounts" />
         </template>
+
+        <AssetLedgerToggle active="asset" @open-ledger="goToLedger" />
     </div>
 </template>
 

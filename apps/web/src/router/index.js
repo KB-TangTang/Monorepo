@@ -303,6 +303,14 @@ if (import.meta.env.DEV) {
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes,
+    /*
+     * 화면마다 스크롤 가능 여부·높이가 달라(고정 높이+내부 스크롤 vs 페이지 스크롤),
+     * 리셋 없이 이동하면 이전 화면의 스크롤 위치가 그대로 남아 새 화면이 밀려 보인다.
+     * 뒤로/앞으로 가기(popstate)는 원래 위치를 복원한다.
+     */
+    scrollBehavior(to, from, savedPosition) {
+        return savedPosition ?? { top: 0 };
+    },
 });
 
 /*
