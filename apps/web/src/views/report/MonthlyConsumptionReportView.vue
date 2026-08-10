@@ -29,11 +29,21 @@ const loading = ref(true);
 const errorMessage = ref('');
 const isMonthPickerOpen = ref(false);
 const selectedPeriod = ref('');
+const selectedTrendMonth = ref(null);
 const state = computed(() =>
     resolveReportState({ loading: loading.value, error: errorMessage.value, report: report.value }),
 );
 const trendMax = computed(() =>
     Math.max(...(report.value?.monthlyTrend.map((item) => item.amount) ?? [1])),
+);
+const trendMin = computed(() =>
+    Math.min(...(report.value?.monthlyTrend.map((item) => item.amount) ?? [0])),
+);
+const selectedTrend = computed(
+    () =>
+        report.value?.monthlyTrend.find((item) => item.month === selectedTrendMonth.value) ??
+        report.value?.monthlyTrend.at(-1) ??
+        null,
 );
 
 async function loadMonths() {
@@ -46,6 +56,7 @@ async function loadReport() {
     report.value = null;
     try {
         report.value = await fetchMonthlyConsumptionReport(selectedPeriod.value);
+        selectedTrendMonth.value = Number(selectedPeriod.value.slice(5));
     } catch (error) {
         errorMessage.value = error.message ?? '소비 리포트를 불러오지 못했습니다.';
     } finally {
@@ -63,10 +74,6 @@ function selectPeriod(period) {
     loadReport();
 }
 
-function openChallengeReport() {
-    router.push({ name: 'challengeReport', query: { month: selectedPeriod.value } });
-}
-
 function openSavingsStatement() {
     router.push({ name: 'fixedExpenseSavings' });
 }
@@ -75,8 +82,20 @@ function openMonthlyReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: selectedPeriod.value } });
 }
 
-function openLedger() {
-    router.push({ name: 'ledger' });
+function openTrialReport() {
+    router.push({ name: 'challengeReport', query: { month: selectedPeriod.value } });
+}
+
+function selectTrend(month) {
+    selectedTrendMonth.value = month;
+}
+
+function getTrendBarHeight(amount) {
+    if (trendMax.value === trendMin.value) {
+        return 65;
+    }
+
+    return 35 + ((amount - trendMin.value) / (trendMax.value - trendMin.value)) * 65;
 }
 
 onMounted(async () => {
@@ -116,20 +135,6 @@ onMounted(async () => {
             <p class="monthly-report__period">{{ formatPeriod(report.period) }}</p>
             <MonthlyVerdictSummary :report="report" />
 
-            <BaseCard
-                class="monthly-report__honor"
-                clickable
-                padding="none"
-                @click="openChallengeReport"
-            >
-                <p>{{ Number(report.period.slice(5)) }}월 명예 법정</p>
-                <strong
-                    >{{ report.honorRank }}위
-                    <span>상위 {{ report.honorPercentile }}%</span></strong
-                >
-                <b>자세히 ›</b>
-            </BaseCard>
-
             <section class="monthly-report__message" aria-labelledby="message-title">
                 <h2 id="message-title">탕탕이 한마디</h2>
                 <p>{{ report.comment }}</p>
@@ -139,35 +144,42 @@ onMounted(async () => {
                 <h2 id="trend-title">최근 6개월</h2>
                 <BaseCard padding="lg">
                     <p>
-                        월 평균 <strong>{{ formatWon(report.averageSpent) }}</strong>
+                        {{ selectedTrend?.month }}월 소비
+                        <strong>{{
+                            formatWon(selectedTrend?.amount ?? report.averageSpent)
+                        }}</strong>
                     </p>
-                    <div
-                        class="monthly-report__chart"
-                        role="img"
-                        aria-label="최근 6개월 소비 그래프"
-                    >
-                        <div
+                    <div class="monthly-report__chart" aria-label="최근 6개월 소비 그래프">
+                        <button
                             v-for="item in report.monthlyTrend"
                             :key="item.month"
+                            type="button"
                             class="monthly-report__bar-item"
+                            :class="{
+                                'monthly-report__bar-item--selected':
+                                    item.month === selectedTrend?.month,
+                            }"
+                            :aria-pressed="item.month === selectedTrend?.month"
+                            :aria-label="`${item.month}월 소비 ${formatWon(item.amount)}`"
+                            @click="selectTrend(item.month)"
                         >
                             <span
                                 :style="{
-                                    height: `${Math.max(35, (item.amount / trendMax) * 100)}%`,
+                                    height: `${getTrendBarHeight(item.amount)}%`,
                                 }"
                                 :class="{
                                     'monthly-report__bar--current':
-                                        item.month === Number(report.period.slice(5)),
+                                        item.month === selectedTrend?.month,
                                 }"
                             ></span>
                             <b
                                 :class="{
                                     'monthly-report__month--current':
-                                        item.month === Number(report.period.slice(5)),
+                                        item.month === selectedTrend?.month,
                                 }"
                                 >{{ item.month }}월</b
                             >
-                        </div>
+                        </button>
                     </div>
                 </BaseCard>
             </section>
@@ -196,9 +208,9 @@ onMounted(async () => {
         />
         <ChallengeReportToggle
             v-if="state === 'ready'"
-            active="report"
-            @open-transactions="openLedger"
+            active="monthly"
             @open-monthly-report="openMonthlyReport"
+            @open-trial-report="openTrialReport"
         />
     </article>
 </template>
@@ -239,38 +251,6 @@ onMounted(async () => {
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-full);
-}
-.monthly-report__honor {
-    position: relative;
-    overflow: hidden;
-    padding: var(--tt-space-6) !important;
-    color: var(--tt-text-inverse);
-    background: var(--tt-primary);
-    border: 0;
-    border-radius: var(--tt-radius-xl);
-}
-.monthly-report__honor p {
-    font-size: var(--tt-fs-body);
-    color: var(--tt-brand-100);
-}
-.monthly-report__honor strong {
-    display: block;
-    margin-top: var(--tt-space-2);
-    font-size: var(--tt-fs-numeric);
-    font-weight: var(--tt-fw-black);
-    line-height: var(--tt-lh-tight);
-}
-.monthly-report__honor strong span {
-    margin-left: var(--tt-space-2);
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-medium);
-    color: var(--tt-brand-100);
-}
-.monthly-report__honor b {
-    position: absolute;
-    right: var(--tt-space-6);
-    bottom: var(--tt-space-6);
-    color: var(--tt-accent);
 }
 .monthly-report__message {
     overflow: hidden;
@@ -329,15 +309,60 @@ onMounted(async () => {
     justify-content: end;
     gap: var(--tt-space-2);
     height: 100%;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
 }
 .monthly-report__bar-item span {
     width: min(42px, 70%);
     min-height: 30px;
     background: var(--tt-brand-200);
     border-radius: var(--tt-radius-md) var(--tt-radius-md) var(--tt-radius-sm) var(--tt-radius-sm);
+    transform-origin: bottom center;
+    animation: monthly-report-bar-fill 640ms ease-out both;
+}
+
+.monthly-report__bar-item:nth-child(2) span {
+    animation-delay: 80ms;
+}
+
+.monthly-report__bar-item:nth-child(3) span {
+    animation-delay: 160ms;
+}
+
+.monthly-report__bar-item:nth-child(4) span {
+    animation-delay: 240ms;
+}
+
+.monthly-report__bar-item:nth-child(5) span {
+    animation-delay: 320ms;
+}
+
+.monthly-report__bar-item:nth-child(6) span {
+    animation-delay: 400ms;
+}
+
+@keyframes monthly-report-bar-fill {
+    from {
+        transform: scaleY(0);
+    }
+
+    to {
+        transform: scaleY(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .monthly-report__bar-item span {
+        animation: none;
+    }
 }
 .monthly-report__bar-item .monthly-report__bar--current {
     background: var(--tt-surface-strong);
+}
+.monthly-report__bar-item--selected .monthly-report__bar--current {
+    box-shadow: 0 0 0 3px var(--tt-primary-subtle);
 }
 .monthly-report__bar-item b {
     font-size: var(--tt-fs-caption);
@@ -425,9 +450,6 @@ onMounted(async () => {
     .monthly-report {
         padding-right: var(--tt-space-4);
         padding-left: var(--tt-space-4);
-    }
-    .monthly-report__honor strong {
-        font-size: var(--tt-fs-numeric);
     }
     .monthly-report__savings {
         min-height: 138px;

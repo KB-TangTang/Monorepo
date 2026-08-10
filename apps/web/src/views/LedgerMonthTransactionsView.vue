@@ -8,7 +8,6 @@ import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchLedgerMonths, fetchLedgerTransactions } from '@/api/ledger';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
-import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import LedgerCategoryFilterSheet from '@/components/ledger/LedgerCategoryFilterSheet.vue';
 import LedgerCategorySheet from '@/components/ledger/LedgerCategorySheet.vue';
 import LedgerDirectionTabs from '@/components/ledger/LedgerDirectionTabs.vue';
@@ -51,7 +50,11 @@ const groupRefs = ref({});
 let pendingAnchorDate = typeof route.query.date === 'string' ? route.query.date : '';
 
 const state = computed(() =>
-    resolveLedgerState({ loading: loading.value, error: errorMessage.value, data: transactions.value }),
+    resolveLedgerState({
+        loading: loading.value,
+        error: errorMessage.value,
+        data: transactions.value,
+    }),
 );
 
 const paymentMethods = computed(() => [
@@ -164,16 +167,8 @@ function applyCategory({ transactionId, categoryName, applyToMerchant }) {
     }
 }
 
-function goToLedger() {
-    router.push({ name: 'ledger' });
-}
-
 function goToSearch() {
     router.push({ name: 'ledgerSearch' });
-}
-
-function openReport() {
-    router.push({ name: 'monthlyConsumptionReport', query: { month: period.value } });
 }
 
 onMounted(async () => {
@@ -256,7 +251,9 @@ onMounted(async () => {
             >
                 <div class="ledger-month-view__group-header">
                     <h2>{{ formatDayLabel(group.date) }}</h2>
-                    <span :class="{ 'ledger-month-view__group-total--income': group.netAmount > 0 }">
+                    <span
+                        :class="{ 'ledger-month-view__group-total--income': group.netAmount > 0 }"
+                    >
                         {{ formatWon(group.netAmount) }}
                     </span>
                 </div>
@@ -290,8 +287,6 @@ onMounted(async () => {
             :transaction="selectedTransaction"
             @select="applyCategory"
         />
-
-        <ChallengeReportToggle active="transactions" @open-transactions="goToLedger" @open-monthly-report="openReport" />
     </article>
 </template>
 

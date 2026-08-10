@@ -2,41 +2,40 @@
 defineProps({
     active: {
         type: String,
-        default: 'report',
-        validator: (v) => ['transactions', 'report'].includes(v),
+        default: 'monthly',
+        validator: (v) => ['monthly', 'trial'].includes(v),
     },
 });
 
-defineEmits(['open-transactions', 'open-monthly-report']);
+defineEmits(['open-monthly-report', 'open-trial-report']);
 </script>
 
 <template>
-    <nav class="report-toggle" aria-label="자료실 화면 전환">
+    <nav class="report-toggle" aria-label="리포트 종류 전환">
         <button
             type="button"
-            :class="{ 'report-toggle__active': active === 'transactions' }"
-            :aria-current="active === 'transactions' ? 'page' : undefined"
-            @click="$emit('open-transactions')"
-        >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2z" />
-                <path d="M9 8h6M9 12h6" />
-            </svg>
-            <span>거래내역</span>
-            <i v-if="active === 'transactions'" aria-hidden="true"></i>
-        </button>
-        <button
-            type="button"
-            :class="{ 'report-toggle__active': active === 'report' }"
-            :aria-current="active === 'report' ? 'page' : undefined"
+            :class="{ 'report-toggle__active': active === 'monthly' }"
+            :aria-current="active === 'monthly' ? 'page' : undefined"
             @click="$emit('open-monthly-report')"
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 3.5h10l4 4v13H5z" />
                 <path d="M15 3.5v4h4M9 16v-3M12 16V9M15 16v-5" />
             </svg>
-            <span>리포트</span>
-            <i v-if="active === 'report'" aria-hidden="true"></i>
+            <span>월간 보고서</span>
+            <i v-if="active === 'monthly'" aria-hidden="true"></i>
+        </button>
+        <button
+            type="button"
+            :class="{ 'report-toggle__active': active === 'trial' }"
+            :aria-current="active === 'trial' ? 'page' : undefined"
+            @click="$emit('open-trial-report')"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v16M7.5 20h9M4.5 8h15M4.5 8 2 14h5zM19.5 8 17 14h5z" />
+            </svg>
+            <span>재판 보고서</span>
+            <i v-if="active === 'trial'" aria-hidden="true"></i>
         </button>
     </nav>
 </template>
