@@ -28,7 +28,7 @@
 }
 
 .personal-home__verdict-info span:last-child {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -59,7 +59,7 @@
 }
 
 .personal-home__insufficient-sub {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     color: var(--tt-accent-warn);
     font-weight: var(--tt-fw-semibold);
     margin-top: 5px;
@@ -77,7 +77,7 @@
 }
 
 .personal-home__conditions-title {
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
 }
 
@@ -118,7 +118,7 @@
 
 .personal-home__condition-label {
     flex: 1;
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
@@ -162,7 +162,7 @@
     background: none;
     border: none;
     padding: 0;
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-info);
     cursor: pointer;
@@ -188,7 +188,7 @@
 }
 
 .personal-home__common-title {
-    font-size: 16px;
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     margin-top: 9px;
     letter-spacing: -0.01em;

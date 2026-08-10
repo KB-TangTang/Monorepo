@@ -4,87 +4,76 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
-import GroupTrialEventCard from '@/components/challenge/group/GroupTrialEventCard.vue';
-import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
-import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
+import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
+import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
+import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/groupTutorialGuide';
+import { useCountdown } from '@/utils/useCountdown';
 import {
-    MOCK_TRIAL_SUMMARY,
-    MOCK_INDICTMENT_SUMMARY,
+    MOCK_TODO_ITEMS,
     MOCK_ACTIVE_CHALLENGES,
 } from '@/fixtures/groupChallenge';
-import mascotSkeptical from '@/assets/images/emotions/25_skeptical.png';
-import mascotJudging from '@/assets/images/emotions/48_judging.png';
-import mascotSmile from '@/assets/images/emotions/03_gentle_smile.png';
+import { ArrowPathIcon } from '@heroicons/vue/24/outline';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
+import courtDistrictImg from '@/assets/images/court/court_district.png';
+import judgeImg from '@/assets/images/emotions/48_judging.png';
 
 const router = useRouter();
+
+/* ── 날짜 ──────────────────────────────── */
+const todayLabel = computed(() => {
+    const d = new Date();
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}. ${mm}. ${dd} (${dayNames[d.getDay()]})`;
+});
+
+/* ── 목데이터 (추후 API 교체) ──────────── */
+const doneIds = ref([]);
+const activeChallenges = ref(MOCK_ACTIVE_CHALLENGES);
+
+const todoItems = computed(() =>
+    MOCK_TODO_ITEMS
+        .filter(i => !doneIds.value.includes(i.id))
+        .sort((a, b) => a.deadlineMinutes - b.deadlineMinutes)
+);
+
+const hasTodo = computed(() => todoItems.value.length > 0);
+const allDone = computed(() => todoItems.value.length === 0 && doneIds.value.length > 0);
+
+/* ── 카운트다운 ────────────────────────── */
+const { countdowns } = useCountdown(todoItems);
+
+/* ── 바텀시트 ──────────────────────────── */
+const showSheet = ref(false);
+const todoSheetRef = ref(null);
+
+/* ── 토스트 ────────────────────────────── */
+const toast = ref(null);
+let toastTimer = null;
+
+function flash(msg) {
+    clearTimeout(toastTimer);
+    toast.value = msg;
+    toastTimer = setTimeout(() => { toast.value = null; }, 1800);
+}
+
+/* ── 판사 탕이 말풍선 ─────────────────── */
+const judgeQuote = computed(() => {
+    const todoCount = todoItems.value.length;
+    const activeCount = activeChallenges.value.length;
+    if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요,\n서두르세요!`;
+    if (allDone.value) return '모든 할 일을 처리했군요,\n훌륭해요!';
+    if (activeCount > 0) return `진행 중인 챌린지가\n${activeCount}건 있어요`;
+    return '새로운 챌린지에\n참여해보세요!';
+});
+
+/* ── 튜토리얼 ─────────────────────────── */
 const showTutorial = ref(false);
 const showJoinSheet = ref(false);
 
-/* ── 목데이터 (추후 API 교체) ──────────── */
-const trialSummary = ref(MOCK_TRIAL_SUMMARY);
-const indictmentSummary = ref(MOCK_INDICTMENT_SUMMARY);
-const activeChallenges = ref(MOCK_ACTIVE_CHALLENGES);
-
-/* ── computed ──────────────────────────── */
-const trialCount = computed(() => trialSummary.value?.count ?? 0);
-const indictmentCount = computed(() => indictmentSummary.value?.count ?? 0);
-const totalAlerts = computed(() => trialCount.value + indictmentCount.value);
-const hasTrials = computed(() => trialCount.value > 0);
-const hasIndictments = computed(() => indictmentCount.value > 0);
-const hasBothTypes = computed(() => hasTrials.value && hasIndictments.value);
-const hasAnyEvent = computed(() => hasTrials.value || hasIndictments.value);
-
-/** 한쪽만 있을 때 보여줄 마스코트 씬 */
-const mascotScene = computed(() => {
-    if (hasBothTypes.value || !hasAnyEvent.value) return 'peaceful';
-    if (hasIndictments.value) return 'indictment';
-    return 'vote';
-});
-
-/** 헤더 상태 뱃지 */
-const headerBadge = computed(() => {
-    if (!hasAnyEvent.value) return { text: '평온', cls: 'gc-badge--green' };
-    if (hasBothTypes.value) return { text: `알림 ${totalAlerts.value}`, cls: 'gc-badge--red' };
-    if (hasIndictments.value) return { text: `기소 ${indictmentCount.value}`, cls: 'gc-badge--red' };
-    return { text: `판결 ${trialCount.value}`, cls: 'gc-badge--gold' };
-});
-
-/** 헤더 서브타이틀 */
-const headerSubtitle = computed(() => {
-    if (!hasAnyEvent.value) return '오늘은 조용한 하루예요';
-    if (hasBothTypes.value) return `처리할 일이 ${totalAlerts.value}건 있어요`;
-    if (hasIndictments.value) return '기소에 응답할 차례예요';
-    return '판결이 기다리고 있어요';
-});
-
-/** 헤더 마스코트 이미지 */
-const headerMascot = computed(() => {
-    if (!hasAnyEvent.value) return mascotSmile;
-    if (hasIndictments.value) return mascotSkeptical;
-    return mascotJudging;
-});
-
-const isDev = import.meta.env.DEV;
-
-/* ── DEV: 상태 전환 테스트 ────────────── */
-const STATE_PRESETS = [
-    { label: '평온', indictment: 0, trial: 0 },
-    { label: '기소만', indictment: 1, trial: 0 },
-    { label: '투표만', indictment: 0, trial: 2 },
-    { label: '기소+투표', indictment: 1, trial: 2 },
-];
-const devStateIndex = ref(3); // 기본: 기소+투표
-const devStateLabel = computed(() => STATE_PRESETS[devStateIndex.value].label);
-
-function cycleDevState() {
-    devStateIndex.value = (devStateIndex.value + 1) % STATE_PRESETS.length;
-    const preset = STATE_PRESETS[devStateIndex.value];
-    indictmentSummary.value = { ...MOCK_INDICTMENT_SUMMARY, count: preset.indictment };
-    trialSummary.value = { ...MOCK_TRIAL_SUMMARY, count: preset.trial };
-}
-
-/* ── 이벤트 핸들러 ─────────────────────── */
 onMounted(() => {
     if (!hasSeenGroupTutorial()) {
         showTutorial.value = true;
@@ -95,17 +84,40 @@ function onTutorialComplete() {
     markGroupTutorialSeen();
 }
 
-function reopenTutorial() {
-    showTutorial.value = true;
+/* ── DEV 상태 전환 ─────────────────────── */
+const isDev = import.meta.env.DEV;
+const DEV_STATES = ['할 일 있음', '전부 완료', '초기화'];
+const devStateIndex = ref(0);
+const devStateLabel = computed(() => DEV_STATES[devStateIndex.value]);
+
+function cycleDevState() {
+    devStateIndex.value = (devStateIndex.value + 1) % DEV_STATES.length;
+    if (devStateIndex.value === 1) {
+        doneIds.value = MOCK_TODO_ITEMS.map(i => i.id);
+    } else if (devStateIndex.value === 2) {
+        doneIds.value = [];
+        devStateIndex.value = 0;
+    }
 }
 
-function onEventAction(type) {
-    if (activeChallenges.value.length) {
-        router.push({
-            name: 'groupChallengeDetail',
-            params: { id: activeChallenges.value[0].id },
+/* ── 이벤트 핸들러 ─────────────────────── */
+function onOpenTodo(item) {
+    if (item.type === 'accuse') {
+        /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
+         * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
+         * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
+        if (showSheet.value) {
+            todoSheetRef.value?.releaseHistory?.();
+            showSheet.value = false;
+        }
+        router.replace({
+            name: 'defenseViolation',
+            params: { id: item.challengeId, indictmentId: item.indictmentId },
         });
+        return;
     }
+    /* vote — 투표 플로우 미구현, 토스트로 안내 */
+    flash('투표 화면으로 이동했어요');
 }
 
 function goToAllChallenges() {
@@ -127,66 +139,48 @@ function livesColor(challenge) {
 
 <template>
     <div class="gc-page">
-        <!-- ===== Ink 헤더 ===== -->
+        <!-- ===== 다크 헤더 (법원 현판) ===== -->
         <header class="gc-header">
-            <div class="gc-header-content">
-                <div class="gc-header-text">
-                    <div class="gc-title-row">
-                        <h1 class="gc-title">그룹 챌린지</h1>
-                        <span :class="['gc-badge', headerBadge.cls]">{{ headerBadge.text }}</span>
+            <div class="gc-header__bg" />
+            <div class="gc-header__glow" />
+
+            <div class="gc-header__inner">
+                <!-- 상단 바: 알림 아이콘 -->
+                <div class="gc-header__topbar">
+                    <TheNotificationBell />
+                </div>
+
+                <!-- 현판 이미지 + 날짜 칩 -->
+                <div class="gc-header__court">
+                    <img :src="courtDistrictImg" alt="탕탕 지방법원" class="gc-header__court-img" />
+                    <div class="gc-header__date">{{ todayLabel }}</div>
+                </div>
+
+                <!-- 판사 탕이 + 말풍선 -->
+                <div class="gc-header__judge">
+                    <div class="gc-header__judge-wrap">
+                        <img :src="judgeImg" alt="판사 탕이" class="gc-header__judge-img" />
+                        <div class="gc-header__nameplate">판사 탕이</div>
                     </div>
-                    <p class="gc-subtitle">{{ headerSubtitle }}</p>
+                    <div class="gc-header__speech">
+                        <div class="gc-header__speech-arrow" />
+                        <div class="gc-header__speech-text">{{ judgeQuote }}</div>
+                    </div>
                 </div>
-                <div class="gc-header-mascot">
-                    <img :src="headerMascot" alt="탕이" class="gc-header-mascot__img" />
-                </div>
-            </div>
-            <div class="gc-header-actions">
-                <button
-                    v-if="isDev"
-                    type="button"
-                    class="gc-dev-btn"
-                    @click="cycleDevState"
-                >
-                    {{ devStateLabel }}
-                </button>
-                <button
-                    type="button"
-                    class="gc-help-btn"
-                    aria-label="튜토리얼 다시보기"
-                    @click="reopenTutorial"
-                >
-                    ?
-                </button>
             </div>
         </header>
 
-        <!-- ===== 본문 (이벤트 카드 영역) ===== -->
+        <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- 이벤트 카드 (기소·투표) 또는 평온 카드 -->
-            <div class="gc-events">
-                <template v-if="hasAnyEvent">
-                    <GroupTrialEventCard
-                        v-if="hasIndictments"
-                        type="indictment"
-                        :data="indictmentSummary"
-                        @action="onEventAction"
-                    />
-                    <GroupTrialEventCard
-                        v-if="hasTrials"
-                        type="trial"
-                        :data="trialSummary"
-                        @action="onEventAction"
-                    />
-                </template>
-                <GroupPeacefulCard v-else />
-            </div>
-
-            <!-- 마스코트 씬 (한쪽 타입만 있거나 평온일 때만) -->
-            <GroupMascotScene
-                v-if="!hasBothTypes"
-                :scene="mascotScene"
+            <!-- TO-DO 인박스 또는 완료 카드 -->
+            <GroupTodoCard
+                v-if="hasTodo"
+                :items="todoItems"
+                :countdowns="countdowns"
+                @open="onOpenTodo"
+                @open-sheet="showSheet = true"
             />
+            <GroupTodoDoneCard v-else-if="allDone" />
 
             <!-- 진행 중인 챌린지 -->
             <div class="gc-section">
@@ -226,8 +220,24 @@ function livesColor(challenge) {
             </div>
         </main>
 
+        <!-- ===== 토스트 ===== -->
+        <Transition name="tt-toast">
+            <div v-if="toast" class="gc-toast">
+                <span class="gc-toast__text">{{ toast }}</span>
+            </div>
+        </Transition>
+
         <!-- ===== 개인/그룹 세그먼트 (팀 공용) ===== -->
         <ChallengeModeTabBar active-mode="group" />
+
+        <!-- ===== TO-DO 바텀시트 ===== -->
+        <GroupTodoSheet
+            ref="todoSheetRef"
+            v-model="showSheet"
+            :items="todoItems"
+            :countdowns="countdowns"
+            @open="onOpenTodo"
+        />
 
         <!-- ===== 참여코드 입장 바텀시트 ===== -->
         <GroupJoinCodeSheet v-model="showJoinSheet" />
@@ -237,6 +247,17 @@ function livesColor(challenge) {
             v-model="showTutorial"
             @complete="onTutorialComplete"
         />
+
+        <!-- DEV 상태 전환 플로팅 버튼 -->
+        <button
+            v-if="isDev"
+            type="button"
+            class="gc-dev-fab"
+            @click="cycleDevState"
+        >
+            <ArrowPathIcon class="gc-dev-fab__icon" />
+            {{ devStateLabel }}
+        </button>
     </div>
 </template>
 
@@ -247,149 +268,192 @@ function livesColor(challenge) {
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
 }
 
-/* ── Ink 헤더 ─────────────────────────── */
-.gc-header {
-    background: var(--tt-surface-inverse);
-    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
-    padding: var(--tt-space-12) var(--tt-screen-padding) 44px;
-    position: relative;
-}
-
-.gc-header-content {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-}
-
-.gc-header-text {
-    max-width: 238px;
-    padding-top: var(--tt-space-2);
-}
-
-.gc-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--tt-space-2);
-}
-
-.gc-title {
-    font-size: 24px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text-inverse);
-    letter-spacing: -0.01em;
-}
-
-/* 상태 뱃지 */
-.gc-badge {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    padding: 3px 9px;
-    border-radius: var(--tt-radius-full);
-}
-.gc-badge--green {
-    background: rgba(46, 158, 107, 0.22);
-    color: #7FD9AE;
-}
-.gc-badge--gold {
-    background: rgba(245, 185, 33, 0.16);
-    color: var(--tt-gold);
-}
-.gc-badge--red {
-    background: rgba(224, 102, 75, 0.22);
-    color: #FF9E86;
-}
-
-.gc-subtitle {
-    font-size: 12.5px;
-    color: var(--tt-tab-inactive);
-    line-height: 1.5;
-    margin-top: 6px;
-}
-
-/* 헤더 마스코트 */
-.gc-header-mascot {
-    width: 88px;
-    height: 88px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    flex: none;
-}
-
-.gc-header-mascot__img {
-    width: 64px;
-    height: 64px;
-    object-fit: contain;
-    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.28));
-}
-
-/* 헤더 우측 버튼 그룹 */
-.gc-header-actions {
-    position: absolute;
-    top: var(--tt-space-12);
-    right: var(--tt-screen-padding);
-    display: flex;
-    align-items: center;
-    gap: var(--tt-space-2);
-}
-
-/* DEV 상태 전환 버튼 */
-.gc-dev-btn {
-    height: 28px;
-    padding: 0 10px;
+.gc-dev-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(var(--tt-tabbar-height) + 16px);
+    height: 32px;
+    padding: 0 12px;
     border-radius: var(--tt-radius-full);
     border: 1.5px solid rgba(245, 185, 33, 0.5);
-    background: rgba(245, 185, 33, 0.15);
+    background: rgba(35, 40, 66, 0.9);
     color: var(--tt-gold);
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     font-family: inherit;
     cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s ease;
-}
-.gc-dev-btn:active {
-    background: rgba(245, 185, 33, 0.3);
+    z-index: var(--tt-z-tabbar);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-/* 도움말 버튼 */
-.gc-help-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 1.5px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.08);
+.gc-dev-fab__icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* ── 다크 헤더 ─────────────────────────── */
+.gc-header {
+    background: var(--tt-surface-inverse);
+    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
+    padding-bottom: var(--tt-space-5);
+    position: relative;
+    overflow: hidden;
+}
+.gc-header__inner {
+    position: relative;
+    z-index: 2;
+    padding: 0 var(--tt-screen-padding);
+}
+
+.gc-header__bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, #1E2338 0%, #232842 60%, #283050 100%);
+}
+.gc-header__glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(200px 130px at 50% 60px, rgba(245, 185, 33, 0.1), transparent 70%);
+}
+
+/* 상단 바 */
+.gc-header__topbar {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
+}
+
+/* TheNotificationBell 다크 헤더 오버라이드 */
+.gc-header__topbar :deep(.tt-bell) {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--tt-radius-sm);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--tt-text-inverse);
-    font-size: var(--tt-fs-label);
-    font-weight: var(--tt-fw-black);
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease;
 }
-.gc-help-btn:active {
-    background: rgba(255, 255, 255, 0.2);
+.gc-header__topbar :deep(.tt-bell svg) {
+    width: 21px;
+    height: 21px;
+}
+.gc-header__topbar :deep(.tt-bell__badge) {
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    font-size: 10px;
+    line-height: 16px;
 }
 
+/* 현판 + 날짜 */
+.gc-header__court {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.gc-header__court-img {
+    height: 120px;
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+.gc-header__date {
+    margin-top: var(--tt-space-2);
+    background: rgba(245, 185, 33, 0.15);
+    border: 1px solid rgba(245, 185, 33, 0.3);
+    border-radius: var(--tt-radius-full);
+    padding: 3px var(--tt-space-3);
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-accent-bright);
+    font-family: var(--tt-font-mono);
+    letter-spacing: 0.06em;
+}
+
+/* 판사 탕이 + 말풍선 */
+.gc-header__judge {
+    margin-top: var(--tt-space-3);
+    display: flex;
+    align-items: center;
+    gap: 3%;
+    padding: 0 var(--tt-space-3);
+}
+.gc-header__judge-wrap {
+    width: 23%;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.gc-header__judge-img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    animation: gc-float 3.4s ease-in-out infinite;
+}
+.gc-header__nameplate {
+    margin-top: var(--tt-space-1);
+    background: var(--tt-kraft);
+    border: 1.5px solid var(--tt-wood);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-wood);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    box-shadow: 0 2px 6px rgba(156, 123, 84, 0.15);
+}
+@keyframes gc-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+.gc-header__speech {
+    flex: 1;
+    min-width: 0;
+    background: var(--tt-white);
+    border-radius: var(--tt-space-4);
+    padding: 13px 14px;
+    box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
+    position: relative;
+}
+.gc-header__speech-arrow {
+    position: absolute;
+    left: -10px;
+    top: calc(50% - 7px);
+    width: 0;
+    height: 0;
+    border-bottom: 14px solid var(--tt-white);
+    border-left: 11px solid transparent;
+}
+.gc-header__speech-text {
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
+    line-height: 1.45;
+    word-break: keep-all;
+    white-space: pre-line;
+}
 /* ── 본문 ──────────────────────────────── */
 .gc-body {
-    padding: 0 var(--tt-screen-padding);
-    margin-top: -30px;
+    padding: 10px 22px 0;
     position: relative;
     z-index: 3;
 }
 
-/* ── 이벤트 카드 목록 ──────────────────── */
-.gc-events {
-    display: flex;
-    flex-direction: column;
-    gap: var(--tt-space-3);
-}
-
 /* ── 진행 중인 챌린지 섹션 ─────────────── */
 .gc-section {
-    margin-top: var(--tt-space-4);
+    margin-top: 10px;
 }
 
 .gc-section-top {
@@ -417,11 +481,11 @@ function livesColor(challenge) {
 
 /* ── 챌린지 카드 ──────────────────────── */
 .gc-challenge-card {
-    margin-top: var(--tt-space-3);
+    margin-top: 11px;
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-2);
+    border-radius: 18px;
+    box-shadow: 0 8px 22px rgba(35, 40, 66, 0.05);
     padding: 14px 16px;
 }
 
@@ -432,7 +496,7 @@ function livesColor(challenge) {
 }
 
 .gc-challenge-card__name {
-    font-size: var(--tt-fs-button);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
@@ -461,11 +525,53 @@ function livesColor(challenge) {
 .gc-progress-fill {
     height: 100%;
     border-radius: var(--tt-radius-full);
-    background: var(--tt-gold);
+    background: var(--tt-accent);
 }
 
 .gc-challenge-card__lives {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
+}
+
+/* ── 토스트 ────────────────────────────── */
+.gc-toast {
+    position: fixed;
+    left: 22px;
+    right: 22px;
+    bottom: calc(var(--tt-tabbar-height) + 80px);
+    z-index: var(--tt-z-toast, 50);
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+.gc-toast__text {
+    background: rgba(35, 40, 66, 0.94);
+    color: var(--tt-text-inverse);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    padding: 10px 16px;
+    border-radius: var(--tt-radius-full);
+    box-shadow: 0 12px 26px rgba(21, 24, 40, 0.32);
+}
+
+.tt-toast-enter-active {
+    animation: tt-toastin 0.22s ease-out both;
+}
+.tt-toast-leave-active {
+    animation: tt-toastin 0.18s ease-in reverse both;
+}
+
+@keyframes tt-toastin {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: none; opacity: 1; }
+}
+
+@media (max-width: 390px) {
+    .gc-header__court-img {
+        height: 100px;
+    }
+    .gc-header__speech-text {
+        font-size: var(--tt-fs-label);
+    }
 }
 </style>

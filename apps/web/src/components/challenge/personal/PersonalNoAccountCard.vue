@@ -61,14 +61,14 @@ const steps = [
 }
 
 .no-account__quote {
-    font-size: 17px;
+    font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     margin-top: var(--tt-space-3);
     letter-spacing: -0.01em;
 }
 
 .no-account__desc {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-semibold);
     margin-top: 7px;
@@ -92,7 +92,7 @@ const steps = [
 
 .no-account__safe {
     margin-top: 11px;
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     color: var(--tt-text-hint);
     font-weight: var(--tt-fw-semibold);
 }
@@ -139,7 +139,7 @@ const steps = [
 }
 
 .no-account__step-text {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
