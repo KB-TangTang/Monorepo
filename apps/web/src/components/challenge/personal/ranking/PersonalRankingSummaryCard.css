@@ -1,0 +1,75 @@
+.ranking-summary-card {
+    position: relative;
+    margin-top: var(--tt-space-4);
+    padding: var(--tt-space-5);
+    overflow: hidden;
+    color: var(--tt-text-inverse);
+    background: var(--tt-surface-inverse);
+    border-radius: var(--tt-radius-lg);
+}
+
+.ranking-summary-card::before {
+    position: absolute;
+    top: calc(var(--tt-space-8) * -1);
+    right: calc(var(--tt-space-6) * -1);
+    width: 120px;
+    height: 120px;
+    content: '';
+    background: var(--tt-surface-raised);
+    border-radius: var(--tt-radius-full);
+}
+
+.ranking-summary-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.ranking-summary-card small {
+    color: var(--tt-border-strong);
+}
+
+.ranking-summary-card > strong {
+    display: block;
+    margin-top: var(--tt-space-2);
+    font-size: var(--tt-fs-display);
+    line-height: var(--tt-lh-tight);
+}
+
+.ranking-summary-card p {
+    margin: var(--tt-space-2) 0 var(--tt-space-4);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-accent);
+}
+
+.ranking-summary-card__progress {
+    height: 8px;
+    overflow: hidden;
+    background: var(--tt-surface-strong-muted);
+    border-radius: var(--tt-radius-full);
+}
+
+.ranking-summary-card__progress span {
+    display: block;
+    height: 100%;
+    background: var(--tt-accent);
+    border-radius: inherit;
+}
+
+.ranking-summary-card__progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--tt-space-1);
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-border-strong);
+}
+
+@media (max-width: 390px) {
+    .ranking-summary-card {
+        padding: var(--tt-space-4);
+    }
+
+    .ranking-summary-card > strong {
+        font-size: clamp(var(--tt-fs-title), 10vw, var(--tt-fs-display));
+    }
+}
