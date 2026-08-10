@@ -34,8 +34,13 @@
     --tt-neutral-fill: #EFF1F5;   /* 입력 필드 배경 / 비활성 */
     --tt-neutral-border: #E5E8EF; /* 구분선 / 카드 테두리 */
     --tt-neutral-track: #E9ECF2;  /* 진행바 트랙 */
+    --tt-neutral-divider: #D4D9E2; /* 점선 구분선 / 비활성 라디오 / 진행바 마커 */
     --tt-neutral-desk: #D9D7D2;   /* 디자인 문서 캔버스 전용 */
     --tt-white: #FFFFFF;
+
+    /* ── Ink 그라데이션 (헤더 전용) ───────────────────── */
+    --tt-ink-deep: #1E2338;       /* 헤더 그라데이션 시작 (어두운) */
+    --tt-ink-glow: #283050;       /* 헤더 그라데이션 끝 (밝은) */
 
     /* ── 탭바 전용 ────────────────────────────────────── */
     --tt-tab-active: #F5B921;     /* 활성 탭 아이콘 + 라벨 */
@@ -49,6 +54,9 @@
 
     /* Gold: 주의 / 진행 중 (= 브랜드 Gold 공유) */
     /* --tt-gold, --tt-gold-soft, --tt-gold-deep 은 위에서 정의 */
+    --tt-gold-bright: #F7C948;    /* 다크 배경 위 골드 텍스트 */
+    --tt-gold-warn: #8A6A24;      /* 골드소프트 배경 위 경고 텍스트 */
+    --tt-gold-soft-border: #F0E0B8; /* 골드소프트 카드 테두리 */
 
     /* Red: 초과 / 탈락 / 유죄 */
     --tt-red: #E0664B;
@@ -59,6 +67,7 @@
     --tt-blue: #3E63D6;
     --tt-blue-soft: #EAF0FF;
     --tt-blue-deep: #3E5299;
+    --tt-blue-soft-border: #C9D6F5; /* 블루소프트 카드/뱃지 테두리 */
 
     /* ── 종이 / 목재 (절제 사용) ────────────────────────── */
     /* 판사봉 / 인장 / 종이 질감에만 쓴다. 일반 UI 배경/텍스트에 쓰지 말 것. */
@@ -86,6 +95,10 @@
     --tt-accent: var(--tt-gold);
     --tt-accent-deep: var(--tt-gold-deep);
     --tt-accent-subtle: var(--tt-gold-soft);
+    --tt-accent-bright: var(--tt-gold-bright);   /* 다크 배경 위 골드 텍스트 */
+    --tt-accent-warn: var(--tt-gold-warn);       /* 골드소프트 배경 위 경고 텍스트 */
+    --tt-accent-subtle-border: var(--tt-gold-soft-border);
+    --tt-info-subtle-border: var(--tt-blue-soft-border);
 
     --tt-text: var(--tt-neutral-text);
     --tt-text-body: var(--tt-neutral-body);
@@ -102,13 +115,14 @@
 
     --tt-border: var(--tt-neutral-border);
     --tt-border-track: var(--tt-neutral-track); /* 진행바 트랙 */
+    --tt-border-divider: var(--tt-neutral-divider); /* 점선 구분선 */
 
     /* 고정지출 화면 — 하위 호환 (필요 시 제거 예정) */
     --tt-surface-strong: var(--tt-ink);
     --tt-surface-strong-deep: var(--tt-ink-raised);
 
     /* 모달/바텀시트 뒤에 까는 딤 */
-    --tt-overlay-dim: rgba(35, 40, 66, 0.48);
+    --tt-overlay-dim: rgba(35, 40, 66, 0.58);
 
     /* 카드 노치(영수증 절취선/소환장 펀치홀) */
     --tt-notch-bg: var(--tt-bg-subtle);
