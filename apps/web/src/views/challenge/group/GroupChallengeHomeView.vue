@@ -48,6 +48,7 @@ const { countdowns } = useCountdown(todoItems);
 
 /* ── 바텀시트 ──────────────────────────── */
 const showSheet = ref(false);
+const todoSheetRef = ref(null);
 
 /* ── 토스트 ────────────────────────────── */
 const toast = ref(null);
@@ -101,13 +102,22 @@ function cycleDevState() {
 
 /* ── 이벤트 핸들러 ─────────────────────── */
 function onOpenTodo(item) {
-    const msg = item.type === 'accuse' ? '변론 화면으로 이동했어요' : '투표 화면으로 이동했어요';
-    flash(msg);
-    doneIds.value = [...doneIds.value, item.id];
-    /* 남은 건이 없으면 시트 자동 닫기 */
-    if (todoItems.value.length === 0) {
-        showSheet.value = false;
+    if (item.type === 'accuse') {
+        /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
+         * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
+         * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
+        if (showSheet.value) {
+            todoSheetRef.value?.releaseHistory?.();
+            showSheet.value = false;
+        }
+        router.replace({
+            name: 'defenseViolation',
+            params: { id: item.challengeId, indictmentId: item.indictmentId },
+        });
+        return;
     }
+    /* vote — 투표 플로우 미구현, 토스트로 안내 */
+    flash('투표 화면으로 이동했어요');
 }
 
 function goToAllChallenges() {
@@ -222,6 +232,7 @@ function livesColor(challenge) {
 
         <!-- ===== TO-DO 바텀시트 ===== -->
         <GroupTodoSheet
+            ref="todoSheetRef"
             v-model="showSheet"
             :items="todoItems"
             :countdowns="countdowns"

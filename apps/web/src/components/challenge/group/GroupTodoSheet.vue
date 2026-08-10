@@ -13,6 +13,11 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'open']);
 
+const sheetRef = ref(null);
+defineExpose({
+    releaseHistory: () => sheetRef.value?.releaseHistory?.(),
+});
+
 const filter = ref('all');
 
 const FILTERS = [
@@ -49,6 +54,7 @@ function setFilter(key) {
 
 <template>
     <BaseBottomSheet
+        ref="sheetRef"
         :model-value="modelValue"
         height="60vh"
         @update:model-value="emit('update:modelValue', $event)"
