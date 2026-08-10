@@ -1,35 +1,46 @@
 import { defineStore } from 'pinia';
 import {
-    MOCK_ABSOLUTE_MISSION,
+    MOCK_DATA_REQUIREMENTS,
+    MOCK_PROSECUTORS,
+    MOCK_TODAY_BRIEFING,
+    MOCK_VERDICT_SUCCESS,
+    MOCK_WEEKLY_WATCHLIST,
+    MOCK_WATCHLIST_META,
+    MOCK_MONTHLY_SCORE,
+    MOCK_COMMON_MISSION,
+} from '@/fixtures/personalChallenge';
+import {
     MOCK_PERSONAL_MISSION_PROFILE,
-    MOCK_RELATIVE_MISSION,
-    PERSONAL_MISSION_DIFFICULTIES,
 } from '@/fixtures/personalMission';
 import {
     hasEnoughPersonalMissionData,
-    selectPersonalMissionType,
-    shouldShowPersonalMissionUnlock,
 } from '@/services/personalMissionFlow';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
 /*
- * 여러 라우트에서 공통으로 사용하는 상태
+ * 개인 미션 챌린지 v4 — 주간 로테이션 상태
  *
- * 개인 미션 홈과 난이도 설정 화면이 같은 동의 여부와 난이도를
- * 사용하기 때문에 Pinia에 저장
+ * 여러 라우트에서 공통으로 사용하는 상태를 Pinia에 저장한다.
+ * 기존 v3 에서 난이도·튜토리얼 플로우가 제거되고,
+ * 담당 탕이(검사) 전역 설정 + 판정 미확인 상태가 추가됐다.
  */
 export const usePersonalMissionChallengeStore = defineStore('personalMissionChallenge', {
     state: () => ({
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
-        hasSeenTutorial: false,
-        wasDataInsufficient: false,
-        hasSeenDataUnlock: false,
-        hasCompletedSetup: false,
-        selectedDifficultyId: 'NORMAL',
-        missionType: 'ABSOLUTE',
+        selectedProsecutorId: 'STRICT',
+        pendingVerdict: null,
+        courtMode: 'supreme',
         isHydrated: false,
+
+        /* mock 데이터 (API 교체 대상) */
+        briefing: MOCK_TODAY_BRIEFING,
+        watchlist: MOCK_WEEKLY_WATCHLIST,
+        watchlistMeta: MOCK_WATCHLIST_META,
+        monthlyScore: MOCK_MONTHLY_SCORE,
+        dataRequirements: MOCK_DATA_REQUIREMENTS,
+        commonMission: MOCK_COMMON_MISSION,
     }),
 
     getters: {
@@ -37,47 +48,45 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             return hasEnoughPersonalMissionData(state.profile);
         },
 
-        shouldShowDataUnlock() {
-            return shouldShowPersonalMissionUnlock({
-                hasAgreed: this.hasAgreed,
-                hasEnoughData: this.hasEnoughData,
-                wasDataInsufficient: this.wasDataInsufficient,
-                hasSeenDataUnlock: this.hasSeenDataUnlock,
-            });
+        isAccountLinked(state) {
+            return state.dataRequirements.accountLinked;
         },
 
-        selectedDifficulty(state) {
-            return PERSONAL_MISSION_DIFFICULTIES.find(
-                (difficulty) => difficulty.id === state.selectedDifficultyId,
-            );
+        selectedProsecutor(state) {
+            return MOCK_PROSECUTORS.find((p) => p.id === state.selectedProsecutorId);
         },
 
-        currentMission(state) {
-            return state.missionType === 'RELATIVE' ? MOCK_RELATIVE_MISSION : MOCK_ABSOLUTE_MISSION;
+        hasPendingVerdict(state) {
+            return state.pendingVerdict !== null;
+        },
+
+        /*
+         * 화면 상태 분기 (우선순위 순서):
+         * 1. 미동의 → consent
+         * 2. 계좌 미연동 → no-account
+         * 3. 데이터 부족 → insufficient
+         * 4. 판정 미확인 → verdict
+         * 5. 정상 → active
+         */
+        screenState() {
+            if (!this.hasAgreed) return 'consent';
+            if (!this.isAccountLinked) return 'no-account';
+            if (!this.hasEnoughData) return 'insufficient';
+            if (this.hasPendingVerdict) return 'verdict';
+            return 'active';
         },
     },
 
     actions: {
-        /*
-         * localStorage에 저장했던 임시 상태를 불러옴
-         * 실제 서버 연동 후에는 사용자 설정 조회 API로 교체할 부분임
-         */
         hydrate() {
-            if (this.isHydrated) {
-                return;
-            }
+            if (this.isHydrated) return;
 
-            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
 
-            this.hasAgreed = savedState.hasAgreed ?? false;
-            this.hasSeenTutorial = savedState.hasSeenTutorial ?? false;
-            this.hasCompletedSetup = savedState.hasCompletedSetup ?? false;
-            this.wasDataInsufficient =
-                savedState.wasDataInsufficient ??
-                (this.hasAgreed && !this.hasSeenTutorial && !this.hasCompletedSetup);
-            this.hasSeenDataUnlock = savedState.hasSeenDataUnlock ?? false;
-            this.selectedDifficultyId = savedState.selectedDifficultyId ?? 'NORMAL';
-            this.missionType = savedState.missionType ?? selectPersonalMissionType(this.profile);
+            this.hasAgreed = saved.hasAgreed ?? false;
+            this.selectedProsecutorId = saved.selectedProsecutorId ?? 'STRICT';
+            this.pendingVerdict = saved.pendingVerdict ?? null;
+            this.courtMode = saved.courtMode ?? 'supreme';
             this.isHydrated = true;
         },
 
@@ -86,49 +95,25 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
                 STORAGE_KEY,
                 JSON.stringify({
                     hasAgreed: this.hasAgreed,
-                    hasSeenTutorial: this.hasSeenTutorial,
-                    wasDataInsufficient: this.wasDataInsufficient,
-                    hasSeenDataUnlock: this.hasSeenDataUnlock,
-                    hasCompletedSetup: this.hasCompletedSetup,
-                    selectedDifficultyId: this.selectedDifficultyId,
-                    missionType: this.missionType,
+                    selectedProsecutorId: this.selectedProsecutorId,
+                    pendingVerdict: this.pendingVerdict,
+                    courtMode: this.courtMode,
                 }),
             );
         },
 
         agree() {
             this.hasAgreed = true;
-            this.wasDataInsufficient = !this.hasEnoughData;
-            this.missionType = selectPersonalMissionType(this.profile);
             this.save();
         },
 
-        acknowledgeDataUnlock() {
-            this.hasSeenDataUnlock = true;
-            this.hasSeenTutorial = true;
-            this.missionType = 'RELATIVE';
+        selectProsecutor(prosecutorId) {
+            this.selectedProsecutorId = prosecutorId;
             this.save();
         },
 
-        selectDifficulty(difficultyId) {
-            this.selectedDifficultyId = difficultyId;
-        },
-
-        completeTutorial() {
-            this.hasSeenTutorial = true;
-            this.save();
-        },
-
-        /** 마이페이지 > 튜토리얼 다시 보기. 플래그만 되돌리고 재생은 홈 화면이 한다 */
-        replayTutorial() {
-            this.hasSeenTutorial = false;
-            this.wasDataInsufficient = false;
-            this.hasSeenDataUnlock = false;
-            this.save();
-        },
-
-        completeDifficultySetup() {
-            this.hasCompletedSetup = true;
+        acknowledgeVerdict() {
+            this.pendingVerdict = null;
             this.save();
         },
 
@@ -136,11 +121,16 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             localStorage.removeItem(STORAGE_KEY);
 
             this.hasAgreed = false;
-            this.hasSeenTutorial = false;
-            this.hasCompletedSetup = false;
-            this.selectedDifficultyId = 'NORMAL';
-            this.missionType = 'ABSOLUTE';
+            this.selectedProsecutorId = 'STRICT';
+            this.pendingVerdict = null;
+            this.courtMode = 'supreme';
             this.isHydrated = true;
+        },
+
+        /* 데모용: 판정 테스트 */
+        setDemoVerdict(verdict) {
+            this.pendingVerdict = verdict;
+            this.save();
         },
     },
 });

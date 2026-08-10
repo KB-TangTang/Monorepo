@@ -5,11 +5,6 @@
  * 나중에 배정 규칙이 변경돼도 이 파일 위주로 수정 가능
  */
 
-export const PERSONAL_MISSION_TYPE = {
-    ABSOLUTE: 'ABSOLUTE',
-    RELATIVE: 'RELATIVE',
-};
-
 /*
  * 연동 계좌에서 최근 28일 소비 데이터와 전체 소비 50건이 확보됐는지 확인
  *
@@ -23,29 +18,6 @@ export function hasEnoughPersonalMissionData(profile) {
     );
 }
 
-export function shouldShowPersonalMissionUnlock({
-    hasAgreed,
-    hasEnoughData,
-    wasDataInsufficient,
-    hasSeenDataUnlock,
-}) {
-    return hasAgreed && hasEnoughData && wasDataInsufficient && !hasSeenDataUnlock;
-}
-
-/*
- * 데이터가 부족하면 무조건 절대형 미션을 반환
- * 데이터가 충분하면 절대형과 상대형 중 하나를 임시로 선택
- *
- * 실제 서비스에서는 백엔드가 하루의 미션을 확정한 뒤 내려줘야 함
- */
-export function selectPersonalMissionType(profile, randomValue = Math.random()) {
-    if (!hasEnoughPersonalMissionData(profile)) {
-        return PERSONAL_MISSION_TYPE.ABSOLUTE;
-    }
-
-    return randomValue < 0.5 ? PERSONAL_MISSION_TYPE.ABSOLUTE : PERSONAL_MISSION_TYPE.RELATIVE;
-}
-
 export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     if (targetAmount <= 0) {
         return currentAmount === 0 ? 100 : 0;
@@ -56,4 +28,48 @@ export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
 
 export function formatWon(amount) {
     return `${Number(amount).toLocaleString('ko-KR')}원`;
+}
+
+/* ── v4 추가 함수 ──────────────────────────────────── */
+
+/**
+ * 오늘 날짜를 "2026. 07. 30 (목)" 형식으로 포맷
+ */
+export function formatCourtDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayName = dayNames[date.getDay()];
+
+    return `${year}. ${month}. ${day} (${dayName})`;
+}
+
+/**
+ * 데이터 수집 진행률 계산 (증거 부족 화면)
+ */
+export function calculateDataProgress(requirements) {
+    const dayProgress = Math.min(requirements.availableDays / requirements.requiredDays, 1);
+    const txProgress = Math.min(
+        requirements.transactionCount / requirements.requiredTransactionCount,
+        1,
+    );
+
+    return Math.round(((dayProgress + txProgress) / 2) * 100);
+}
+
+/**
+ * 요주의 대상 상태 라벨 반환
+ */
+export function getWatchlistStatusLabel(status, clearedDate) {
+    switch (status) {
+        case 'CLEARED':
+            return `${clearedDate} 인정`;
+        case 'TODAY':
+            return '오늘 수사 중';
+        case 'PENDING':
+            return '대기';
+        default:
+            return '';
+    }
 }

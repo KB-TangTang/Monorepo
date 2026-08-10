@@ -15,11 +15,7 @@ defineProps({
             :aria-current="activeMode === 'personal' ? 'page' : undefined"
             :to="{ name: 'personalMissionChallenge' }"
         >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="8" r="3" />
-                <path d="M6.5 19a5.5 5.5 0 0 1 11 0" />
-            </svg>
-            개인
+            대법원
         </RouterLink>
 
         <RouterLink
@@ -27,12 +23,7 @@ defineProps({
             :aria-current="activeMode === 'group' ? 'page' : undefined"
             :to="{ name: 'groupChallenge' }"
         >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="8" cy="9" r="2.5" />
-                <circle cx="16" cy="9" r="2.5" />
-                <path d="M3.5 19a4.5 4.5 0 0 1 9 0M11.5 19a4.5 4.5 0 0 1 9 0" />
-            </svg>
-            그룹
+            지방법원
         </RouterLink>
     </nav>
 </template>
