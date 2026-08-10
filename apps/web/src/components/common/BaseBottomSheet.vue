@@ -12,6 +12,8 @@ const props = defineProps({
     title: { type: String, default: '' },
     closeOnOverlay: { type: Boolean, default: true },
     closeOnEsc: { type: Boolean, default: true },
+    /* 패널 높이를 고정한다. null 이면 콘텐츠에 맞춰 늘어난다 (기본) */
+    height: { type: String, default: null },
     /* 드래그 핸들을 아래로 이만큼(px) 끌면 닫는다 */
     dragCloseThreshold: { type: Number, default: 80 },
 });
@@ -81,7 +83,7 @@ defineExpose({ releaseHistory });
                     ref="panel"
                     class="tt-sheet__panel"
                     :class="{ 'tt-sheet__panel--dragging': dragging }"
-                    :style="dragOffset ? { transform: `translateY(${dragOffset}px)` } : null"
+                    :style="[height ? { height } : null, dragOffset ? { transform: `translateY(${dragOffset}px)` } : null]"
                     role="dialog"
                     aria-modal="true"
                     :aria-label="title || undefined"
@@ -175,6 +177,8 @@ defineExpose({ releaseHistory });
 }
 
 .tt-sheet__body {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     font-size: var(--tt-fs-body);
     line-height: var(--tt-lh-normal);
