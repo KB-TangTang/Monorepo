@@ -129,6 +129,13 @@ function goToDefense(item) {
     });
 }
 
+function goToVote(item) {
+    router.push({
+        name: 'voteVerdict',
+        params: { id: ch.value.id, indictmentId: item.id },
+    });
+}
+
 const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 </script>
 
@@ -291,6 +298,7 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                     v-if="isActive && isDaily && ch.indictments?.length"
                     :indictments="ch.indictments"
                     @defend="goToDefense"
+                    @vote="goToVote"
                 />
 
                 <!-- 약속 아코디언 -->
