@@ -112,7 +112,7 @@ const mascotLine = computed(() => {
     animation: tt-tick 1.6s ease-in-out infinite;
 }
 .todo-card__label {
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     letter-spacing: 0.08em;
     color: var(--tt-red-deep);
@@ -120,7 +120,7 @@ const mascotLine = computed(() => {
 .todo-card__sort {
     background: var(--tt-bg-fill);
     color: var(--tt-text-hint);
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     padding: 4px 9px;
     border-radius: var(--tt-radius-full);
@@ -163,7 +163,7 @@ const mascotLine = computed(() => {
 .todo-card__stack-icon--vote .todo-card__stack-glyph   { color: var(--tt-gold-deep); }
 
 .todo-card__rest-label {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-primary);
 }
@@ -211,7 +211,7 @@ const mascotLine = computed(() => {
     object-fit: contain;
 }
 .todo-mascot__text {
-    font-size: 12.5px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     text-align: center;

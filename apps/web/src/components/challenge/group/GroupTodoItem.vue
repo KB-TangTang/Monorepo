@@ -93,7 +93,7 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
     min-width: 0;
 }
 .todo-item__title {
-    font-size: 13px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     letter-spacing: -0.01em;
     white-space: nowrap;
@@ -101,7 +101,7 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
     text-overflow: ellipsis;
 }
 .todo-item__sub {
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-muted);
     margin-top: 3px;
     white-space: nowrap;
@@ -125,7 +125,7 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 10px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     padding: 3px 8px;
     border-radius: var(--tt-radius-full);
@@ -144,7 +144,7 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
 }
 
 .todo-item__btn {
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     font-family: inherit;
     padding: 7px 14px;

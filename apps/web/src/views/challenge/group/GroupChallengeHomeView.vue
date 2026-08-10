@@ -13,7 +13,8 @@ import {
     MOCK_TODO_ITEMS,
     MOCK_ACTIVE_CHALLENGES,
 } from '@/fixtures/groupChallenge';
-import { BellIcon, ArrowPathIcon } from '@heroicons/vue/24/outline';
+import { ArrowPathIcon } from '@heroicons/vue/24/outline';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
 
@@ -62,14 +63,11 @@ function flash(msg) {
 const judgeQuote = computed(() => {
     const todoCount = todoItems.value.length;
     const activeCount = activeChallenges.value.length;
-    if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요, 서두르세요!`;
-    if (allDone.value) return '모든 할 일을 처리했군요, 훌륭해요!';
-    if (activeCount > 0) return `진행 중인 챌린지가 ${activeCount}건 있어요`;
-    return '새로운 챌린지에 참여해보세요!';
+    if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요,\n서두르세요!`;
+    if (allDone.value) return '모든 할 일을 처리했군요,\n훌륭해요!';
+    if (activeCount > 0) return `진행 중인 챌린지가\n${activeCount}건 있어요`;
+    return '새로운 챌린지에\n참여해보세요!';
 });
-
-/* ── 알림 빨간 점 ─────────────────────── */
-const hasNotificationDot = computed(() => hasTodo.value);
 
 /* ── 튜토리얼 ─────────────────────────── */
 const showTutorial = ref(false);
@@ -139,10 +137,7 @@ function livesColor(challenge) {
             <div class="gc-header__inner">
                 <!-- 상단 바: 알림 아이콘 -->
                 <div class="gc-header__topbar">
-                    <div class="gc-header__bell">
-                        <BellIcon class="gc-header__bell-icon" />
-                        <span v-if="hasNotificationDot" class="gc-header__bell-dot" />
-                    </div>
+                    <TheNotificationBell />
                 </div>
 
                 <!-- 현판 이미지 + 날짜 칩 -->
@@ -153,11 +148,13 @@ function livesColor(challenge) {
 
                 <!-- 판사 탕이 + 말풍선 -->
                 <div class="gc-header__judge">
-                    <img :src="judgeImg" alt="담당 판사 탕이" class="gc-header__judge-img" />
+                    <div class="gc-header__judge-wrap">
+                        <img :src="judgeImg" alt="판사 탕이" class="gc-header__judge-img" />
+                        <div class="gc-header__nameplate">판사 탕이</div>
+                    </div>
                     <div class="gc-header__speech">
                         <div class="gc-header__speech-arrow" />
                         <div class="gc-header__speech-text">{{ judgeQuote }}</div>
-                        <div class="gc-header__speech-sub">담당 판사 · 탕이</div>
                     </div>
                 </div>
             </div>
@@ -270,7 +267,7 @@ function livesColor(challenge) {
     border: 1.5px solid rgba(245, 185, 33, 0.5);
     background: rgba(35, 40, 66, 0.9);
     color: var(--tt-gold);
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     font-family: inherit;
     cursor: pointer;
@@ -319,35 +316,31 @@ function livesColor(challenge) {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding-top: env(safe-area-inset-top);
+    padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
 }
 
-/* 알림 아이콘 */
-.gc-header__bell {
+/* TheNotificationBell 다크 헤더 오버라이드 */
+.gc-header__topbar :deep(.tt-bell) {
     width: 36px;
     height: 36px;
+    padding: 0;
     border-radius: var(--tt-radius-sm);
     background: rgba(255, 255, 255, 0.1);
+    color: var(--tt-text-inverse);
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    cursor: pointer;
 }
-.gc-header__bell-icon {
+.gc-header__topbar :deep(.tt-bell svg) {
     width: 21px;
     height: 21px;
-    color: var(--tt-text-inverse);
 }
-.gc-header__bell-dot {
-    position: absolute;
-    top: 7px;
-    right: 8px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--tt-red);
-    border: 1.5px solid var(--tt-surface-inverse);
+.gc-header__topbar :deep(.tt-bell__badge) {
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    font-size: 10px;
+    line-height: 16px;
 }
 
 /* 현판 + 날짜 */
@@ -368,7 +361,7 @@ function livesColor(challenge) {
     border: 1px solid rgba(245, 185, 33, 0.3);
     border-radius: var(--tt-radius-full);
     padding: 3px var(--tt-space-3);
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     color: var(--tt-accent-bright);
     font-family: var(--tt-font-mono);
@@ -381,13 +374,33 @@ function livesColor(challenge) {
     display: flex;
     align-items: center;
     gap: 3%;
+    padding: 0 var(--tt-space-3);
+}
+.gc-header__judge-wrap {
+    width: 23%;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 .gc-header__judge-img {
-    width: 23%;
+    width: 100%;
     aspect-ratio: 1;
     object-fit: contain;
-    flex: none;
     animation: gc-float 3.4s ease-in-out infinite;
+}
+.gc-header__nameplate {
+    margin-top: var(--tt-space-1);
+    background: var(--tt-kraft);
+    border: 1.5px solid var(--tt-wood);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-wood);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    box-shadow: 0 2px 6px rgba(156, 123, 84, 0.15);
 }
 @keyframes gc-float {
     0%, 100% { transform: translateY(0); }
@@ -398,34 +411,28 @@ function livesColor(challenge) {
     min-width: 0;
     background: var(--tt-white);
     border-radius: var(--tt-space-4);
-    padding: 10px 13px;
+    padding: 13px 14px;
     box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
     position: relative;
 }
 .gc-header__speech-arrow {
     position: absolute;
     left: -10px;
-    bottom: 26px;
+    top: calc(50% - 7px);
     width: 0;
     height: 0;
     border-bottom: 14px solid var(--tt-white);
     border-left: 11px solid transparent;
 }
 .gc-header__speech-text {
-    font-size: 14px;
+    font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     letter-spacing: -0.01em;
     line-height: 1.45;
     word-break: keep-all;
+    white-space: pre-line;
 }
-.gc-header__speech-sub {
-    font-size: 10.5px;
-    color: var(--tt-text-hint);
-    font-weight: var(--tt-fw-bold);
-    margin-top: var(--tt-space-2);
-}
-
 /* ── 본문 ──────────────────────────────── */
 .gc-body {
     padding: 10px 22px 0;
@@ -445,13 +452,13 @@ function livesColor(challenge) {
 }
 
 .gc-section-title {
-    font-size: 15px;
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
 .gc-view-all {
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     background: none;
@@ -478,13 +485,13 @@ function livesColor(challenge) {
 }
 
 .gc-challenge-card__name {
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
 .gc-challenge-card__info {
-    font-size: 11px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-hint);
     font-weight: var(--tt-fw-bold);
 }
@@ -511,7 +518,7 @@ function livesColor(challenge) {
 }
 
 .gc-challenge-card__lives {
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
 }
 
@@ -529,7 +536,7 @@ function livesColor(challenge) {
 .gc-toast__text {
     background: rgba(35, 40, 66, 0.94);
     color: var(--tt-text-inverse);
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     padding: 10px 16px;
     border-radius: var(--tt-radius-full);
@@ -553,7 +560,7 @@ function livesColor(challenge) {
         height: 100px;
     }
     .gc-header__speech-text {
-        font-size: 13px;
+        font-size: var(--tt-fs-label);
     }
 }
 </style>

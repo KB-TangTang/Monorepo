@@ -1,5 +1,5 @@
 <script setup>
-import { BellIcon } from '@heroicons/vue/24/outline';
+import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 
 defineProps({
     courtImage: { type: String, required: true },
@@ -7,12 +7,9 @@ defineProps({
     prosecutorImage: { type: String, default: '' },
     prosecutorName: { type: String, default: '' },
     quote: { type: String, default: '' },
-    hasNotification: { type: Boolean, default: false },
     compact: { type: Boolean, default: false },
     compactTitle: { type: String, default: '' },
 });
-
-defineEmits(['notification-click']);
 </script>
 
 <template>
@@ -24,15 +21,7 @@ defineEmits(['notification-click']);
         <div v-if="!compact" class="court-header__inner">
             <div class="court-header__topbar">
                 <div style="flex:1" />
-                <button
-                    type="button"
-                    class="court-header__notification"
-                    aria-label="알림"
-                    @click="$emit('notification-click')"
-                >
-                    <BellIcon class="court-header__noti-icon" />
-                    <span v-if="hasNotification" class="court-header__noti-dot"></span>
-                </button>
+                <TheNotificationBell />
             </div>
 
             <div class="court-header__sign-area">
@@ -43,11 +32,13 @@ defineEmits(['notification-click']);
             </div>
 
             <div v-if="prosecutorImage && quote" class="court-header__prosecutor">
-                <img :src="prosecutorImage" :alt="prosecutorName" class="court-header__tangi-img" />
+                <div class="court-header__tangi-wrap">
+                    <img :src="prosecutorImage" :alt="prosecutorName" class="court-header__tangi-img" />
+                    <div class="court-header__nameplate">검사 {{ prosecutorName }}</div>
+                </div>
                 <div class="court-header__speech">
                     <div class="court-header__speech-arrow"></div>
                     <h2 class="court-header__speech-text">{{ quote }}</h2>
-                    <div class="court-header__speech-sub">담당 검사 · {{ prosecutorName }}</div>
                 </div>
             </div>
         </div>
@@ -62,15 +53,7 @@ defineEmits(['notification-click']);
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <h2 class="court-header__compact-title" v-html="compactTitle"></h2>
             </div>
-            <button
-                type="button"
-                class="court-header__notification"
-                aria-label="알림"
-                @click="$emit('notification-click')"
-            >
-                <BellIcon class="court-header__noti-icon" />
-                <span v-if="hasNotification" class="court-header__noti-dot"></span>
-            </button>
+            <TheNotificationBell />
         </div>
     </header>
 </template>
