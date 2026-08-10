@@ -7,129 +7,42 @@
     background: var(--tt-bg-subtle);
 }
 
-.personal-ranking__toolbar {
+.personal-ranking__period-navigation {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: var(--tt-space-2);
     margin-top: var(--tt-space-4);
 }
 
-.personal-ranking__toolbar span,
-.personal-ranking__toolbar button {
-    min-width: 0;
-    padding: var(--tt-space-2) var(--tt-space-3);
-    font: inherit;
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    border: 0;
-    border-radius: var(--tt-radius-md);
-}
-
-.personal-ranking__toolbar span {
-    color: var(--tt-info);
-    background: var(--tt-info-subtle);
-}
-
-.personal-ranking__toolbar button {
-    color: var(--tt-accent-strong);
-    background: var(--tt-accent-subtle);
-    cursor: pointer;
-}
-
-.personal-ranking__summary {
-    position: relative;
-    margin-top: var(--tt-space-3);
-    padding: var(--tt-space-5);
-    overflow: hidden;
-    color: var(--tt-text-inverse);
-    background: var(--tt-surface-inverse);
-    border-radius: var(--tt-radius-lg);
-}
-
-.personal-ranking__summary::before {
-    position: absolute;
-    top: calc(var(--tt-space-8) * -1);
-    right: calc(var(--tt-space-6) * -1);
-    width: 120px;
-    height: 120px;
-    content: '';
-    background: var(--tt-surface-raised);
-    border-radius: var(--tt-radius-full);
-}
-
-.personal-ranking__summary > * {
-    position: relative;
-    z-index: 1;
-}
-
-.personal-ranking__summary small {
-    color: var(--tt-border-strong);
-}
-
-.personal-ranking__summary > strong {
-    display: block;
-    margin-top: var(--tt-space-2);
-    font-size: var(--tt-fs-display);
-    line-height: var(--tt-lh-tight);
-}
-
-.personal-ranking__summary p {
-    margin: var(--tt-space-2) 0 var(--tt-space-4);
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-accent);
-}
-
-.personal-ranking__progress {
-    height: 8px;
-    overflow: hidden;
-    background: var(--tt-surface-strong-muted);
-    border-radius: var(--tt-radius-full);
-}
-
-.personal-ranking__progress span {
-    display: block;
-    height: 100%;
-    background: var(--tt-accent);
-    border-radius: inherit;
-}
-
-.personal-ranking__progress-label {
+.personal-ranking__period-navigation button {
     display: flex;
-    justify-content: space-between;
-    margin-top: var(--tt-space-1);
-    font-size: var(--tt-fs-mono-chip);
-    color: var(--tt-border-strong);
-}
-
-.personal-ranking__report-button {
-    display: flex;
-    gap: var(--tt-space-2);
     align-items: center;
-    min-height: 44px;
-    margin: var(--tt-space-4) 0 0 auto;
-    padding: var(--tt-space-2) var(--tt-space-4);
-    font: inherit;
-    font-size: var(--tt-fs-caption);
+    justify-content: center;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0 var(--tt-space-2);
+    font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-info);
-    background: var(--tt-bg);
+    color: var(--tt-text);
+    background: transparent;
     border: 0;
-    border-radius: var(--tt-radius-md);
     cursor: pointer;
-    transition:
-        transform 0.12s ease,
-        box-shadow 0.12s ease;
 }
 
-.personal-ranking__report-button span {
+.personal-ranking__period-navigation button:nth-child(2) {
+    min-width: 92px;
     font-size: var(--tt-fs-section);
-    line-height: 1;
 }
 
 .personal-ranking__podium-section {
-    margin-top: var(--tt-space-4);
+    margin-top: var(--tt-space-5);
+}
+
+.personal-ranking__empty-mascot {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
 }
 
 .personal-ranking__podium-header {
@@ -167,7 +80,6 @@
     transition: transform 0.12s ease;
 }
 
-.personal-ranking__report-button:active,
 .personal-ranking__podium-header button:active,
 .personal-ranking :deep(.challenge-page-header button):active {
     box-shadow: var(--tt-elevation-0);
@@ -399,7 +311,6 @@
         animation: none;
     }
 
-    .personal-ranking__report-button,
     .personal-ranking__podium-header button,
     .personal-ranking :deep(.challenge-page-header button) {
         transition: none;
@@ -407,20 +318,6 @@
 }
 
 @media (max-width: 390px) {
-    .personal-ranking__summary {
-        padding: var(--tt-space-4);
-    }
-
-    .personal-ranking__summary > strong {
-        font-size: clamp(var(--tt-fs-title), 10vw, var(--tt-fs-display));
-    }
-
-    .personal-ranking__report-button {
-        max-width: 100%;
-        padding-right: var(--tt-space-3);
-        padding-left: var(--tt-space-3);
-    }
-
     .personal-ranking__podium {
         padding-right: var(--tt-space-2);
         padding-left: var(--tt-space-2);
@@ -448,12 +345,6 @@
 }
 
 @media (max-width: 359px) {
-    .personal-ranking__toolbar span,
-    .personal-ranking__toolbar button {
-        padding-right: var(--tt-space-2);
-        padding-left: var(--tt-space-2);
-    }
-
     .personal-ranking__podium-header {
         align-items: flex-start;
     }
