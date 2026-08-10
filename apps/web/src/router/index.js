@@ -187,6 +187,19 @@ const routes = [
         component: () => import('@/views/challenge/group/DefenseAdmitDoneView.vue'),
         meta: { title: '혐의 인정', hideTabBar: true },
     },
+    // ↓ 투표 플로우 (#GC_07_04). 변론 확인 → 유·무죄 투표 → 완료.
+    {
+        path: '/group-challenges/:id/vote/:indictmentId',
+        name: 'voteVerdict',
+        component: () => import('@/views/challenge/group/VoteVerdictView.vue'),
+        meta: { title: '판결 참여', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/done',
+        name: 'voteDone',
+        component: () => import('@/views/challenge/group/VoteDoneView.vue'),
+        meta: { title: '투표 완료', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',

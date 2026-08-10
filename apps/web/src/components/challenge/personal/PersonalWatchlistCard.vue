@@ -132,13 +132,13 @@ function barColorClass(status) {
 }
 
 .watchlist__title {
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
 .watchlist__meta {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-hint);
     font-weight: var(--tt-fw-semibold);
     font-family: var(--tt-font-mono);
@@ -196,7 +196,7 @@ function barColorClass(status) {
 }
 
 .watchlist__status {
-    font-size: 10px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     padding: 2px var(--tt-space-2);
     border-radius: var(--tt-radius-full);
@@ -245,7 +245,7 @@ function barColorClass(status) {
     background: var(--tt-bg-fill);
     border-radius: var(--tt-radius-sm);
     padding: 9px var(--tt-space-3);
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
     line-height: 1.5;
