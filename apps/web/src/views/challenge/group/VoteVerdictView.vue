@@ -91,6 +91,8 @@ const verdictKo = computed(() => {
 });
 
 /* ── 확인 바텀시트 ─────────────────────── */
+const confirmSheetRef = ref(null);
+const finalModalRef = ref(null);
 const showConfirmSheet = ref(false);
 const comment = ref('');
 const MAX_COMMENT = 40;
@@ -113,15 +115,23 @@ function openFinalModal() {
 }
 
 function submitVote() {
+    finalModalRef.value?.releaseHistory?.();
+    confirmSheetRef.value?.releaseHistory?.();
     showFinalModal.value = false;
     showConfirmSheet.value = false;
-    router.replace({
-        name: 'voteDone',
-        params: {
-            id: route.params.id,
-            indictmentId: route.params.indictmentId,
-        },
-    });
+
+    const params = {
+        id: route.params.id,
+        indictmentId: route.params.indictmentId,
+    };
+
+    /* 오버레이가 pushState 한 히스토리 항목 2개를 되돌려 VoteVerdict 위치로 복귀한 뒤,
+     * VoteVerdict 을 VoteDone 으로 교체한다.
+     * 이래야 뒤로가기 시 투표 화면이 다시 나타나지 않는다. */
+    window.addEventListener('popstate', () => {
+        router.replace({ name: 'voteDone', params });
+    }, { once: true });
+    window.history.go(-2);
 }
 
 /* ── 날짜 포맷 ─────────────────────────── */
@@ -360,7 +370,7 @@ function formatDefenseDate(iso) {
         </Teleport>
 
         <!-- ===== 확인 바텀시트 ===== -->
-        <BaseBottomSheet v-model="showConfirmSheet">
+        <BaseBottomSheet ref="confirmSheetRef" v-model="showConfirmSheet">
             <div class="vote-page__confirm">
                 <div class="vote-page__confirm-top">
                     <img
@@ -413,6 +423,7 @@ function formatDefenseDate(iso) {
 
         <!-- ===== 최종 확인 모달 ===== -->
         <BaseModal
+            ref="finalModalRef"
             v-model="showFinalModal"
             :show-close="false"
             :close-on-overlay="false"
@@ -447,10 +458,12 @@ function formatDefenseDate(iso) {
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap');
 
 .vote-page {
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
     background: var(--tt-bg-subtle);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* ── 헤더 ─────────────────────────────── */
