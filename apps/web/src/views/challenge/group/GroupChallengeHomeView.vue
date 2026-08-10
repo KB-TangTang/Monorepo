@@ -116,8 +116,18 @@ function onOpenTodo(item) {
         });
         return;
     }
-    /* vote — 투표 플로우 미구현, 토스트로 안내 */
-    flash('투표 화면으로 이동했어요');
+    /* vote — 투표 플로우 */
+    if (item.type === 'vote') {
+        if (showSheet.value) {
+            todoSheetRef.value?.releaseHistory?.();
+            showSheet.value = false;
+        }
+        router.replace({
+            name: 'voteVerdict',
+            params: { id: item.challengeId, indictmentId: item.indictmentId },
+        });
+        return;
+    }
 }
 
 function goToAllChallenges() {
