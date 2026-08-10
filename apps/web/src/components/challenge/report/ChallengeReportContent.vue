@@ -1,13 +1,12 @@
 <script setup>
-import {
-    formatPercentage,
-    formatPercentagePoint,
-    formatPeriod,
-    formatWon,
-} from '@/utils/challengeReport';
+import { ref } from 'vue';
+import { formatPercentage, formatPercentagePoint, formatPeriod } from '@/utils/challengeReport';
+import ChallengeConsumptionHabitDropdown from '@/components/challenge/report/ChallengeConsumptionHabitDropdown.vue';
 
 defineProps({ report: { type: Object, required: true } });
-defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
+defineEmits(['change-difficulty', 'open-group-history']);
+
+const isWeeklyResultsOpen = ref(false);
 </script>
 
 <template>
@@ -31,36 +30,54 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
                 <div class="mission-card__track" aria-hidden="true">
                     <span :style="{ width: formatPercentage(report.missionSuccessRate) }"></span>
                 </div>
+                <button
+                    type="button"
+                    class="mission-card__weekly-toggle"
+                    :aria-expanded="isWeeklyResultsOpen"
+                    aria-controls="weekly-results"
+                    @click="isWeeklyResultsOpen = !isWeeklyResultsOpen"
+                >
+                    <span>주차별 성공률</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m7 10 5 5 5-5" />
+                    </svg>
+                </button>
             </div>
+            <section
+                v-if="isWeeklyResultsOpen"
+                id="weekly-results"
+                class="weekly-card"
+                aria-labelledby="weekly-title"
+            >
+                <h2 id="weekly-title">주차별 성공률</h2>
+                <ul>
+                    <li v-for="week in report.weeklyResults" :key="week.week">
+                        <i aria-hidden="true"></i>
+                        <strong>{{ week.week }}주차</strong>
+                        <div class="weekly-card__track" aria-hidden="true">
+                            <span :style="{ width: formatPercentage(week.successRate) }"></span>
+                        </div>
+                        <b>{{ week.successDays }}/{{ week.totalDays }}</b>
+                    </li>
+                </ul>
+            </section>
         </section>
 
-        <section class="weekly-card" aria-labelledby="weekly-title">
-            <h2 id="weekly-title">주차별 성공률</h2>
-            <ul>
-                <li v-for="week in report.weeklyResults" :key="week.week">
-                    <i aria-hidden="true"></i>
-                    <strong>{{ week.week }}주차</strong>
-                    <div class="weekly-card__track" aria-hidden="true">
-                        <span :style="{ width: formatPercentage(week.successRate) }"></span>
-                    </div>
-                    <b>{{ week.successDays }}/{{ week.totalDays }}</b>
-                </li>
-            </ul>
-        </section>
+        <ChallengeConsumptionHabitDropdown :report="report" />
 
-        <section class="streak-card" aria-label="최고 연속 성공 일수">
+        <section class="challenge-summary" aria-label="챌린지 요약">
             <div>
-                <span>최고 연속 성공 일수</span><strong>{{ report.bestStreakDays }}일</strong>
-            </div>
-            <b>가장 잘 지킨 요일 · {{ report.bestWeekday }}</b>
-        </section>
-
-        <section class="summary-cards" aria-label="챌린지 요약">
-            <div>
-                <span>도전 일수</span><strong>{{ report.challengeDays }}일</strong>
+                <span>최고 연속 성공</span>
+                <strong>{{ report.bestStreakDays }}일</strong>
+                <small>가장 잘 지킨 요일 · {{ report.bestWeekday }}</small>
             </div>
             <div>
-                <span>획득 점수</span><strong>{{ report.earnedPoints }}점</strong>
+                <span>도전 일수</span>
+                <strong>{{ report.challengeDays }}일</strong>
+            </div>
+            <div>
+                <span>획득 점수</span>
+                <strong>{{ report.earnedPoints }}점</strong>
             </div>
         </section>
 
@@ -123,21 +140,6 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
                 </footer>
             </div>
         </section>
-
-        <section class="savings-card" aria-labelledby="savings-title">
-            <div>
-                <p>이번 달 순 절감액</p>
-                <h2 id="savings-title">{{ formatWon(report.netSavings) }}</h2>
-                <strong>챌린지로 바뀐 내 소비습관 확인하기</strong>
-            </div>
-            <button
-                type="button"
-                aria-label="카테고리별 순 절감액 보기"
-                @click="$emit('open-net-savings')"
-            >
-                ›
-            </button>
-        </section>
     </div>
 </template>
 
@@ -168,10 +170,11 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 
 .mission-card {
     overflow: hidden;
-    color: var(--tt-text-inverse);
-    background: color-mix(in srgb, var(--tt-text) 92%, var(--tt-bg));
+    color: var(--tt-text);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-xl);
-    box-shadow: var(--tt-elevation-3);
+    box-shadow: var(--tt-elevation-1);
 }
 
 .mission-card header {
@@ -191,7 +194,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 }
 
 .mission-card__body > p:first-child {
-    color: var(--tt-border-strong);
+    color: var(--tt-text-muted);
 }
 
 .mission-card__score {
@@ -209,7 +212,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 }
 
 .mission-card__comparison {
-    color: var(--tt-border-strong);
+    color: var(--tt-text-muted);
 }
 
 .mission-card__comparison b {
@@ -226,7 +229,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 .mission-card__track {
     height: var(--tt-space-2);
     margin-top: var(--tt-space-4);
-    background: color-mix(in srgb, var(--tt-text) 72%, var(--tt-bg));
+    background: var(--tt-border);
 }
 
 .mission-card__track span,
@@ -236,14 +239,41 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     height: 100%;
     background: var(--tt-success);
     border-radius: inherit;
+    transform-origin: left center;
+    animation: report-progress-fill 720ms ease-out both;
+}
+
+.mission-card__weekly-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: var(--tt-space-5);
+    padding: var(--tt-space-3) 0 0;
+    font: inherit;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--tt-border);
+}
+
+.mission-card__weekly-toggle svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
 }
 
 .weekly-card {
     overflow: hidden;
     padding: var(--tt-space-4);
-    background: color-mix(in srgb, var(--tt-bg-subtle) 45%, var(--tt-border));
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
+    background: var(--tt-bg-subtle);
+    border-top: 1px solid var(--tt-border);
 }
 
 .weekly-card h2 {
@@ -268,7 +298,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 .weekly-card li > i {
     width: 10px;
     height: 10px;
-    background: var(--tt-bg-subtle);
+    background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
 }
@@ -278,76 +308,94 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     font-family: var(--tt-font-mono);
 }
 
+.weekly-card li > strong {
+    color: var(--tt-text);
+}
+
+.weekly-card li > b {
+    color: var(--tt-text);
+}
+
 .weekly-card li > b {
     text-align: right;
 }
 
-.weekly-card__track,
+.weekly-card__track {
+    height: var(--tt-space-2);
+    background: var(--tt-border);
+}
+
 .difficulty-card__track {
     height: var(--tt-space-2);
     background: var(--tt-border);
 }
 
-.streak-card,
-.summary-cards > div {
+@keyframes report-progress-fill {
+    from {
+        transform: scaleX(0);
+    }
+
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mission-card__track span,
+    .weekly-card__track span,
+    .difficulty-card__track span {
+        animation: none;
+    }
+}
+
+.challenge-summary {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    overflow: hidden;
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
 }
 
-.streak-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-4);
-    padding: var(--tt-space-5);
-    background: var(--tt-accent-subtle);
-    border-color: color-mix(in srgb, var(--tt-accent) 45%, var(--tt-bg));
-}
-
-.streak-card span,
-.streak-card strong,
-.summary-cards span,
-.summary-cards strong {
-    display: block;
-}
-
-.streak-card span {
-    color: color-mix(in srgb, var(--tt-text) 70%, var(--tt-accent));
-}
-
-.streak-card strong {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
-}
-
-.streak-card > b {
-    font-size: var(--tt-fs-caption);
-    color: color-mix(in srgb, var(--tt-text) 70%, var(--tt-accent));
-}
-
-.summary-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--tt-space-3);
-}
-
-.summary-cards > div {
-    padding: var(--tt-space-5);
+.challenge-summary > div {
+    min-width: 0;
+    padding: var(--tt-space-4);
     background: var(--tt-bg);
 }
 
-.summary-cards span {
+.challenge-summary > div + div {
+    border-left: 1px solid var(--tt-border);
+}
+
+.challenge-summary span,
+.challenge-summary strong,
+.challenge-summary small {
+    display: block;
+}
+
+.challenge-summary span,
+.challenge-summary small {
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
 }
 
-.summary-cards strong {
+.challenge-summary strong {
     margin-top: var(--tt-space-1);
     font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
+    font-size: var(--tt-fs-numeric);
+    font-weight: var(--tt-fw-black);
+    letter-spacing: -0.04em;
 }
 
-.summary-cards > div:last-child strong {
-    color: var(--tt-primary);
+.challenge-summary > div:first-child strong {
+    color: var(--tt-success);
+}
+
+.challenge-summary > div:nth-child(2) strong {
+    color: var(--tt-brand-700);
+}
+
+.challenge-summary > div:last-child strong {
+    color: var(--tt-text);
 }
 
 .performance-section {
@@ -501,49 +549,13 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     transform: rotate(3deg);
 }
 
-.savings-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-4);
-    padding: var(--tt-space-5);
-    background: color-mix(in srgb, var(--tt-bg-subtle) 35%, var(--tt-border));
-    border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-2);
-}
-
-.savings-card p {
-    color: var(--tt-text-muted);
-}
-
-.savings-card h2 {
-    margin: var(--tt-space-1) 0;
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-numeric);
-}
-
-.savings-card > div > strong {
-    color: var(--tt-accent);
-}
-
-.savings-card > button {
-    display: grid;
-    flex: 0 0 48px;
-    width: 48px;
-    height: 48px;
-    font-size: var(--tt-fs-title);
-    color: var(--tt-accent);
-    background: var(--tt-text);
-    border: 0;
-    border-radius: var(--tt-radius-full);
-    cursor: pointer;
-    place-items: center;
-}
-
 @media (max-width: 360px) {
-    .streak-card {
-        align-items: flex-start;
-        flex-direction: column;
+    .challenge-summary {
+        grid-template-columns: 1.3fr 1fr 1fr;
+    }
+
+    .challenge-summary > div {
+        padding: var(--tt-space-3);
     }
 
     .difficulty-card {

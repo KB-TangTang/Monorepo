@@ -22,7 +22,6 @@ const emit = defineEmits([
     'change-difficulty',
     'open-group-history',
     'open-monthly-report',
-    'open-transactions',
     'start-challenge',
 ]);
 
@@ -96,12 +95,8 @@ async function acknowledgeGuide() {
     isGuideOpen.value = false;
 }
 
-function openNetSavings() {
-    router.push({ name: 'challengeNetSavings', query: { month: selectedPeriod.value } });
-}
-
 function openMonthlyReport() {
-    router.push({ name: 'monthlyConsumptionReport' });
+    router.push({ name: 'monthlyConsumptionReport', query: { month: selectedPeriod.value } });
 }
 
 function goBack() {
@@ -123,7 +118,7 @@ onMounted(initialize);
     <article class="challenge-report">
         <ChallengePageHeader
             class="challenge-report__page-header"
-            title="챌린지 리포트"
+            title="재판 보고서"
             @back="goBack"
         >
             <template v-if="selectedPeriod" #action>
@@ -164,13 +159,13 @@ onMounted(initialize);
             :report="report"
             @change-difficulty="emit('change-difficulty')"
             @open-group-history="emit('open-group-history')"
-            @open-net-savings="openNetSavings"
         />
 
         <ChallengeReportToggle
             v-if="selectedPeriod"
-            @open-transactions="emit('open-transactions')"
+            active="trial"
             @open-monthly-report="openMonthlyReport"
+            @open-trial-report="loadReport"
         />
         <ChallengeMonthPicker
             v-if="selectedPeriod"
