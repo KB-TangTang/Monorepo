@@ -13,8 +13,9 @@ import {
     MOCK_TODO_ITEMS,
     MOCK_ACTIVE_CHALLENGES,
 } from '@/fixtures/groupChallenge';
-import { BellIcon } from '@heroicons/vue/24/outline';
+import { BellIcon, ArrowPathIcon } from '@heroicons/vue/24/outline';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
+import judgeImg from '@/assets/images/emotions/48_judging.png';
 
 const router = useRouter();
 
@@ -56,6 +57,16 @@ function flash(msg) {
     toast.value = msg;
     toastTimer = setTimeout(() => { toast.value = null; }, 1800);
 }
+
+/* ── 판사 탕이 말풍선 ─────────────────── */
+const judgeQuote = computed(() => {
+    const todoCount = todoItems.value.length;
+    const activeCount = activeChallenges.value.length;
+    if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요, 서두르세요!`;
+    if (allDone.value) return '모든 할 일을 처리했군요, 훌륭해요!';
+    if (activeCount > 0) return `진행 중인 챌린지가 ${activeCount}건 있어요`;
+    return '새로운 챌린지에 참여해보세요!';
+});
 
 /* ── 알림 빨간 점 ─────────────────────── */
 const hasNotificationDot = computed(() => hasTodo.value);
@@ -125,27 +136,30 @@ function livesColor(challenge) {
             <div class="gc-header__bg" />
             <div class="gc-header__glow" />
 
-            <!-- 상단 바: DEV 버튼 + 알림 아이콘 -->
-            <div class="gc-header__topbar">
-                <button
-                    v-if="isDev"
-                    type="button"
-                    class="gc-dev-btn"
-                    @click="cycleDevState"
-                >
-                    {{ devStateLabel }}
-                </button>
-                <div style="flex:1" />
-                <div class="gc-header__bell">
-                    <BellIcon class="gc-header__bell-icon" />
-                    <span v-if="hasNotificationDot" class="gc-header__bell-dot" />
+            <div class="gc-header__inner">
+                <!-- 상단 바: 알림 아이콘 -->
+                <div class="gc-header__topbar">
+                    <div class="gc-header__bell">
+                        <BellIcon class="gc-header__bell-icon" />
+                        <span v-if="hasNotificationDot" class="gc-header__bell-dot" />
+                    </div>
                 </div>
-            </div>
 
-            <!-- 현판 이미지 + 날짜 칩 -->
-            <div class="gc-header__court">
-                <img :src="courtDistrictImg" alt="탕탕 지방법원" class="gc-header__court-img" />
-                <div class="gc-header__date">{{ todayLabel }}</div>
+                <!-- 현판 이미지 + 날짜 칩 -->
+                <div class="gc-header__court">
+                    <img :src="courtDistrictImg" alt="탕탕 지방법원" class="gc-header__court-img" />
+                    <div class="gc-header__date">{{ todayLabel }}</div>
+                </div>
+
+                <!-- 판사 탕이 + 말풍선 -->
+                <div class="gc-header__judge">
+                    <img :src="judgeImg" alt="담당 판사 탕이" class="gc-header__judge-img" />
+                    <div class="gc-header__speech">
+                        <div class="gc-header__speech-arrow" />
+                        <div class="gc-header__speech-text">{{ judgeQuote }}</div>
+                        <div class="gc-header__speech-sub">담당 판사 · 탕이</div>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -225,6 +239,17 @@ function livesColor(challenge) {
             v-model="showTutorial"
             @complete="onTutorialComplete"
         />
+
+        <!-- DEV 상태 전환 플로팅 버튼 -->
+        <button
+            v-if="isDev"
+            type="button"
+            class="gc-dev-fab"
+            @click="cycleDevState"
+        >
+            <ArrowPathIcon class="gc-dev-fab__icon" />
+            {{ devStateLabel }}
+        </button>
     </div>
 </template>
 
@@ -235,13 +260,44 @@ function livesColor(challenge) {
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
 }
 
+.gc-dev-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(var(--tt-tabbar-height) + 16px);
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--tt-radius-full);
+    border: 1.5px solid rgba(245, 185, 33, 0.5);
+    background: rgba(35, 40, 66, 0.9);
+    color: var(--tt-gold);
+    font-size: 11px;
+    font-weight: var(--tt-fw-black);
+    font-family: inherit;
+    cursor: pointer;
+    z-index: var(--tt-z-tabbar);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gc-dev-fab__icon {
+    width: 14px;
+    height: 14px;
+}
+
 /* ── 다크 헤더 ─────────────────────────── */
 .gc-header {
     background: var(--tt-surface-inverse);
-    border-radius: 0 0 30px 30px;
-    padding: 0 20px 14px;
+    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
+    padding-bottom: var(--tt-space-5);
     position: relative;
     overflow: hidden;
+}
+.gc-header__inner {
+    position: relative;
+    z-index: 2;
+    padding: 0 var(--tt-screen-padding);
 }
 
 .gc-header__bg {
@@ -262,35 +318,15 @@ function livesColor(challenge) {
     height: 42px;
     display: flex;
     align-items: center;
-    position: relative;
-    z-index: 2;
+    justify-content: flex-end;
     padding-top: env(safe-area-inset-top);
-}
-
-/* DEV 버튼 */
-.gc-dev-btn {
-    height: 28px;
-    padding: 0 10px;
-    border-radius: var(--tt-radius-full);
-    border: 1.5px solid rgba(245, 185, 33, 0.5);
-    background: rgba(245, 185, 33, 0.15);
-    color: var(--tt-gold);
-    font-size: 11px;
-    font-weight: var(--tt-fw-black);
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s ease;
-}
-.gc-dev-btn:active {
-    background: rgba(245, 185, 33, 0.3);
 }
 
 /* 알림 아이콘 */
 .gc-header__bell {
     width: 36px;
     height: 36px;
-    border-radius: 12px;
+    border-radius: var(--tt-radius-sm);
     background: rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
@@ -316,30 +352,78 @@ function livesColor(challenge) {
 
 /* 현판 + 날짜 */
 .gc-header__court {
-    position: relative;
-    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 6px;
 }
 .gc-header__court-img {
-    width: 150px;
-    height: auto;
+    height: 120px;
+    width: auto;
     object-fit: contain;
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 .gc-header__date {
-    margin-top: 6px;
+    margin-top: var(--tt-space-2);
     background: rgba(245, 185, 33, 0.15);
     border: 1px solid rgba(245, 185, 33, 0.3);
     border-radius: var(--tt-radius-full);
-    padding: 3px 12px;
+    padding: 3px var(--tt-space-3);
     font-size: 10.5px;
     font-weight: var(--tt-fw-black);
-    color: var(--tt-gold);
-    font-family: ui-monospace, Menlo, monospace;
+    color: var(--tt-accent-bright);
+    font-family: var(--tt-font-mono);
     letter-spacing: 0.06em;
+}
+
+/* 판사 탕이 + 말풍선 */
+.gc-header__judge {
+    margin-top: var(--tt-space-3);
+    display: flex;
+    align-items: center;
+    gap: 3%;
+}
+.gc-header__judge-img {
+    width: 23%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    flex: none;
+    animation: gc-float 3.4s ease-in-out infinite;
+}
+@keyframes gc-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+.gc-header__speech {
+    flex: 1;
+    min-width: 0;
+    background: var(--tt-white);
+    border-radius: var(--tt-space-4);
+    padding: 10px 13px;
+    box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
+    position: relative;
+}
+.gc-header__speech-arrow {
+    position: absolute;
+    left: -10px;
+    bottom: 26px;
+    width: 0;
+    height: 0;
+    border-bottom: 14px solid var(--tt-white);
+    border-left: 11px solid transparent;
+}
+.gc-header__speech-text {
+    font-size: 14px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
+    line-height: 1.45;
+    word-break: keep-all;
+}
+.gc-header__speech-sub {
+    font-size: 10.5px;
+    color: var(--tt-text-hint);
+    font-weight: var(--tt-fw-bold);
+    margin-top: var(--tt-space-2);
 }
 
 /* ── 본문 ──────────────────────────────── */
@@ -462,5 +546,14 @@ function livesColor(challenge) {
 @keyframes tt-toastin {
     0% { transform: translateY(10px); opacity: 0; }
     100% { transform: none; opacity: 1; }
+}
+
+@media (max-width: 390px) {
+    .gc-header__court-img {
+        height: 100px;
+    }
+    .gc-header__speech-text {
+        font-size: 13px;
+    }
 }
 </style>

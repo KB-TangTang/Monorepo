@@ -22,11 +22,8 @@ defineEmits(['notification-click']);
 
         <!-- 기본 모드: 중앙 현판 + 날짜 + 검사 -->
         <div v-if="!compact" class="court-header__inner">
-            <div class="court-header__sign-area">
-                <div class="court-header__sign-wrap">
-                    <img :src="courtImage" alt="" class="court-header__sign-img" />
-                    <div class="court-header__date-badge">{{ date }}</div>
-                </div>
+            <div class="court-header__topbar">
+                <div style="flex:1" />
                 <button
                     type="button"
                     class="court-header__notification"
@@ -36,6 +33,13 @@ defineEmits(['notification-click']);
                     <BellIcon class="court-header__noti-icon" />
                     <span v-if="hasNotification" class="court-header__noti-dot"></span>
                 </button>
+            </div>
+
+            <div class="court-header__sign-area">
+                <div class="court-header__sign-wrap">
+                    <img :src="courtImage" alt="" class="court-header__sign-img" />
+                    <div class="court-header__date-badge">{{ date }}</div>
+                </div>
             </div>
 
             <div v-if="prosecutorImage && quote" class="court-header__prosecutor">

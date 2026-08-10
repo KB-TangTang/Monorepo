@@ -85,7 +85,7 @@ const mascotLine = computed(() => {
 <style scoped>
 .todo-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
+    border: 1px solid var(--tt-border-light);
     border-radius: 22px;
     box-shadow: 0 12px 28px rgba(35, 40, 66, 0.1);
     padding: 14px 15px 0;

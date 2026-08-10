@@ -17,8 +17,7 @@ import mascotCelebration from '@/assets/images/emotions/10_celebration.png';
 
         <div class="done-card__title">밀린 일이 없어요</div>
         <div class="done-card__desc">
-            기소·투표를 모두 처리했어요.<br />
-            다음 결산은 오늘 밤 24:00에 열려요.
+            기소·투표를 모두 처리했어요.
         </div>
     </div>
 </template>
