@@ -200,6 +200,31 @@ const routes = [
         component: () => import('@/views/challenge/group/VoteDoneView.vue'),
         meta: { title: '투표 완료', hideTabBar: true },
     },
+    // ↓ 동점 AI 판결 플로우 (#105). 투표 종료 상태 UI와의 실제 연결은 후속 작업에서 처리한다.
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/tie',
+        name: 'groupVoteTie',
+        component: () => import('@/views/challenge/group/judgment/GroupVoteTieView.vue'),
+        meta: { title: '동점 안내', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict',
+        name: 'groupAiVerdict',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictView.vue'),
+        meta: { title: 'AI 판결', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict/result',
+        name: 'groupAiVerdictResult',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictResultView.vue'),
+        meta: { title: 'AI 판결 결과', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict/detail',
+        name: 'groupAiVerdictDetail',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictDetailView.vue'),
+        meta: { title: '재판 세부 정보 안내', hideTabBar: true },
+    },
     // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',
