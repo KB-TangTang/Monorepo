@@ -545,7 +545,23 @@ export const MOCK_ENDED_CHALLENGES = [
 ];
 
 /* ────────────────────────────────────────────────────────────
- * 5. 홈 위젯용 진행 중 챌린지 (간소화 버전)
+ * 5. 홈 TO-DO 인박스 시드
+ *    type: 'accuse' (기소 → 변론 필요) | 'vote' (투표 대기)
+ *    deadlineMinutes: 페이지 진입 시점 기준 남은 분 수.
+ *      useCountdown 에서 base + deadlineMinutes * 60000 으로
+ *      실시간 카운트다운을 계산한다.
+ * ──────────────────────────────────────────────────────────── */
+
+export const MOCK_TODO_ITEMS = [
+    { id: 1, type: 'accuse', title: '기소 되어 변론이 필요해요!', amount: 6800, challengeName: '배달 소비 줄이기', challengeId: 1, indictmentId: 101, deadlineMinutes: 26 * 60 },
+    { id: 2, type: 'vote', title: '지판님의 변론에 투표하세요', challengeName: '배달 소비 줄이기', challengeId: 1, indictmentId: 102, tally: '3/5 투표', deadlineMinutes: 134 },
+    { id: 3, type: 'vote', title: '현우님의 변론에 투표하세요', challengeName: '택시 대신 지하철', challengeId: 4, indictmentId: 201, tally: '1/5 투표', deadlineMinutes: 21 * 60 + 40 },
+    { id: 4, type: 'accuse', title: '기소 되어 변론이 필요해요!', amount: 23000, challengeName: '신상 지름신 봉인령', challengeId: 3, indictmentId: 201, deadlineMinutes: 44 * 60 },
+    { id: 5, type: 'vote', title: '민지님의 변론에 투표하세요', challengeName: '신상 지름신 봉인령', challengeId: 5, indictmentId: 301, tally: '2/5 투표', deadlineMinutes: 52 * 60 },
+];
+
+/* ────────────────────────────────────────────────────────────
+ * 6. 홈 위젯용 진행 중 챌린지 (간소화 버전)
  * ──────────────────────────────────────────────────────────── */
 
 export const MOCK_ACTIVE_CHALLENGES = [

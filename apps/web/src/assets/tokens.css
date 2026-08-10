@@ -114,6 +114,7 @@
     --tt-bg-fill: var(--tt-neutral-fill);    /* 입력 필드 / 비활성 배경 */
 
     --tt-border: var(--tt-neutral-border);
+    --tt-border-light: var(--tt-neutral-fill); /* 카드 내부 구분선 (border 보다 연함) */
     --tt-border-track: var(--tt-neutral-track); /* 진행바 트랙 */
     --tt-border-divider: var(--tt-neutral-divider); /* 점선 구분선 */
 

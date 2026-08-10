@@ -62,7 +62,7 @@ defineEmits(['report-click']);
 }
 
 .score-card__overline {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
     letter-spacing: 0.08em;
@@ -76,7 +76,7 @@ defineEmits(['report-click']);
 }
 
 .score-card__score {
-    font-size: 28px;
+    font-size: var(--tt-fs-stat);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     letter-spacing: -0.02em;
@@ -84,7 +84,7 @@ defineEmits(['report-click']);
 }
 
 .score-card__unit {
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-accent-deep);
 }
@@ -92,7 +92,7 @@ defineEmits(['report-click']);
 .score-card__percentile {
     background: var(--tt-accent-subtle);
     color: var(--tt-accent-deep);
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 5px 11px;
     border-radius: var(--tt-radius-full);
@@ -135,7 +135,7 @@ defineEmits(['report-click']);
 }
 
 .score-card__gap-text {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-semibold);
 }
@@ -148,7 +148,7 @@ defineEmits(['report-click']);
     background: none;
     border: none;
     padding: 0;
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-info);
     white-space: nowrap;

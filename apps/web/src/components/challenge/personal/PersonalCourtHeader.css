@@ -32,7 +32,14 @@
 .court-header__inner {
     position: relative;
     z-index: 2;
-    padding: var(--tt-space-2) var(--tt-screen-padding) 0;
+    padding: 0 var(--tt-screen-padding);
+}
+
+.court-header__topbar {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
 }
 
 /* ── 기본 모드 ────────────────────────────────────── */
@@ -49,8 +56,8 @@
 }
 
 .court-header__sign-img {
-    width: 178px;
-    height: auto;
+    height: 120px;
+    width: auto;
     object-fit: contain;
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
@@ -61,43 +68,37 @@
     border: 1px solid rgba(245, 185, 33, 0.3);
     border-radius: var(--tt-radius-full);
     padding: 3px var(--tt-space-3);
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     color: var(--tt-accent-bright);
     font-family: var(--tt-font-mono);
     letter-spacing: 0.06em;
 }
 
-.court-header__notification {
-    position: absolute;
-    top: 0;
-    right: 0;
+/* TheNotificationBell 다크 헤더 오버라이드 */
+.court-header :deep(.tt-bell) {
     width: 36px;
     height: 36px;
+    padding: 0;
     border-radius: var(--tt-radius-sm);
     background: rgba(255, 255, 255, 0.1);
-    border: none;
-    cursor: pointer;
+    color: var(--tt-white);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.court-header__noti-icon {
+.court-header :deep(.tt-bell svg) {
     width: 21px;
     height: 21px;
-    color: var(--tt-white);
 }
 
-.court-header__noti-dot {
-    position: absolute;
-    top: 7px;
-    right: 8px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--tt-accent);
-    border: 1.5px solid var(--tt-ink);
+.court-header :deep(.tt-bell__badge) {
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    font-size: 10px;
+    line-height: 16px;
 }
 
 /* ── 검사 탕이 + 말풍선 ──────────────────────────── */
@@ -106,14 +107,36 @@
     display: flex;
     align-items: center;
     gap: 3%;
+    padding: 0 var(--tt-space-3);
+}
+
+.court-header__tangi-wrap {
+    width: 23%;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .court-header__tangi-img {
-    width: 23%;
+    width: 100%;
     aspect-ratio: 1;
     object-fit: contain;
-    flex: none;
     animation: tt-tangi-float 3.4s ease-in-out infinite;
+}
+
+.court-header__nameplate {
+    margin-top: var(--tt-space-1);
+    background: var(--tt-kraft);
+    border: 1.5px solid var(--tt-wood);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-wood);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    box-shadow: 0 2px 6px rgba(156, 123, 84, 0.15);
 }
 
 @keyframes tt-tangi-float {
@@ -131,7 +154,7 @@
     min-width: 0;
     background: var(--tt-white);
     border-radius: var(--tt-space-4);
-    padding: 10px 13px;
+    padding: 13px 14px;
     box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
     position: relative;
 }
@@ -139,7 +162,7 @@
 .court-header__speech-arrow {
     position: absolute;
     left: -10px;
-    bottom: 26px;
+    top: calc(50% - 7px);
     width: 0;
     height: 0;
     border-bottom: 14px solid var(--tt-white);
@@ -147,19 +170,13 @@
 }
 
 .court-header__speech-text {
-    font-size: 14px;
+    font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     letter-spacing: -0.01em;
     line-height: 1.45;
     word-break: keep-all;
-}
-
-.court-header__speech-sub {
-    font-size: 10.5px;
-    color: var(--tt-text-hint);
-    font-weight: var(--tt-fw-bold);
-    margin-top: var(--tt-space-2);
+    white-space: pre-line;
 }
 
 /* ── 축소 모드 (화면 05/06) ──────────────────────── */
@@ -168,6 +185,7 @@
 }
 
 .court-header__inner--compact {
+    padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -193,7 +211,7 @@
 }
 
 .court-header__compact-date {
-    font-size: 9.5px;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-tab-inactive);
     font-family: var(--tt-font-mono);
@@ -201,7 +219,7 @@
 }
 
 .court-header__compact-title {
-    font-size: 21px;
+    font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     color: var(--tt-white);
     letter-spacing: -0.01em;
@@ -211,10 +229,10 @@
 
 @media (max-width: 390px) {
     .court-header__sign-img {
-        width: 150px;
+        height: 100px;
     }
 
     .court-header__speech-text {
-        font-size: 13px;
+        font-size: var(--tt-fs-label);
     }
 }

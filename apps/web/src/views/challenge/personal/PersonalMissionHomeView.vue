@@ -120,8 +120,7 @@ function setDemoFail() {
             :date="courtDate"
             :prosecutor-image="store.selectedProsecutor?.image"
             :prosecutor-name="store.selectedProsecutor?.name"
-            :quote="'&quot;오늘은 ' + store.briefing.categoryName + '을 지켜보겠습니다&quot;'"
-            :has-notification="true"
+            :quote="'&quot;오늘은 ' + store.briefing.categoryName + '을\n지켜보겠습니다&quot;'"
         />
 
         <!-- 헤더: 축소 모드 (no-account) -->

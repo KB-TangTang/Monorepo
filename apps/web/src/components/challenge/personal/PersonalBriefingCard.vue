@@ -284,7 +284,7 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
 }
 
 .briefing-card__gauge-remain {
-    font-size: 11.5px;
+    font-size: var(--tt-fs-badge);
     color: var(--tt-text-muted);
 }
 

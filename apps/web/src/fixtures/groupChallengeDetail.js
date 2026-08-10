@@ -1116,3 +1116,123 @@ export const MOCK_CHALLENGE_RANKINGS = {
         ],
     },
 };
+
+/* ────────────────────────────────────────────────────────────
+ * 3. MOCK_VOTE_DETAIL — 투표 화면(VoteVerdictView) 데이터
+ *    indictmentId 기준으로 조회한다.
+ *    피고인 변론 + 증거 + 투표 현황을 하나로 합친 DTO.
+ * ──────────────────────────────────────────────────────────── */
+
+export const MOCK_VOTE_DETAIL = {
+    /* ── indictmentId=102 · 민지 · 배달 소비 줄이기 ── */
+    102: {
+        indictmentId: 102,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        limitAmount: 15000,
+        currentAmount: 27490,
+        exceededAmount: 12490,
+
+        /* 피고인 정보 */
+        defendant: {
+            userId: 5,
+            ...AVATAR[5],
+        },
+
+        /* 변론 내용 */
+        defenseMessage: '친구들 네 명과 다같이 주문해서 결제만 제 카드로 했고, 제가 실제로 부담한 금액은 8,000원이에요. 영수증과 친구들이 보내준 송금 내역을 함께 첨부했으니 확인 부탁드려요. 다음부터는 미리 한도를 정할게요.',
+        actualCostAmount: 8000,
+        defenseDate: '2026-08-06',
+
+        /* 증거 자료 */
+        evidences: [
+            { id: 1, label: '증 제1호 · 배달앱 결제 영수증', fileName: 'receipt.jpg' },
+            { id: 2, label: '증 제2호 · 친구 3인 송금 내역', fileName: 'transfer.png' },
+        ],
+
+        /* 마감 카운트다운 (초 단위, 페이지 진입 기준) */
+        deadlineSeconds: 134 * 60,
+
+        /* 투표 현황 */
+        voteCount: 3,
+        totalVoters: 5,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 2, ...AVATAR[2], voted: true },
+            { userId: 3, ...AVATAR[3], voted: true },
+            { userId: 4, ...AVATAR[4], voted: true },
+            { userId: 6, ...AVATAR[6], voted: false },
+        ],
+    },
+
+    /* ── indictmentId=201 · 하은 · 택시 대신 지하철 ── */
+    201: {
+        indictmentId: 201,
+        challengeId: 4,
+        challengeName: '택시 대신 지하철',
+        evalType: 'DAILY',
+        limitAmount: 8000,
+        currentAmount: 9200,
+        exceededAmount: 1200,
+
+        defendant: {
+            userId: 6,
+            ...AVATAR[6],
+        },
+
+        defenseMessage: '비가 많이 와서 안전 상 택시를 탔어요. 대중교통이 지연되는 바람에 불가피한 선택이었습니다.',
+        actualCostAmount: 9200,
+        defenseDate: '2026-08-04',
+
+        evidences: [
+            { id: 1, label: '증 제1호 · 택시 영수증', fileName: 'taxi_receipt.jpg' },
+        ],
+
+        deadlineSeconds: 21 * 60 * 60 + 40 * 60,
+
+        voteCount: 1,
+        totalVoters: 2,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 3, ...AVATAR[3], voted: true },
+        ],
+    },
+
+    /* ── indictmentId=301 · placeholder ── */
+    301: {
+        indictmentId: 301,
+        challengeId: 5,
+        challengeName: '편의점 간식 줄이기',
+        evalType: 'PERIOD',
+        limitAmount: 30000,
+        currentAmount: 35400,
+        exceededAmount: 5400,
+
+        defendant: {
+            userId: 5,
+            ...AVATAR[5],
+        },
+
+        defenseMessage: '회사 야근 중에 편의점에서 간식을 샀는데, 팀원들이 같이 먹을 거라 제가 대신 결제했어요. 제 몫은 3,000원 정도입니다.',
+        actualCostAmount: 3000,
+        defenseDate: '2026-08-06',
+
+        evidences: [
+            { id: 1, label: '증 제1호 · 편의점 영수증', fileName: 'receipt_conv.jpg' },
+            { id: 2, label: '증 제2호 · 팀 채팅 캡처', fileName: 'chat_capture.png' },
+        ],
+
+        deadlineSeconds: 52 * 60 * 60,
+
+        voteCount: 2,
+        totalVoters: 5,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 2, ...AVATAR[2], voted: true },
+            { userId: 3, ...AVATAR[3], voted: true },
+            { userId: 4, ...AVATAR[4], voted: false },
+            { userId: 6, ...AVATAR[6], voted: false },
+        ],
+    },
+};
