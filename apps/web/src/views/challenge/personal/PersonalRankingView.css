@@ -241,10 +241,24 @@
     border-radius: var(--tt-radius-md);
 }
 
-.personal-ranking__mine > strong:last-child {
+.personal-ranking__mine-score {
     flex: none;
     margin-left: auto;
+    color: var(--tt-text);
+}
+
+.personal-ranking__mine-score span {
+    margin-right: var(--tt-space-2);
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+}
+
+.personal-ranking__mine-score span:first-child {
     color: var(--tt-info);
+}
+
+.personal-ranking__mine-score span:last-child {
+    margin-right: 0;
 }
 
 .personal-ranking__avatar {
@@ -268,6 +282,21 @@
 
 .personal-ranking__mine small {
     color: var(--tt-text-muted);
+}
+
+.personal-ranking__mascot-scene {
+    display: flex;
+    justify-content: center;
+    height: 136px;
+    margin-top: var(--tt-space-4);
+    overflow: hidden;
+}
+
+.personal-ranking__mascot-scene img {
+    width: 136px;
+    height: 136px;
+    object-fit: contain;
+    animation: personal-ranking-mascot-float 2.8s ease-in-out infinite;
 }
 
 .personal-ranking__reset-notice {
@@ -306,8 +335,20 @@
     }
 }
 
+@keyframes personal-ranking-mascot-float {
+    0%,
+    100% {
+        transform: translateY(var(--tt-space-2)) rotate(-3deg);
+    }
+
+    50% {
+        transform: translateY(0) rotate(3deg);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .personal-ranking__podium-item {
+    .personal-ranking__podium-item,
+    .personal-ranking__mascot-scene img {
         animation: none;
     }
 

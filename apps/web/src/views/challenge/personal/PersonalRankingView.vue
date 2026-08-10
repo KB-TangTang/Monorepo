@@ -5,8 +5,8 @@ import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue'
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import PersonalRankingMonthPicker from '@/components/challenge/personal/ranking/PersonalRankingMonthPicker.vue';
-import PersonalRankingSummaryCard from '@/components/challenge/personal/ranking/PersonalRankingSummaryCard.vue';
 import tangtangMascot from '@/assets/images/tangtang.png';
+import tangtangTrophyMascot from '@/assets/images/emotions/53_with_trophy_ver1.png';
 import { MOCK_PERSONAL_RANKING_MONTHS, MOCK_PERSONAL_RANKINGS } from '@/fixtures/personalRanking';
 
 const route = useRoute();
@@ -176,15 +176,20 @@ function selectPeriod(period) {
                         연속 {{ ranking.streakDays }}일 · 최고 {{ ranking.bestStreakDays }}일
                     </small>
                 </p>
-                <strong>{{ ranking.score.toLocaleString('ko-KR') }}점</strong>
+                <strong class="personal-ranking__mine-score">
+                    <span>상위 {{ ranking.percentile }}%</span>
+                    <span>{{ ranking.score.toLocaleString('ko-KR') }}점</span>
+                </strong>
             </section>
-
-            <PersonalRankingSummaryCard :ranking="ranking" />
 
             <aside class="personal-ranking__reset-notice">
                 <span aria-hidden="true">↻</span>
                 <p>매월 1일, 점수는 0점부터 다시 시작해요.</p>
             </aside>
+
+            <div class="personal-ranking__mascot-scene" aria-hidden="true">
+                <img :src="tangtangTrophyMascot" alt="" />
+            </div>
         </template>
 
         <StateEmpty
