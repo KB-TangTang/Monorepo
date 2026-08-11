@@ -109,11 +109,25 @@ export const useAccountStore = defineStore('account', () => {
         entryRoute.value = '';
     }
 
-    /** 단계 이동. 라우트 이름은 utils 의 매핑에서만 나온다. */
+    /**
+     * 단계 이동. 라우트 이름은 utils 의 매핑에서만 나온다.
+     *
+     * ⚠ **push 가 아니라 replace 다.** 단계를 히스토리에 쌓으면 플로우를 끝낸 뒤 뒤로가기를
+     *   누를 때마다 이미 끝난 중간 단계로 돌아간다. 그 화면들은 `resetFlow()` 로 상태가 비어 있어
+     *   `canEnterLinkStep` 가드가 곧바로 기관 선택으로 되돌리고, 사용자는 **"완료했는데 왜 계좌
+     *   연동이 다시 뜨지"** 로 읽는다(2026-08-11 배포본에서 실제로 지적됐다).
+     *
+     *   replace 로 두면 플로우 전체가 히스토리 **한 칸**만 차지한다. 완료 후 어디로 나가든
+     *   뒤로가기는 플로우 **이전** 화면으로 간다.
+     *
+     *   대신 플로우 중간에서 브라우저 뒤로를 누르면 이전 단계가 아니라 플로우 밖으로 나간다.
+     *   각 화면에 자체 「뒤로」 버튼(goPrevStep)이 있어 기능 손실은 없고, 마법사형 화면에서
+     *   흔한 동작이다. 무엇보다 **가드에 튕겨 엉뚱한 화면에 착지하는 것보다 예측 가능하다.**
+     */
     function goStep(step) {
         const name = LINK_STEP_ROUTES[step];
         if (name) {
-            router.push({ name });
+            router.replace({ name });
         }
     }
 
