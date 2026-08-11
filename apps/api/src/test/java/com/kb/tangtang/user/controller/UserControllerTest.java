@@ -65,6 +65,8 @@ class UserControllerTest {
         return UserMeDto.builder()
                 .id(USER_ID)
                 .nickname("지윤")
+                .socialName("JH Jang")
+                .displayName("지윤")
                 .name(name)
                 .email("me@example.com")
                 .socialProvider("GOOGLE")
@@ -96,6 +98,37 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.name").value("장재한"));
+    }
+
+    @Test
+    @DisplayName("닉네임 PATCH 는 로그인 사용자 ID 로 저장하고 표시명까지 돌려준다")
+    void updateNickname() throws Exception {
+        when(userService.updateNickname(USER_ID, "탕탕이")).thenReturn(me("장재한"));
+
+        String body = objectMapper.writeValueAsString(Map.of("nickname", "탕탕이"));
+
+        mockMvc.perform(patch("/api/users/me/nickname")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.nickname").value("지윤"))
+                .andExpect(jsonPath("$.data.socialName").value("JH Jang"))
+                .andExpect(jsonPath("$.data.displayName").value("지윤"));
+    }
+
+    @Test
+    @DisplayName("빈 닉네임은 400 + INVALID_REQUEST 로 나간다")
+    void updateNicknameInvalid() throws Exception {
+        when(userService.updateNickname(USER_ID, "  "))
+                .thenThrow(new BusinessException("INVALID_REQUEST", "닉네임을 입력해 주세요."));
+
+        String body = objectMapper.writeValueAsString(Map.of("nickname", "  "));
+
+        mockMvc.perform(patch("/api/users/me/nickname")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test

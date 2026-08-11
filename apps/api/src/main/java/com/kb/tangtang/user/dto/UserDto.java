@@ -21,8 +21,17 @@ public class UserDto {
     private String socialProvider;   // 'GOOGLE'
     private String providerUserId;   // 구글 sub
     private String email;
-    private String nickname;         // 구글 name 을 넣는다
-    private String name;             // 실명. 가입 시점엔 null (계좌 인증 단계에서 채움)
+    /*
+     * 이름처럼 보이는 컬럼이 셋이다. 절대 섞어 쓰지 말 것 (docs/DOMAIN_GLOSSARY.md 참고).
+     *   nickname   : 사용자가 직접 정한 표시명. 미설정이면 null = 온보딩 미완료
+     *   socialName : OAuth 제공자가 준 이름. 입력창 prefill · 표시명 fallback
+     *   name       : 실명(본인확인용). 간편인증 화면에서 채운다
+     * 표시명 규칙은 nickname ?? socialName 이다. name 은 표시명 후보가 아니다 —
+     * 구글 이름이 실명과 다를 수 있어 섞으면 인증 실명이 표시명을 덮어쓴다.
+     */
+    private String nickname;
+    private String socialName;
+    private String name;
     private String status;           // ACTIVE / WITHDRAWN / BLOCKED
     private Long difficultyId;       // 가입 시 EASY(1)
 

@@ -7,12 +7,19 @@
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import { profileInitial, providerLabel } from '@/utils/my';
+import { resolveDisplayName } from '@/utils/user';
 
 const props = defineProps({
     user: { type: Object, default: null },
 });
 
-const initial = computed(() => profileInitial(props.user?.nickname));
+/*
+ * 표시명 규칙은 `nickname ?? socialName` 이고 서버가 displayName 으로 계산해 내려준다.
+ * 규칙 자체는 utils/user.js 한 곳에 있다 — 이름과 아바타 이니셜이 서로 다른 값을 보는 일이 없게
+ * **둘 다 같은 값에서 뽑는다.** (DECISIONS.md 2026-08-11)
+ */
+const displayName = computed(() => resolveDisplayName(props.user));
+const initial = computed(() => profileInitial(displayName.value));
 const subtitle = computed(() => {
     const provider = providerLabel(props.user?.socialProvider);
     const email = props.user?.email ?? '';
@@ -25,7 +32,7 @@ const subtitle = computed(() => {
         <div class="my-profile">
             <span class="my-profile__avatar" aria-hidden="true">{{ initial }}</span>
             <div class="my-profile__text">
-                <p class="my-profile__name">{{ user?.nickname ?? '이름 없음' }}</p>
+                <p class="my-profile__name">{{ displayName || '이름 없음' }}</p>
                 <p class="my-profile__sub">{{ subtitle }}</p>
             </div>
         </div>

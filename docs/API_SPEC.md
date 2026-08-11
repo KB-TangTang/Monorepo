@@ -26,15 +26,38 @@
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
 | GET | `/api/users/me` | Bearer | 사용자정보 |
 | PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
+| PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
 
-**사용자정보** = `{ id, nickname, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
-(`/api/auth/refresh` 의 `user` 만 `socialProvider` 를 뺀다 — 로그인 경로 전체에 영향을 주지 않기 위함)
+**사용자정보** = `{ id, nickname, socialName, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+
+**이 모양은 `GET /api/users/me` · `POST /api/auth/refresh` 의 `user` · 사용자 정보를 바꾸는 모든
+`PATCH` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto)` 한 곳에서만 만든다 — 경로마다
+따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만 값이 비는** 버그가 난다.
 
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
   (`DECISIONS.md` 2026-08-11 (4))
 - 검증 규칙: 앞뒤 공백 제거 후 **2~50자**, **한글·영문·공백만**. 어기면 `INVALID_NAME`.
+
+### 닉네임 — 이름 3종을 헷갈리지 말 것 (이슈 #110)
+
+| 필드 | 컬럼 | 누가 채우나 | 뜻 |
+|---|---|---|---|
+| `nickname` | `tbl_user.nickname` | 사용자 (온보딩·마이페이지) | 표시명. **`null` 이면 온보딩 미완료** |
+| `socialName` | `tbl_user.social_name` | 가입 시 자동 (구글 `name`) | 입력창 prefill · 표시명 fallback |
+| `name` | `tbl_user.name` | 사용자 (간편인증 화면) | **실명(본인확인용).** 표시명으로 쓰지 않는다 |
+
+- **표시명 = `nickname ?? socialName`** 이고 **서버가 `displayName` 으로 계산해 내려준다.**
+  화면마다 계산하면 어디선 닉네임, 어디선 구글 이름이 나온다.
+- `PATCH /api/users/me/nickname` 은 **온보딩(`AU_03_01`)과 마이페이지 수정(`MY_01_03`)이 함께 쓴다.**
+- 검증: 앞뒤 공백 제거 후 **1~50자**(빈 값·공백만 불가). 어기면 `INVALID_REQUEST`.
+  실명보다 느슨하다 — 표시명이라 한 글자도, 숫자·기호도 막을 이유가 없다.
+- **중복 검사를 하지 않는다.** 닉네임 중복 허용이 팀 결정이라 `UNIQUE` 도 걸지 않았다
+  (`DECISIONS.md` 2026-08-11 닉네임 온보딩).
+- **온보딩 완료 여부는 `nickname` 이 `null` 인지로만 판별한다. 별도 판별 API 를 두지 않는다.**
+- 가입 시 `nickname` 은 **비워 둔다.** 구글 이름은 `social_name` 에 넣는다 —
+  미리 채우면 "설정함"과 "안 함"을 구분할 별도 플래그가 필요해진다.
 
 ### 튜토리얼 완료 플래그 (이슈 #128)
 
@@ -66,6 +89,7 @@
 | `OAUTH_TOKEN_EXCHANGE_FAILED` | 400 | 구글 code↔token 교환 실패 |
 | `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 (실명 갱신 대상이 탈퇴·차단 상태일 때도 이 코드다) |
 | `INVALID_NAME` | 400 | `/api/users/me/name` 의 이름이 형식에 맞지 않음 (2~50자·한글/영문/공백) |
+| `INVALID_REQUEST` | 400 | `/api/users/me/nickname` 의 닉네임이 비었거나 50자를 넘음 |
 
 ### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 

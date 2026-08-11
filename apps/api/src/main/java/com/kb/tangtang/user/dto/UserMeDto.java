@@ -6,10 +6,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * GET /api/users/me 응답. tbl_user 에 프로필 이미지 컬럼이 없으므로 포함하지 않는다.
+ * 로그인한 사용자 정보. {@code GET /api/users/me} · {@code POST /api/auth/refresh} 의 {@code user} ·
+ * 사용자 정보를 바꾸는 모든 PATCH 응답이 **같은 모양**을 쓴다.
+ * tbl_user 에 프로필 이미지 컬럼이 없으므로 포함하지 않는다.
  *
- * socialProvider 는 마이페이지 프로필 카드가 'google · 이메일' 을 그리는 데 쓴다.
- * /api/auth/refresh 응답에는 넣지 않는다 — 로그인 경로 전체에 영향을 주지 않기 위함이다.
+ * <p>⚠ **반드시 {@link #from(UserDto)} 으로 만든다.** 빌더를 직접 호출하는 곳이 늘면
+ * 필드를 추가할 때마다 여러 군데를 고쳐야 하고, 한 곳을 빠뜨리면 그 경로에서만 값이 비는
+ * 버그가 난다(실제로 name·tutorialSeenAt 을 넣을 때 두 곳을 따로 고쳐야 했다).
+ * 표시명 계산 규칙도 여기 한 곳에만 둔다.
  */
 @Getter
 @NoArgsConstructor
@@ -18,7 +22,15 @@ import lombok.NoArgsConstructor;
 public class UserMeDto {
 
     private Long id;
+    /** 사용자가 직접 정한 표시명. **null 이면 닉네임 온보딩 미완료**다 — 프론트 가드가 이 값만 본다. */
     private String nickname;
+    /** OAuth 제공자가 준 이름. 닉네임 입력창 prefill 과 표시명 fallback 에 쓴다. */
+    private String socialName;
+    /**
+     * 화면에 그릴 표시명. **서버가 `nickname ?? socialName` 을 계산해 내려준다** —
+     * 규칙이 화면마다 흩어지면 어디선 닉네임, 어디선 구글 이름이 나오는 사고가 난다.
+     */
+    private String displayName;
     /**
      * 실명(본인확인용). 간편인증 화면이 이 값을 입력창에 미리 채운다.
      * 아직 인증을 한 번도 안 한 사용자는 null 이다. (DECISIONS.md 2026-08-11 간편인증 이름 수정 허용)
@@ -32,4 +44,31 @@ public class UserMeDto {
      */
     private java.time.LocalDateTime tutorialSeenAt;
     private java.time.LocalDateTime groupTutorialSeenAt;
+
+    /** tbl_user 행 하나를 응답 모양으로 옮긴다. 표시명은 여기서 계산한다. */
+    public static UserMeDto from(UserDto user) {
+        return UserMeDto.builder()
+                .id(user.getId())
+                .nickname(user.getNickname())
+                .socialName(user.getSocialName())
+                .displayName(displayNameOf(user))
+                .name(user.getName())
+                .email(user.getEmail())
+                .socialProvider(user.getSocialProvider())
+                .tutorialSeenAt(user.getTutorialSeenAt())
+                .groupTutorialSeenAt(user.getGroupTutorialSeenAt())
+                .build();
+    }
+
+    /**
+     * 표시명 규칙 — {@code nickname ?? socialName}.
+     *
+     * <p>**서버에서만 계산한다.** 화면마다 각자 계산하면 어디선 닉네임, 어디선 구글 이름이
+     * 나오는 사고가 난다. 실명({@code name})은 후보가 아니다 — 구글 이름이 실명과 다를 수 있어
+     * 섞으면 계좌 인증 실명이 표시명을 덮어쓴다. (DECISIONS.md 2026-08-11 닉네임 온보딩)
+     */
+    private static String displayNameOf(UserDto user) {
+        String nickname = user.getNickname();
+        return nickname != null && !nickname.isBlank() ? nickname : user.getSocialName();
+    }
 }

@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -71,7 +72,14 @@ class AuthServiceTest {
         UserDto created = captor.getValue();
         assertEquals("GOOGLE", created.getSocialProvider());
         assertEquals("google-sub-1", created.getProviderUserId());
-        assertEquals("지윤", created.getNickname());
+        /*
+         * 구글 이름은 socialName 으로 들어가고 nickname 은 비어 있어야 한다 —
+         * nickname IS NULL 이 "닉네임 온보딩 미완료" 판별 기준이라, 여기서 미리 채우면
+         * 모든 신규 사용자가 온보딩 화면을 영영 못 본다.
+         * (DECISIONS.md 2026-08-11 닉네임 온보딩)
+         */
+        assertEquals("지윤", created.getSocialName());
+        assertNull(created.getNickname(), "가입 시 닉네임은 비어 있어야 온보딩이 뜬다");
         assertEquals("ACTIVE", created.getStatus());
         assertEquals(1L, created.getDifficultyId(), "가입 시 EASY(1) 를 부여한다");
 

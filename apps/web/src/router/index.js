@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
 import { canEnterLinkStep } from '@/utils/account';
+import { NICKNAME_SETUP_ROUTE, needsNicknameSetup } from '@/utils/user';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -33,6 +34,17 @@ const routes = [
         name: 'financialConsent',
         component: () => import('@/views/consent/FinancialConsentView.vue'),
         meta: { title: '금융데이터 수집 동의', hideTabBar: true },
+    },
+    /*
+     * 온보딩 마지막 단계 (DECISIONS.md 2026-08-11).
+     * 동선은 로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈.
+     * 강제 입력이라 탭바를 숨긴다 — 여기서 빠져나갈 길은 저장뿐이다.
+     */
+    {
+        path: '/onboarding/nickname',
+        name: 'nicknameSetup',
+        component: () => import('@/views/onboarding/NicknameSetupView.vue'),
+        meta: { title: '닉네임 설정', hideTabBar: true },
     },
     {
         path: '/',
@@ -378,6 +390,17 @@ router.beforeEach((to) => {
      */
     if (auth.needsConsent && to.name !== 'consent') {
         return { name: 'consent' };
+    }
+
+    /*
+     * 닉네임을 아직 정하지 않은 사용자는 온보딩 마지막 단계에 묶어둔다 (DECISIONS.md 2026-08-11).
+     * 판정 근거는 `nickname` 이 비었는지 하나뿐이다 — 별도 판별 API 를 두지 않기로 했다.
+     *
+     * 면제 대상(닉네임 화면 자신 · 동의 · 계좌 연동 플로우)과 "사용자 정보가 아직 없으면 통과"는
+     * needsNicknameSetup() 안에 이유와 함께 적혀 있다. 여기서 조건을 다시 쓰지 말 것.
+     */
+    if (needsNicknameSetup(auth.user, to)) {
+        return { name: NICKNAME_SETUP_ROUTE };
     }
 
     /*

@@ -54,6 +54,7 @@ class UserServiceTest {
                 .providerUserId("sub-1")
                 .email("me@example.com")
                 .nickname("지윤")
+                .socialName("JH Jang")
                 .name(name)
                 .status("ACTIVE")
                 .difficultyId(1L)
@@ -163,6 +164,139 @@ class UserServiceTest {
                         () -> service.updateName(USER_ID, "ㅈㅐㅎㅏㄴ")).getCode());
 
         verify(userMapper, never()).updateName(anyLong(), anyString());
+    }
+
+    /* ── 닉네임 (이슈 #110) ─────────────────────────────── */
+
+    @Test
+    @DisplayName("닉네임을 저장한다 — 중복 검사는 하지 않는다")
+    void updateNickname() {
+        when(userMapper.updateNickname(USER_ID, "탕탕이")).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.updateNickname(USER_ID, "탕탕이");
+
+        verify(userMapper).updateNickname(USER_ID, "탕탕이");
+    }
+
+    @Test
+    @DisplayName("닉네임 앞뒤 공백은 잘라서 저장한다")
+    void updateNicknameTrims() {
+        when(userMapper.updateNickname(USER_ID, "탕탕이")).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.updateNickname(USER_ID, "  탕탕이  ");
+
+        verify(userMapper).updateNickname(USER_ID, "탕탕이");
+    }
+
+    @Test
+    @DisplayName("닉네임은 한 글자도 허용한다 — 실명과 달리 하한이 없다")
+    void updateNicknameAllowsSingleChar() {
+        when(userMapper.updateNickname(eq(USER_ID), anyString())).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.updateNickname(USER_ID, "탕");
+
+        verify(userMapper).updateNickname(USER_ID, "탕");
+    }
+
+    @Test
+    @DisplayName("닉네임은 숫자·기호도 허용한다 — 표시명이라 막을 이유가 없다")
+    void updateNicknameAllowsSymbols() {
+        when(userMapper.updateNickname(eq(USER_ID), anyString())).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.updateNickname(USER_ID, "탕탕이_99!");
+
+        verify(userMapper).updateNickname(USER_ID, "탕탕이_99!");
+    }
+
+    @Test
+    @DisplayName("빈 값·공백만·50자 초과는 INVALID_REQUEST 이고 DB 를 건드리지 않는다")
+    void updateNicknameRejectsInvalid() {
+        for (String bad : new String[] {null, "", "   ", "가".repeat(51)}) {
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> service.updateNickname(USER_ID, bad));
+            assertEquals("INVALID_REQUEST", ex.getCode(), "입력: " + bad);
+        }
+        verify(userMapper, never()).updateNickname(anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("50자는 통과한다 — 경계값")
+    void updateNicknameAllows50() {
+        when(userMapper.updateNickname(eq(USER_ID), anyString())).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.updateNickname(USER_ID, "가".repeat(50));
+
+        verify(userMapper).updateNickname(USER_ID, "가".repeat(50));
+    }
+
+    @Test
+    @DisplayName("없는 사용자의 닉네임 갱신은 NOT_FOUND")
+    void updateNicknameMissingUser() {
+        when(userMapper.updateNickname(USER_ID, "탕탕이")).thenReturn(0);
+
+        assertEquals("NOT_FOUND", assertThrows(BusinessException.class,
+                () -> service.updateNickname(USER_ID, "탕탕이")).getCode());
+        verify(userMapper, never()).findById(anyLong());
+    }
+
+    /* ── 표시명 규칙 (nickname ?? socialName) ────────────── */
+
+    @Test
+    @DisplayName("닉네임이 있으면 표시명은 닉네임이다")
+    void displayNamePrefersNickname() {
+        UserDto row = user("장재한");
+        row.setNickname("탕탕이");
+        row.setSocialName("JH Jang");
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        UserMeDto result = service.me(USER_ID);
+
+        assertEquals("탕탕이", result.getDisplayName());
+        assertEquals("JH Jang", result.getSocialName());
+    }
+
+    @Test
+    @DisplayName("닉네임 미설정이면 표시명은 소셜 이름이다 — 온보딩 전 방어값")
+    void displayNameFallsBackToSocialName() {
+        UserDto row = user("장재한");
+        row.setNickname(null);
+        row.setSocialName("JH Jang");
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        UserMeDto result = service.me(USER_ID);
+
+        assertEquals("JH Jang", result.getDisplayName());
+        assertNull(result.getNickname(), "nickname 이 null 이어야 프론트 가드가 온보딩으로 보낸다");
+    }
+
+    @Test
+    @DisplayName("닉네임이 공백뿐이어도 소셜 이름으로 넘어간다")
+    void displayNameIgnoresBlankNickname() {
+        UserDto row = user("장재한");
+        row.setNickname("   ");
+        row.setSocialName("JH Jang");
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        assertEquals("JH Jang", service.me(USER_ID).getDisplayName());
+    }
+
+    @Test
+    @DisplayName("실명은 표시명 후보가 아니다 — 둘 다 없으면 표시명도 없다")
+    void displayNameNeverUsesRealName() {
+        UserDto row = user("장재한");
+        row.setNickname(null);
+        row.setSocialName(null);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        UserMeDto result = service.me(USER_ID);
+
+        assertNull(result.getDisplayName(), "실명(name)이 표시명으로 새어나오면 안 된다");
+        assertEquals("장재한", result.getName());
     }
 
     /* ── 튜토리얼 완료 플래그 (이슈 #128) ───────────────── */
