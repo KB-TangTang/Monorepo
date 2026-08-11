@@ -2,7 +2,21 @@
 import { computed } from 'vue';
 import { formatChangeRate, formatWon } from '@/utils/monthlyConsumption';
 
-const props = defineProps({ report: { type: Object, required: true } });
+const props = defineProps({
+    report: { type: Object, required: true },
+    showComparison: { type: Boolean, default: true },
+});
+const reportMonth = computed(() => Number(props.report.period.slice(5)));
+const leadingCategory = computed(() => props.report.categories[0]);
+const comparisonCopy = computed(() => {
+    const rate = leadingCategory.value.changeRate;
+    if (rate === 0) {
+        return `${leadingCategory.value.name} 지출이 지난달과 같아요`;
+    }
+    return `${leadingCategory.value.name} 지출이 지난달보다 ${Math.abs(rate)}% ${
+        rate > 0 ? '늘었어요' : '줄었어요'
+    }`;
+});
 const CHART_COLORS = {
     primary: 'var(--tt-primary)',
     accent: 'var(--tt-accent)',
@@ -26,9 +40,11 @@ const chartStyle = computed(() => {
     <section class="category-report" aria-labelledby="category-title">
         <h2 id="category-title">카테고리별</h2>
         <div class="category-report__ratio-card">
-            <h3>
-                카페 지출이 지난달보다
-                <em>{{ report.categories[0].changeRate }}% 늘었어요</em>
+            <h3 v-if="showComparison">
+                {{ comparisonCopy }}
+            </h3>
+            <h3 v-else>
+                이번 달 소비 비중 <span>{{ reportMonth }}월 지출 기준</span>
             </h3>
             <div class="category-report__chart-row">
                 <div
@@ -37,6 +53,7 @@ const chartStyle = computed(() => {
                     aria-label="카테고리별 지출 비율"
                 >
                     <span></span>
+                    <b>{{ reportMonth }}월</b>
                 </div>
                 <ul class="category-report__legend">
                     <li v-for="category in report.categories" :key="category.name">
@@ -55,6 +72,7 @@ const chartStyle = computed(() => {
                     <span>{{ category.name }}</span>
                     <strong>{{ formatWon(category.amount) }}</strong>
                     <b
+                        v-if="showComparison"
                         :class="{
                             'category-report__change--up': category.changeRate > 0,
                             'category-report__change--down': category.changeRate < 0,
@@ -68,7 +86,7 @@ const chartStyle = computed(() => {
                 <span>합계</span><strong>{{ formatWon(report.totalSpent) }}</strong>
             </footer>
         </div>
-        <aside class="category-report__sentence">
+        <aside v-if="showComparison" class="category-report__sentence">
             이번 달 아낀 <strong>{{ formatWon(report.savingsStatement.amount) }}</strong
             >은<br />
             <b>{{ report.savingsStatement.category }}라떼 {{ report.savingsStatement.count }}잔</b>
@@ -101,6 +119,12 @@ const chartStyle = computed(() => {
     font-style: normal;
     color: var(--tt-danger);
 }
+.category-report__ratio-card h3 span {
+    margin-left: var(--tt-space-1);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
+}
 .category-report__chart-row {
     display: flex;
     align-items: center;
@@ -120,6 +144,13 @@ const chartStyle = computed(() => {
     inset: 31px;
     background: var(--tt-bg);
     border-radius: 50%;
+}
+.category-report__donut > b {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    font-size: var(--tt-fs-caption);
+    place-items: center;
 }
 .category-report__legend {
     display: flex;
@@ -253,7 +284,7 @@ const chartStyle = computed(() => {
     .category-report__receipt li {
         grid-template-columns: 38px 1fr auto;
     }
-    .category-report__receipt li > b {
+    .category-report__receipt li > b:not(:first-child) {
         grid-column: 2 / -1;
         margin-top: calc(var(--tt-space-2) * -1);
     }

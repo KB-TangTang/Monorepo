@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    buildMonthlyTrendSlots,
     formatChangeRate,
     getPreviousPeriod,
     isAvailableReportMonth,
     resolveSelectedReportPeriod,
+    resolveFixedExpenseStatus,
     resolveReportState,
 } from '../src/utils/monthlyConsumption.js';
-import { AVAILABLE_MONTHS } from '../src/fixtures/monthlyConsumption.js';
+import { AVAILABLE_MONTHS, REPORTS } from '../src/fixtures/monthlyConsumption.js';
 
 test('기준일 이전의 리포트 보유 월만 조회 가능 월로 계산한다', () => {
     const referenceDate = new Date(2026, 7, 4);
@@ -42,13 +44,20 @@ test('유효한 요청 월을 유지하고 데이터 없는 월은 최신 리포
     assert.equal(resolveSelectedReportPeriod(months, '2026-03', referenceDate), '2026-07');
 });
 
-test('데이터가 없는 1~4월은 월 선택에서 비활성화한다', () => {
+test('2월 온보딩과 3~4월 리포트는 월 선택에서 활성화한다', () => {
     const referenceDate = new Date(2026, 7, 4);
 
-    ['2026-01', '2026-02', '2026-03', '2026-04'].forEach((period) => {
+    ['2026-02', '2026-03', '2026-04'].forEach((period) => {
         const month = AVAILABLE_MONTHS.find((item) => item.value === period);
-        assert.equal(isAvailableReportMonth(month, referenceDate), false);
+        assert.equal(isAvailableReportMonth(month, referenceDate), true);
     });
+    assert.equal(
+        isAvailableReportMonth(
+            AVAILABLE_MONTHS.find((item) => item.value === '2026-01'),
+            referenceDate,
+        ),
+        false,
+    );
 });
 
 test('카테고리 증감과 화면 상태를 표시한다', () => {
@@ -58,5 +67,69 @@ test('카테고리 증감과 화면 상태를 표시한다', () => {
     assert.equal(resolveReportState({ loading: true, error: '실패', report: {} }), 'loading');
     assert.equal(resolveReportState({ error: '실패', report: {} }), 'error');
     assert.equal(resolveReportState({ report: null }), 'empty');
+    assert.equal(resolveReportState({ report: { status: 'onboarding' } }), 'onboarding');
+    assert.equal(
+        resolveReportState({ report: { status: 'report', hasPreviousComparison: false } }),
+        'first-report',
+    );
     assert.equal(resolveReportState({ report: {} }), 'ready');
+});
+
+test('고정 지출 의심 건은 명시적인 배열 또는 false일 때만 확정한다', () => {
+    assert.equal(resolveFixedExpenseStatus([{ id: 1 }]), 'detected');
+    assert.equal(resolveFixedExpenseStatus([]), 'clear');
+    assert.equal(resolveFixedExpenseStatus(false), 'clear');
+    assert.equal(resolveFixedExpenseStatus(null), 'unknown');
+    assert.equal(resolveFixedExpenseStatus(undefined), 'unknown');
+});
+
+test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지한다', () => {
+    assert.equal(REPORTS['2026-02'].status, 'onboarding');
+    assert.equal(REPORTS['2026-03'].hasPreviousComparison, false);
+    assert.equal(REPORTS['2026-03'].monthlyTrend.length, 1);
+    assert.equal(
+        REPORTS['2026-03'].categories.every((category) => category.changeRate === undefined),
+        true,
+    );
+    assert.equal(REPORTS['2026-04'].hasPreviousComparison, true);
+    assert.deepEqual(
+        REPORTS['2026-04'].monthlyTrend.map((item) => item.month),
+        [3, 4],
+    );
+    assert.deepEqual(REPORTS['2026-04'].fixedExpenseCandidates, []);
+});
+
+test('모든 리포트에 최근 6개월 슬롯을 만들고 내역 없는 달은 비워 둔다', () => {
+    const aprilSlots = buildMonthlyTrendSlots(
+        REPORTS['2026-04'].period,
+        REPORTS['2026-04'].monthlyTrend,
+    );
+    assert.deepEqual(
+        aprilSlots.map((item) => item.month),
+        [11, 12, 1, 2, 3, 4],
+    );
+    assert.deepEqual(
+        aprilSlots.map((item) => item.hasData),
+        [false, false, false, false, true, true],
+    );
+});
+
+test('5~7월 소비 흐름은 3월 데이터부터 일관되게 누적된다', () => {
+    const expectedMonths = {
+        '2026-05': [3, 4, 5],
+        '2026-06': [3, 4, 5, 6],
+        '2026-07': [3, 4, 5, 6, 7],
+    };
+
+    Object.entries(expectedMonths).forEach(([period, months]) => {
+        const report = REPORTS[period];
+        assert.deepEqual(
+            report.monthlyTrend.map((item) => item.month),
+            months,
+        );
+        assert.equal(
+            report.categories.reduce((sum, category) => sum + category.amount, 0),
+            report.totalSpent,
+        );
+    });
 });

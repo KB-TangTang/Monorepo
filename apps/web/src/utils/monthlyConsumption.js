@@ -13,7 +13,8 @@ export function getPreviousPeriod(referenceDate = new Date()) {
 }
 
 export function isAvailableReportMonth(month, referenceDate = new Date()) {
-    return month.hasReport && month.value <= getPreviousPeriod(referenceDate);
+    const hasMonthlyContent = month.hasReport || month.status === 'onboarding';
+    return hasMonthlyContent && month.value <= getPreviousPeriod(referenceDate);
 }
 
 export function resolveSelectedReportPeriod(months, requestedPeriod, referenceDate = new Date()) {
@@ -42,5 +43,32 @@ export function resolveReportState({ loading, error, report }) {
     if (!report) {
         return 'empty';
     }
+    if (report.status === 'onboarding') {
+        return 'onboarding';
+    }
+    if (report.hasPreviousComparison === false) {
+        return 'first-report';
+    }
     return 'ready';
+}
+
+export function resolveFixedExpenseStatus(candidates) {
+    if (Array.isArray(candidates)) {
+        return candidates.length > 0 ? 'detected' : 'clear';
+    }
+    if (candidates === false) {
+        return 'clear';
+    }
+    return 'unknown';
+}
+
+export function buildMonthlyTrendSlots(period, monthlyTrend = []) {
+    const currentMonth = Number(period?.slice(5));
+    const trendByMonth = new Map(monthlyTrend.map((item) => [item.month, item.amount]));
+
+    return Array.from({ length: 6 }, (_, index) => {
+        const month = ((currentMonth - 6 + index + 12) % 12) + 1;
+        const amount = trendByMonth.get(month) ?? null;
+        return { month, amount, hasData: amount !== null, active: index === 5 };
+    });
 }
