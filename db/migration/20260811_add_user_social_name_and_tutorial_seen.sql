@@ -23,6 +23,8 @@
 --     -e "source D:/KB_Final_Project/app/Monorepo/db/migration/20260811_add_user_social_name_and_tutorial_seen.sql"
 --   PowerShell 은 < 리다이렉션을 지원하지 않으므로 위처럼 source 를 쓴다.
 --
+-- 신규 설치: **실행 대상이다.** 이 변경은 schema.sql 에 반영돼 있지 않다.
+--
 -- ⚠ schema.sql 은 고치지 않았다.
 --   팀에 이미 공유된 스키마라 변경분은 migration/ 으로만 관리한다
 --   (db/AGENTS.md 규칙 · DECISIONS.md 2026-08-09 (4)).
