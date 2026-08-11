@@ -36,7 +36,7 @@ import com.kb.tangtang.transaction.domain.Transaction;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -78,6 +78,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private final TransactionMapper transactionMapper;
     private final FinancialSyncHistoryMapper syncHistoryMapper;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * ⚠ 생성자가 둘이라 **@Autowired 로 어느 쪽을 쓸지 명시해야 한다** (AccountLinkService 와 같은 이유).
@@ -94,10 +95,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                                     CardMapper cardMapper,
                                     CardBillMapper cardBillMapper,
                                     TransactionMapper transactionMapper,
-                                    FinancialSyncHistoryMapper syncHistoryMapper) {
+                                    FinancialSyncHistoryMapper syncHistoryMapper,
+                                    TransactionTemplate transactionTemplate) {
         this(client, scenarioKeyProvider, connectedAccountMapper, loanMapper, investmentHoldingMapper,
                 cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
-                Clock.systemDefaultZone());
+                Clock.systemDefaultZone(), transactionTemplate);
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -110,7 +112,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                              CardBillMapper cardBillMapper,
                              TransactionMapper transactionMapper,
                              FinancialSyncHistoryMapper syncHistoryMapper,
-                             Clock clock) {
+                             Clock clock,
+                             TransactionTemplate transactionTemplate) {
         this.client = client;
         this.scenarioKeyProvider = scenarioKeyProvider;
         this.connectedAccountMapper = connectedAccountMapper;
@@ -121,6 +124,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         this.transactionMapper = transactionMapper;
         this.syncHistoryMapper = syncHistoryMapper;
         this.clock = clock;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override
@@ -219,15 +223,22 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /* ── 저장 (하나의 트랜잭션) ─────────────────────────── */
 
     /**
-     * 수집한 데이터를 한 번에 반영한다. 순서: 상품 upsert → 거래 upsert → correlation 연결 → 성공 이력.
+     * 저장 구간의 트랜잭션 경계.
      *
-     * ⚠ 같은 클래스 안(sync())에서 부르므로 프록시를 타지 않아 이 @Transactional 은 실제로는 적용되지
-     *    않는다. 트랜잭션 경계를 진짜로 걸려면 트랜잭션 매니저(TransactionTemplate)를 주입하거나
-     *    저장 전용 빈으로 분리해야 한다 — 설계·리뷰에서 정할 사항이라 태스크 브리프의 구조를 그대로 둔다.
-     *    저장이 전부 멱등 upsert 라서 중간 실패 후 재동기화하면 같은 상태로 수렴한다.
+     * ⚠ 여기서 @Transactional 을 쓰면 **아무 일도 일어나지 않는다.** 애너테이션은 프록시를 통해 들어온
+     *    호출에만 걸리는데 이 메서드는 같은 객체의 sync() 가 직접 부르기 때문이다(자기호출).
+     *    설계 §8 이 요구하는 "전부 성공한 뒤 하나의 커밋" 을 실제로 보장하려면 경계를 코드로 명시해야
+     *    해서 TransactionTemplate 을 쓴다. 콜백 안에서 예외가 나면 그때까지의 쓰기가 전부 롤백된다.
      */
-    @Transactional
-    protected void saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
+    private void saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
+        transactionTemplate.execute(status -> {
+            writeAll(userId, bundle, startedAt);
+            return null;
+        });
+    }
+
+    /** 실제 쓰기. 순서: 상품 upsert → 거래 upsert → correlation 연결 → 성공 이력. */
+    private void writeAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
         LocalDateTime now = LocalDateTime.now(clock);
 
         /* BANK: 계좌 upsert + 거래 upsert. 계좌 타입은 목서버 accountTypeCode 를 그대로 안 쓰고
@@ -394,7 +405,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                         .loanId(loanId)
                         .codefTrKey("LOAN-" + loan.getLoanId() + "-" + tx.getTransactionId())
                         .amount(tx.getAmount())
-                        .direction("OUT")
+                        /* 대출 거래는 실행(입금)과 상환(출금)이 섞여 있다 — 구분이 서기 전엔 비워 둔다. */
+                        .direction(null)
                         .trDate(OffsetDateTime.parse(tx.getTransactedAt()).toLocalDate())
                         .classification("TRANSFER")
                         .isExcludedFromSummary(false)
@@ -534,7 +546,13 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .merchantName(merchantName)
                 .merchantNameNormalized(merchantName)
                 .amount(amount)
-                .direction(amount != null && amount.signum() < 0 ? "OUT" : "IN")
+                /*
+                 * 금액 부호로는 입출금을 못 가른다 — tbl_transaction.amount 는 "항상 양수" 이고
+                 * 목서버도 양수만 준다. 카드 승인은 성격상 무조건 출금이라 OUT 으로 확정하고,
+                 * 나머지 소스는 원천 거래유형 코드의 의미가 확정되지 않아 **지어내지 않고 비운다**
+                 * (direction 은 nullable). 코드 해석이 정리되면 그때 채운다.
+                 */
+                .direction(sourceType.startsWith("CARD_") ? "OUT" : null)
                 .trDate(OffsetDateTime.parse(transactedAt).toLocalDate())
                 .classification("CONSUMPTION")
                 .isExcludedFromSummary(false)

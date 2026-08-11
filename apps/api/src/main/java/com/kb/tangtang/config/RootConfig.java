@@ -20,7 +20,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.client.RestTemplate;
 
@@ -106,6 +108,19 @@ public class RootConfig {
     @Bean
     public DataSourceTransactionManager transactionManager() {
         return new DataSourceTransactionManager(dataSource());
+    }
+
+    /**
+     * 프로그래밍 방식 트랜잭션 경계.
+     *
+     * ⚠ @Transactional 은 **프록시를 통해 들어온 호출에만** 걸린다. 한 클래스 안에서 자기 메서드를
+     *   부르는 구조(FinancialSyncService: 외부 API 수집은 트랜잭션 밖, 저장만 트랜잭션 안)에서는
+     *   애너테이션이 조용히 무시되고 문장 단위 auto-commit 으로 떨어진다.
+     *   그런 구간은 이 템플릿으로 경계를 명시한다.
+     */
+    @Bean
+    public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+        return new TransactionTemplate(transactionManager);
     }
 
     /** 외부 API 호출용. 지금은 구글 OAuth 만 쓴다. */

@@ -19,6 +19,11 @@ import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -46,6 +51,31 @@ import static org.mockito.Mockito.when;
  * 매퍼·클라이언트는 전부 목이라 DB·목서버가 없어도 돈다 (AccountLinkServiceTest 와 같은 방식).
  */
 class FinancialSyncServiceImplTest {
+
+    /**
+     * 커넥션 없이 콜백만 그대로 실행하는 트랜잭션 매니저.
+     *
+     * TransactionTemplate 은 매니저를 목으로 줘도 콜백을 부르긴 하지만, 그건 목의 기본 반환값
+     * (getTransaction → null)에 기대는 동작이라 의도가 드러나지 않는다. "이 테스트는 트랜잭션을
+     * 검증하지 않고 통과시킨다" 를 코드로 못박는다. 실제 경계는 RootConfig 의 빈이 담당한다.
+     */
+    private static final PlatformTransactionManager NO_OP_TRANSACTION_MANAGER =
+            new PlatformTransactionManager() {
+                @Override
+                public TransactionStatus getTransaction(TransactionDefinition definition) {
+                    return new SimpleTransactionStatus();
+                }
+
+                @Override
+                public void commit(TransactionStatus status) {
+                    /* 할 일 없음 */
+                }
+
+                @Override
+                public void rollback(TransactionStatus status) {
+                    /* 할 일 없음 */
+                }
+            };
 
     private FinancialSyncClient client;
     private ScenarioKeyProvider scenarioKeyProvider;
@@ -75,7 +105,7 @@ class FinancialSyncServiceImplTest {
         service = new FinancialSyncServiceImpl(
                 client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
-                syncHistoryMapper, clock);
+                syncHistoryMapper, clock, new TransactionTemplate(NO_OP_TRANSACTION_MANAGER));
 
         when(scenarioKeyProvider.resolve(1L)).thenReturn("1");
         // 이번 테스트는 BANK 만 데이터가 있고 나머지 5개 소스는 빈 목록으로 둔다.
@@ -192,5 +222,28 @@ class FinancialSyncServiceImplTest {
 
         verify(transactionMapper).insert(argThat(t ->
                 "BANK".equals(t.getSourceType()) && "N2-CHK-0617".equals(t.getCorrelationId())));
+    }
+
+    @Test
+    @DisplayName("direction 은 카드 승인만 OUT 이고 나머지 소스는 비운다 — 지어내지 않는다")
+    void directionIsSetOnlyForCardApprovals() {
+        when(client.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
+                        .cardTypeCode("01").currency("KRW").build()));
+        when(client.getCardApprovals(eq("1"), eq(1L))).thenReturn(List.of(
+                CardApprovalSyncDto.builder().approvalId(1L).approvalNo("APV-CREDIT-1")
+                        .approvedAt("2026-08-10T12:00:00+09:00").approvedAmount(new BigDecimal("30000"))
+                        .rawJson(null).build()));
+        when(client.getCardBills(anyString(), anyLong())).thenReturn(List.of());
+        when(cardMapper.update(any())).thenReturn(0);
+
+        service.sync(1L);
+
+        /* 카드 승인은 무조건 출금이다. */
+        verify(transactionMapper).insert(argThat(t ->
+                "CARD_CREDIT".equals(t.getSourceType()) && "OUT".equals(t.getDirection())));
+        /* 은행 거래는 금액이 항상 양수라 부호로 판정할 수 없다 — 잘못 채우느니 비운다. */
+        verify(transactionMapper).insert(argThat(t ->
+                "BANK".equals(t.getSourceType()) && t.getDirection() == null));
     }
 }
