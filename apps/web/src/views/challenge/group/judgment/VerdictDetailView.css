@@ -1,0 +1,262 @@
+.verdict-detail {
+    min-height: 100dvh;
+    background: var(--tt-bg-subtle);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── 헤더 ── */
+.verdict-detail__header {
+    flex: none;
+    position: relative;
+    overflow: hidden;
+    padding-bottom: 8px;
+}
+
+.verdict-detail__deco {
+    position: absolute;
+    top: -34px;
+    right: -26px;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+}
+
+.verdict-detail__deco--innocent {
+    background: var(--tt-success-subtle);
+}
+
+.verdict-detail__deco--guilty {
+    background: var(--tt-danger-subtle);
+}
+
+.verdict-detail__header-content {
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
+    position: relative;
+    z-index: 2;
+}
+
+.verdict-detail__badges {
+    display: flex;
+    gap: 6px;
+}
+
+.verdict-detail__badge {
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    padding: 4px 10px;
+    border-radius: var(--tt-radius-full);
+}
+
+.badge--eval {
+    background: var(--tt-info-subtle);
+    color: var(--tt-info);
+}
+
+.badge--innocent {
+    background: var(--tt-success-subtle);
+    color: var(--tt-success);
+}
+
+.badge--guilty {
+    background: var(--tt-danger-subtle);
+    color: var(--tt-danger-deep);
+}
+
+.verdict-detail__title {
+    font-size: 22px;
+    font-weight: var(--tt-fw-black);
+    letter-spacing: -0.01em;
+    margin-top: 10px;
+    color: var(--tt-text);
+}
+
+.verdict-detail__sub {
+    font-size: 12.5px;
+    color: var(--tt-text-muted);
+    margin-top: var(--tt-space-1);
+    font-weight: var(--tt-fw-medium);
+}
+
+/* ── 본문 ── */
+.verdict-detail__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+/* ── 투표 결과 배너 ── */
+.verdict-detail__banner {
+    flex: none;
+    border-radius: var(--tt-radius-lg);
+    padding: 15px 18px;
+}
+
+.verdict-detail__banner--innocent {
+    background: var(--tt-success);
+    box-shadow: 0 12px 28px -14px rgba(46, 158, 107, 0.7);
+}
+
+.verdict-detail__banner--guilty {
+    background: var(--tt-danger);
+    box-shadow: 0 12px 28px -14px rgba(224, 102, 75, 0.7);
+}
+
+.verdict-detail__banner-label {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-black);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.verdict-detail__banner-score {
+    font-size: 24px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+    letter-spacing: -0.01em;
+    margin-top: var(--tt-space-1);
+}
+
+/* ── 금액 테이블 ── */
+.verdict-detail__table {
+    flex: none;
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-lg);
+    padding: var(--tt-space-1) var(--tt-card-padding) 14px;
+    box-shadow: var(--tt-elevation-2);
+}
+
+.verdict-detail__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 0;
+}
+
+.verdict-detail__row--highlight {
+    padding: var(--tt-space-3) 0 3px;
+}
+
+.verdict-detail__row-label {
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text-body);
+    font-weight: var(--tt-fw-semibold);
+}
+
+.verdict-detail__row-label--success {
+    font-size: var(--tt-fs-body);
+    color: var(--tt-success-deep);
+    font-weight: var(--tt-fw-black);
+}
+
+.verdict-detail__row-label--danger {
+    font-size: var(--tt-fs-body);
+    color: var(--tt-danger-deep);
+    font-weight: var(--tt-fw-black);
+}
+
+.verdict-detail__row-value {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
+    font-family: var(--tt-font-mono);
+}
+
+.verdict-detail__row-value--highlight {
+    font-size: var(--tt-card-padding);
+}
+
+.verdict-detail__row-value--success {
+    color: var(--tt-success-deep);
+}
+
+.verdict-detail__row-value--danger {
+    color: var(--tt-danger-deep);
+}
+
+.verdict-detail__row-hint {
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
+    font-weight: var(--tt-fw-semibold);
+}
+
+.verdict-detail__divider {
+    height: 1px;
+    background: var(--tt-bg-fill);
+}
+
+.verdict-detail__divider--dashed {
+    height: 0;
+    border-top: 1px dashed var(--tt-border-divider);
+    background: none;
+    margin: 2px 0;
+}
+
+/* ── 판결 사유 ── */
+.verdict-detail__reason {
+    flex: none;
+    border-radius: var(--tt-card-padding);
+    padding: 13px var(--tt-card-padding);
+}
+
+.verdict-detail__reason--innocent {
+    background: var(--tt-success-subtle);
+    border: 1px solid var(--tt-success-subtle-border);
+}
+
+.verdict-detail__reason--guilty {
+    background: var(--tt-danger-subtle);
+    border: 1px solid var(--tt-danger-subtle-border);
+}
+
+.verdict-detail__reason-label {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-black);
+}
+
+.verdict-detail__reason--innocent .verdict-detail__reason-label {
+    color: var(--tt-success);
+}
+
+.verdict-detail__reason--guilty .verdict-detail__reason-label {
+    color: var(--tt-danger-deep);
+}
+
+.verdict-detail__reason-text {
+    font-size: 12.5px;
+    line-height: var(--tt-lh-normal);
+    margin-top: 5px;
+}
+
+.verdict-detail__reason--innocent .verdict-detail__reason-text {
+    color: var(--tt-success-deep);
+}
+
+.verdict-detail__reason--guilty .verdict-detail__reason-text {
+    color: var(--tt-danger-deep);
+}
+
+/* ── 하단 버튼 ── */
+.verdict-detail__footer {
+    flex: none;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 18px;
+    background: var(--tt-bg-subtle);
+}
+
+.verdict-detail__btn {
+    width: 100%;
+    background: var(--tt-surface-inverse);
+    color: var(--tt-text-inverse);
+    font-weight: var(--tt-fw-black);
+    font-size: var(--tt-fs-label);
+    padding: 15px;
+    border-radius: var(--tt-radius-md);
+    text-align: center;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 10px 24px -12px rgba(35, 40, 66, 0.6);
+}

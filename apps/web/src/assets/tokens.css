@@ -52,6 +52,8 @@
     --tt-green-soft: #E4F4EC;
     --tt-green-deep: #1F6B48;
 
+    --tt-green-soft-border: #C9E6D6; /* 무죄 카드 테두리 */
+
     /* Gold: 주의 / 진행 중 (= 브랜드 Gold 공유) */
     /* --tt-gold, --tt-gold-soft, --tt-gold-deep 은 위에서 정의 */
     --tt-gold-bright: #F7C948;    /* 다크 배경 위 골드 텍스트 */
@@ -62,6 +64,7 @@
     --tt-red: #E0664B;
     --tt-red-soft: #FBE9E4;
     --tt-red-deep: #C24B31;
+    --tt-red-soft-border: #F3D3C9;  /* 유죄 카드 테두리 */
 
     /* Blue: 정보 / 링크 / 기간 */
     --tt-blue: #3E63D6;
@@ -99,6 +102,8 @@
     --tt-accent-warn: var(--tt-gold-warn);       /* 골드소프트 배경 위 경고 텍스트 */
     --tt-accent-subtle-border: var(--tt-gold-soft-border);
     --tt-info-subtle-border: var(--tt-blue-soft-border);
+    --tt-success-subtle-border: var(--tt-green-soft-border);
+    --tt-danger-subtle-border: var(--tt-red-soft-border);
 
     --tt-text: var(--tt-neutral-text);
     --tt-text-body: var(--tt-neutral-body);
