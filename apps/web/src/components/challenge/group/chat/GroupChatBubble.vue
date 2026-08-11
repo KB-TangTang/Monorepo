@@ -51,6 +51,11 @@ const initial = computed(() => {
                     class="bubble-row__sticker"
                 />
 
+                <!-- 스티커 로드 실패 -->
+                <div v-else-if="isSticker" class="bubble-row__sticker-fallback">
+                    스티커
+                </div>
+
                 <!-- 텍스트 -->
                 <div
                     v-else
@@ -140,6 +145,18 @@ const initial = computed(() => {
     width: 100px;
     height: 100px;
     object-fit: contain;
+}
+
+.bubble-row__sticker-fallback {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tt-bg-fill);
+    border-radius: var(--tt-radius-md);
+    color: var(--tt-text-hint);
+    font-size: var(--tt-fs-caption);
 }
 
 .bubble-row__time {

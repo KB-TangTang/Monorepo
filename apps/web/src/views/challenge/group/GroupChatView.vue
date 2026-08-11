@@ -22,6 +22,7 @@ const chatScrollEl = ref(null);
 const showSticker = ref(false);
 const toastText = ref('');
 let toastTimer = null;
+let isLoadingOlder = false; // 스크롤-업 페이징 중 scrollToBottom 방지용
 
 /* ── 메시지 그룹핑 (날짜 구분 삽입) ────────────────────── */
 const groupedMessages = computed(() => {
@@ -74,6 +75,7 @@ function scrollToBottom() {
 function handleScroll() {
     if (!chatScrollEl.value) return;
     if (chatScrollEl.value.scrollTop < 40 && store.hasMore && !store.loading) {
+        isLoadingOlder = true;
         const prevHeight = chatScrollEl.value.scrollHeight;
         store.loadOlderMessages(groupId.value).then(() => {
             nextTick(() => {
@@ -81,6 +83,7 @@ function handleScroll() {
                     chatScrollEl.value.scrollTop =
                         chatScrollEl.value.scrollHeight - prevHeight;
                 }
+                isLoadingOlder = false;
             });
         });
     }
@@ -134,7 +137,7 @@ function handleOpenVerdict(indictmentId) {
 
 /* ── 메시지 판별 헬퍼 ──────────────────────────────────── */
 function isMine(msg) {
-    return msg.senderId === store.currentUserId;
+    return Number(msg.senderId) === Number(store.currentUserId);
 }
 
 function isSystemCard(msg) {
@@ -163,11 +166,13 @@ onUnmounted(() => {
     store.leaveRoom();
 });
 
-// 메시지가 추가되면 자동 스크롤
+// 새 메시지가 뒤에 추가될 때만 자동 스크롤 (페이징으로 앞에 삽입될 때는 스킵)
 watch(
     () => store.messages.length,
     () => {
-        scrollToBottom();
+        if (!isLoadingOlder) {
+            scrollToBottom();
+        }
     },
 );
 </script>
@@ -175,7 +180,7 @@ watch(
 <template>
     <div class="chat-view">
         <!-- 헤더 -->
-        <GroupChatHeader :room-info="store.roomInfo" />
+        <GroupChatHeader :room-info="store.roomInfo" @open-menu="showToast('준비 중인 기능입니다')" />
 
         <!-- 대화 영역 -->
         <div
