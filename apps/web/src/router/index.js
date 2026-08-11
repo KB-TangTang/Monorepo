@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
 import { canEnterLinkStep } from '@/utils/account';
-import { NICKNAME_SETUP_ROUTE, needsNicknameSetup } from '@/utils/user';
+import { resolveOnboardingRedirect } from '@/utils/user';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -384,23 +384,16 @@ router.beforeEach((to) => {
     }
 
     /*
-     * 필수 동의를 마치지 않은 사용자는 동의 화면에 묶어둔다.
-     * 계좌 연동용 CODEF 동의(/consent/financial)는 이 게이트 밖이다 —
-     * SIGNUP 동의를 이미 마친 사용자만 도달하는 화면이라 여기서 막으면 순환한다.
-     */
-    if (auth.needsConsent && to.name !== 'consent') {
-        return { name: 'consent' };
-    }
-
-    /*
-     * 닉네임을 아직 정하지 않은 사용자는 온보딩 마지막 단계에 묶어둔다 (DECISIONS.md 2026-08-11).
-     * 판정 근거는 `nickname` 이 비었는지 하나뿐이다 — 별도 판별 API 를 두지 않기로 했다.
+     * 온보딩을 끝내지 않은 사용자는 남은 단계에 묶어둔다 (DECISIONS.md 2026-08-11 (7)).
+     * 동선은 `로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈` 이고 계좌 연동까지 강제한다.
      *
-     * 면제 대상(닉네임 화면 자신 · 동의 · 계좌 연동 플로우)과 "사용자 정보가 아직 없으면 통과"는
-     * needsNicknameSetup() 안에 이유와 함께 적혀 있다. 여기서 조건을 다시 쓰지 말 것.
+     * 단계 순서·면제 대상(자기 화면과 앞 단계 화면)·"사용자 정보가 아직 없으면 통과"는
+     * 전부 resolveOnboardingRedirect() 안에 이유와 함께 적혀 있다.
+     * ⚠ 여기서 조건을 다시 쓰지 말 것 — 판정이 두 곳으로 갈리면 무한 리다이렉트가 난다.
      */
-    if (needsNicknameSetup(auth.user, to)) {
-        return { name: NICKNAME_SETUP_ROUTE };
+    const onboardingRoute = resolveOnboardingRedirect(auth, to);
+    if (onboardingRoute) {
+        return { name: onboardingRoute };
     }
 
     /*

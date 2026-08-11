@@ -38,8 +38,12 @@ const errorMessage = ref('');
 const isSaving = ref(false);
 
 const items = computed(() => catalog.value?.items ?? []);
-const allChecked = computed(() => items.value.length > 0 && isAllChecked(items.value, agreementState.value));
-const submittable = computed(() => items.value.length > 0 && canSubmit(items.value, agreementState.value));
+const allChecked = computed(
+    () => items.value.length > 0 && isAllChecked(items.value, agreementState.value),
+);
+const submittable = computed(
+    () => items.value.length > 0 && canSubmit(items.value, agreementState.value),
+);
 
 async function loadConsentCatalog() {
     // 재시도 시 이전 실패 메시지가 남아있으면 성공해도 화면에 계속 보인다.
@@ -77,7 +81,14 @@ async function onSubmit() {
     errorMessage.value = '';
     try {
         await consent.save('SIGNUP', toAgreements(agreementState.value));
-        router.replace({ name: 'home' });
+        /*
+         * 홈이 아니라 금융동의로 잇는다 (DECISIONS.md 2026-08-11 (7)).
+         * 여기서 홈으로 보내던 동안 /consent/financial 은 **아무도 도달할 수 없는 화면**이었다 —
+         * 제3자 제공(THIRD_PARTY) 동의를 받지 않은 채 계좌가 연동됐다. 규정상 그냥 버그다.
+         * 동선은 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈이고, 남은 단계는
+         * 라우터 가드(utils/user.js resolveOnboardingRedirect)가 안전망으로 다시 잡는다.
+         */
+        router.replace({ name: 'financialConsent' });
     } catch (err) {
         errorMessage.value = err.message;
     } finally {
@@ -99,7 +110,14 @@ async function onBack() {
 <template>
     <div class="consent-view">
         <header class="consent-view__header">
-            <button class="consent-view__back" type="button" aria-label="동의 취소하고 로그아웃" @click="onBack">‹</button>
+            <button
+                class="consent-view__back"
+                type="button"
+                aria-label="동의 취소하고 로그아웃"
+                @click="onBack"
+            >
+                ‹
+            </button>
             <h1 class="consent-view__title">서비스 동의</h1>
         </header>
 
@@ -129,7 +147,13 @@ async function onBack() {
             <p v-if="errorMessage" class="consent-view__error">{{ errorMessage }}</p>
 
             <div class="consent-view__cta">
-                <BaseButton block size="lg" :disabled="!submittable" :loading="isSaving" @click="onSubmit">
+                <BaseButton
+                    block
+                    size="lg"
+                    :disabled="!submittable"
+                    :loading="isSaving"
+                    @click="onSubmit"
+                >
                     동의하고 시작하기
                 </BaseButton>
             </div>

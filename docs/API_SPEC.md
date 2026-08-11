@@ -22,7 +22,7 @@
 |---|---|---|---|
 | GET | `/api/auth/google` | 불필요 | 302 → 구글 동의 화면. `oauth_state` 쿠키 발급 |
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
-| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent }` |
+| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent, needsFinancialConsent, needsAccountLink }` |
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
 | GET | `/api/users/me` | Bearer | 사용자정보 |
 | PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
@@ -39,6 +39,28 @@
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
   (`DECISIONS.md` 2026-08-11 (4))
 - 검증 규칙: 앞뒤 공백 제거 후 **2~50자**, **한글·영문·공백만**. 어기면 `INVALID_NAME`.
+
+### 온보딩 게이트 — 순서가 정해져 있다
+
+신규 사용자는 **`동의 → 금융동의 → 계좌연동 → 닉네임 → 홈`** 을 순서대로 통과한다.
+프론트 라우터 가드는 **부팅 시 `POST /api/auth/refresh` 응답 하나만 보고** 다음 단계를 정한다 —
+화면 진입마다 조회하지 않는다.
+
+| 플래그 | true 이면 보낼 화면 | 판정 |
+|---|---|---|
+| `needsConsent` | 서비스 동의 | `SIGNUP` 필수 동의(약관·개인정보·금융정보) 미완료 |
+| `needsFinancialConsent` | 금융(제3자 제공) 동의 | `THIRD_PARTY` 동의 미완료 |
+| `needsAccountLink` | 계좌 연동 | 활성 연결 계좌가 0개 |
+| — | 닉네임 설정 | `user.nickname` 이 `null` (별도 플래그 없음) |
+
+- ⚠ **`THIRD_PARTY` 를 `needsConsent` 에 합치면 안 된다.** 그러면 계좌를 아직 연동하지 않은
+  사용자가 가입 동의 화면을 영원히 벗어나지 못한다. 그래서 단계를 나눈다.
+- **서버도 검사한다.** 계좌 연결 요청(`simple-auth` · `connections`)은 `THIRD_PARTY` 동의가 없으면
+  **`CONSENT_REQUIRED`(400)** 로 거부한다. 계좌 연동 진입점이 셋이라 화면 순서만으로는 우회된다 —
+  **2026-08-11 까지 실제로 아무도 제3자 제공 동의를 하지 않은 채 연동해 왔다.**
+- `POST /api/consents` 와 철회 응답도 `{ needsConsent, needsFinancialConsent }` 를 함께 준다.
+  저장 직후 게이트를 갱신하지 않으면 동의를 마쳐도 계속 동의 화면으로 되돌아간다.
+  (`DECISIONS.md` 2026-08-11 (7))
 
 ### 닉네임 — 이름 3종을 헷갈리지 말 것 (이슈 #110)
 

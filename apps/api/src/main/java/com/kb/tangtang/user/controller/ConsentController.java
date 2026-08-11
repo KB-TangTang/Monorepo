@@ -55,7 +55,15 @@ public class ConsentController {
                 userId,
                 parseScope(request.getScope()),
                 request.getAgreements() == null ? List.of() : request.getAgreements());
-        return ApiResponse.ok(ConsentResultDto.builder().needsConsent(needsConsent).build());
+        /*
+         * 온보딩 게이트를 저장 직후 바로 갱신할 수 있게 두 플래그를 함께 내려준다.
+         * 이게 없으면 금융동의를 마쳐도 가드가 계속 동의 화면으로 돌려보낸다.
+         * (DECISIONS.md 2026-08-11 (7))
+         */
+        return ApiResponse.ok(ConsentResultDto.builder()
+                .needsConsent(needsConsent)
+                .needsFinancialConsent(consentService.needsConsent(userId, ConsentScope.FINANCIAL))
+                .build());
     }
 
     @GetMapping("/me")
@@ -68,8 +76,15 @@ public class ConsentController {
     @PostMapping("/{type}/withdraw")
     public ApiResponse<ConsentResultDto> withdraw(@LoginUser Long userId,
                                                   @PathVariable("type") String type) {
+        /*
+         * ⚠ 철회를 먼저 실행하고 그 뒤에 플래그를 읽는다.
+         * 빌더 인자 순서대로 평가되므로, THIRD_PARTY 를 철회하는데 플래그를 먼저 읽으면
+         * 철회 전 값이 나가 화면이 "아직 동의돼 있음" 으로 잘못 판단한다.
+         */
+        boolean needsConsent = consentService.withdraw(userId, type);
         return ApiResponse.ok(ConsentResultDto.builder()
-                .needsConsent(consentService.withdraw(userId, type))
+                .needsConsent(needsConsent)
+                .needsFinancialConsent(consentService.needsConsent(userId, ConsentScope.FINANCIAL))
                 .build());
     }
 

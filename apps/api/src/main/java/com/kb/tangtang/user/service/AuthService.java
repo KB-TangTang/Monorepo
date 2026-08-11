@@ -1,7 +1,9 @@
 package com.kb.tangtang.user.service;
 
+import com.kb.tangtang.account.service.ConnectedAccountQuery;
 import com.kb.tangtang.common.auth.JwtProvider;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.domain.ConsentScope;
 import com.kb.tangtang.user.dto.AuthResultDto;
 import com.kb.tangtang.user.dto.GoogleProfileDto;
 import com.kb.tangtang.user.dto.LoginResponseDto;
@@ -29,17 +31,24 @@ public class AuthService {
     private final UserMapper userMapper;
     private final JwtProvider jwtProvider;
     private final ConsentService consentService;
+    /*
+     * ⚠ account 모듈을 통째로 끌어오지 않는다. 「계좌를 연동했는가」 하나만 묻는 좁은 창구다.
+     * (apps/api/AGENTS.md 「모듈 간 직접 호출 최소화」)
+     */
+    private final ConnectedAccountQuery connectedAccountQuery;
 
     public AuthService(GoogleOAuthClient googleOAuthClient,
                        RefreshTokenService refreshTokenService,
                        UserMapper userMapper,
                        JwtProvider jwtProvider,
-                       ConsentService consentService) {
+                       ConsentService consentService,
+                       ConnectedAccountQuery connectedAccountQuery) {
         this.googleOAuthClient = googleOAuthClient;
         this.refreshTokenService = refreshTokenService;
         this.userMapper = userMapper;
         this.jwtProvider = jwtProvider;
         this.consentService = consentService;
+        this.connectedAccountQuery = connectedAccountQuery;
     }
 
     /** 구글 콜백에서 받은 code 로 로그인/가입을 마치고 토큰 쌍을 만든다. */
@@ -99,7 +108,15 @@ public class AuthService {
     private AuthResultDto buildResult(UserDto user) {
         String accessToken = jwtProvider.createAccessToken(user.getId());
         String refreshToken = refreshTokenService.issue(user.getId());
+        /*
+         * 온보딩 게이트 3단을 한 번에 실어 보낸다. 프론트는 부팅 시 이 응답만 보고
+         * 다음 단계를 정하며 화면 진입마다 조회하지 않는다.
+         * 마지막 단계인 닉네임은 user.nickname 이 null 인지로 본다 — 별도 플래그를 두지 않는다.
+         * (DECISIONS.md 2026-08-11 (7))
+         */
         boolean needsConsent = consentService.needsConsent(user.getId());
+        boolean needsFinancialConsent = consentService.needsConsent(user.getId(), ConsentScope.FINANCIAL);
+        boolean needsAccountLink = !connectedAccountQuery.hasActiveAccount(user.getId());
 
         return AuthResultDto.builder()
                 .response(LoginResponseDto.builder()
@@ -113,6 +130,8 @@ public class AuthService {
                          */
                         .user(UserMeDto.from(user))
                         .needsConsent(needsConsent)
+                        .needsFinancialConsent(needsFinancialConsent)
+                        .needsAccountLink(needsAccountLink)
                         .build())
                 .refreshToken(refreshToken)
                 .build();

@@ -14,6 +14,8 @@ import com.kb.tangtang.account.domain.SyncStatus;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.domain.ConsentScope;
+import com.kb.tangtang.user.service.ConsentService;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +59,14 @@ public class AccountLinkService {
     private final AccountNumberPolicy accountNumbers;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    /*
+     * 제3자 제공(THIRD_PARTY) 동의 검사용.
+     * ⚠ 화면 순서만으로는 못 막는다 — 계좌 연동 진입점이 셋이고 우회가 가능하다.
+     *   동의는 화면 규칙이 아니라 서버 규칙이어야 한다. (DECISIONS.md 2026-08-11 (7))
+     * ConsentService 는 의존이 가벼워 좁은 창구를 따로 만들지 않고 직접 주입한다
+     * (반대 방향인 AuthService→계좌 조회는 AccountLinkService 가 무거워 ConnectedAccountQuery 를 뒀다).
+     */
+    private final ConsentService consentService;
 
     /**
      * ⚠ 생성자가 둘이라 **@Autowired 로 어느 쪽을 쓸지 명시해야 한다.**
@@ -69,8 +79,10 @@ public class AccountLinkService {
                               LinkProgressStore progressStore,
                               InstitutionCatalog catalog,
                               AccountNumberPolicy accountNumbers,
-                              ApplicationEventPublisher events) {
-        this(client, mapper, progressStore, catalog, accountNumbers, events, Clock.systemDefaultZone());
+                              ApplicationEventPublisher events,
+                              ConsentService consentService) {
+        this(client, mapper, progressStore, catalog, accountNumbers, events, consentService,
+                Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -80,6 +92,7 @@ public class AccountLinkService {
                        InstitutionCatalog catalog,
                        AccountNumberPolicy accountNumbers,
                        ApplicationEventPublisher events,
+                       ConsentService consentService,
                        Clock clock) {
         this.client = client;
         this.mapper = mapper;
@@ -87,6 +100,7 @@ public class AccountLinkService {
         this.catalog = catalog;
         this.accountNumbers = accountNumbers;
         this.events = events;
+        this.consentService = consentService;
         this.clock = clock;
     }
 
@@ -105,6 +119,21 @@ public class AccountLinkService {
                 .cards(onlySupported(catalog.cards(connected), supported))
                 .securities(onlySupported(catalog.securities(connected), supported))
                 .build();
+    }
+
+    /**
+     * 계좌 연동 전 제3자 제공(THIRD_PARTY) 동의를 확인한다.
+     *
+     * ⚠ 화면 순서에만 맡기면 우회된다 — 계좌 연동 진입점이 셋(연결 계좌 관리 · 개인챌린지 CTA ·
+     *   재연동)이고 전부 동의 화면을 거치지 않는 경로였다. 실제로 2026-08-11 까지
+     *   **아무도 제3자 제공 동의를 하지 않은 채 계좌를 연동해 왔다.**
+     *   마이데이터 동의는 화면 규칙이 아니라 서버 규칙이어야 한다. (DECISIONS.md 2026-08-11 (7))
+     */
+    private void requireFinancialConsent(long userId) {
+        if (consentService.needsConsent(userId, ConsentScope.FINANCIAL)) {
+            throw new BusinessException("CONSENT_REQUIRED",
+                    "계좌를 연결하려면 제3자 제공 동의가 필요해요.");
+        }
     }
 
     /** 빈 집합은 "제한 없음" 이다 (목서버). 그때는 목록을 그대로 둔다. */
@@ -145,6 +174,7 @@ public class AccountLinkService {
 
     /** 간편인증 요청. 선택한 기관을 한 번에 처리한다. */
     public ConnectionResponseDto requestSimpleAuth(long userId, SimpleAuthRequestDto request) {
+        requireFinancialConsent(userId);
         if (request.getProvider() == null || request.getProvider().isBlank()) {
             throw new BusinessException("INVALID_CREDENTIALS", "인증 수단을 선택해 주세요.");
         }
@@ -180,6 +210,7 @@ public class AccountLinkService {
      */
     public ConnectionResponseDto requestInstitutionLogin(long userId,
                                                          InstitutionLoginRequestDto request) {
+        requireFinancialConsent(userId);
         List<CredentialRequestDto> rows = request.getCredentials();
         if (rows == null || rows.isEmpty()) {
             throw new BusinessException("INVALID_CREDENTIALS", "금융기관 로그인 정보가 필요해요.");

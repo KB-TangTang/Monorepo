@@ -49,7 +49,22 @@ public class ConsentService {
      */
     @Transactional(readOnly = true)
     public boolean needsConsent(Long userId) {
-        List<ConsentType> required = ConsentScope.SIGNUP.requiredTypes();
+        return needsConsent(userId, ConsentScope.SIGNUP);
+    }
+
+    /**
+     * 해당 그룹의 **필수** 항목을 아직 다 받지 않았는지.
+     *
+     * <p>온보딩 게이트가 단계마다 이 판정을 쓴다 —
+     * `SIGNUP`(가입 동의) 다음에 `FINANCIAL`(제3자 제공 동의)이 온다.
+     *
+     * <p>⚠ `SIGNUP` 판정에 `THIRD_PARTY` 를 섞으면 안 된다. 그러면 계좌를 아직 연동하지 않은
+     * 사용자가 가입 동의 화면을 영원히 벗어나지 못한다. 그래서 **그룹을 나눠서 본다.**
+     * (DECISIONS.md 2026-08-11 (7))
+     */
+    @Transactional(readOnly = true)
+    public boolean needsConsent(Long userId, ConsentScope scope) {
+        List<ConsentType> required = scope.requiredTypes();
         if (required.isEmpty()) {
             return false;   // IN () 은 SQL 문법 오류다. 방어적으로 막는다
         }
