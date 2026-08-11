@@ -9,7 +9,10 @@
 | `00_init_local_db.sql` | 로컬 DB·계정 생성 (관리자 계정으로 1회 실행) |
 | `schema.sql` | 전체 DDL |
 | `seed.sql` | 개발용 초기 데이터 |
+| `seed_category.sql` | 소비 카테고리 (대분류 12 · 소분류 46). 아래 시드들이 이름으로 참조하므로 **선행 필수** |
+| `seed_mission_pool.sql` | 데일리 미션 풀. 비어 있으면 미션 배정 자체가 안 된다 |
 | `seed_notification_demo.sql` | 알림 화면 시연용 데이터 (선택, 팀 공용 seed와 분리) |
+| `seed_demo_transactions.sql` | 시연용 거래내역 7개월치 (선택). 계좌 연동 1회 선행 필요 |
 | `migration/YYYYMMDD_<변경요약>.sql` | 스키마 변경분. **`schema.sql` 에 반영하지 않는 것이 원칙** |
 
 ## 신규 설치 순서
