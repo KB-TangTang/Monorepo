@@ -87,3 +87,27 @@ ol {
         transform: translateY(-5px);
     }
 }
+
+/* 튜토리얼 요소 등장 */
+@keyframes tt-pop {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* 튜토리얼 도장 찍히는 효과 */
+@keyframes tt-stamp {
+    from {
+        opacity: 0;
+        transform: rotate(-8deg) scale(1.6);
+    }
+    to {
+        opacity: 1;
+        transform: rotate(-8deg) scale(1);
+    }
+}
