@@ -80,12 +80,8 @@ onMounted(() => {
     }
 });
 
-/*
- * 완료 저장은 서버(tbl_user.group_tutorial_seen_at)로 나간다 — 비동기다.
- * 저장 실패는 markGroupTutorialSeen() 안에서 삼킨다(다음에 한 번 더 뜨는 게 전부).
- */
-async function onTutorialComplete() {
-    await markGroupTutorialSeen();
+function onTutorialComplete() {
+    markGroupTutorialSeen();
 }
 
 /* ── DEV 상태 전환 ─────────────────────── */

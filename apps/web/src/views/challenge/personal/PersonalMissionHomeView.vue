@@ -72,13 +72,8 @@ function handleAgree() {
     }
 }
 
-/*
- * 완료 저장은 서버(tbl_user.tutorial_seen_at)로 나간다 — 비동기다.
- * 저장 실패는 markPersonalTutorialSeen() 안에서 삼키므로(다음에 한 번 더 뜨는 게 전부)
- * 여기서 따로 오류를 처리하지 않는다.
- */
-async function onTutorialComplete() {
-    await markPersonalTutorialSeen();
+function onTutorialComplete() {
+    markPersonalTutorialSeen();
 }
 
 function openTangiSheet() {
