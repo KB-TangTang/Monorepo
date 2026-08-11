@@ -60,12 +60,12 @@ const stampImage = props.verdict.outcome === 'GUILTY' ? guiltyStampImage : innoc
 .verdict-card__stamp-ring {
     position: relative;
     display: block;
-    width: 128px;
-    height: 128px;
+    width: 120px;
+    height: 120px;
     margin: var(--tt-space-4) auto var(--tt-space-2);
-    padding: var(--tt-space-2);
+    padding: var(--tt-space-1);
     background: var(--tt-bg);
-    border: 8px solid var(--tt-bg);
+    border: var(--tt-space-1) solid var(--tt-bg);
     border-radius: var(--tt-radius-full);
     box-shadow: var(--tt-elevation-2);
 }
@@ -78,10 +78,13 @@ const stampImage = props.verdict.outcome === 'GUILTY' ? guiltyStampImage : innoc
 }
 
 .verdict-card__stamp {
-    display: block;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 116%;
+    height: 116%;
     object-fit: contain;
+    transform: translate(-50%, -50%);
 }
 
 .verdict-card__mascot {

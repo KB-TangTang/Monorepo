@@ -8,7 +8,7 @@ import { getAiVerdict } from '@/fixtures/groupChallengeAiVerdict';
 
 const route = useRoute();
 const router = useRouter();
-const verdict = getAiVerdict();
+const verdict = getAiVerdict(route.query.outcome);
 
 function goGroupHome() {
     router.push({ name: 'groupChallenge' });

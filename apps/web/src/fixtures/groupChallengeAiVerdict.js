@@ -36,10 +36,12 @@ const OUTCOME_COPY = {
     },
 };
 
-export function getAiVerdict() {
+export function getAiVerdict(outcome = developmentOutcome) {
+    const resolvedOutcome = OUTCOME_COPY[outcome] ? outcome : developmentOutcome;
+
     return {
         ...BASE_VERDICT,
-        ...OUTCOME_COPY[developmentOutcome],
+        ...OUTCOME_COPY[resolvedOutcome],
     };
 }
 

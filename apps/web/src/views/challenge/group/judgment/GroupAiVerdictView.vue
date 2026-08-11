@@ -38,7 +38,11 @@ function runVerdictAnimation() {
 
 function openResult() {
     if (!isReady.value) return;
-    router.push({ name: 'groupAiVerdictResult', params: route.params });
+    router.push({
+        name: 'groupAiVerdictResult',
+        params: route.params,
+        query: { outcome: verdict.value.outcome },
+    });
 }
 
 function toggleDevelopmentVerdict() {
@@ -119,6 +123,9 @@ onUnmounted(() => timers.forEach((timer) => window.clearTimeout(timer)));
     flex: 1;
     flex-direction: column;
     padding: var(--tt-space-4) var(--tt-space-5);
+}
+.ai-page :deep(.court-header__nav) {
+    z-index: 3;
 }
 .ai-page__development-button {
     position: absolute;
