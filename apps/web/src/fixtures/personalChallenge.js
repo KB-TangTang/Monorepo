@@ -85,6 +85,21 @@ export const MOCK_WATCHLIST_META = {
     uncategorizedWarning: '분류되지 않은 거래가 많아 수사가 어렵습니다.\n정리하면 더 정확한 사건이 배정돼요.',
 };
 
+/* ── 이번 주 판정 (스트릭) ────────────────────────────── */
+export const MOCK_WEEKLY_VERDICT = {
+    days: [
+        { dow: '금', status: 'failed' },
+        { dow: '토', status: 'success' },
+        { dow: '일', status: 'success' },
+        { dow: '월', status: 'success' },
+        { dow: '화', status: 'success' },
+        { dow: '수', status: 'success' },
+        { dow: '목', status: 'today' },
+    ],
+    streakDays: 5,
+    streakText: '토요일부터 5일 연속 인정 · 오늘 인정 시 6일',
+};
+
 /* ── 이번 달 누적 점수 ───────────────────────────────── */
 export const MOCK_MONTHLY_SCORE = {
     score: 520,

@@ -138,7 +138,7 @@ export const MOCK_CHALLENGE_DETAILS = {
                 hasDefended: true,
                 voteCount: 2,
                 totalVoters: 3,
-                myVote: null,
+                myVote: 'INNOCENT', /* 투표 완료 → vote-done 카드 */
             },
             {
                 id: 104,
@@ -1166,6 +1166,40 @@ export const MOCK_VOTE_DETAIL = {
         ],
     },
 
+    /* ── indictmentId=104 · 유현 · 배달 소비 줄이기 ── */
+    104: {
+        indictmentId: 104,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        limitAmount: 15000,
+        currentAmount: 16800,
+        exceededAmount: 1800,
+
+        defendant: {
+            userId: 2,
+            ...AVATAR[2],
+        },
+
+        defenseMessage: '퇴근길에 편의점에서 도시락이랑 음료를 샀는데, 집에 밥이 없어서 어쩔 수 없었어요. 내일은 미리 준비하겠습니다.',
+        actualCostAmount: 16800,
+        defenseDate: '2026-08-05',
+
+        evidences: [
+            { id: 1, label: '증 제1호 · 편의점 영수증', fileName: 'receipt_conv2.jpg' },
+        ],
+
+        deadlineSeconds: 52 * 60,
+
+        voteCount: 0,
+        totalVoters: 3,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 3, ...AVATAR[3], voted: false },
+            { userId: 5, ...AVATAR[5], voted: false },
+        ],
+    },
+
     /* ── indictmentId=201 · 하은 · 택시 대신 지하철 ── */
     201: {
         indictmentId: 201,
@@ -1346,6 +1380,32 @@ export const MOCK_TRIAL_PROGRESS = {
         steps: {
             indictedAt: '23:30',
             defenseSubmittedAt: null,
+            voteDeadline: '23:59',
+            verdictAt: null,
+        },
+
+        vote: {
+            votedCount: 0,
+            totalVoters: 3,
+            remainingVoters: 3,
+        },
+    },
+
+    /* ── 104: 투표 진행 중 ── */
+    104: {
+        indictmentId: 104,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0805-2',
+        status: 'VOTING',
+
+        defendant: { userId: 2, ...AVATAR[2] },
+
+        steps: {
+            indictedAt: '23:30',
+            defenseSubmittedAt: '23:55',
             voteDeadline: '23:59',
             verdictAt: null,
         },

@@ -136,6 +136,13 @@ function goToVote(item) {
     });
 }
 
+function goToTrialProgress(item) {
+    router.push({
+        name: 'trialProgress',
+        params: { id: ch.value.id, indictmentId: item.id },
+    });
+}
+
 const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
 </script>
 
@@ -299,6 +306,7 @@ const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
                     :indictments="ch.indictments"
                     @defend="goToDefense"
                     @vote="goToVote"
+                    @trial="goToTrialProgress"
                 />
 
                 <!-- 약속 아코디언 -->
