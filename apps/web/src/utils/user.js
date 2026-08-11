@@ -1,12 +1,14 @@
 /**
- * 사용자 표시명·닉네임 판정 (DECISIONS.md 2026-08-11 「닉네임 온보딩 신설」).
+ * 사용자 표시명·닉네임 판정과 **온보딩 게이트 판정** (DECISIONS.md 2026-08-11).
  *
  * 표시명 규칙과 닉네임 검증을 화면마다 따로 쓰면 프로필 카드·설정 시트·온보딩이
  * 각자 다른 이름과 다른 오류 문구를 보여준다. 판정은 전부 여기 한 곳에 둔다.
+ * 온보딩 단계 판정도 같은 이유로 여기 모은다 — 라우터 가드는 결과만 받아 이동한다.
  *
  * ⚠ **이 파일에는 `@/` 별칭 import 를 쓰지 않는다.** 별칭은 Vite 가 푸는 것이라
  * `node --test` 는 해석하지 못해 테스트 파일이 통째로 죽는다. (utils/account.js 와 같은 이유)
  */
+import { LINK_STEP_ROUTES } from './account.js';
 
 /**
  * 닉네임 길이 한계.
@@ -59,42 +61,96 @@ export function validateNickname(value) {
 }
 
 /**
- * 닉네임 게이트를 면제할 라우트.
+ * 온보딩 단계 정의 (DECISIONS.md 2026-08-11 (7)).
  *
- * 온보딩 동선은 `로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈` 이다.
- * 닉네임보다 **앞에 있는 단계**를 면제하지 않으면, 계좌를 연동하던 사용자가 닉네임 화면으로
- * 튕겨나가 연동을 끝내지 못한다. 닉네임 화면 자신을 빼면 무한 리다이렉트가 난다.
+ * 동선은 `로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈` 이고 **계좌 연동까지 강제**한다.
+ * 예전에는 서비스 동의 뒤 바로 홈으로 보내 금융동의(THIRD_PARTY, 제3자 제공) 화면에 도달할 길이
+ * 아예 없었다 — 아무도 동의하지 않은 채 계좌가 연동됐다. 그래서 순서를 여기 한 줄로 못박는다.
  *
- * 계좌 연동 플로우의 2~5단계는 `meta.linkStep` 으로 판별하므로 여기에는 그것이 없는
- * 첫 단계(기관 선택)만 적는다.
+ * **배열 순서가 곧 판정 순서다.** 앞 단계가 남아 있으면 뒤 단계는 보지 않는다.
+ *
+ * - `pending` — 그 단계가 아직 안 끝났는지. 앞의 셋은 서버가 내려주는 플래그
+ *   (`POST /auth/refresh` · `POST /consents` 응답)이고, 마지막은 `nickname` 이 비었는지로만 본다.
+ * - `route`   — 그 단계로 보낼 라우트 이름.
+ * - `matches` — 라우트 이름 외에 "그 단계의 화면"으로 쳐야 하는 라우트 판별(면제 계산에만 쓴다).
  */
-const NICKNAME_GATE_EXEMPT_ROUTES = [
-    NICKNAME_SETUP_ROUTE,
-    'consent',
-    'financialConsent',
-    'accountLinkInstitutions',
+const ONBOARDING_STEPS = [
+    {
+        route: 'consent',
+        pending: (session) => Boolean(session.needsConsent),
+    },
+    {
+        route: 'financialConsent',
+        pending: (session) => Boolean(session.needsFinancialConsent),
+    },
+    {
+        /* 계좌 연동 1단계(기관 선택)만 라우트 이름이 있다. 2~5단계는 meta.linkStep 으로 판별한다. */
+        route: LINK_STEP_ROUTES.institutions,
+        pending: (session) => Boolean(session.needsAccountLink),
+        matches: (to) => Boolean(to?.meta?.linkStep),
+    },
+    {
+        route: NICKNAME_SETUP_ROUTE,
+        pending: (session) => !session.user?.nickname,
+    },
 ];
 
 /**
- * 닉네임 설정 화면으로 보내야 하는지. 라우터 가드가 쓴다.
+ * `to` 가 `index` 번째 단계 **이하**의 화면인지. 면제 규칙은 이것 하나가 전부다.
+ *
+ * ⚠ 각 단계는 **자기 화면과 그 앞 단계 화면**에서는 발동하지 않는다.
+ *   - 자기 화면을 면제하지 않으면 그 화면에 들어가는 순간 자기 자신으로 다시 보내 무한 리다이렉트가 난다.
+ *   - 앞 단계 화면을 면제하지 않으면, 계좌를 연동하던 사용자가 닉네임 화면으로 튕겨나가 연동을 끝내지 못한다.
+ *
+ * 반대로 **뒤 단계 화면은 면제하지 않는다.** 그래야 앞 단계를 건너뛴 채 뒤 화면에 들어올 수 없다.
+ */
+function isAtOrBeforeStep(to, index) {
+    return ONBOARDING_STEPS.slice(0, index + 1).some(
+        (step) => step.route === to?.name || step.matches?.(to) === true,
+    );
+}
+
+/**
+ * 온보딩 게이트. 지금 보내야 할 라우트 이름을 돌려준다. 보낼 곳이 없으면 `null`.
+ * 라우터 가드가 이 결과만 보고 이동한다 — 가드 본문에 조건을 다시 쓰지 말 것.
+ *
+ * ⚠ `session.user` 가 아직 없으면 **전부 통과시킨다.** 부팅 직후·로그인 직후에는 사용자 정보가
+ * 잠깐 비는데, 없는 값을 "닉네임 미설정"으로 읽으면 엉뚱한 순간에 온보딩 화면으로 튕긴다.
+ * 게이트 플래그 셋도 같은 순간에는 기본값(false)이라 판정할 근거 자체가 없다.
+ *
+ * 스토어·라우터를 직접 읽지 않고 값만 받는 순수 함수라 마운트 없이 검증할 수 있다.
+ *
+ * @param {{user?: object|null, needsConsent?: boolean, needsFinancialConsent?: boolean,
+ *          needsAccountLink?: boolean}} session 인증 스토어(또는 같은 모양의 객체)
+ * @param {{name?: string, meta?: {linkStep?: string}}} to 이동하려는 라우트
+ * @returns {string|null} 보낼 라우트 이름 · 통과면 null
+ */
+export function resolveOnboardingRedirect(session, to) {
+    if (!session?.user) {
+        return null;
+    }
+    for (let index = 0; index < ONBOARDING_STEPS.length; index += 1) {
+        const step = ONBOARDING_STEPS[index];
+        if (step.pending(session) && !isAtOrBeforeStep(to, index)) {
+            return step.route;
+        }
+    }
+    return null;
+}
+
+/**
+ * 닉네임 설정 화면으로 보내야 하는지. **온보딩 4단계 중 닉네임만** 떼어 본다.
+ *
+ * 판정 자체는 resolveOnboardingRedirect() 로 흡수했다 — 게이트가 넷으로 늘어난 마당에
+ * 면제 규칙이 두 벌 존재하면 언젠가 반드시 어긋난다. 앞 단계 플래그를 넘기지 않으므로
+ * 여기서는 닉네임 단계만 발동할 수 있다.
  *
  * 온보딩 완료 여부는 **`nickname` 이 비어 있는지로만** 판별한다 — 별도 판별 API 는 두지 않는다
  * (DECISIONS.md 2026-08-11). 빈 문자열·null·undefined 를 모두 미설정으로 본다.
- *
- * ⚠ `user` 가 아직 없으면 **통과시킨다.** 부팅 직후·로그인 직후에는 사용자 정보가 잠깐 비는데,
- * 없는 값을 "닉네임 미설정"으로 읽으면 엉뚱한 순간에 온보딩 화면으로 튕긴다.
- *
- * 스토어·라우터를 직접 읽지 않고 값만 받는 순수 함수라 마운트 없이 검증할 수 있다.
  *
  * @param {object|null} user 인증 스토어의 사용자 정보
  * @param {{name?: string, meta?: {linkStep?: string}}} to 이동하려는 라우트
  */
 export function needsNicknameSetup(user, to) {
-    if (!user || user.nickname) {
-        return false;
-    }
-    if (to?.meta?.linkStep) {
-        return false;
-    }
-    return !NICKNAME_GATE_EXEMPT_ROUTES.includes(to?.name);
+    return resolveOnboardingRedirect({ user }, to) === NICKNAME_SETUP_ROUTE;
 }

@@ -2,8 +2,10 @@ package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.auth.JwtProvider;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.domain.ConsentScope;
 import com.kb.tangtang.user.dto.AuthResultDto;
 import com.kb.tangtang.user.dto.GoogleProfileDto;
+import com.kb.tangtang.user.dto.LoginResponseDto;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,12 +36,14 @@ class AuthServiceTest {
     @Mock private UserMapper userMapper;
     @Mock private JwtProvider jwtProvider;
     @Mock private ConsentService consentService;
+    @Mock private com.kb.tangtang.account.service.ConnectedAccountQuery connectedAccountQuery;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider, consentService);
+        authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider,
+                consentService, connectedAccountQuery);
     }
 
     private static GoogleProfileDto profile() {
@@ -48,6 +52,48 @@ class AuthServiceTest {
                 .email("jiyoon@example.com")
                 .name("지윤")
                 .build();
+    }
+
+    /*
+     * 온보딩 게이트 3단 (DECISIONS.md 2026-08-11 (7)).
+     * 프론트 가드는 부팅 시 이 응답만 보고 다음 단계를 정한다 — 하나라도 빠지면 그 단계가 통째로 건너뛰어진다.
+     */
+    @Test
+    @DisplayName("세션 응답에 온보딩 게이트 3단이 모두 실린다")
+    void sessionCarriesOnboardingGates() {
+        when(refreshTokenService.consume("refresh-raw")).thenReturn(11L);
+        when(userMapper.findById(11L)).thenReturn(UserDto.builder()
+                .id(11L).socialProvider("GOOGLE").providerUserId("sub-1")
+                .socialName("지윤").status("ACTIVE").difficultyId(1L).build());
+        when(jwtProvider.createAccessToken(11L)).thenReturn("access-jwt");
+        when(refreshTokenService.issue(11L)).thenReturn("refresh-new");
+        when(consentService.needsConsent(11L)).thenReturn(false);
+        when(consentService.needsConsent(11L, ConsentScope.FINANCIAL)).thenReturn(true);
+        when(connectedAccountQuery.hasActiveAccount(11L)).thenReturn(false);
+
+        LoginResponseDto response = authService.refresh("refresh-raw").getResponse();
+
+        assertFalse(response.isNeedsConsent(), "가입 동의는 마쳤다");
+        assertTrue(response.isNeedsFinancialConsent(), "제3자 제공 동의가 남았다");
+        assertTrue(response.isNeedsAccountLink(), "계좌가 0개면 연동이 남았다");
+        assertNull(response.getUser().getNickname(), "닉네임 단계는 nickname 이 null 인지로 본다");
+    }
+
+    @Test
+    @DisplayName("계좌가 있으면 계좌연동 단계는 요구하지 않는다")
+    void noAccountLinkWhenAccountExists() {
+        when(refreshTokenService.consume("refresh-raw")).thenReturn(11L);
+        when(userMapper.findById(11L)).thenReturn(UserDto.builder()
+                .id(11L).socialProvider("GOOGLE").providerUserId("sub-1")
+                .nickname("탕탕이").socialName("지윤").status("ACTIVE").difficultyId(1L).build());
+        when(jwtProvider.createAccessToken(11L)).thenReturn("access-jwt");
+        when(refreshTokenService.issue(11L)).thenReturn("refresh-new");
+        when(connectedAccountQuery.hasActiveAccount(11L)).thenReturn(true);
+
+        LoginResponseDto response = authService.refresh("refresh-raw").getResponse();
+
+        assertFalse(response.isNeedsAccountLink());
+        assertEquals("탕탕이", response.getUser().getDisplayName());
     }
 
     @Test

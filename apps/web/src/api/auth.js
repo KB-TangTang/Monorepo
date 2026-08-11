@@ -8,7 +8,11 @@ import http from './http';
  */
 export const GOOGLE_LOGIN_URL = '/api/auth/google';
 
-/** 리프레시 쿠키로 액세스 토큰을 재발급한다. { accessToken, user, needsConsent } */
+/**
+ * 리프레시 쿠키로 액세스 토큰을 재발급한다.
+ * `{ accessToken, user, needsConsent, needsFinancialConsent, needsAccountLink }`
+ * 뒤의 세 플래그가 온보딩 게이트다 (stores/auth.js · utils/user.js 참고).
+ */
 export function refreshSession() {
     return http.post('/auth/refresh');
 }

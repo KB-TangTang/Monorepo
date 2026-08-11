@@ -36,12 +36,21 @@ export function isSafeRedirectPath(value) {
 export const useAuthStore = defineStore('auth', () => {
     const accessToken = ref('');
     const user = ref(null);
-    /**
-     * 필수 동의(SIGNUP 그룹)를 아직 마치지 않은 사용자인지.
-     * 라우터 가드가 이 값을 보고 동의 화면으로 보낸다.
-     * 동의 저장·철회 응답으로도 갱신된다(stores/consent.js).
+    /*
+     * ── 온보딩 게이트 3단 ──────────────────────────────────────────────
+     * 셋 다 **완전히 같은 취급**이다. 서버가 `POST /auth/refresh` · `POST /consents` 응답의
+     * 같은 자리에 실어 보내고, 라우터 가드가 순서대로 읽어 다음 화면을 정한다.
+     * 순서는 `needsConsent → needsFinancialConsent → needsAccountLink → 닉네임` 이고,
+     * 그 순서와 면제 규칙은 utils/user.js 의 resolveOnboardingRedirect() 한 곳에만 있다.
+     * (닉네임은 플래그가 아니라 user.nickname 이 비었는지로 판별한다 — DECISIONS.md 2026-08-11)
      */
+
+    /** 필수 동의(SIGNUP 그룹)를 아직 마치지 않은 사용자인지. 저장·철회 응답으로도 갱신된다(stores/consent.js). */
     const needsConsent = ref(false);
+    /** 제3자 제공 동의(FINANCIAL 그룹의 THIRD_PARTY)를 아직 마치지 않았는지. 계좌 연동의 법적 전제다. */
+    const needsFinancialConsent = ref(false);
+    /** 활성 연결 계좌가 0개인지. 온보딩에서 계좌 연동을 강제한다(DECISIONS.md 2026-08-11 (7)). */
+    const needsAccountLink = ref(false);
 
     const isLoggedIn = computed(() => Boolean(accessToken.value));
 
@@ -49,6 +58,27 @@ export const useAuthStore = defineStore('auth', () => {
         accessToken.value = session.accessToken ?? '';
         user.value = session.user ?? null;
         needsConsent.value = Boolean(session.needsConsent);
+        needsFinancialConsent.value = Boolean(session.needsFinancialConsent);
+        needsAccountLink.value = Boolean(session.needsAccountLink);
+    }
+
+    /**
+     * 온보딩 게이트 플래그만 부분 갱신한다.
+     *
+     * 동의 저장(POST /consents)·계좌 연결 저장처럼 **세션 전체가 아니라 일부만** 돌아오는 응답용이다.
+     * ⚠ 응답에 없는 플래그는 건드리지 않는다 — `undefined` 를 `false` 로 읽으면 아직 끝나지 않은
+     * 단계를 끝난 것으로 착각해 게이트가 통째로 뚫린다(철회 응답은 needsConsent 만 싣는다).
+     */
+    function applyOnboardingFlags(flags) {
+        if (flags?.needsConsent !== undefined) {
+            needsConsent.value = Boolean(flags.needsConsent);
+        }
+        if (flags?.needsFinancialConsent !== undefined) {
+            needsFinancialConsent.value = Boolean(flags.needsFinancialConsent);
+        }
+        if (flags?.needsAccountLink !== undefined) {
+            needsAccountLink.value = Boolean(flags.needsAccountLink);
+        }
     }
 
     /**
@@ -66,7 +96,20 @@ export const useAuthStore = defineStore('auth', () => {
         accessToken.value = '';
         user.value = null;
         needsConsent.value = false;
+        needsFinancialConsent.value = false;
+        needsAccountLink.value = false;
     }
 
-    return { accessToken, user, needsConsent, isLoggedIn, setSession, mergeUser, clear };
+    return {
+        accessToken,
+        user,
+        needsConsent,
+        needsFinancialConsent,
+        needsAccountLink,
+        isLoggedIn,
+        setSession,
+        applyOnboardingFlags,
+        mergeUser,
+        clear,
+    };
 });
