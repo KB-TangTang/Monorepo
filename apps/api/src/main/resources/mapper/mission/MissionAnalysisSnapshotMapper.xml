@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionAnalysisSnapshotMapper">
+
+    <select id="findPendingSnapshots"
+            resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
+        SELECT analysis.id,
+               analysis.user_id,
+               analysis.cycle_start_date,
+               analysis.category_id,
+               parent.category_name AS parent_category_name,
+               category.category_name,
+               analysis.category_rank,
+               analysis.spending_amount,
+               analysis.spending_ratio,
+               analysis.transaction_count,
+               analysis.assigned_date
+        FROM tbl_user_mission_analysis analysis
+        JOIN tbl_category category ON category.id = analysis.category_id
+        LEFT JOIN tbl_category parent ON parent.id = category.parent_id
+        WHERE analysis.user_id = #{userId}
+          AND analysis.assigned_date IS NULL
+          AND analysis.cycle_start_date = (
+              SELECT MAX(latest.cycle_start_date)
+              FROM tbl_user_mission_analysis latest
+              WHERE latest.user_id = #{userId}
+          )
+        ORDER BY analysis.category_rank
+    </select>
+
+    <insert id="insertSnapshots">
+        INSERT INTO tbl_user_mission_analysis (
+            user_id,
+            cycle_start_date,
+            category_id,
+            category_rank,
+            spending_amount,
+            spending_ratio,
+            transaction_count
+        )
+        VALUES
+        <foreach collection="snapshots" item="snapshot" separator=",">
+            (
+                #{snapshot.userId},
+                #{snapshot.cycleStartDate},
+                #{snapshot.categoryId},
+                #{snapshot.categoryRank},
+                #{snapshot.spendingAmount},
+                #{snapshot.spendingRatio},
+                #{snapshot.transactionCount}
+            )
+        </foreach>
+    </insert>
+
+</mapper>
