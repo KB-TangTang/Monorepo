@@ -285,6 +285,23 @@
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
 
+## 메인 챌린지 카테고리 분석 (이슈 #119)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
+
+응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
+`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio }` 형태다.
+
+- 분석 기간은 오늘을 제외한 최근 28일이다.
+- 거래 데이터가 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때만 상위 카테고리를 집계한다.
+- 미션 대상은 `tbl_mission_pool`에 `RELATIVE` 행이 존재하는 소분류다. 현재 정책은 15개다.
+- 환불은 거래 건수에서 제외하고 순소비금액에서 차감한다.
+- 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
+- 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
+- `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
+
 ## 알림 (이슈 #58)
 
 | 메서드 | 경로 | 인증 | 응답 |
