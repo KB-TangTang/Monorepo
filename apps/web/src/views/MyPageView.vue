@@ -14,12 +14,10 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMe, logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
-import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
-import { resetGroupTutorial } from '@/services/groupTutorialGuide';
+import { resetPersonalTutorial, resetGroupTutorial } from '@/services/tutorialGuide';
 
 const router = useRouter();
 const auth = useAuthStore();
-const personalMission = usePersonalMissionChallengeStore();
 
 const MENU = [
     { key: 'accounts', label: '계좌 연결 관리' },
@@ -78,7 +76,7 @@ function leaveViaSheet(routeName) {
 }
 
 function replayPersonal() {
-    personalMission.replayTutorial();
+    resetPersonalTutorial();
     leaveViaSheet('personalMissionChallenge');
 }
 
@@ -137,8 +135,8 @@ async function confirmLogout() {
             title="어떤 튜토리얼을 다시 볼까요?"
         >
             <div class="my-page__sheet">
-                <BaseButton variant="secondary" block @click="replayPersonal">개인 미션</BaseButton>
-                <BaseButton variant="secondary" block @click="replayGroup">그룹 챌린지</BaseButton>
+                <BaseButton variant="secondary" block @click="replayPersonal">대법원 (개인)</BaseButton>
+                <BaseButton variant="secondary" block @click="replayGroup">지방법원 (그룹)</BaseButton>
             </div>
         </BaseBottomSheet>
 
