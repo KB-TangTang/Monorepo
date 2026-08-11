@@ -10,8 +10,10 @@ import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard
 import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiSheet.vue';
 import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdictModal.vue';
 import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
+import PersonalTutorialOverlay from '@/components/challenge/personal/PersonalTutorialOverlay.vue';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 import { formatCourtDate, calculateDataProgress, formatWon } from '@/services/personalMissionFlow';
+import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
 
@@ -21,6 +23,7 @@ const store = usePersonalMissionChallengeStore();
 const isConsentOpen = ref(false);
 const isTangiSheetOpen = ref(false);
 const isVerdictOpen = ref(false);
+const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 
 const courtDate = computed(() => formatCourtDate());
@@ -52,6 +55,11 @@ onMounted(() => {
         return;
     }
 
+    if (!hasSeenPersonalTutorial()) {
+        showTutorial.value = true;
+        return;
+    }
+
     if (store.hasPendingVerdict) {
         isVerdictOpen.value = true;
     }
@@ -59,6 +67,13 @@ onMounted(() => {
 
 function handleAgree() {
     store.agree();
+    if (!hasSeenPersonalTutorial()) {
+        showTutorial.value = true;
+    }
+}
+
+function onTutorialComplete() {
+    markPersonalTutorialSeen();
 }
 
 function openTangiSheet() {
@@ -101,6 +116,7 @@ function setDemoFail() {
 <template>
     <div class="personal-home">
         <!-- 오버레이 -->
+        <PersonalTutorialOverlay v-model="showTutorial" @complete="onTutorialComplete" />
         <PersonalMissionConsentSheet v-model="isConsentOpen" @agree="handleAgree" />
         <PersonalTangiSheet
             v-model="isTangiSheetOpen"

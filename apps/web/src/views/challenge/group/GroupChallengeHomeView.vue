@@ -7,7 +7,7 @@ import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.
 import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
-import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/groupTutorialGuide';
+import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
 import { useCountdown } from '@/utils/useCountdown';
 import {
     MOCK_TODO_ITEMS,
