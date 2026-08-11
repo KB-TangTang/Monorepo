@@ -86,9 +86,7 @@ public class ServletConfig implements WebMvcConfigurer {
                 // 로컬 개발은 Vite 프록시(same-origin)라 CORS 를 타지 않지만,
                 // 프록시를 끄고 직접 붙이는 경우를 위해 남겨둔다.
                 .allowedOrigins("https://monorepo-three-ruby-81.vercel.app", "http://localhost:5173")
-                // PATCH 가 빠져 있으면 배포 환경(Vercel↔EC2, 교차 출처)에서만 프리플라이트가 막힌다.
-                // 로컬은 Vite 프록시라 same-origin 이어서 끝까지 드러나지 않는다. (2026-08-11 추가)
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }
