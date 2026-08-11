@@ -2,7 +2,10 @@
 import { computed } from 'vue';
 import { formatWon } from '@/utils/monthlyConsumption';
 
-const props = defineProps({ report: { type: Object, required: true } });
+const props = defineProps({
+    report: { type: Object, required: true },
+    showComparison: { type: Boolean, default: true },
+});
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
 const verdictCopy = computed(() =>
     props.report.monthOverMonthRate <= 0
@@ -19,9 +22,15 @@ const verdictCopy = computed(() =>
         <div class="verdict-summary__body">
             <p>이번 달 누적 혐의액</p>
             <strong>{{ formatWon(report.totalSpent) }}</strong>
-            <mark :class="{ 'verdict-summary__mark--guilty': report.monthOverMonthRate > 0 }">
+            <mark
+                v-if="showComparison"
+                :class="{ 'verdict-summary__mark--guilty': report.monthOverMonthRate > 0 }"
+            >
                 {{ verdictCopy }}
             </mark>
+            <p v-else class="verdict-summary__basis">
+                {{ reportMonth }}월 1일부터 말일까지의 소비 내역을 분석했어요
+            </p>
         </div>
     </section>
 </template>
@@ -72,5 +81,28 @@ const verdictCopy = computed(() =>
 .verdict-summary__mark--guilty {
     color: var(--tt-text-inverse);
     background: var(--tt-danger);
+}
+.verdict-summary .verdict-summary__basis {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
+    margin-top: var(--tt-space-4);
+    padding-top: var(--tt-space-4);
+    color: var(--tt-border-strong);
+    font-size: var(--tt-fs-caption);
+    border-top: 1px solid color-mix(in srgb, var(--tt-bg) 12%, transparent);
+}
+.verdict-summary__basis::before {
+    display: grid;
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    content: '1';
+    color: var(--tt-text);
+    font-family: var(--tt-font-mono);
+    font-weight: var(--tt-fw-black);
+    background: var(--tt-accent);
+    border-radius: var(--tt-radius-full);
+    place-items: center;
 }
 </style>

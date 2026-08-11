@@ -20,7 +20,11 @@ export async function fetchMonthlyConsumptionMonths(referenceDate = new Date()) 
             ...month,
             available: isAvailableReportMonth(month, referenceDate),
             reason:
-                month.value > latestPeriod ? 'future' : month.hasReport ? undefined : 'unavailable',
+                month.value > latestPeriod
+                    ? 'future'
+                    : month.hasReport || month.status === 'onboarding'
+                      ? undefined
+                      : 'unavailable',
         })),
     );
 }
