@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
-import { canEnterLinkStep } from '@/utils/account';
+import { LINK_STEP_ROUTES, canEnterLinkStep, resolveLinkEntryRoute } from '@/utils/account';
 import { resolveOnboardingRedirect } from '@/utils/user';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
@@ -375,7 +375,7 @@ const router = createRouter({
  * 5탭은 전부 개인 금융 데이터라 예외를 두지 않는다.
  * 개발용 인증 우회 플래그는 만들지 않는다 — 인증 버그를 가리고 운영 설정에 새어나간다.
  */
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
     const auth = useAuthStore();
 
     if (to.meta.public) {
@@ -401,6 +401,21 @@ router.beforeEach((to) => {
     const onboardingRoute = resolveOnboardingRedirect(auth, to);
     if (onboardingRoute) {
         return { name: onboardingRoute };
+    }
+
+    /*
+     * 계좌 연동 플로우 진입점 기록.
+     *
+     * 플로우 **밖**에서 첫 단계로 들어오는 순간의 `from` 이 곧 "나갈 때 돌아갈 곳"이다.
+     * 진입 화면(연결 계좌 관리·재연동·개인챌린지 CTA·온보딩)이 각자 기억하게 하면 새 진입점이
+     * 생길 때마다 빠뜨린다. 여기서 한 번 잡으면 자동으로 따라온다.
+     * ⚠ 기록/무시 판정은 전부 resolveLinkEntryRoute() 안에 이유와 함께 있다 — 여기 조건을 늘리지 말 것.
+     */
+    if (to.name === LINK_STEP_ROUTES.institutions) {
+        const entry = resolveLinkEntryRoute(from.name, { redirected: Boolean(to.redirectedFrom) });
+        if (entry) {
+            useAccountStore().setEntryRoute(entry);
+        }
     }
 
     /*
