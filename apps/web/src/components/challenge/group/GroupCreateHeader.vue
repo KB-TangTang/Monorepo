@@ -1,4 +1,6 @@
 <script setup>
+import { ChevronLeftIcon } from '@heroicons/vue/24/solid';
+
 defineProps({
     step: { type: Number, required: true },
     title: { type: String, required: true },
@@ -13,10 +15,10 @@ const emit = defineEmits(['back']);
         <div class="gcr-deco-circle gcr-deco-circle--white" />
         <div class="gcr-deco-circle gcr-deco-circle--gold" />
 
-        <div class="gcr-nav" @click="emit('back')">
-            <svg width="9" height="16" viewBox="0 0 9 16" fill="none" aria-hidden="true">
-                <path d="M8 1L1 8l7 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+        <div class="gcr-nav">
+            <button type="button" class="gcr-nav__back" aria-label="뒤로가기" @click="emit('back')">
+                <ChevronLeftIcon class="gcr-nav__back-icon" />
+            </button>
             <span class="gcr-nav__label">그룹 만들기</span>
             <span class="gcr-nav__sub">
                 <slot name="subtitle">
@@ -72,7 +74,25 @@ const emit = defineEmits(['back']);
     gap: 9px;
     position: relative;
     z-index: 2;
+}
+
+.gcr-nav__back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -12px;
+    padding: 0;
+    background: none;
+    border: none;
     cursor: pointer;
+}
+
+.gcr-nav__back-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--tt-text-inverse);
 }
 
 .gcr-nav__label {

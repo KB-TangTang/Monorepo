@@ -1,4 +1,6 @@
 <script setup>
+import { ChevronLeftIcon } from '@heroicons/vue/24/solid';
+
 defineProps({
     title: { type: String, required: true },
     subtitle: { type: String, default: '' },
@@ -13,10 +15,10 @@ const emit = defineEmits(['back']);
     <header class="gih-header">
         <div class="gih-deco-circle gih-deco-circle--white" />
 
-        <div class="gih-nav" @click="emit('back')">
-            <svg width="9" height="16" viewBox="0 0 9 16" fill="none" aria-hidden="true">
-                <path d="M8 1L1 8l7 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+        <div class="gih-nav">
+            <button type="button" class="gih-nav__back" aria-label="뒤로가기" @click="emit('back')">
+                <ChevronLeftIcon class="gih-nav__back-icon" />
+            </button>
             <span class="gih-nav__label">{{ navLabel }}</span>
             <span v-if="badges.length" class="gih-nav__badges">
                 <span
@@ -68,7 +70,25 @@ const emit = defineEmits(['back']);
     gap: 9px;
     position: relative;
     z-index: 2;
+}
+
+.gih-nav__back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -12px;
+    padding: 0;
+    background: none;
+    border: none;
     cursor: pointer;
+}
+
+.gih-nav__back-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--tt-text-inverse);
 }
 
 .gih-nav__label {

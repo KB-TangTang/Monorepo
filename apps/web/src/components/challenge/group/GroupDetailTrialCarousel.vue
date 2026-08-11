@@ -10,7 +10,7 @@ const props = defineProps({
     indictments: { type: Array, required: true },
 });
 
-const emit = defineEmits(['defend', 'vote']);
+const emit = defineEmits(['defend', 'vote', 'trial']);
 
 const currentSlide = ref(0);
 const scrollEl = ref(null);
@@ -111,7 +111,10 @@ function deadline(item) {
                                     {{ cardDesc(item) }}
                                 </div>
                             </div>
-                            <div class="trial-carousel__stamp">
+                            <div
+                                class="trial-carousel__stamp"
+                                :class="{ 'trial-carousel__stamp--blue': cardType(item) === 'vote-done' }"
+                            >
                                 <span
                                     v-for="(line, li) in stampLabel(item).split('\n')"
                                     :key="li"
@@ -195,7 +198,7 @@ function deadline(item) {
                     </button>
                 </template>
 
-                <!-- 본문: done 카드 — 투표 현황 + 마감 -->
+                <!-- 본문: done 카드 — 투표 현황 + CTA -->
                 <template v-else>
                     <div class="trial-carousel__vote-status">
                         <span class="trial-carousel__vote-label">투표 현황</span>
@@ -211,9 +214,16 @@ function deadline(item) {
                             {{ item.voteCount }} / {{ item.totalVoters }}명
                         </span>
                     </div>
-                    <div class="trial-carousel__deadline-bottom">
-                        {{ deadline(item) }}
-                    </div>
+                    <button
+                        class="trial-carousel__cta"
+                        :class="{
+                            'trial-carousel__cta--trial': cardType(item) === 'defense-done',
+                            'trial-carousel__cta--trial-outline': cardType(item) === 'vote-done',
+                        }"
+                        @click="emit('trial', item)"
+                    >
+                        재판 현황 보기
+                    </button>
                 </template>
             </div>
         </div>
@@ -485,11 +495,21 @@ function deadline(item) {
     background: var(--tt-blue);
 }
 
-/* ── 마감 (done 카드 하단) ── */
-.trial-carousel__deadline-bottom {
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-hint);
+.trial-carousel__cta--trial {
+    background: var(--tt-blue);
+}
+
+.trial-carousel__cta--trial-outline {
+    background: transparent;
+    border: 1.5px solid var(--tt-blue);
+    color: var(--tt-blue);
+}
+
+/* ── 스탬프 파란색 변형 (투표 완료) ── */
+.trial-carousel__stamp--blue {
+    border-color: var(--tt-blue);
+    box-shadow: inset 0 0 0 1px rgba(47, 90, 208, 0.3);
+    color: var(--tt-blue);
 }
 
 /* ── 페이지 인디케이터 ── */
