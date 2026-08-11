@@ -7,6 +7,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * 이슈 #147 금융 동기화 전용 RestTemplate.
  *
@@ -26,6 +29,9 @@ public class FinancialSyncClientConfig {
     @Value("${mock.server.read-timeout-ms}")
     private int readTimeoutMs;
 
+    @Value("${mock.server.scenario-keys}")
+    private String scenarioKeysRaw;
+
     @Bean
     @Qualifier("financialSyncRestTemplate")
     public RestTemplate financialSyncRestTemplate() {
@@ -39,5 +45,14 @@ public class FinancialSyncClientConfig {
     public FinancialSyncClient financialSyncClient(
             @Qualifier("financialSyncRestTemplate") RestTemplate restTemplate) {
         return new MockFinancialSyncClient(restTemplate, baseUrl);
+    }
+
+    @Bean
+    public ScenarioKeyProvider scenarioKeyProvider() {
+        List<String> keys = Arrays.stream(scenarioKeysRaw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        return new PooledScenarioKeyProvider(keys);
     }
 }
