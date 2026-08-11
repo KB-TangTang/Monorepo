@@ -126,6 +126,15 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
     @Override
     public StockAssetSyncDto getStockAsset(String scenarioKey) {
         Map<String, Object> data = get("/api/v1/assets/stocks", scenarioKey);
+        /*
+         * 증권 계좌가 없는 사용자는 목서버가 code:"SUCCESS" 에 data:{} (accountId 없음) 로 응답한다
+         * (MockAssetServiceImpl.emptyStockAsset(), demo-empty-user 시나리오). 이건 에러가 아니라
+         * "증권 자산 없음" 이라는 정상 상태이므로 예외 대신 null 을 반환해 호출자가
+         * if (stock != null) 으로 건너뛸 수 있게 한다.
+         */
+        if (data.get("accountId") == null) {
+            return null;
+        }
         List<StockHoldingSyncDto> holdings = new ArrayList<>();
         for (Object item : asList(data.get("holdings"))) {
             Map<?, ?> row = (Map<?, ?>) item;
@@ -365,7 +374,12 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
         if (value == null) {
             throw new BusinessException("EXTERNAL_API_ERROR", "목서버 응답에 식별자가 없어요.");
         }
-        return Long.parseLong(String.valueOf(value));
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            throw new BusinessException("EXTERNAL_API_ERROR",
+                    "목서버 응답의 식별자 형식이 올바르지 않아요: " + value);
+        }
     }
 
     private static BigDecimal decimal(Object value) {

@@ -1,6 +1,7 @@
 package com.kb.tangtang.account.client.sync;
 
 import com.kb.tangtang.account.client.sync.dto.BankAccountSyncDto;
+import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.common.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,5 +83,79 @@ class MockFinancialSyncClientTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> client.getBankAccounts("1"));
         assertEquals("EXTERNAL_API_ERROR", e.getCode());
+    }
+
+    @Test
+    @DisplayName("증권 계좌가 없는 사용자는 getStockAsset 이 예외 대신 null 을 반환한다")
+    void getStockAssetReturnsNullForEmptyPortfolio() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        // 목서버는 증권 계좌가 없는 사용자(예: demo-empty-user 시나리오)에게 code:"SUCCESS" 에
+        // data:{} (accountId 없음) 로 응답한다 — 이건 에러가 아니라 "증권 자산 없음"이라는 정상 상태다.
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/stocks"))
+                .andRespond(withSuccess("""
+                        {"code":"SUCCESS","message":"ok","data":{}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+        StockAssetSyncDto result = client.getStockAsset("demo-empty-user");
+
+        assertNull(result);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("13개 메서드 모두 정확한 요청 경로로 호출한다 (경로 오타 회귀 방지)")
+    void allMethodsHitExpectedPaths() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        String emptyBody = """
+                {"code":"SUCCESS","message":"ok","data":{}}
+                """;
+
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/accounts"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/accounts/1/transactions"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/deposits"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/deposits/1/transactions"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/stocks"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/securities/1/transactions"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/loans"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/loans/1/transactions"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/payMoney"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/pay-money/1/transactions"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/cards"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/cards/1/approvals"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/api/v1/cards/1/bills"))
+                .andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+
+        client.getBankAccounts("1");
+        client.getBankTransactions("1", 1L);
+        client.getDeposits("1");
+        client.getDepositTransactions("1", 1L);
+        client.getStockAsset("1");
+        client.getSecuritiesTransactions("1", 1L);
+        client.getLoans("1");
+        client.getLoanTransactions("1", 1L);
+        client.getPayMoney("1");
+        client.getPayMoneyTransactions("1", 1L);
+        client.getCards("1");
+        client.getCardApprovals("1", 1L);
+        client.getCardBills("1", 1L);
+
+        server.verify();
     }
 }
