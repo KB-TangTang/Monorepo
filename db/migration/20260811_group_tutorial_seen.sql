@@ -27,6 +27,8 @@
 -- 신규 설치: **실행 대상이다.** 이 변경은 schema.sql 에 반영돼 있지 않다.
 --   (db/AGENTS.md 규칙 · DECISIONS.md 2026-08-09 (4) — 공유된 schema.sql 은 고치지 않는다)
 
+USE tangtang;
+
 ALTER TABLE tbl_user
   ADD COLUMN group_tutorial_seen_at DATETIME NULL
     COMMENT '그룹 챌린지 튜토리얼(GC_01_01) 완료 시각. NULL 이면 미완료'
