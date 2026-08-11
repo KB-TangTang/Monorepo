@@ -18,4 +18,10 @@ public interface UserMapper {
     void insert(UserDto user);
 
     UserDto findById(@Param("id") Long id);
+
+    /**
+     * 실명 갱신 (간편인증 화면). 반환값은 실제로 바뀐 행 수다 —
+     * 0 이면 그 사용자가 없다는 뜻이라 서비스가 404 로 바꾼다.
+     */
+    int updateName(@Param("id") Long id, @Param("name") String name);
 }

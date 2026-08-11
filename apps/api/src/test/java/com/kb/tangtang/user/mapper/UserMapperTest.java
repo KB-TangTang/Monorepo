@@ -70,6 +70,27 @@ class UserMapperTest {
     }
 
     @Test
+    @DisplayName("실명을 저장하면 findById 로 다시 읽힌다")
+    void updateName() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("test-sub-0002")
+                .email("name@example.com").nickname("이름없음")
+                .status("ACTIVE").difficultyId(1L)
+                .build();
+        userMapper.insert(user);
+        assertNull(userMapper.findById(user.getId()).getName(), "가입 직후 실명은 비어 있다");
+
+        assertEquals(1, userMapper.updateName(user.getId(), "장재한"));
+        assertEquals("장재한", userMapper.findById(user.getId()).getName());
+    }
+
+    @Test
+    @DisplayName("없는 사용자의 실명 갱신은 0행을 돌려준다")
+    void updateNameMissing() {
+        assertEquals(0, userMapper.updateName(-1L, "장재한"));
+    }
+
+    @Test
     @DisplayName("리프레시 토큰을 넣고 해시로 찾은 뒤 폐기한다")
     void refreshTokenLifecycle() {
         UserDto user = UserDto.builder()

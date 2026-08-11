@@ -19,6 +19,11 @@ public class UserMeDto {
 
     private Long id;
     private String nickname;
+    /**
+     * 실명(본인확인용). 간편인증 화면이 이 값을 입력창에 미리 채운다.
+     * 아직 인증을 한 번도 안 한 사용자는 null 이다. (DECISIONS.md 2026-08-11 간편인증 이름 수정 허용)
+     */
+    private String name;
     private String email;
     private String socialProvider;
 }

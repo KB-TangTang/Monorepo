@@ -100,6 +100,7 @@ public class AuthService {
                         .user(UserMeDto.builder()
                                 .id(user.getId())
                                 .nickname(user.getNickname())
+                                .name(user.getName())
                                 .email(user.getEmail())
                                 .build())
                         .needsConsent(needsConsent)
