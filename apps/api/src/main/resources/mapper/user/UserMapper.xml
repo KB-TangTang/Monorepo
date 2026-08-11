@@ -9,7 +9,8 @@
 
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
-        id, social_provider, provider_user_id, email, nickname, name, status, difficulty_id
+        id, social_provider, provider_user_id, email, nickname, name, status, difficulty_id,
+        tutorial_seen_at, group_tutorial_seen_at
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -32,5 +33,41 @@
           FROM tbl_user
          WHERE id = #{id}
     </select>
+
+    <!--
+      실명 갱신. 탈퇴/차단 사용자는 제외한다 — 상태가 ACTIVE 가 아닌 행을 고칠 이유가 없고,
+      제외하면 updateName 이 0 을 돌려주므로 서비스가 그대로 404 로 응답한다.
+    -->
+    <update id="updateName">
+        UPDATE tbl_user
+           SET name = #{name}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      튜토리얼 완료 시각. 완료(시각)와 「다시 보기」(NULL)를 한 문장으로 처리한다.
+
+      대상 컬럼을 <choose> 대신 CASE 로 고른 이유:
+        · 동적 SQL 분기 없이 평문 SQL 한 벌로 끝나 읽기 쉽다
+        · target 은 바인딩 파라미터(#{})라 ${} 금지 규칙을 어기지 않는다
+        · 대상이 아닌 컬럼은 자기 값을 다시 넣으므로 값이 보존된다
+
+      jdbcType 을 명시하는 이유: seenAt 이 null 로 올 때(다시 보기) 드라이버가 타입을
+      추론하지 못해 실패할 수 있다.
+
+      ⚠ 'MAIN'·'GROUP' 은 TutorialType enum 의 이름이다. enum 을 고치면 여기도 고쳐야 한다.
+    -->
+    <update id="updateTutorialSeenAt">
+        UPDATE tbl_user
+           SET tutorial_seen_at = CASE WHEN #{target} = 'MAIN'
+                                       THEN #{seenAt,jdbcType=TIMESTAMP}
+                                       ELSE tutorial_seen_at END,
+               group_tutorial_seen_at = CASE WHEN #{target} = 'GROUP'
+                                             THEN #{seenAt,jdbcType=TIMESTAMP}
+                                             ELSE group_tutorial_seen_at END
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
 
 </mapper>

@@ -70,6 +70,58 @@ class UserMapperTest {
     }
 
     @Test
+    @DisplayName("실명을 저장하면 findById 로 다시 읽힌다")
+    void updateName() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("test-sub-0002")
+                .email("name@example.com").nickname("이름없음")
+                .status("ACTIVE").difficultyId(1L)
+                .build();
+        userMapper.insert(user);
+        assertNull(userMapper.findById(user.getId()).getName(), "가입 직후 실명은 비어 있다");
+
+        assertEquals(1, userMapper.updateName(user.getId(), "장재한"));
+        assertEquals("장재한", userMapper.findById(user.getId()).getName());
+    }
+
+    @Test
+    @DisplayName("없는 사용자의 실명 갱신은 0행을 돌려준다")
+    void updateNameMissing() {
+        assertEquals(0, userMapper.updateName(-1L, "장재한"));
+    }
+
+    @Test
+    @DisplayName("튜토리얼 완료 시각은 개인·그룹이 서로 간섭하지 않는다")
+    void updateTutorialSeenAt() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("test-sub-0004")
+                .email("tutorial@example.com").nickname("튜토리얼")
+                .status("ACTIVE").difficultyId(1L)
+                .build();
+        userMapper.insert(user);
+        assertNull(userMapper.findById(user.getId()).getTutorialSeenAt());
+        assertNull(userMapper.findById(user.getId()).getGroupTutorialSeenAt());
+
+        LocalDateTime seen = LocalDateTime.now().withNano(0);
+
+        assertEquals(1, userMapper.updateTutorialSeenAt(user.getId(), "MAIN", seen));
+        UserDto afterMain = userMapper.findById(user.getId());
+        assertEquals(seen, afterMain.getTutorialSeenAt());
+        assertNull(afterMain.getGroupTutorialSeenAt(), "MAIN 갱신이 그룹을 건드리면 안 된다");
+
+        assertEquals(1, userMapper.updateTutorialSeenAt(user.getId(), "GROUP", seen));
+        UserDto afterGroup = userMapper.findById(user.getId());
+        assertEquals(seen, afterGroup.getTutorialSeenAt(), "GROUP 갱신이 개인을 지우면 안 된다");
+        assertEquals(seen, afterGroup.getGroupTutorialSeenAt());
+
+        // 다시 보기 — null 이 실제로 들어가는지 (jdbcType 누락 시 여기서 터진다)
+        assertEquals(1, userMapper.updateTutorialSeenAt(user.getId(), "MAIN", null));
+        UserDto afterReset = userMapper.findById(user.getId());
+        assertNull(afterReset.getTutorialSeenAt());
+        assertEquals(seen, afterReset.getGroupTutorialSeenAt(), "개인만 지워져야 한다");
+    }
+
+    @Test
     @DisplayName("리프레시 토큰을 넣고 해시로 찾은 뒤 폐기한다")
     void refreshTokenLifecycle() {
         UserDto user = UserDto.builder()

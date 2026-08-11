@@ -22,9 +22,37 @@
 |---|---|---|---|
 | GET | `/api/auth/google` | 불필요 | 302 → 구글 동의 화면. `oauth_state` 쿠키 발급 |
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
-| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: { id, nickname, email }, needsConsent }` |
+| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent }` |
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
-| GET | `/api/users/me` | Bearer | `{ id, nickname, email, socialProvider }` |
+| GET | `/api/users/me` | Bearer | 사용자정보 |
+| PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
+
+**사용자정보** = `{ id, nickname, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+(`/api/auth/refresh` 의 `user` 만 `socialProvider` 를 뺀다 — 로그인 경로 전체에 영향을 주지 않기 위함)
+
+- `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
+- `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
+  생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
+  (`DECISIONS.md` 2026-08-11 (4))
+- 검증 규칙: 앞뒤 공백 제거 후 **2~50자**, **한글·영문·공백만**. 어기면 `INVALID_NAME`.
+
+### 튜토리얼 완료 플래그 (이슈 #128)
+
+| 메서드 | 경로 | 인증 | 뜻 |
+|---|---|---|---|
+| PATCH | `/api/main-challenge/tutorial/complete` | Bearer | 메인(개인·대법원) 튜토리얼 `MC_01_05` 완료 |
+| DELETE | `/api/main-challenge/tutorial/complete` | Bearer | 다시 보기 — 완료 시각을 지운다 |
+| PATCH | `/api/group-challenge/tutorial/complete` | Bearer | 그룹(지방법원) 튜토리얼 `GC_01_01` 완료 |
+| DELETE | `/api/group-challenge/tutorial/complete` | Bearer | 다시 보기 |
+
+- 네 개 모두 응답은 **갱신된 사용자정보**다. 프론트는 이 응답으로 스토어를 갱신한다.
+- 저장 위치는 `tbl_user.tutorial_seen_at`(메인) · `tbl_user.group_tutorial_seen_at`(그룹).
+  **`null` 이면 아직 안 본 것**이고, 프론트는 이 값만 보고 노출을 정한다.
+  로그인 시 `POST /api/auth/refresh` 응답에 이미 실려 오므로 **화면 진입마다 조회하지 않는다.**
+- `localStorage` 를 쓰지 않는다 — 기기를 바꾸면 튜토리얼이 다시 뜬다
+  (`DECISIONS.md` 2026-08-11 RV-108 에서 기각된 대안이다).
+- 클래스는 `user` 모듈(`user/controller/TutorialController`)에 있다. 경로는 챌린지 도메인이지만
+  값이 사는 테이블이 `tbl_user` 라서다.
 
 ### 인증 에러 코드
 
@@ -36,7 +64,8 @@
 | `REFRESH_TOKEN_REUSED` | 400 | 폐기된 리프레시 토큰 재사용 — 전체 토큰 폐기됨 |
 | `USER_WITHDRAWN` | 400 | 탈퇴·차단 계정 |
 | `OAUTH_TOKEN_EXCHANGE_FAILED` | 400 | 구글 code↔token 교환 실패 |
-| `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 |
+| `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 (실명 갱신 대상이 탈퇴·차단 상태일 때도 이 코드다) |
+| `INVALID_NAME` | 400 | `/api/users/me/name` 의 이름이 형식에 맞지 않음 (2~50자·한글/영문/공백) |
 
 ### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 
@@ -129,6 +158,10 @@
 - `type` 이 `SIMPLE_AUTH` 면 `providers` 가 채워지고, `INSTITUTION_LOGIN` 이면 빈 배열이다.
 - 본인 정보(`userName`·`birthDate`·`carrier`·`phoneNo`)는 **`requiresIdentity: true` 일 때만** 보낸다.
   목 모드에서는 화면이 형식만 검증하고 폐기해 필드가 비어 온다. 서버도 공급자에 전달만 하고 저장·로깅하지 않는다.
+  - ⚠ **이름만 예외다.** 화면이 입력받은 이름은 이 요청과 별개로 `PATCH /api/users/me/name` 이
+    `tbl_user.name` 에 저장한다. 이 요청의 `userName` 은 여전히 **공급자 전달용**이고 저장되지 않는다.
+    (`DECISIONS.md` 2026-08-11 (4) — 목 모드는 `requiresIdentity: false` 라 이 페이로드에만 실으면
+    시연 환경에서 실명이 영영 저장되지 않는다)
 - **`credentials` 는 요청 처리 중에만 존재한다.** 진행 상태·DB·로그 어디에도 남지 않는다.
 - 인증 승인은 프론트가 `auth-status` 를 1초 간격으로 폴링해 확인한다.
 
@@ -220,7 +253,7 @@
 
 | 화면 | 쓰는 API |
 |---|---|
-| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, email, socialProvider}` |
+| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, name, email, socialProvider}` |
 | 동의 관리 (`/my/consents`) | `GET /api/consents/me` · `POST /api/consents/{type}/withdraw` · `POST /api/consents` (재동의) |
 | 로그아웃 | `POST /api/auth/logout` |
 

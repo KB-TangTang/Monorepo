@@ -97,10 +97,19 @@ public class AuthService {
         return AuthResultDto.builder()
                 .response(LoginResponseDto.builder()
                         .accessToken(accessToken)
+                        /*
+                         * ⚠ 프론트는 이 응답만으로 튜토리얼 노출을 정한다 —
+                         * 부팅 시 refresh 한 번으로 스토어가 채워지고, 화면은 추가 조회 없이
+                         * seenAt 이 null 인지만 본다. 필드를 빼면 튜토리얼이 매번 다시 뜬다.
+                         * (이슈 #128. socialProvider 만 여전히 뺀다 — UserMeDto 주석 참고)
+                         */
                         .user(UserMeDto.builder()
                                 .id(user.getId())
                                 .nickname(user.getNickname())
+                                .name(user.getName())
                                 .email(user.getEmail())
+                                .tutorialSeenAt(user.getTutorialSeenAt())
+                                .groupTutorialSeenAt(user.getGroupTutorialSeenAt())
                                 .build())
                         .needsConsent(needsConsent)
                         .build())

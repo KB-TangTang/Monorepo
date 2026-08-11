@@ -19,6 +19,17 @@ public class UserMeDto {
 
     private Long id;
     private String nickname;
+    /**
+     * 실명(본인확인용). 간편인증 화면이 이 값을 입력창에 미리 채운다.
+     * 아직 인증을 한 번도 안 한 사용자는 null 이다. (DECISIONS.md 2026-08-11 간편인증 이름 수정 허용)
+     */
+    private String name;
     private String email;
     private String socialProvider;
+    /**
+     * 튜토리얼 완료 시각. **NULL 이면 아직 안 봤다**는 뜻이라 프론트가 이 값만 보고 노출을 정한다.
+     * 별도 조회 없이 판정하도록 로그인 응답(/api/auth/refresh)에도 함께 실린다. (이슈 #128)
+     */
+    private java.time.LocalDateTime tutorialSeenAt;
+    private java.time.LocalDateTime groupTutorialSeenAt;
 }

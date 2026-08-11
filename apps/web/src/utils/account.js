@@ -248,14 +248,33 @@ export function formatBirthDate(value) {
  * 간편인증 입력 형식 검증.
  *
  * ⚠ **형식만 본다.** 목 모드에는 대조할 인증기관이 없다.
- * 입력값(생년월일·통신사·휴대폰)은 서버로 보내지 않고 저장하지도 않는다.
+ * 생년월일·통신사·휴대폰은 서버로 보내지 않고 저장하지도 않는다.
  * 실제 마이데이터에서 이 값들은 "누구에게 인증 푸시를 보낼지"를 정하는 용도이고,
  * 우리 목 모드에는 보낼 곳이 없다. (DECISIONS.md 2026-08-05)
  *
+ * ⚠ **이름만은 예외다 — `tbl_user.name` 에 저장한다.**
+ * 구글 계정 이름이 실명과 달라 인증에 실패하는 사용자가 화면에서 바로 고칠 수 있어야 하고,
+ * 고친 값은 `PATCH /api/users/me/name` 으로 남는다. 매번 다시 입력하게 만들지 않기 위해서다.
+ * (DECISIONS.md 2026-08-11)
+ *
  * @returns {{valid: boolean, errors: Object<string, string>}}
  */
-export function validateSimpleAuthForm({ birthDate, carrier, phone } = {}) {
+export function validateSimpleAuthForm({ name, birthDate, carrier, phone } = {}) {
     const errors = {};
+    const trimmedName = String(name ?? '').trim();
+    if (!trimmedName) {
+        errors.name = '이름을 입력해주세요';
+    } else if (trimmedName.length < 2 || trimmedName.length > 50) {
+        /* 50자 상한은 저장 대상 컬럼이 `tbl_user.name VARCHAR(50)` 이기 때문이다. */
+        errors.name = '이름을 2~50자로 입력해주세요';
+    } else if (!/^[가-힣a-zA-Z ]+$/.test(trimmedName)) {
+        /*
+         * `가-힣` 은 완성형만 포함하므로 자모만 친 입력(ㄱ, ㅏ)도 여기서 걸러진다.
+         * 공백은 \s 가 아니라 진짜 공백만 허용한다 — 서버(UserService.NAME_PATTERN)와 같은 규칙이라야
+         * 화면은 통과했는데 서버가 INVALID_NAME 으로 되돌려주는 어긋남이 안 생긴다.
+         */
+        errors.name = '한글 또는 영문으로 입력해주세요';
+    }
     if (!/^\d{6}$/.test(String(birthDate ?? ''))) {
         errors.birthDate = '생년월일 6자리를 입력해주세요';
     }

@@ -129,7 +129,7 @@ test('폴링 제한 시간을 넘겼는지 판정한다', () => {
 });
 
 test('간편인증 입력 형식을 검증한다', () => {
-    const ok = { birthDate: '990101', carrier: 'SKT', phone: '01012345678' };
+    const ok = { name: '홍길동', birthDate: '990101', carrier: 'SKT', phone: '01012345678' };
     assert.equal(validateSimpleAuthForm(ok).valid, true);
     assert.equal(validateSimpleAuthForm({ ...ok, birthDate: '9901' }).valid, false);
     assert.equal(validateSimpleAuthForm({ ...ok, phone: '02012345678' }).valid, false);
@@ -141,6 +141,49 @@ test('간편인증 입력 형식을 검증한다', () => {
         '생년월일 6자리를 입력해주세요',
     );
     assert.equal(validateSimpleAuthForm().valid, false);
+});
+
+/*
+ * 이름은 나머지 세 값과 달리 tbl_user.name 에 저장된다 — 틀린 값이 그대로 남으면
+ * 다음 인증에서도 같은 이유로 실패한다. (DECISIONS.md 2026-08-11)
+ */
+test('간편인증 이름을 검증한다', () => {
+    const ok = { name: '홍길동', birthDate: '990101', carrier: 'SKT', phone: '01012345678' };
+    assert.equal(validateSimpleAuthForm({ ...ok, name: '  홍길동  ' }).valid, true);
+    assert.equal(validateSimpleAuthForm({ ...ok, name: 'John Doe' }).valid, true);
+
+    assert.equal(validateSimpleAuthForm({ ...ok, name: '' }).errors.name, '이름을 입력해주세요');
+    /* 공백만 친 것도 빈 값이다. */
+    assert.equal(validateSimpleAuthForm({ ...ok, name: '   ' }).errors.name, '이름을 입력해주세요');
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: undefined }).errors.name,
+        '이름을 입력해주세요',
+    );
+
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: '홍' }).errors.name,
+        '이름을 2~50자로 입력해주세요',
+    );
+    /* 상한 50 은 tbl_user.name VARCHAR(50) 때문이다. */
+    assert.equal(validateSimpleAuthForm({ ...ok, name: '가'.repeat(50) }).valid, true);
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: '가'.repeat(51) }).errors.name,
+        '이름을 2~50자로 입력해주세요',
+    );
+
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: '홍길동2' }).errors.name,
+        '한글 또는 영문으로 입력해주세요',
+    );
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: '홍길동!' }).errors.name,
+        '한글 또는 영문으로 입력해주세요',
+    );
+    /* 자모만 친 입력은 `가-힣` 범위 밖이라 걸러진다. */
+    assert.equal(
+        validateSimpleAuthForm({ ...ok, name: 'ㅎㄱㄷ' }).errors.name,
+        '한글 또는 영문으로 입력해주세요',
+    );
 });
 
 test('동기화 상태 5종을 배지로 옮긴다', () => {
