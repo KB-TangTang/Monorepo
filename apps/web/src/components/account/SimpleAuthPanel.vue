@@ -77,10 +77,14 @@ const provider = ref(props.providers[0]?.code ?? '');
  * ⚠ 생년월일·통신사·휴대폰은 이 객체 밖으로 나가지 않는다. 이름만 예외로 서버에 저장한다.
  *
  * 이름은 이미 아는 값으로 미리 채운다 — 실명(tbl_user.name)이 있으면 그것을,
- * 없으면 구글 계정 이름(nickname)을 출발점으로 준다. 사용자는 틀렸을 때만 고치면 된다.
+ * 없으면 구글 계정 이름(socialName)을 출발점으로 준다. 사용자는 틀렸을 때만 고치면 된다.
+ *
+ * ⚠ nickname 을 쓰지 않는다. 2026-08-11 닉네임 온보딩이 생기면서 nickname 은 **사용자가 정하는 별명**이 됐고
+ * 가입 시점에는 NULL 이다(구글 이름은 socialName 으로 옮겨갔다). 게다가 이 화면은 닉네임 설정보다
+ * **앞 단계**라 nickname 을 봐도 항상 비어 있다.
  */
 const form = reactive({
-    name: auth.user?.name ?? auth.user?.nickname ?? '',
+    name: auth.user?.name ?? auth.user?.socialName ?? '',
     birthDate: '',
     carrier: '',
     phone: '',

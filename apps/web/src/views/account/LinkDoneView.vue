@@ -15,11 +15,14 @@ import { storeToRefs } from 'pinia';
 import BaseButton from '@/components/common/BaseButton.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import { useAccountStore } from '@/stores/account';
+import { useAuthStore } from '@/stores/auth';
 import { PROGRESS_STATUS } from '@/utils/account';
+import { NICKNAME_SETUP_ROUTE } from '@/utils/user';
 import successAnimation from '@/assets/images/link-success.svg';
 
 const router = useRouter();
 const store = useAccountStore();
+const auth = useAuthStore();
 const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions } =
     storeToRefs(store);
 
@@ -83,8 +86,21 @@ function leaveFlow(name) {
     router.replace({ name });
 }
 
-function goAccounts() {
-    leaveFlow('connectedAccounts');
+/*
+ * 온보딩으로 들어온 사용자는 여기서 끝이 아니다 — 닉네임 설정이 남았다
+ * (로그인 → 동의 → 계좌연동 → **닉네임 설정** → 홈. DECISIONS.md 2026-08-11).
+ *
+ * 라우터 가드가 안전망으로 잡아주긴 하지만, 그것만 믿고 '연결 계좌 확인' 을 눌렀다가
+ * 엉뚱한 화면으로 튕기게 두면 완료 화면이 고장 난 것처럼 보인다. 다음 할 일을 화면이 직접 말한다.
+ * 이미 닉네임이 있는 사용자(나중에 기관을 더 붙이는 경우)는 원래 동선 그대로다.
+ */
+const needsNickname = computed(() => !auth.user?.nickname);
+const primaryLabel = computed(() =>
+    needsNickname.value ? '닉네임 정하러 가기' : '연결 계좌 확인',
+);
+
+function goNext() {
+    leaveFlow(needsNickname.value ? NICKNAME_SETUP_ROUTE : 'connectedAccounts');
 }
 
 function goHome() {
@@ -153,10 +169,13 @@ function goHome() {
         </div>
 
         <div class="link-done__cta">
-            <BaseButton variant="accent" block size="lg" @click="goAccounts">
-                연결 계좌 확인
+            <BaseButton variant="accent" block size="lg" @click="goNext">
+                {{ primaryLabel }}
             </BaseButton>
-            <button class="link-done__link" type="button" @click="goHome">홈으로</button>
+            <!-- 닉네임을 정하기 전에는 홈으로 갈 수 없다. 눌러도 가드가 되돌리므로 아예 감춘다. -->
+            <button v-if="!needsNickname" class="link-done__link" type="button" @click="goHome">
+                홈으로
+            </button>
         </div>
     </div>
 </template>

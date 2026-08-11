@@ -4,6 +4,7 @@ import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.dto.UserNameUpdateRequestDto;
+import com.kb.tangtang.user.dto.UserNicknameUpdateRequestDto;
 import com.kb.tangtang.user.service.UserService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -40,5 +41,19 @@ public class UserController {
     public ApiResponse<UserMeDto> updateName(@LoginUser Long userId,
                                              @RequestBody UserNameUpdateRequestDto request) {
         return ApiResponse.ok(userService.updateName(userId, request.getName()));
+    }
+
+    /**
+     * 닉네임(표시명) 설정·수정.
+     *
+     * 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 **같은 엔드포인트**를 쓴다 —
+     * 하는 일이 "닉네임을 이 값으로 바꾼다" 하나라 나눌 이유가 없다.
+     * 온보딩 완료 여부는 `GET /api/users/me` 의 `nickname` 이 null 인지로 판별한다.
+     * 별도 판별 API 를 두지 않는다. (API 연동규격 No.87)
+     */
+    @PatchMapping("/me/nickname")
+    public ApiResponse<UserMeDto> updateNickname(@LoginUser Long userId,
+                                                 @RequestBody UserNicknameUpdateRequestDto request) {
+        return ApiResponse.ok(userService.updateNickname(userId, request.getNickname()));
     }
 }

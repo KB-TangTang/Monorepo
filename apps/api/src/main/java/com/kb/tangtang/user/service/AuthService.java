@@ -80,7 +80,14 @@ public class AuthService {
                 .socialProvider(PROVIDER_GOOGLE)
                 .providerUserId(profile.getProviderUserId())
                 .email(profile.getEmail())
-                .nickname(profile.getName())   // 실명(name)은 계좌 인증 단계에서 채운다
+                /*
+                 * 구글 이름은 socialName 으로 들어간다. nickname 은 **비워 둔다** —
+                 * 그래야 "닉네임을 설정했는지"를 nickname IS NULL 하나로 판별할 수 있다.
+                 * 미리 채워두면 설정한 값과 구분할 별도 플래그 컬럼이 필요해진다.
+                 * (DECISIONS.md 2026-08-11 닉네임 온보딩)
+                 * 실명(name)은 계좌 인증 단계에서 채운다.
+                 */
+                .socialName(profile.getName())
                 .status(STATUS_ACTIVE)
                 .difficultyId(DEFAULT_DIFFICULTY_ID)
                 .build();
@@ -98,19 +105,13 @@ public class AuthService {
                 .response(LoginResponseDto.builder()
                         .accessToken(accessToken)
                         /*
-                         * ⚠ 프론트는 이 응답만으로 튜토리얼 노출을 정한다 —
-                         * 부팅 시 refresh 한 번으로 스토어가 채워지고, 화면은 추가 조회 없이
-                         * seenAt 이 null 인지만 본다. 필드를 빼면 튜토리얼이 매번 다시 뜬다.
-                         * (이슈 #128. socialProvider 만 여전히 뺀다 — UserMeDto 주석 참고)
+                         * ⚠ 프론트는 부팅 시 이 응답 하나로 스토어를 채우고, 이후 화면들은
+                         * 추가 조회 없이 여기 실린 값만 본다 — 튜토리얼 노출(seenAt 이 null 인가)과
+                         * 닉네임 온보딩 가드(nickname 이 null 인가)가 둘 다 그렇다.
+                         * 그래서 /users/me 와 **같은 모양**을 내려준다. 필드가 빠지면
+                         * 그 경로에서만 튜토리얼이 다시 뜨거나 온보딩으로 튕기는 버그가 난다.
                          */
-                        .user(UserMeDto.builder()
-                                .id(user.getId())
-                                .nickname(user.getNickname())
-                                .name(user.getName())
-                                .email(user.getEmail())
-                                .tutorialSeenAt(user.getTutorialSeenAt())
-                                .groupTutorialSeenAt(user.getGroupTutorialSeenAt())
-                                .build())
+                        .user(UserMeDto.from(user))
                         .needsConsent(needsConsent)
                         .build())
                 .refreshToken(refreshToken)
