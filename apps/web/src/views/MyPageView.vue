@@ -4,22 +4,26 @@
   쓰면 안 되는 경우: 여기에 새 기능 화면을 만들지 말 것 — 참고화면에 있는 4개 진입점만 둔다.
 -->
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import BaseInput from '@/components/common/BaseInput.vue';
 import MyMenuList from '@/components/my/MyMenuList.vue';
 import MyProfileCard from '@/components/my/MyProfileCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMe, logout } from '@/api/auth';
+import { updateMyNickname } from '@/api/user';
 import { useAuthStore } from '@/stores/auth';
 import { resetPersonalTutorial, resetGroupTutorial } from '@/services/tutorialGuide';
+import { NICKNAME_MAX_LENGTH, resolveDisplayName, validateNickname } from '@/utils/user';
 
 const router = useRouter();
 const auth = useAuthStore();
 
 const MENU = [
+    { key: 'nickname', label: '닉네임 수정' },
     { key: 'accounts', label: '계좌 연결 관리' },
     { key: 'consents', label: '동의 관리' },
     { key: 'tutorial', label: '튜토리얼 다시 보기' },
@@ -35,6 +39,10 @@ const logoutSheetOpen = ref(false);
 const loggingOut = ref(false);
 const tutorialSheet = ref(null);
 const logoutSheet = ref(null);
+const nicknameSheetOpen = ref(false);
+const nicknameDraft = ref('');
+const nicknameError = ref('');
+const savingNickname = ref(false);
 
 /*
  * 인증 스토어의 user 를 쓰지 않고 직접 조회한다.
@@ -55,13 +63,53 @@ async function load() {
 onMounted(load);
 
 function onSelect(key) {
-    if (key === 'accounts') {
+    if (key === 'nickname') {
+        openNicknameSheet();
+    } else if (key === 'accounts') {
         router.push({ name: 'connectedAccounts' });
     } else if (key === 'consents') {
         router.push({ name: 'myConsents' });
     } else {
         tutorialError.value = '';
         tutorialSheetOpen.value = true;
+    }
+}
+
+/*
+ * 닉네임 수정 (MY_01_03).
+ *
+ * 화면을 따로 만들지 않고 이 화면의 바텀시트를 쓴다 — 입력 한 칸짜리 편집이고,
+ * 저장 결과가 바로 위 프로필 카드에 나타나야 "바뀌었다"가 눈에 보이기 때문이다.
+ * 오버레이를 직접 만들지 않고 로그아웃·튜토리얼과 같은 BaseBottomSheet 를 쓴다.
+ */
+const nicknameValidation = computed(() => validateNickname(nicknameDraft.value));
+
+function openNicknameSheet() {
+    /* 현재 닉네임을 미리 채운다. 아직 없는 사용자(온보딩 전)에게는 표시명을 출발점으로 준다. */
+    nicknameDraft.value = user.value?.nickname || resolveDisplayName(user.value);
+    nicknameError.value = '';
+    nicknameSheetOpen.value = true;
+}
+
+async function saveNickname() {
+    if (!nicknameValidation.value.valid || savingNickname.value) {
+        return;
+    }
+    savingNickname.value = true;
+    nicknameError.value = '';
+    try {
+        const updated = await updateMyNickname(nicknameValidation.value.value);
+        auth.mergeUser(updated);
+        /*
+         * 이 화면의 user 는 fetchMe 결과라 스토어와 별개다(위 load() 주석 참고).
+         * 함께 갈아끼워야 프로필 카드가 그 자리에서 바뀐다 — 다시 조회하러 나갔다 오게 만들지 않는다.
+         */
+        user.value = { ...user.value, ...updated };
+        nicknameSheetOpen.value = false;
+    } catch (err) {
+        nicknameError.value = err.message ?? '닉네임을 저장하지 못했어요.';
+    } finally {
+        savingNickname.value = false;
     }
 }
 
@@ -152,6 +200,30 @@ async function confirmLogout() {
                 </button>
             </div>
         </template>
+
+        <BaseBottomSheet v-model="nicknameSheetOpen" title="닉네임 수정">
+            <div class="my-page__sheet">
+                <BaseInput
+                    v-model="nicknameDraft"
+                    label="닉네임"
+                    placeholder="닉네임을 입력해주세요"
+                    :maxlength="NICKNAME_MAX_LENGTH"
+                    :disabled="savingNickname"
+                    required
+                />
+                <p v-if="nicknameError" class="my-page__sheet-error" role="alert">
+                    {{ nicknameError }}
+                </p>
+                <BaseButton
+                    block
+                    :disabled="!nicknameValidation.valid"
+                    :loading="savingNickname"
+                    @click="saveNickname"
+                >
+                    저장
+                </BaseButton>
+            </div>
+        </BaseBottomSheet>
 
         <BaseBottomSheet
             ref="tutorialSheet"

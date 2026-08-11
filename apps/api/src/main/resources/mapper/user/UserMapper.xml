@@ -9,8 +9,8 @@
 
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
-        id, social_provider, provider_user_id, email, nickname, name, status, difficulty_id,
-        tutorial_seen_at, group_tutorial_seen_at
+        id, social_provider, provider_user_id, email, nickname, social_name, name,
+        status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -24,8 +24,12 @@
             parameterType="com.kb.tangtang.user.dto.UserDto"
             useGeneratedKeys="true"
             keyProperty="id">
-        INSERT INTO tbl_user (social_provider, provider_user_id, email, nickname, status, difficulty_id)
-        VALUES (#{socialProvider}, #{providerUserId}, #{email}, #{nickname}, #{status}, #{difficultyId})
+        <!--
+          nickname 은 넣지 않는다. 가입 시점에는 NULL 이어야 "닉네임 온보딩 미완료" 로 판별된다.
+          구글 이름은 social_name 에 들어간다. (DECISIONS.md 2026-08-11 닉네임 온보딩)
+        -->
+        INSERT INTO tbl_user (social_provider, provider_user_id, email, social_name, status, difficulty_id)
+        VALUES (#{socialProvider}, #{providerUserId}, #{email}, #{socialName}, #{status}, #{difficultyId})
     </insert>
 
     <select id="findById" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -41,6 +45,18 @@
     <update id="updateName">
         UPDATE tbl_user
            SET name = #{name}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      닉네임 갱신. 온보딩(AU_03_01)과 마이페이지 수정(MY_01_03)이 같은 문장을 쓴다.
+      중복 검사는 하지 않는다 — 닉네임 중복 허용이 팀 결정이라 UNIQUE 도 걸지 않았다.
+      (DECISIONS.md 2026-08-11 닉네임 온보딩)
+    -->
+    <update id="updateNickname">
+        UPDATE tbl_user
+           SET nickname = #{nickname}
          WHERE id     = #{id}
            AND status = 'ACTIVE'
     </update>

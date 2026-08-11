@@ -91,6 +91,32 @@ class UserMapperTest {
     }
 
     @Test
+    @DisplayName("가입 시 닉네임은 비고 소셜 이름만 들어간다 — 온보딩 판별 기준")
+    void insertLeavesNicknameNull() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("test-sub-0005")
+                .email("nick@example.com").socialName("JH Jang")
+                .status("ACTIVE").difficultyId(1L)
+                .build();
+        userMapper.insert(user);
+
+        UserDto found = userMapper.findById(user.getId());
+        assertNull(found.getNickname(), "nickname IS NULL 이어야 온보딩 화면이 뜬다");
+        assertEquals("JH Jang", found.getSocialName());
+
+        assertEquals(1, userMapper.updateNickname(user.getId(), "탕탕이"));
+        UserDto after = userMapper.findById(user.getId());
+        assertEquals("탕탕이", after.getNickname());
+        assertEquals("JH Jang", after.getSocialName(), "닉네임 설정이 소셜 이름을 덮으면 안 된다");
+    }
+
+    @Test
+    @DisplayName("없는 사용자의 닉네임 갱신은 0행을 돌려준다")
+    void updateNicknameMissing() {
+        assertEquals(0, userMapper.updateNickname(-1L, "탕탕이"));
+    }
+
+    @Test
     @DisplayName("튜토리얼 완료 시각은 개인·그룹이 서로 간섭하지 않는다")
     void updateTutorialSeenAt() {
         UserDto user = UserDto.builder()

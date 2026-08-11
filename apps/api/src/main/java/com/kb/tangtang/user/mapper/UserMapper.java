@@ -26,6 +26,12 @@ public interface UserMapper {
     int updateName(@Param("id") Long id, @Param("name") String name);
 
     /**
+     * 닉네임(표시명) 갱신. 온보딩과 마이페이지 수정이 같은 경로를 쓴다.
+     * 중복 검사는 하지 않는다 — 닉네임 중복 허용이 팀 결정이다.
+     */
+    int updateNickname(@Param("id") Long id, @Param("nickname") String nickname);
+
+    /**
      * 튜토리얼 완료 시각 갱신 (이슈 #128).
      *
      * 완료·해제를 한 메서드로 처리한다 — `seenAt` 이 null 이면 「다시 보기」다.

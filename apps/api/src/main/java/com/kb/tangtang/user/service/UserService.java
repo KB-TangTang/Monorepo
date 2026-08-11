@@ -35,6 +35,9 @@ public class UserService {
      */
     private static final Pattern NAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z ]+$");
 
+    /** tbl_user.nickname 도 VARCHAR(50) 이다. 하한은 두지 않는다 — 표시명은 한 글자여도 된다. */
+    private static final int NICKNAME_MAX_LENGTH = 50;
+
     private final UserMapper userMapper;
 
     public UserService(UserMapper userMapper) {
@@ -43,7 +46,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserMeDto me(long userId) {
-        return toMeDto(findActive(userId));
+        return UserMeDto.from(findActive(userId));
     }
 
     /**
@@ -61,7 +64,45 @@ public class UserService {
         if (userMapper.updateName(userId, name) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return toMeDto(findActive(userId));
+        return UserMeDto.from(findActive(userId));
+    }
+
+    /**
+     * 닉네임(표시명) 설정·수정 — 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 함께 쓴다.
+     *
+     * ⚠ **중복 검사를 하지 않는다.** 닉네임 중복 허용이 팀 결정이라 UNIQUE 제약도 없다.
+     *   유니크를 걸면 흔한 이름이 전부 선점돼 가입 직후가 이탈 지점이 된다.
+     *   그룹챌린지는 초대 기반 소규모라 중복이 실제 문제가 되지 않는다.
+     *   (DECISIONS.md 2026-08-11 닉네임 온보딩)
+     *
+     * 빈 값 저장은 허용하지 않는다 — 온보딩에서 강제로 받은 값이라
+     * 미설정(null) 상태로 되돌릴 경로를 두지 않는다.
+     */
+    @Transactional
+    public UserMeDto updateNickname(long userId, String rawNickname) {
+        String nickname = normalizeNickname(rawNickname);
+        if (userMapper.updateNickname(userId, nickname) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return UserMeDto.from(findActive(userId));
+    }
+
+    /**
+     * 닉네임 형식 검증.
+     *
+     * 실명(name)보다 규칙이 느슨하다 — 표시명이라 한 글자도, 이모지·기호도 막을 이유가 없다.
+     * 막는 건 **빈 값과 길이 초과** 둘뿐이다. (API 연동규격 No.87)
+     */
+    private static String normalizeNickname(String rawNickname) {
+        String nickname = rawNickname == null ? "" : rawNickname.trim();
+        if (nickname.isEmpty()) {
+            throw new BusinessException("INVALID_REQUEST", "닉네임을 입력해 주세요.");
+        }
+        if (nickname.length() > NICKNAME_MAX_LENGTH) {
+            throw new BusinessException("INVALID_REQUEST",
+                    "닉네임은 " + NICKNAME_MAX_LENGTH + "자 이하로 입력해 주세요.");
+        }
+        return nickname;
     }
 
     /**
@@ -108,7 +149,7 @@ public class UserService {
         if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return toMeDto(findActive(userId));
+        return UserMeDto.from(findActive(userId));
     }
 
     private UserDto findActive(long userId) {
@@ -119,15 +160,4 @@ public class UserService {
         return user;
     }
 
-    private static UserMeDto toMeDto(UserDto user) {
-        return UserMeDto.builder()
-                .id(user.getId())
-                .nickname(user.getNickname())
-                .name(user.getName())
-                .email(user.getEmail())
-                .socialProvider(user.getSocialProvider())
-                .tutorialSeenAt(user.getTutorialSeenAt())
-                .groupTutorialSeenAt(user.getGroupTutorialSeenAt())
-                .build();
-    }
 }

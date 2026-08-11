@@ -1,0 +1,28 @@
+package com.kb.tangtang.mission.mapper;
+
+import com.kb.tangtang.mission.domain.CategorySpending;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+@Mapper
+public interface MissionCategoryAnalysisMapper {
+
+    LocalDate findFirstTransactionDate(@Param("userId") long userId);
+
+    int countConsumptionTransactions(@Param("userId") long userId,
+                                     @Param("startDate") LocalDate startDate,
+                                     @Param("endDate") LocalDate endDate);
+
+    BigDecimal sumCategorizedConsumption(@Param("userId") long userId,
+                                         @Param("startDate") LocalDate startDate,
+                                         @Param("endDate") LocalDate endDate);
+
+    List<CategorySpending> findTopCategorySpending(@Param("userId") long userId,
+                                                   @Param("startDate") LocalDate startDate,
+                                                   @Param("endDate") LocalDate endDate,
+                                                   @Param("limit") int limit);
+}

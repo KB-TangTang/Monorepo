@@ -11,8 +11,9 @@ import { useAuthStore } from '@/stores/auth';
 /**
  * 동의 도메인 상태.
  *
- * 게이트 플래그(needsConsent)는 여기 두지 않는다 — 로그인·재발급 응답에 실려 오므로
- * auth 스토어가 계속 소유한다. 저장·철회 응답으로 그 값을 갱신해준다.
+ * 게이트 플래그(needsConsent · needsFinancialConsent · needsAccountLink)는 여기 두지 않는다 —
+ * 로그인·재발급 응답에 실려 오므로 auth 스토어가 계속 소유한다. 저장·철회 응답으로 그 값을 갱신해준다.
+ * 응답에 실려 온 플래그만 반영된다(auth 스토어의 applyOnboardingFlags 참고).
  */
 export const useConsentStore = defineStore('consent', () => {
     const catalog = ref(null);
@@ -30,9 +31,16 @@ export const useConsentStore = defineStore('consent', () => {
         }
     }
 
+    /**
+     * scope 단위 동의 저장.
+     *
+     * 응답의 게이트 플래그를 **전부** 반영한다. 예전에는 needsConsent 만 반영해서,
+     * FINANCIAL 저장 직후에도 needsFinancialConsent 가 true 로 남아 라우터 가드가
+     * 방금 동의한 화면으로 다시 돌려보냈다.
+     */
     async function save(scope, agreements) {
         const result = await submitConsents(scope, agreements);
-        useAuthStore().needsConsent = result.needsConsent;
+        useAuthStore().applyOnboardingFlags(result);
         return result;
     }
 
@@ -61,7 +69,7 @@ export const useConsentStore = defineStore('consent', () => {
 
     async function withdraw(type) {
         const result = await withdrawConsent(type);
-        useAuthStore().needsConsent = result.needsConsent;
+        useAuthStore().applyOnboardingFlags(result);
         try {
             await loadMyConsents();
         } catch {

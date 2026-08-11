@@ -12,6 +12,7 @@ import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.service.ConsentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class AccountLinkServiceTest {
     private FinancialDataClient client;
     private ConnectedAccountMapper mapper;
     private LinkProgressStore store;
+    private ConsentService consentService;
     private AccountLinkService service;
 
     /* 발행된 이벤트를 모아두는 퍼블리셔. 계좌별로 정확히 한 번 발행되는지 검증한다 */
@@ -57,8 +59,15 @@ class AccountLinkServiceTest {
         client = mock(FinancialDataClient.class);
         mapper = mock(ConnectedAccountMapper.class);
         store = new LinkProgressStore(CLOCK);
+        consentService = mock(ConsentService.class);
         service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
-                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), capturingPublisher, CLOCK);
+                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), capturingPublisher,
+                consentService, CLOCK);
+        /*
+         * 기본은 "제3자 제공 동의를 마친 사용자" 다. 동의 검사는 연결 생성의 전제일 뿐이라
+         * 여기 대부분의 테스트가 검증하려는 대상이 아니다. 미동의 경로는 별도 테스트에서 덮어쓴다.
+         */
+        when(consentService.needsConsent(anyLong(), any())).thenReturn(false);
 
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
@@ -99,6 +108,43 @@ class AccountLinkServiceTest {
         assertEquals(1, result.getMethods().size());
         assertEquals("SIMPLE_AUTH", result.getMethods().get(0).getType());
         assertEquals("카카오톡", result.getMethods().get(0).getProviders().get(0).getName());
+    }
+
+    /*
+     * 제3자 제공 동의 검사 (DECISIONS.md 2026-08-11 (7)).
+     * 화면 순서에만 맡기면 우회된다 — 계좌 연동 진입점이 셋이고 전부 동의 화면을 거치지 않았다.
+     */
+    @Test
+    @DisplayName("제3자 제공 동의가 없으면 간편인증을 시작하지 않는다 — 공급자를 부르기도 전에 막는다")
+    void simpleAuthRequiresFinancialConsent() {
+        when(consentService.needsConsent(anyLong(), any())).thenReturn(true);
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("0004"));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.requestSimpleAuth(USER_ID, request));
+
+        assertEquals("CONSENT_REQUIRED", e.getCode());
+        verify(client, never()).createConnection(any());
+    }
+
+    @Test
+    @DisplayName("제3자 제공 동의가 없으면 기관 로그인도 막는다 — 진입점이 달라도 규칙은 같다")
+    void institutionLoginRequiresFinancialConsent() {
+        when(consentService.needsConsent(anyLong(), any())).thenReturn(true);
+        CredentialRequestDto row = new CredentialRequestDto();
+        row.setOrganization("0004");
+        row.setId("tester");
+        row.setPassword("pw");
+        InstitutionLoginRequestDto request = new InstitutionLoginRequestDto();
+        request.setCredentials(List.of(row));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.requestInstitutionLogin(USER_ID, request));
+
+        assertEquals("CONSENT_REQUIRED", e.getCode());
+        verify(client, never()).createConnection(any());
     }
 
     @Test

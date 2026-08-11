@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
 import { canEnterLinkStep } from '@/utils/account';
+import { resolveOnboardingRedirect } from '@/utils/user';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -33,6 +34,17 @@ const routes = [
         name: 'financialConsent',
         component: () => import('@/views/consent/FinancialConsentView.vue'),
         meta: { title: '금융데이터 수집 동의', hideTabBar: true },
+    },
+    /*
+     * 온보딩 마지막 단계 (DECISIONS.md 2026-08-11).
+     * 동선은 로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈.
+     * 강제 입력이라 탭바를 숨긴다 — 여기서 빠져나갈 길은 저장뿐이다.
+     */
+    {
+        path: '/onboarding/nickname',
+        name: 'nicknameSetup',
+        component: () => import('@/views/onboarding/NicknameSetupView.vue'),
+        meta: { title: '닉네임 설정', hideTabBar: true },
     },
     {
         path: '/',
@@ -379,12 +391,16 @@ router.beforeEach((to) => {
     }
 
     /*
-     * 필수 동의를 마치지 않은 사용자는 동의 화면에 묶어둔다.
-     * 계좌 연동용 CODEF 동의(/consent/financial)는 이 게이트 밖이다 —
-     * SIGNUP 동의를 이미 마친 사용자만 도달하는 화면이라 여기서 막으면 순환한다.
+     * 온보딩을 끝내지 않은 사용자는 남은 단계에 묶어둔다 (DECISIONS.md 2026-08-11 (7)).
+     * 동선은 `로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈` 이고 계좌 연동까지 강제한다.
+     *
+     * 단계 순서·면제 대상(자기 화면과 앞 단계 화면)·"사용자 정보가 아직 없으면 통과"는
+     * 전부 resolveOnboardingRedirect() 안에 이유와 함께 적혀 있다.
+     * ⚠ 여기서 조건을 다시 쓰지 말 것 — 판정이 두 곳으로 갈리면 무한 리다이렉트가 난다.
      */
-    if (auth.needsConsent && to.name !== 'consent') {
-        return { name: 'consent' };
+    const onboardingRoute = resolveOnboardingRedirect(auth, to);
+    if (onboardingRoute) {
+        return { name: onboardingRoute };
     }
 
     /*

@@ -22,19 +22,64 @@
 |---|---|---|---|
 | GET | `/api/auth/google` | 불필요 | 302 → 구글 동의 화면. `oauth_state` 쿠키 발급 |
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
-| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent }` |
+| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent, needsFinancialConsent, needsAccountLink }` |
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
 | GET | `/api/users/me` | Bearer | 사용자정보 |
 | PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
+| PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
 
-**사용자정보** = `{ id, nickname, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
-(`/api/auth/refresh` 의 `user` 만 `socialProvider` 를 뺀다 — 로그인 경로 전체에 영향을 주지 않기 위함)
+**사용자정보** = `{ id, nickname, socialName, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+
+**이 모양은 `GET /api/users/me` · `POST /api/auth/refresh` 의 `user` · 사용자 정보를 바꾸는 모든
+`PATCH` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto)` 한 곳에서만 만든다 — 경로마다
+따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만 값이 비는** 버그가 난다.
 
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
   (`DECISIONS.md` 2026-08-11 (4))
 - 검증 규칙: 앞뒤 공백 제거 후 **2~50자**, **한글·영문·공백만**. 어기면 `INVALID_NAME`.
+
+### 온보딩 게이트 — 순서가 정해져 있다
+
+신규 사용자는 **`동의 → 금융동의 → 계좌연동 → 닉네임 → 홈`** 을 순서대로 통과한다.
+프론트 라우터 가드는 **부팅 시 `POST /api/auth/refresh` 응답 하나만 보고** 다음 단계를 정한다 —
+화면 진입마다 조회하지 않는다.
+
+| 플래그 | true 이면 보낼 화면 | 판정 |
+|---|---|---|
+| `needsConsent` | 서비스 동의 | `SIGNUP` 필수 동의(약관·개인정보·금융정보) 미완료 |
+| `needsFinancialConsent` | 금융(제3자 제공) 동의 | `THIRD_PARTY` 동의 미완료 |
+| `needsAccountLink` | 계좌 연동 | 활성 연결 계좌가 0개 |
+| — | 닉네임 설정 | `user.nickname` 이 `null` (별도 플래그 없음) |
+
+- ⚠ **`THIRD_PARTY` 를 `needsConsent` 에 합치면 안 된다.** 그러면 계좌를 아직 연동하지 않은
+  사용자가 가입 동의 화면을 영원히 벗어나지 못한다. 그래서 단계를 나눈다.
+- **서버도 검사한다.** 계좌 연결 요청(`simple-auth` · `connections`)은 `THIRD_PARTY` 동의가 없으면
+  **`CONSENT_REQUIRED`(400)** 로 거부한다. 계좌 연동 진입점이 셋이라 화면 순서만으로는 우회된다 —
+  **2026-08-11 까지 실제로 아무도 제3자 제공 동의를 하지 않은 채 연동해 왔다.**
+- `POST /api/consents` 와 철회 응답도 `{ needsConsent, needsFinancialConsent }` 를 함께 준다.
+  저장 직후 게이트를 갱신하지 않으면 동의를 마쳐도 계속 동의 화면으로 되돌아간다.
+  (`DECISIONS.md` 2026-08-11 (7))
+
+### 닉네임 — 이름 3종을 헷갈리지 말 것 (이슈 #110)
+
+| 필드 | 컬럼 | 누가 채우나 | 뜻 |
+|---|---|---|---|
+| `nickname` | `tbl_user.nickname` | 사용자 (온보딩·마이페이지) | 표시명. **`null` 이면 온보딩 미완료** |
+| `socialName` | `tbl_user.social_name` | 가입 시 자동 (구글 `name`) | 입력창 prefill · 표시명 fallback |
+| `name` | `tbl_user.name` | 사용자 (간편인증 화면) | **실명(본인확인용).** 표시명으로 쓰지 않는다 |
+
+- **표시명 = `nickname ?? socialName`** 이고 **서버가 `displayName` 으로 계산해 내려준다.**
+  화면마다 계산하면 어디선 닉네임, 어디선 구글 이름이 나온다.
+- `PATCH /api/users/me/nickname` 은 **온보딩(`AU_03_01`)과 마이페이지 수정(`MY_01_03`)이 함께 쓴다.**
+- 검증: 앞뒤 공백 제거 후 **1~50자**(빈 값·공백만 불가). 어기면 `INVALID_REQUEST`.
+  실명보다 느슨하다 — 표시명이라 한 글자도, 숫자·기호도 막을 이유가 없다.
+- **중복 검사를 하지 않는다.** 닉네임 중복 허용이 팀 결정이라 `UNIQUE` 도 걸지 않았다
+  (`DECISIONS.md` 2026-08-11 닉네임 온보딩).
+- **온보딩 완료 여부는 `nickname` 이 `null` 인지로만 판별한다. 별도 판별 API 를 두지 않는다.**
+- 가입 시 `nickname` 은 **비워 둔다.** 구글 이름은 `social_name` 에 넣는다 —
+  미리 채우면 "설정함"과 "안 함"을 구분할 별도 플래그가 필요해진다.
 
 ### 튜토리얼 완료 플래그 (이슈 #128)
 
@@ -66,6 +111,7 @@
 | `OAUTH_TOKEN_EXCHANGE_FAILED` | 400 | 구글 code↔token 교환 실패 |
 | `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 (실명 갱신 대상이 탈퇴·차단 상태일 때도 이 코드다) |
 | `INVALID_NAME` | 400 | `/api/users/me/name` 의 이름이 형식에 맞지 않음 (2~50자·한글/영문/공백) |
+| `INVALID_REQUEST` | 400 | `/api/users/me/nickname` 의 닉네임이 비었거나 50자를 넘음 |
 
 ### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 
@@ -260,6 +306,23 @@
 - `socialProvider` 는 마이페이지가 "google · 이메일" 형식으로 표시하려고 추가한 필드다.
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
+
+## 메인 챌린지 카테고리 분석 (이슈 #119)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
+
+응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
+`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio }` 형태다.
+
+- 분석 기간은 오늘을 제외한 최근 28일이다.
+- 거래 데이터가 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때만 상위 카테고리를 집계한다.
+- 미션 대상은 `tbl_mission_pool`에 `RELATIVE` 행이 존재하는 소분류다. 현재 정책은 15개다.
+- 환불은 거래 건수에서 제외하고 순소비금액에서 차감한다.
+- 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
+- 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
+- `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
 
 ## 알림 (이슈 #58)
 

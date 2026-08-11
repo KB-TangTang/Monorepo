@@ -23,6 +23,7 @@ import {
     prevLinkDestination,
     resolveAuthView,
 } from '@/utils/account';
+import { useAuthStore } from '@/stores/auth';
 
 /**
  * 계좌 도메인 스토어 (이슈 #12). 도메인당 1개 규칙이라 연결 플로우와 연결 계좌 목록을 함께 둔다.
@@ -263,10 +264,19 @@ export const useAccountStore = defineStore('account', () => {
         return selectedAccountIds.value.includes(accountId);
     }
 
+    /**
+     * 고른 계좌를 실제로 연결한다.
+     *
+     * ⚠ 성공하면 **온보딩 계좌 연동 게이트를 반드시 내린다.**
+     * 서버 기준으로는 이 순간 활성 연결 계좌가 생겨 needsAccountLink 가 false 인데,
+     * 프론트 플래그는 다음 재발급(refresh) 때까지 true 로 남는다.
+     * 그대로 두면 연동을 끝낸 사용자를 라우터 가드가 계속 기관 선택으로 돌려보내 무한 루프가 난다.
+     */
     async function submitLink() {
         return run(async () => {
             const result = await linkAccounts(connectionId.value, selectedAccountIds.value);
             linkedCount.value = result.linkedCount;
+            useAuthStore().applyOnboardingFlags({ needsAccountLink: false });
             return result;
         });
     }
