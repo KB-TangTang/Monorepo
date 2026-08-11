@@ -6,6 +6,7 @@ import {
     MOCK_VERDICT_SUCCESS,
     MOCK_WEEKLY_WATCHLIST,
     MOCK_WATCHLIST_META,
+    MOCK_WEEKLY_VERDICT,
     MOCK_MONTHLY_SCORE,
     MOCK_COMMON_MISSION,
 } from '@/fixtures/personalChallenge';
@@ -53,6 +54,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         monthlyScore: MOCK_MONTHLY_SCORE,
         dataRequirements: MOCK_DATA_REQUIREMENTS,
         commonMission: MOCK_COMMON_MISSION,
+        weeklyVerdict: MOCK_WEEKLY_VERDICT,
     }),
 
     getters: {

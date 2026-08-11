@@ -187,6 +187,9 @@ function setDemoFail() {
                 />
 
                 <PersonalScoreCard
+                    :week-days="store.weeklyVerdict.days"
+                    :streak-days="store.weeklyVerdict.streakDays"
+                    :prosecutor-image="store.selectedProsecutor?.image"
                     :score="store.monthlyScore.score"
                     :percentile="store.monthlyScore.percentile"
                     :next-tier-gap="store.monthlyScore.nextTierGap"
