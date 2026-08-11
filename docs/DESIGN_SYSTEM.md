@@ -47,12 +47,12 @@
 
 ### 상태 — 4색 체계 (진한값 / 옅은값 / deep)
 
-| 상태 | 진한 | 옅은 | deep | 도메인 매핑 |
-|---|---|---|---|---|
-| **Green** | `#2E9E6B` | `#E4F4EC` | `#1F6B48` | 성공 · 안전 · 무죄 |
-| **Gold** | `#F5B921` | `#FFF3D1` | `#B67D06` | 주의 · 진행 중 · 기소 |
-| **Red** | `#E0664B` | `#FBE9E4` | `#C24B31` | 초과 · 탈락 · 유죄 |
-| **Blue** | `#3E63D6` | `#EAF0FF` | `#3E5299` | 정보 · 링크 · 기간 |
+| 상태 | 진한 | 옅은 | deep | soft-border | 도메인 매핑 |
+|---|---|---|---|---|---|
+| **Green** | `#2E9E6B` | `#E4F4EC` | `#1F6B48` | `#C9E6D6` | 성공 · 안전 · 무죄 |
+| **Gold** | `#F5B921` | `#FFF3D1` | `#B67D06` | `#F0E0B8` | 주의 · 진행 중 · 기소 |
+| **Red** | `#E0664B` | `#FBE9E4` | `#C24B31` | `#F3D3C9` | 초과 · 탈락 · 유죄 |
+| **Blue** | `#3E63D6` | `#EAF0FF` | `#3E5299` | `#C9D6F5` | 정보 · 링크 · 기간 |
 
 ### 종이 · 목재 (절제 사용)
 
@@ -81,6 +81,8 @@
 | `--tt-accent` | `--tt-gold` | 배지 · 판사봉 포인트 |
 | `--tt-accent-deep` | `--tt-gold-deep` | Gold soft 위 텍스트 |
 | `--tt-accent-subtle` | `--tt-gold-soft` | 배지 배경 |
+| `--tt-success-subtle-border` | `--tt-green-soft-border` | 무죄 카드 테두리 |
+| `--tt-danger-subtle-border` | `--tt-red-soft-border` | 유죄 카드 테두리 |
 | `--tt-text` | `--tt-neutral-text` | 제목 · 강조 텍스트 |
 | `--tt-text-body` | `--tt-neutral-body` | 본문 |
 | `--tt-text-muted` | `--tt-neutral-muted` | 보조 설명 · 캡션 |
@@ -148,6 +150,7 @@
 | `--tt-elevation-2` | `0 8px 22px rgba(35,40,66,.05)` | 일반 카드 |
 | `--tt-elevation-3` | `0 12px 28px rgba(35,40,66,.10)` | 겹치는 카드 · 토글 |
 | `--tt-elevation-4` | `0 14px 30px -16px rgba(35,40,66,.55)` | Ink 스탯 카드 |
+| `--tt-elevation-btn` | `0 10px 24px -12px rgba(35,40,66,.6)` | Primary 버튼 |
 
 ---
 

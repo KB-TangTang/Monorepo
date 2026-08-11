@@ -219,6 +219,25 @@ const routes = [
         component: () => import('@/views/challenge/group/VoteDoneView.vue'),
         meta: { title: '투표 완료', hideTabBar: true },
     },
+    // ↓ 재판 진행 현황 · 최종 판결 · 판결 상세 (#GC_08). 기소 후 판결까지 타임라인과 결과 화면.
+    {
+        path: '/group-challenges/:id/trial/:indictmentId',
+        name: 'trialProgress',
+        component: () => import('@/views/challenge/group/judgment/TrialProgressView.vue'),
+        meta: { title: '재판 진행 현황', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict',
+        name: 'verdictResult',
+        component: () => import('@/views/challenge/group/judgment/VerdictResultView.vue'),
+        meta: { title: '최종 판결', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict/detail',
+        name: 'verdictDetail',
+        component: () => import('@/views/challenge/group/judgment/VerdictDetailView.vue'),
+        meta: { title: '판결 상세', hideTabBar: true },
+    },
     // ↓ 동점 AI 판결 플로우 (#105). 투표 종료 상태 UI와의 실제 연결은 후속 작업에서 처리한다.
     {
         path: '/group-challenges/:id/vote/:indictmentId/tie',
