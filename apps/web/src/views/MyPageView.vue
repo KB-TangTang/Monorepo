@@ -29,6 +29,8 @@ const user = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
 const tutorialSheetOpen = ref(false);
+const tutorialError = ref('');
+const replaying = ref(false);
 const logoutSheetOpen = ref(false);
 const loggingOut = ref(false);
 const tutorialSheet = ref(null);
@@ -58,6 +60,7 @@ function onSelect(key) {
     } else if (key === 'consents') {
         router.push({ name: 'myConsents' });
     } else {
+        tutorialError.value = '';
         tutorialSheetOpen.value = true;
     }
 }
@@ -75,14 +78,35 @@ function leaveViaSheet(routeName) {
     router.replace({ name: routeName });
 }
 
+/*
+ * 플래그 해제는 서버(tbl_user.tutorial_seen_at / group_tutorial_seen_at)로 나간다.
+ * 실패하면 이동하지 않고 시트 안에 오류를 남긴다 — 그대로 옮겨가면 튜토리얼이 안 뜨는
+ * 화면에 도착해 고장으로 보인다. 오류 표시는 이 프로젝트가 쓰는 인라인 문구 방식
+ * (ConnectedAccountView 의 `__error`)을 따른다.
+ *
+ * 성공 시 갱신된 사용자 정보가 인증 스토어에 반영되고(tutorialGuide), 이 화면의 user 는
+ * 다시 들어올 때 onMounted(load) 로 새로 받으므로 화면 상태가 어긋나지 않는다.
+ */
+async function replay(reset, routeName) {
+    if (replaying.value) return;
+    replaying.value = true;
+    tutorialError.value = '';
+    try {
+        await reset();
+        leaveViaSheet(routeName);
+    } catch (err) {
+        tutorialError.value = err.message ?? '튜토리얼을 되돌리지 못했어요.';
+    } finally {
+        replaying.value = false;
+    }
+}
+
 function replayPersonal() {
-    resetPersonalTutorial();
-    leaveViaSheet('personalMissionChallenge');
+    return replay(resetPersonalTutorial, 'personalMissionChallenge');
 }
 
 function replayGroup() {
-    resetGroupTutorial();
-    leaveViaSheet('groupChallenge');
+    return replay(resetGroupTutorial, 'groupChallenge');
 }
 
 async function confirmLogout() {
@@ -135,8 +159,13 @@ async function confirmLogout() {
             title="어떤 튜토리얼을 다시 볼까요?"
         >
             <div class="my-page__sheet">
-                <BaseButton variant="secondary" block @click="replayPersonal">대법원 (개인)</BaseButton>
-                <BaseButton variant="secondary" block @click="replayGroup">지방법원 (그룹)</BaseButton>
+                <p v-if="tutorialError" class="my-page__sheet-error">{{ tutorialError }}</p>
+                <BaseButton variant="secondary" block :disabled="replaying" @click="replayPersonal">
+                    대법원 (개인)
+                </BaseButton>
+                <BaseButton variant="secondary" block :disabled="replaying" @click="replayGroup">
+                    지방법원 (그룹)
+                </BaseButton>
             </div>
         </BaseBottomSheet>
 
@@ -188,6 +217,15 @@ async function confirmLogout() {
     display: flex;
     flex-direction: column;
     gap: var(--tt-space-3);
+}
+
+.my-page__sheet-error {
+    margin: 0;
+    padding: var(--tt-space-3);
+    border-radius: var(--tt-radius-md);
+    background: var(--tt-danger-subtle);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-danger);
 }
 
 .my-page__sheet-text {

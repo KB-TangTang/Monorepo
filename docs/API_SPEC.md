@@ -22,16 +22,37 @@
 |---|---|---|---|
 | GET | `/api/auth/google` | 불필요 | 302 → 구글 동의 화면. `oauth_state` 쿠키 발급 |
 | GET | `/api/auth/google/callback` | 불필요 | 302 → 프론트. 성공 시 `/auth/callback` + `refresh_token` 쿠키, 실패 시 `/login?error=...` |
-| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: { id, nickname, name, email }, needsConsent }` |
+| POST | `/api/auth/refresh` | 쿠키 | `{ accessToken, user: 사용자정보, needsConsent }` |
 | POST | `/api/auth/logout` | 쿠키 | `{"success":true,"data":null}` + 쿠키 만료 |
-| GET | `/api/users/me` | Bearer | `{ id, nickname, name, email, socialProvider }` |
-| PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 `{ id, nickname, name, email, socialProvider }` |
+| GET | `/api/users/me` | Bearer | 사용자정보 |
+| PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
+
+**사용자정보** = `{ id, nickname, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+(`/api/auth/refresh` 의 `user` 만 `socialProvider` 를 뺀다 — 로그인 경로 전체에 영향을 주지 않기 위함)
 
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
   (`DECISIONS.md` 2026-08-11 (4))
 - 검증 규칙: 앞뒤 공백 제거 후 **2~50자**, **한글·영문·공백만**. 어기면 `INVALID_NAME`.
+
+### 튜토리얼 완료 플래그 (이슈 #128)
+
+| 메서드 | 경로 | 인증 | 뜻 |
+|---|---|---|---|
+| PATCH | `/api/main-challenge/tutorial/complete` | Bearer | 메인(개인·대법원) 튜토리얼 `MC_01_05` 완료 |
+| DELETE | `/api/main-challenge/tutorial/complete` | Bearer | 다시 보기 — 완료 시각을 지운다 |
+| PATCH | `/api/group-challenge/tutorial/complete` | Bearer | 그룹(지방법원) 튜토리얼 `GC_01_01` 완료 |
+| DELETE | `/api/group-challenge/tutorial/complete` | Bearer | 다시 보기 |
+
+- 네 개 모두 응답은 **갱신된 사용자정보**다. 프론트는 이 응답으로 스토어를 갱신한다.
+- 저장 위치는 `tbl_user.tutorial_seen_at`(메인) · `tbl_user.group_tutorial_seen_at`(그룹).
+  **`null` 이면 아직 안 본 것**이고, 프론트는 이 값만 보고 노출을 정한다.
+  로그인 시 `POST /api/auth/refresh` 응답에 이미 실려 오므로 **화면 진입마다 조회하지 않는다.**
+- `localStorage` 를 쓰지 않는다 — 기기를 바꾸면 튜토리얼이 다시 뜬다
+  (`DECISIONS.md` 2026-08-11 RV-108 에서 기각된 대안이다).
+- 클래스는 `user` 모듈(`user/controller/TutorialController`)에 있다. 경로는 챌린지 도메인이지만
+  값이 사는 테이블이 `tbl_user` 라서다.
 
 ### 인증 에러 코드
 

@@ -25,4 +25,8 @@ public class UserDto {
     private String name;             // 실명. 가입 시점엔 null (계좌 인증 단계에서 채움)
     private String status;           // ACTIVE / WITHDRAWN / BLOCKED
     private Long difficultyId;       // 가입 시 EASY(1)
+
+    /* 튜토리얼 완료 시각. NULL 이면 아직 안 봤다는 뜻이다. (이슈 #128) */
+    private java.time.LocalDateTime tutorialSeenAt;       // 메인(개인·대법원) MC_01_05
+    private java.time.LocalDateTime groupTutorialSeenAt;  // 그룹(지방법원) GC_01_01
 }

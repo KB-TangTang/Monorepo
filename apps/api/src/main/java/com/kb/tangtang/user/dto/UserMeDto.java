@@ -26,4 +26,10 @@ public class UserMeDto {
     private String name;
     private String email;
     private String socialProvider;
+    /**
+     * 튜토리얼 완료 시각. **NULL 이면 아직 안 봤다**는 뜻이라 프론트가 이 값만 보고 노출을 정한다.
+     * 별도 조회 없이 판정하도록 로그인 응답(/api/auth/refresh)에도 함께 실린다. (이슈 #128)
+     */
+    private java.time.LocalDateTime tutorialSeenAt;
+    private java.time.LocalDateTime groupTutorialSeenAt;
 }
