@@ -1,6 +1,7 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.mapper.UserMapper;
@@ -8,12 +9,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -156,6 +163,72 @@ class UserServiceTest {
                         () -> service.updateName(USER_ID, "ㅈㅐㅎㅏㄴ")).getCode());
 
         verify(userMapper, never()).updateName(anyLong(), anyString());
+    }
+
+    /* ── 튜토리얼 완료 플래그 (이슈 #128) ───────────────── */
+
+    @Test
+    @DisplayName("메인 튜토리얼 완료는 MAIN 컬럼에 현재 시각을 남긴다")
+    void markMainTutorial() {
+        LocalDateTime before = LocalDateTime.now();
+        when(userMapper.updateTutorialSeenAt(eq(USER_ID), eq("MAIN"), any())).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.markTutorialSeen(USER_ID, TutorialType.MAIN);
+
+        ArgumentCaptor<LocalDateTime> seenAt = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(userMapper).updateTutorialSeenAt(eq(USER_ID), eq("MAIN"), seenAt.capture());
+        assertNotNull(seenAt.getValue(), "완료 시각은 서버가 찍는다");
+        assertFalse(seenAt.getValue().isBefore(before), "과거 시각이 들어가면 안 된다");
+    }
+
+    @Test
+    @DisplayName("그룹 튜토리얼은 GROUP 으로 넘어간다 — 개인 것과 섞이면 안 된다")
+    void markGroupTutorial() {
+        when(userMapper.updateTutorialSeenAt(eq(USER_ID), eq("GROUP"), any())).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.markTutorialSeen(USER_ID, TutorialType.GROUP);
+
+        verify(userMapper).updateTutorialSeenAt(eq(USER_ID), eq("GROUP"), any());
+    }
+
+    @Test
+    @DisplayName("다시 보기는 완료 시각을 null 로 지운다")
+    void clearTutorial() {
+        when(userMapper.updateTutorialSeenAt(USER_ID, "MAIN", null)).thenReturn(1);
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+
+        service.clearTutorialSeen(USER_ID, TutorialType.MAIN);
+
+        verify(userMapper).updateTutorialSeenAt(USER_ID, "MAIN", null);
+    }
+
+    @Test
+    @DisplayName("응답에 두 튜토리얼 시각이 그대로 실린다 — 프론트가 이 값만 보고 노출을 정한다")
+    void meIncludesTutorialFlags() {
+        LocalDateTime seen = LocalDateTime.of(2026, 8, 11, 10, 0);
+        UserDto row = user("장재한");
+        row.setTutorialSeenAt(seen);
+        row.setGroupTutorialSeenAt(null);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        UserMeDto result = service.me(USER_ID);
+
+        assertEquals(seen, result.getTutorialSeenAt());
+        assertNull(result.getGroupTutorialSeenAt(), "안 본 튜토리얼은 null 이어야 한다");
+    }
+
+    @Test
+    @DisplayName("튜토리얼 갱신 대상이 없으면 NOT_FOUND")
+    void markTutorialMissingUser() {
+        when(userMapper.updateTutorialSeenAt(eq(USER_ID), eq("MAIN"), any())).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.markTutorialSeen(USER_ID, TutorialType.MAIN));
+
+        assertEquals("NOT_FOUND", ex.getCode());
+        verify(userMapper, never()).findById(anyLong());
     }
 
     @Test

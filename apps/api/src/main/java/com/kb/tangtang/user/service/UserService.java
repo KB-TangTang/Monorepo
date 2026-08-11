@@ -1,12 +1,14 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 
 /**
@@ -82,6 +84,33 @@ public class UserService {
         return name;
     }
 
+    /**
+     * 튜토리얼을 봤다고 표시한다 (이슈 #128).
+     *
+     * 시각을 서버에서 찍는다 — 클라이언트 시계를 믿으면 기기 시간만 바꿔도 값이 어긋난다.
+     * 이 프로젝트에는 Clock 빈이 없어 LocalDateTime.now() 를 그대로 쓴다.
+     */
+    @Transactional
+    public UserMeDto markTutorialSeen(long userId, TutorialType type) {
+        return writeTutorialSeenAt(userId, type, LocalDateTime.now());
+    }
+
+    /**
+     * 「튜토리얼 다시 보기」 (마이페이지).
+     * 완료 시각을 지우면 다음 진입 때 다시 뜬다 — 별도 플래그를 두지 않는다.
+     */
+    @Transactional
+    public UserMeDto clearTutorialSeen(long userId, TutorialType type) {
+        return writeTutorialSeenAt(userId, type, null);
+    }
+
+    private UserMeDto writeTutorialSeenAt(long userId, TutorialType type, LocalDateTime seenAt) {
+        if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return toMeDto(findActive(userId));
+    }
+
     private UserDto findActive(long userId) {
         UserDto user = userMapper.findById(userId);
         if (user == null) {
@@ -97,6 +126,8 @@ public class UserService {
                 .name(user.getName())
                 .email(user.getEmail())
                 .socialProvider(user.getSocialProvider())
+                .tutorialSeenAt(user.getTutorialSeenAt())
+                .groupTutorialSeenAt(user.getGroupTutorialSeenAt())
                 .build();
     }
 }
