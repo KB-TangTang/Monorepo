@@ -33,4 +33,15 @@
          WHERE id = #{id}
     </select>
 
+    <!--
+      실명 갱신. 탈퇴/차단 사용자는 제외한다 — 상태가 ACTIVE 가 아닌 행을 고칠 이유가 없고,
+      제외하면 updateName 이 0 을 돌려주므로 서비스가 그대로 404 로 응답한다.
+    -->
+    <update id="updateName">
+        UPDATE tbl_user
+           SET name = #{name}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
 </mapper>

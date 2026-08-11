@@ -3,18 +3,27 @@
   언제 쓰는지: 백엔드 auth-methods 가 SIMPLE_AUTH 를 내려줄 때. 어느 경로인지는 AuthStepView 가 정한다.
   쓰면 안 되는 경우: 실 CODEF 기관 로그인. 그쪽은 InstitutionLoginPanel 이다.
 
-  ⚠ 개인정보 취급 — 생년월일·통신사·휴대폰은 실제 마이데이터에서 "누구에게 인증 푸시를 보낼지"를
-    정하는 값이다. 목 모드에는 보낼 인증기관이 없으므로
-    · 서버로 보내지 않는다 (requestSimpleAuth 페이로드는 provider·organizations 뿐).
-    · 스토어·로컬스토리지에 저장하지 않는다. 이 컴포넌트 지역 상태로만 들고 있다가 제출 즉시 비운다.
-    · 형식만 검증한다 (utils/account.js validateSimpleAuthForm).
-    (DECISIONS.md 2026-08-05 계좌 연동 항목)
+  ⚠ 개인정보 취급 — 입력 4개의 취급이 **이름과 나머지 3개로 갈린다.**
+
+    · 생년월일·통신사·휴대폰: 실제 마이데이터에서 "누구에게 인증 푸시를 보낼지"를 정하는 값이다.
+      목 모드에는 보낼 인증기관이 없으므로
+        - 서버로 보내지 않는다 (requestSimpleAuth 페이로드는 provider·organizations 뿐.
+          실제로 실릴지는 스토어가 서버의 requiresIdentity 를 보고 정한다).
+        - 스토어·로컬스토리지에 저장하지 않는다. 이 컴포넌트 지역 상태로만 들고 있다가 제출 즉시 비운다.
+        - 형식만 검증한다 (utils/account.js validateSimpleAuthForm).
+      (DECISIONS.md 2026-08-05 계좌 연동 항목)
+
+    · 이름: **여기만 저장한다.** 인증 요청 직전에 PATCH /api/users/me/name 으로 tbl_user.name 에 남긴다.
+      구글 계정 이름이 실명과 달라 인증에 실패하는 사용자가 화면에서 바로 고칠 수 있어야 하고,
+      고친 값을 매번 다시 입력하게 만들면 안 되기 때문이다. 저장에 실패하면 인증 요청도 하지 않는다.
+      (DECISIONS.md 2026-08-11)
 
   폴링은 하지 않는다. 요청이 나가면 requested 를 emit 하고 부모(AuthStepView)가 승인 여부를 확인한다.
 -->
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import { updateMyName } from '@/api/user';
 import { useAccountStore } from '@/stores/account';
 import { useAuthStore } from '@/stores/auth';
 import {
@@ -64,9 +73,30 @@ function logoOf(code) {
 }
 
 const provider = ref(props.providers[0]?.code ?? '');
-/* ⚠ 개인정보는 이 객체 밖으로 나가지 않는다. */
-const form = reactive({ birthDate: '', carrier: '', phone: '' });
+/*
+ * ⚠ 생년월일·통신사·휴대폰은 이 객체 밖으로 나가지 않는다. 이름만 예외로 서버에 저장한다.
+ *
+ * 이름은 이미 아는 값으로 미리 채운다 — 실명(tbl_user.name)이 있으면 그것을,
+ * 없으면 구글 계정 이름(nickname)을 출발점으로 준다. 사용자는 틀렸을 때만 고치면 된다.
+ */
+const form = reactive({
+    name: auth.user?.name ?? auth.user?.nickname ?? '',
+    birthDate: '',
+    carrier: '',
+    phone: '',
+});
 const errors = ref({});
+/*
+ * 이름 저장 실패 문구. account.error 는 계좌 스토어 소유라 여기서 쓰지 않는다.
+ * 이 화면이 직접 호출한 API 의 실패는 이 화면이 들고 있어야 한다.
+ */
+const nameError = ref('');
+/*
+ * 이름 저장이 도는 동안에도 버튼을 잠근다.
+ * account.loading 은 인증 요청이 시작돼야 켜지므로, 그 앞의 이름 저장 구간이 무방비로 남는다 —
+ * 그 사이에 한 번 더 누르면 인증 요청이 두 번 나간다.
+ */
+const savingName = ref(false);
 const submitted = ref(false);
 const waiting = ref(false);
 const remaining = ref(0);
@@ -79,10 +109,11 @@ let countdown = null;
 watch(form, () => {
     if (submitted.value) {
         errors.value = validateSimpleAuthForm(form).errors;
+        /* 이름 저장 실패 문구도 같은 이유로 내린다 — 값을 고쳤는데 옛 실패가 남아 있으면 안 된다. */
+        nameError.value = '';
     }
 });
 
-const userName = computed(() => auth.user?.nickname ?? '');
 const providerName = computed(
     () => props.providers.find((item) => item.code === provider.value)?.name ?? '인증 앱',
 );
@@ -102,6 +133,11 @@ function onPhone(event) {
     event.target.value = form.phone;
 }
 
+/*
+ * ⚠ **이름은 지우지 않는다.** 저장하지 않는 세 값만 비운다.
+ * 이름은 우리가 tbl_user.name 에 저장하는 값이라 화면에 남아 있어야 하고,
+ * 대기 화면에서 취소하고 돌아온 사용자에게 다시 입력을 시키면 안 된다.
+ */
 function clearPrivateInput() {
     form.birthDate = '';
     form.phone = '';
@@ -121,11 +157,29 @@ onBeforeUnmount(() => {
 });
 
 async function onSubmit() {
+    if (savingName.value) {
+        return;
+    }
     submitted.value = true;
+    nameError.value = '';
     const result = validateSimpleAuthForm(form);
     errors.value = result.errors;
     if (!result.valid) {
         return;
+    }
+    const trimmedName = form.name.trim();
+    /*
+     * 이름 저장이 먼저다. 실패하면 인증 요청으로 넘어가지 않는다 —
+     * 저장되지 않은 이름으로 인증을 보내면 다음 시도에서도 같은 값이 없어 또 실패한다.
+     */
+    savingName.value = true;
+    try {
+        auth.mergeUser(await updateMyName(trimmedName));
+    } catch (error) {
+        nameError.value = error.message;
+        return;
+    } finally {
+        savingName.value = false;
     }
     try {
         /*
@@ -133,7 +187,7 @@ async function onSubmit() {
          * 목 모드에서는 여기서 넘긴 값이 요청에 실리지 않고 아래에서 즉시 지워진다.
          */
         const response = await account.requestAuth(provider.value, {
-            userName: userName.value,
+            userName: trimmedName,
             birthDate: form.birthDate,
             carrier: form.carrier,
             phoneNo: form.phone,
@@ -209,10 +263,19 @@ function onCancel() {
         </div>
 
         <div class="simple-auth__form">
-            <div class="simple-auth__field">
+            <label class="simple-auth__field">
                 <span class="simple-auth__field-label">이름</span>
-                <input class="simple-auth__input" type="text" :value="userName" readonly />
-            </div>
+                <input
+                    v-model="form.name"
+                    class="simple-auth__input"
+                    type="text"
+                    maxlength="50"
+                    autocomplete="name"
+                    placeholder="실명을 입력해주세요"
+                />
+                <span v-if="errors.name" class="simple-auth__error">{{ errors.name }}</span>
+                <span v-else-if="nameError" class="simple-auth__error">{{ nameError }}</span>
+            </label>
 
             <label class="simple-auth__field">
                 <span class="simple-auth__field-label">생년월일</span>
@@ -260,11 +323,18 @@ function onCancel() {
 
         <p v-if="account.error" class="simple-auth__error">{{ account.error }}</p>
 
+        <!-- 이름은 저장하므로 고지 문구에서 제외한다. 화면이 하는 일과 문구가 어긋나면 안 된다. -->
         <p class="simple-auth__guard">
-            입력하신 정보는 저장하지 않아요. 본인 확인에만 쓰이고 즉시 폐기돼요.
+            생년월일·통신사·휴대폰번호는 저장하지 않아요. 본인 확인에만 쓰이고 즉시 폐기돼요.
         </p>
 
-        <BaseButton variant="dark" type="submit" block size="lg" :loading="account.loading">
+        <BaseButton
+            variant="dark"
+            type="submit"
+            block
+            size="lg"
+            :loading="savingName || account.loading"
+        >
             인증 요청
         </BaseButton>
     </form>
@@ -425,19 +495,7 @@ function onCancel() {
     color: var(--tt-text);
 }
 
-.simple-auth__provider--on /*
- * 로고 타일. PASS 는 흰 배경이라 카드 위에서 경계가 사라진다 — 옅은 테두리로 형태를 잡는다.
- * 세 로고의 크기·라운드를 맞춰 한 줄로 읽히게 한다.
- */
-.simple-auth__provider-logo {
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-md);
-    object-fit: cover;
-}
-
-.simple-auth__provider-name {
+.simple-auth__provider--on .simple-auth__provider-name {
     color: var(--tt-primary);
 }
 
@@ -488,11 +546,6 @@ function onCancel() {
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-body);
     color: var(--tt-text);
-}
-
-.simple-auth__input:read-only {
-    background: var(--tt-bg-subtle);
-    color: var(--tt-text-muted);
 }
 
 .simple-auth__input:focus {

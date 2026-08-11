@@ -51,11 +51,22 @@ export const useAuthStore = defineStore('auth', () => {
         needsConsent.value = Boolean(session.needsConsent);
     }
 
+    /**
+     * 사용자 정보 부분 갱신.
+     *
+     * 이름 저장(PATCH /users/me/name) 같은 개별 API 응답을 세션 전체를 다시 받지 않고 반영한다.
+     * 이걸 안 하면 저장은 됐는데 화면·스토어는 옛 값을 계속 들고 있게 된다.
+     * 넘기지 않은 필드는 그대로 둔다. (DECISIONS.md 2026-08-11)
+     */
+    function mergeUser(patch) {
+        user.value = { ...user.value, ...patch };
+    }
+
     function clear() {
         accessToken.value = '';
         user.value = null;
         needsConsent.value = false;
     }
 
-    return { accessToken, user, needsConsent, isLoggedIn, setSession, clear };
+    return { accessToken, user, needsConsent, isLoggedIn, setSession, mergeUser, clear };
 });
