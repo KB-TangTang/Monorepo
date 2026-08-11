@@ -1,0 +1,33 @@
+package com.kb.tangtang.mission.mapper;
+
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.io.InputStream;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class MissionCategoryAnalysisMapperXmlTest {
+
+    private static final String RESOURCE = "mapper/mission/MissionCategoryAnalysisMapper.xml";
+
+    @Test
+    @DisplayName("미션 카테고리 분석 Mapper XML이 파싱되고 모든 조회문이 등록된다")
+    void parsesMapperXml() throws Exception {
+        Configuration configuration = new Configuration();
+
+        try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
+            new XMLMapperBuilder(inputStream, configuration, RESOURCE,
+                    configuration.getSqlFragments()).parse();
+        }
+
+        String namespace = MissionCategoryAnalysisMapper.class.getName();
+        assertTrue(configuration.hasStatement(namespace + ".findFirstTransactionDate"));
+        assertTrue(configuration.hasStatement(namespace + ".countConsumptionTransactions"));
+        assertTrue(configuration.hasStatement(namespace + ".sumCategorizedConsumption"));
+        assertTrue(configuration.hasStatement(namespace + ".findTopCategorySpending"));
+    }
+}
