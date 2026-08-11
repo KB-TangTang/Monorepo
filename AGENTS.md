@@ -61,13 +61,24 @@ mysql -u root -p < db/00_init_local_db.sql            # tangtang DB + 전용 계
 mysql -u tangtang -p tangtang < db/schema.sql
 mysql -u tangtang -p tangtang < db/seed.sql
 
-# 3) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
+# 3) 스키마 변경분 — db/migration/ 을 파일명(날짜)순으로 적용한다. 빼먹으면 컬럼이 모자란 DB 가 된다
+#    schema.sql 은 팀에 공유된 뒤로 갱신하지 않는다(아래 「스키마 변경」 참고)
+for f in db/migration/*.sql; do
+  mysql -u tangtang -p tangtang < "$f"      # 파일마다 비밀번호를 묻는다
+done
+
+# 4) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
 cp apps/api/src/main/resources/application-local.properties.example \
    apps/api/src/main/resources/application-local.properties
 
-# 4) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
+# 5) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
 cp .env.example .env
 ```
+
+> ⚠ **`20260805_add_account_name_to_connected_account.sql` 은 건너뛴다.** 이 변경만 `schema.sql` 에도
+> 반영돼 있어 신규 설치에서 실행하면 `Duplicate column name` 으로 죽는다.
+> **각 마이그레이션 머리말에 신규 설치 시 실행 여부가 적혀 있으니 그것을 따른다.**
+> 이후 추가되는 마이그레이션은 전부 실행 대상이다.
 
 **PowerShell 은 `<` 리다이렉션을 지원하지 않는다.** Windows 에서는 mysql 의 `source` 를 쓴다
 (경로는 슬래시, 한글 주석이 깨지지 않게 `--default-character-set=utf8mb4` 를 붙인다):
@@ -75,6 +86,12 @@ cp .env.example .env
 mysql -u root -p -e "source D:/.../db/00_init_local_db.sql"
 mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/schema.sql"
 mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/seed.sql"
+
+# 3) 마이그레이션 — 날짜순. 위 ⚠ 에 적힌 건너뛸 파일은 제외한다
+Get-ChildItem db/migration/*.sql | Sort-Object Name | ForEach-Object {
+    mysql -u tangtang -p tangtang --default-character-set=utf8mb4 `
+      -e "source $($_.FullName -replace '\\','/')"
+}
 ```
 `Get-Content | mysql` 은 PowerShell 5.1 의 기본 인코딩이 UTF-8 이 아니라 한글 주석이 깨진다.
 
@@ -85,6 +102,7 @@ mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../
 > ```
 
 확인: `mysql -u tangtang -p tangtang -e "SHOW TABLES"` → 33개
+마이그레이션까지 들어갔는지 확인: `mysql -u tangtang -p tangtang -e "DESC tbl_user"` → `social_name` · `tutorial_seen_at` 이 보여야 한다
 연결 확인: `GET http://localhost:8080/api/health` → `{"success":true,"data":{"status":"UP",...}}`
 
 ## 작업 프로토콜

@@ -19,6 +19,18 @@ import {
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
 /*
+ * 2026-08-11 이전에 저장된 검사 성향 ID 를 새 코드로 옮긴다.
+ * localStorage 에 남은 구 값을 그대로 두면 MOCK_PROSECUTORS 에서 못 찾아
+ * 선택된 탕이가 사라진 것처럼 보인다.
+ */
+const LEGACY_PROSECUTOR_ID = { TOUGH: 'HARD', STRICT: 'NORMAL', LENIENT: 'EASY' };
+const DEFAULT_PROSECUTOR_ID = 'NORMAL';
+
+function normalizeProsecutorId(id) {
+    return LEGACY_PROSECUTOR_ID[id] ?? id ?? DEFAULT_PROSECUTOR_ID;
+}
+
+/*
  * 개인 미션 챌린지 v4 — 주간 로테이션 상태
  *
  * 여러 라우트에서 공통으로 사용하는 상태를 Pinia에 저장한다.
@@ -29,7 +41,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     state: () => ({
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
-        selectedProsecutorId: 'STRICT',
+        selectedProsecutorId: DEFAULT_PROSECUTOR_ID,
         pendingVerdict: null,
         courtMode: 'supreme',
         isHydrated: false,
@@ -84,7 +96,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
 
             this.hasAgreed = saved.hasAgreed ?? false;
-            this.selectedProsecutorId = saved.selectedProsecutorId ?? 'STRICT';
+            this.selectedProsecutorId = normalizeProsecutorId(saved.selectedProsecutorId);
             this.pendingVerdict = saved.pendingVerdict ?? null;
             this.courtMode = saved.courtMode ?? 'supreme';
             this.isHydrated = true;
@@ -121,7 +133,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             localStorage.removeItem(STORAGE_KEY);
 
             this.hasAgreed = false;
-            this.selectedProsecutorId = 'STRICT';
+            this.selectedProsecutorId = DEFAULT_PROSECUTOR_ID;
             this.pendingVerdict = null;
             this.courtMode = 'supreme';
             this.isHydrated = true;
