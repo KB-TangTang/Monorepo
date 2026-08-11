@@ -14,10 +14,15 @@ import tangiRaidWatch from '@/assets/images/prosecutor_tangtang/consumer_moment_
 import tangiSceneRaid from '@/assets/images/prosecutor_tangtang/scene_raid_v1_one_leg_no_emphasis.png';
 import tangiSceneWatch from '@/assets/images/prosecutor_tangtang/scene_raid_v2_one_leg_no_emphasis.png';
 
-/* ── 담당 탕이(검사) 3종 ────────────────────────────── */
+/* ── 검사 성향 3종 ──────────────────────────────────────
+ * id 는 tbl_mission_difficulty.difficulty_name 과 같은 값을 쓴다(EASY/NORMAL/HARD).
+ * API 요청·응답도 이 값이라 화면에서 따로 매핑하지 않는다.
+ * (2026-08-11 팀 결정 — 구 ID TOUGH/STRICT/LENIENT 는 STRICT 가 '중' 에 붙어 있어
+ *  영어 뜻과 난이도가 어긋나 있었다. DECISIONS.md 2026-08-11 참고)
+ */
 export const MOCK_PROSECUTORS = [
     {
-        id: 'TOUGH',
+        id: 'HARD',
         name: '깐깐한 탕이',
         bonusPoints: 35,
         targetReductionRange: '40-50%',
@@ -29,7 +34,7 @@ export const MOCK_PROSECUTORS = [
         recommended: true,
     },
     {
-        id: 'STRICT',
+        id: 'NORMAL',
         name: '냉정한 탕이',
         bonusPoints: 20,
         targetReductionRange: '20-40%',
@@ -41,7 +46,7 @@ export const MOCK_PROSECUTORS = [
         recommended: false,
     },
     {
-        id: 'LENIENT',
+        id: 'EASY',
         name: '너그러운 탕이',
         bonusPoints: 10,
         targetReductionRange: '10-20%',
@@ -61,7 +66,7 @@ export const MOCK_TODAY_BRIEFING = {
     currentAmount: 3200,
     limitAmount: 6000,
     streakDays: 5,
-    prosecutorId: 'STRICT',
+    prosecutorId: 'NORMAL',
     date: '2026-07-30',
 };
 

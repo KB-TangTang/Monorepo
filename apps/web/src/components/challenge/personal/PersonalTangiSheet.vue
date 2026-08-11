@@ -5,7 +5,7 @@ import { MOCK_PROSECUTORS } from '@/fixtures/personalChallenge';
 
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
-    currentProsecutorId: { type: String, default: 'STRICT' },
+    currentProsecutorId: { type: String, default: 'NORMAL' },
 });
 
 const emit = defineEmits(['update:modelValue', 'select', 'confirm']);
