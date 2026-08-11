@@ -11,7 +11,9 @@ import {
     formatCooldown,
     formatPhoneNumber,
     formatSyncTime,
+    isLinkFlowRoute,
     isPollExpired,
+    linkExitRoute,
     linkStepPosition,
     needsReconnect,
     nextLinkStep,
@@ -19,6 +21,7 @@ import {
     prevLinkStep,
     resolveAuthView,
     resolveInstitutionTone,
+    resolveLinkEntryRoute,
     resolveProgressRow,
     resolveSyncBadge,
     validateSimpleAuthForm,
@@ -302,23 +305,80 @@ test('생년월일은 숫자 6자리로만 받는다', () => {
     assert.equal(formatBirthDate(null), '');
 });
 
-test('첫 단계의 뒤로가기는 히스토리 대신 연결 계좌 관리로 나간다', () => {
+test('첫 단계의 뒤로가기는 히스토리 대신 기록해둔 진입점으로 나간다', () => {
     // router.back() 을 쓰면 restartFlow 로 되돌아온 경우 히스토리 뒤의 auth/progress/select 로 가는데,
     // 그 화면들은 가드가 institutions 로 되돌려보내 화면이 그대로인 것처럼 보인다.
+    assert.deepEqual(prevLinkDestination('institutions', 'personalMissionHome'), {
+        type: 'route',
+        name: 'personalMissionHome',
+    });
+    assert.deepEqual(prevLinkDestination('institutions', 'accountReconnect'), {
+        type: 'route',
+        name: 'accountReconnect',
+    });
+});
+
+test('진입점 기록이 없으면 기본 착지점으로 나간다', () => {
+    // 새로고침·주소 직접 진입·온보딩 강제 이동은 돌아갈 화면이 없다.
     assert.deepEqual(prevLinkDestination('institutions'), {
         type: 'route',
         name: LINK_EXIT_ROUTE,
     });
+    assert.deepEqual(prevLinkDestination('institutions', ''), {
+        type: 'route',
+        name: LINK_EXIT_ROUTE,
+    });
     assert.equal(LINK_EXIT_ROUTE, 'connectedAccounts');
+    assert.equal(linkExitRoute(''), LINK_EXIT_ROUTE);
+    assert.equal(linkExitRoute(undefined), LINK_EXIT_ROUTE);
+    assert.equal(linkExitRoute('my'), 'my');
 });
 
-test('두 번째 단계부터는 이전 단계로 간다', () => {
+test('두 번째 단계부터는 진입점과 무관하게 이전 단계로 간다', () => {
     assert.deepEqual(prevLinkDestination('auth'), { type: 'step', step: 'institutions' });
     assert.deepEqual(prevLinkDestination('progress'), { type: 'step', step: 'auth' });
     assert.deepEqual(prevLinkDestination('select'), { type: 'step', step: 'progress' });
     assert.deepEqual(prevLinkDestination('done'), { type: 'step', step: 'select' });
+    assert.deepEqual(prevLinkDestination('auth', 'connectedAccounts'), {
+        type: 'step',
+        step: 'institutions',
+    });
 });
 
 test('모르는 단계면 플로우 밖으로 내보낸다', () => {
     assert.deepEqual(prevLinkDestination('알수없음'), { type: 'route', name: LINK_EXIT_ROUTE });
+    assert.deepEqual(prevLinkDestination('알수없음', 'my'), { type: 'route', name: 'my' });
+});
+
+test('연결 플로우 5단계 라우트만 플로우 안으로 친다', () => {
+    assert.equal(isLinkFlowRoute('accountLinkInstitutions'), true);
+    assert.equal(isLinkFlowRoute('accountLinkAuth'), true);
+    assert.equal(isLinkFlowRoute('accountLinkProgress'), true);
+    assert.equal(isLinkFlowRoute('accountLinkSelect'), true);
+    assert.equal(isLinkFlowRoute('accountLinkDone'), true);
+
+    assert.equal(isLinkFlowRoute('connectedAccounts'), false);
+    assert.equal(isLinkFlowRoute('accountReconnect'), false);
+    assert.equal(isLinkFlowRoute('financialConsent'), false);
+    assert.equal(isLinkFlowRoute('personalMissionHome'), false);
+    assert.equal(isLinkFlowRoute(undefined), false);
+});
+
+test('플로우 밖에서 들어온 화면만 진입점으로 기록한다', () => {
+    assert.equal(resolveLinkEntryRoute('connectedAccounts'), 'connectedAccounts');
+    assert.equal(resolveLinkEntryRoute('accountReconnect'), 'accountReconnect');
+    assert.equal(resolveLinkEntryRoute('personalMissionHome'), 'personalMissionHome');
+});
+
+test('플로우 내부 이동·기록 불가 진입은 진입점으로 적지 않는다', () => {
+    // 단계 이동일 뿐이다 — 여기서 덮어쓰면 원래 진입점을 잃는다.
+    assert.equal(resolveLinkEntryRoute('accountLinkAuth'), null);
+    assert.equal(resolveLinkEntryRoute('accountLinkSelect'), null);
+    // 새로고침·주소 직접 진입은 돌아갈 화면 자체가 없다.
+    assert.equal(resolveLinkEntryRoute(undefined), null);
+    assert.equal(resolveLinkEntryRoute(''), null);
+    // 온보딩(금융 동의)으로 되돌리면 게이트가 다시 앞으로 보내 왕복이 된다.
+    assert.equal(resolveLinkEntryRoute('financialConsent'), null);
+    // 가드가 강제로 보낸 진입은 사용자가 그 화면에서 온 것이 아니다.
+    assert.equal(resolveLinkEntryRoute('home', { redirected: true }), null);
 });

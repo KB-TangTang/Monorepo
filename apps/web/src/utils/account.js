@@ -92,12 +92,62 @@ export function prevLinkStep(current) {
 }
 
 /**
- * 첫 단계에서 플로우를 빠져나갈 때 갈 화면.
+ * 진입점을 모를 때 플로우를 빠져나갈 **기본** 착지점.
  *
  * 연결 계좌 관리는 이 플로우의 실질적인 출발지다 — `기관 추가`·`재연동` 모두 거기서 들어온다.
- * 최초 온보딩(금융 동의 → institutions)으로 들어온 사용자에게도 유효한 착지점이다.
+ * 어디서 들어왔는지 기록이 없을 때(새로고침·주소 직접 입력·온보딩 강제 이동) 여기로 내보낸다.
+ * 기록이 있으면 그쪽이 우선이다 — `linkExitRoute()` 참고.
  */
 export const LINK_EXIT_ROUTE = 'connectedAccounts';
+
+/** 연결 플로우 5단계에 속한 라우트인지. 진입점 기록 판정이 이 함수 하나만 본다. */
+export function isLinkFlowRoute(routeName) {
+    return Object.values(LINK_STEP_ROUTES).includes(routeName);
+}
+
+/**
+ * 진입점으로 **기록하면 안 되는** 라우트.
+ *
+ * 온보딩(금융 동의 → 기관 선택)은 강제 단계다. 여기를 진입점으로 기록해두면 플로우에서 나갈 때
+ * 동의 화면으로 되돌아가는데, 온보딩 게이트(resolveOnboardingRedirect)가 곧바로 다시 앞으로 보내
+ * 두 화면 사이를 왕복한다. 기록하지 않으면 기본 착지점으로 나가고, 그다음 갈 곳은 게이트가 정한다.
+ * (라우트 이름을 문자열로 적는 이유: utils/user.js 가 이 파일을 import 하므로 역참조하면 순환이 된다)
+ */
+const LINK_ENTRY_IGNORED_ROUTES = ['financialConsent'];
+
+/**
+ * 플로우 **밖**에서 첫 단계로 들어올 때 기록할 진입점 라우트 이름. 기록하지 않아야 하면 `null`.
+ *
+ * 라우터 가드가 이 결과만 보고 스토어에 기록한다 — 가드 본문에 조건을 늘어놓지 말 것.
+ * 진입 화면(연결 계좌 관리·재연동·개인챌린지 …)을 일일이 고치지 않아도 새 진입점이 자동으로 잡힌다.
+ *
+ * 기록하지 않는 경우는 셋이다.
+ *   - `redirected` — 가드가 되돌려보낸 진입이다. 사용자가 그 화면에서 온 게 아니라
+ *     온보딩 게이트·단계 가드가 강제로 보낸 것이라 "돌아갈 곳"이 될 수 없다.
+ *   - `fromName` 이 없다 — 새로고침·주소 직접 진입. 돌아갈 화면 자체가 없다.
+ *   - 플로우 내부에서 왔거나(단계 이동일 뿐이다) 기록 금지 목록에 있다.
+ *
+ * @param {string|undefined} fromName 직전 라우트 이름
+ * @param {{redirected?: boolean}} [options] 가드 리다이렉트로 도착했는지
+ * @returns {string|null}
+ */
+export function resolveLinkEntryRoute(fromName, { redirected = false } = {}) {
+    if (redirected || !fromName) {
+        return null;
+    }
+    if (isLinkFlowRoute(fromName) || LINK_ENTRY_IGNORED_ROUTES.includes(fromName)) {
+        return null;
+    }
+    return fromName;
+}
+
+/**
+ * 플로우를 완전히 빠져나갈 때 갈 화면. 기록된 진입점이 있으면 그곳, 없으면 기본 착지점.
+ * 완료 화면의 뒤로가기와 첫 단계의 "뒤로"가 같은 곳으로 나가야 해서 판정을 여기 하나로 둔다.
+ */
+export function linkExitRoute(entryRoute) {
+    return entryRoute || LINK_EXIT_ROUTE;
+}
 
 /**
  * "뒤로"를 눌렀을 때 어디로 갈지 판정한다.
@@ -109,11 +159,13 @@ export const LINK_EXIT_ROUTE = 'connectedAccounts';
  * 결과적으로 뒤로가기를 눌러도 **화면이 그대로인 것처럼 보인다**(2026-08-06 실제 발생).
  * 그래서 히스토리에 기대지 않고 나갈 곳을 명시한다.
  *
+ * @param {string} current 지금 단계
+ * @param {string} [entryRoute] 플로우에 들어온 화면(스토어가 기록한다). 없으면 기본 착지점으로 나간다
  * @returns {{type: 'step', step: string} | {type: 'route', name: string}}
  */
-export function prevLinkDestination(current) {
+export function prevLinkDestination(current, entryRoute) {
     const step = prevLinkStep(current);
-    return step ? { type: 'step', step } : { type: 'route', name: LINK_EXIT_ROUTE };
+    return step ? { type: 'step', step } : { type: 'route', name: linkExitRoute(entryRoute) };
 }
 
 /** 진행 표시용. 1부터 센다. */

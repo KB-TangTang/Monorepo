@@ -9,7 +9,7 @@
   얼굴로 이어져야 완료 화면이 결과처럼 읽힌다.
 -->
 <script setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -23,7 +23,7 @@ import successAnimation from '@/assets/images/link-success.svg';
 const router = useRouter();
 const store = useAccountStore();
 const auth = useAuthStore();
-const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions } =
+const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions, exitRoute } =
     storeToRefs(store);
 
 /**
@@ -79,10 +79,14 @@ const firstCollectLabel = computed(() => {
  * ⚠ 플로우 상태는 **여기서만** 비운다. 예전에는 onBeforeUnmount 에서 비웠는데,
  *   라우터는 가드를 통과시킨 뒤 이전 화면을 언마운트하므로 뒤로가기로 계좌 선택에 도착한
  *   직후 connectionId 가 지워졌다 — 그 화면이 `/connections//accounts` 를 불러 항상 실패했다.
- *   완료 화면에서 뒤로가면 계좌 선택이 그대로 살아 있는 편이 자연스럽다.
+ *   지금은 뒤로가기도 계좌 선택으로 돌아가지 않으므로(아래 onPopState) 비우는 시점은 이 한 곳뿐이다.
+ *
+ * 진입점 기록도 함께 지운다 — 여기를 지나면 플로우 밖이라, 남겨두면 다음에 다른 곳에서
+ * 시작한 연동이 옛 진입점으로 나간다.
  */
 function leaveFlow(name) {
     store.resetFlow();
+    store.clearEntryRoute();
     router.replace({ name });
 }
 
@@ -99,6 +103,7 @@ const primaryLabel = computed(() =>
     needsNickname.value ? '닉네임 정하러 가기' : '연결 계좌 확인',
 );
 
+/* CTA 는 라벨이 약속한 곳으로 간다 — '연결 계좌 확인' 은 진입점과 무관하게 연결 계좌 관리다. */
 function goNext() {
     leaveFlow(needsNickname.value ? NICKNAME_SETUP_ROUTE : 'connectedAccounts');
 }
@@ -106,6 +111,35 @@ function goNext() {
 function goHome() {
     leaveFlow('home');
 }
+
+/*
+ * 기기/브라우저 뒤로가기 가로채기.
+ *
+ * 연결이 끝난 화면이라 **되돌아갈 이전 단계가 없다.** 그냥 두면 계좌 선택으로 돌아가는데,
+ * 이미 저장이 끝난 목록을 다시 보여주는 셈이라 사용자가 "진행이 취소됐나" 로 읽는다
+ * (2026-08-11 지적). 들어온 곳(entryRoute)으로 나가는 게 맞다.
+ *
+ * 방식은 이 저장소가 이미 쓰는 관용구다(components/common/useOverlay.js) —
+ * 마운트할 때 히스토리 항목을 하나 쌓아두고, popstate 로 그 항목이 소비되면 그때 이동한다.
+ * 이동은 push 가 아니라 **replace** 여야 한다. 소비된 자리를 새 화면이 덮어써야
+ * 나간 뒤 뒤로가기를 또 눌렀을 때 완료 화면으로 되돌아오지 않는다.
+ *
+ * 온보딩 중(닉네임 미설정)이면 뒤가 아니라 **다음 단계**로 보낸다. 온보딩은 강제 단계라
+ * 되돌려봐야 라우터 가드가 곧바로 앞으로 다시 보낸다.
+ */
+function onPopState() {
+    leaveFlow(needsNickname.value ? NICKNAME_SETUP_ROUTE : exitRoute.value);
+}
+
+onMounted(() => {
+    window.history.pushState({ ttLinkDone: true }, '');
+    window.addEventListener('popstate', onPopState);
+});
+
+/* 화면을 떠나면 반드시 걷어낸다 — 남으면 다른 화면의 뒤로가기까지 이 핸들러가 가로챈다. */
+onBeforeUnmount(() => {
+    window.removeEventListener('popstate', onPopState);
+});
 </script>
 
 <template>

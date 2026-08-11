@@ -19,6 +19,7 @@ import {
 import {
     LINK_STEP_ROUTES,
     calcLinkProgress,
+    linkExitRoute,
     nextLinkStep,
     prevLinkDestination,
     resolveAuthView,
@@ -64,6 +65,17 @@ export const useAccountStore = defineStore('account', () => {
     const loading = ref(false);
     const error = ref('');
 
+    /**
+     * 플로우에 들어온 화면. 라우터 가드가 첫 단계 진입 때 기록한다(router/index.js).
+     *
+     * ⚠ **resetFlow() 에서 비우지 않는다.** 기관 선택 화면이 마운트하면서 resetFlow() 를 부르는데,
+     * 기록은 그보다 먼저(가드에서) 일어나므로 같이 비우면 방금 적은 진입점이 곧바로 지워진다.
+     * 연결이 끝난 뒤 완료 화면이 나갈 곳을 정할 때도 이 값이 필요하다.
+     * 비우는 시점은 **플로우 밖으로 실제로 나갈 때** 한 곳뿐이다 — goPrevStep() 의 이탈 분기와
+     * 완료 화면의 leaveFlow(). 남겨두면 다음에 다른 곳에서 들어온 플로우가 옛 진입점으로 나간다.
+     */
+    const entryRoute = ref('');
+
     const selectedCount = computed(() => selectedInstitutions.value.length);
     const selectedAccountCount = computed(() => selectedAccountIds.value.length);
     const hasConnection = computed(() => connectionId.value !== '');
@@ -84,6 +96,18 @@ export const useAccountStore = defineStore('account', () => {
     /** 어떤 인증 화면을 그릴지. 서버가 내려준 목록만 보고 정한다. */
     const authView = computed(() => resolveAuthView(authMethods.value));
     const progressPercent = computed(() => calcLinkProgress(progressInstitutions.value));
+    /** 플로우 밖으로 나갈 때 갈 화면. 기록이 없으면 기본 착지점(LINK_EXIT_ROUTE). */
+    const exitRoute = computed(() => linkExitRoute(entryRoute.value));
+
+    /** 진입점 기록. 판정은 utils 의 resolveLinkEntryRoute() 가 하고 여기서는 받아 적기만 한다. */
+    function setEntryRoute(name) {
+        entryRoute.value = name;
+    }
+
+    /** 플로우 밖으로 나갈 때 기록을 지운다. 다음 진입은 자기 진입점을 다시 적는다. */
+    function clearEntryRoute() {
+        entryRoute.value = '';
+    }
 
     /** 단계 이동. 라우트 이름은 utils 의 매핑에서만 나온다. */
     function goStep(step) {
@@ -113,16 +137,18 @@ export const useAccountStore = defineStore('account', () => {
     }
 
     function goPrevStep(current) {
-        const target = prevLinkDestination(current);
+        const target = prevLinkDestination(current, entryRoute.value);
         if (target.type === 'step') {
             goStep(target.step);
             return;
         }
         /*
-         * 첫 단계에서는 플로우 밖으로 나간다. router.back() 은 쓰지 않는다 —
+         * 첫 단계에서는 플로우 밖으로 나간다 — 들어온 화면(entryRoute)이 있으면 그곳으로,
+         * 없으면 기본 착지점으로. router.back() 은 쓰지 않는다 —
          * 이유는 utils/account.js 의 prevLinkDestination 주석 참고.
          * replace 로 나가야 나간 뒤 다시 뒤로가기를 눌렀을 때 이 화면으로 되돌아오지 않는다.
          */
+        clearEntryRoute();
         router.replace({ name: target.name });
     }
 
@@ -330,7 +356,10 @@ export const useAccountStore = defineStore('account', () => {
         refreshResult.value = null;
     }
 
-    /** 플로우를 처음부터 다시 시작할 때. 완료 화면을 벗어나거나 중간 진입을 막을 때 쓴다. */
+    /**
+     * 플로우를 처음부터 다시 시작할 때. 완료 화면을 벗어나거나 중간 진입을 막을 때 쓴다.
+     * ⚠ entryRoute 는 여기서 비우지 않는다 — 이유는 그 선언부 주석 참고.
+     */
     function resetFlow() {
         selectedInstitutions.value = [];
         connectionId.value = '';
@@ -364,6 +393,8 @@ export const useAccountStore = defineStore('account', () => {
         refreshResult,
         loading,
         error,
+        entryRoute,
+        exitRoute,
         selectedCount,
         selectedAccountCount,
         hasConnection,
@@ -375,6 +406,8 @@ export const useAccountStore = defineStore('account', () => {
         goNextStep,
         goPrevStep,
         restartFlow,
+        setEntryRoute,
+        clearEntryRoute,
         loadInstitutions,
         toggleInstitution,
         isInstitutionSelected,
