@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.TransactionMapper">
+
+    <update id="update" parameterType="com.kb.tangtang.transaction.domain.Transaction">
+        UPDATE tbl_transaction
+        SET merchant_name            = #{merchantName},
+            merchant_name_normalized = #{merchantNameNormalized},
+            amount                   = #{amount},
+            direction                = #{direction},
+            tr_date                  = #{trDate},
+            tr_time                  = #{trTime},
+            description1             = #{description1},
+            classification           = #{classification},
+            source_type              = #{sourceType},
+            correlation_id           = #{correlationId},
+            original_approval_no     = #{originalApprovalNo},
+            merchant_category_code   = #{merchantCategoryCode},
+            merchant_category_name   = #{merchantCategoryName},
+            raw_json                 = #{rawJson}
+        WHERE codef_tr_key = #{codefTrKey}
+    </update>
+
+    <insert id="insert" parameterType="com.kb.tangtang.transaction.domain.Transaction"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_transaction
+            (user_id, account_id, codef_tr_key, merchant_name, merchant_name_normalized,
+             amount, direction, tr_date, tr_time, description1, classification, category_id,
+             is_excluded_from_summary, loan_id, source_type, card_id, correlation_id,
+             original_approval_no, merchant_category_code, merchant_category_name, raw_json)
+        VALUES
+            (#{userId}, #{accountId}, #{codefTrKey}, #{merchantName}, #{merchantNameNormalized},
+             #{amount}, #{direction}, #{trDate}, #{trTime}, #{description1}, #{classification},
+             #{categoryId}, #{isExcludedFromSummary}, #{loanId}, #{sourceType}, #{cardId},
+             #{correlationId}, #{originalApprovalNo}, #{merchantCategoryCode},
+             #{merchantCategoryName}, #{rawJson})
+    </insert>
+
+    <!--
+      체크카드 승인 <-> 은행 출금 연결.
+      승인된 요구사항(§7): CARD_CHECK 쪽을 집계 기준으로 남기고, BANK 쪽을 집계 제외로 표시한다
+      (가맹점명·MCC 등 카테고리화 정보가 카드 쪽에만 있기 때문).
+      linked_transaction_id 가 이미 채워진 행은 WHERE 절에서 제외되므로 여러 번 실행해도 안전하다.
+    -->
+    <update id="linkByCorrelation" parameterType="long">
+        UPDATE tbl_transaction bank
+        JOIN tbl_transaction card
+          ON card.user_id = bank.user_id
+         AND card.correlation_id = bank.correlation_id
+         AND card.source_type = 'CARD_CHECK'
+        SET bank.linked_transaction_id = card.id,
+            bank.is_excluded_from_summary = 1,
+            card.linked_transaction_id = bank.id
+        WHERE bank.user_id = #{userId}
+          AND bank.source_type = 'BANK'
+          AND bank.correlation_id IS NOT NULL
+          AND bank.linked_transaction_id IS NULL
+          AND card.linked_transaction_id IS NULL
+    </update>
+
+</mapper>
