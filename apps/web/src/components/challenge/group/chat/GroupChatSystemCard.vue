@@ -9,53 +9,61 @@ const props = defineProps({
 const emit = defineEmits(['open-trial']);
 
 const meta = computed(() => props.message.metadata ?? {});
+
+const overAmountLabel = computed(() => {
+    const amount = meta.value.overAmount ?? 0;
+    return amount.toLocaleString() + '원';
+});
 </script>
 
 <template>
-    <div class="sys-card">
-        <div class="sys-card__inner">
+    <div class="sys-card-wrap">
+        <div class="sys-card">
             <img :src="judgeImg" alt="판사 탕이" class="sys-card__avatar" />
             <div class="sys-card__body">
-                <p class="sys-card__title">재판이 열렸습니다!</p>
+                <p class="sys-card__title">재판이 게시됐어요</p>
                 <p class="sys-card__desc">
-                    <strong>{{ meta.defendantName }}</strong>님이
-                    <strong>{{ meta.category }}</strong> 카테고리에서
-                    <strong>{{ (meta.overAmount ?? 0).toLocaleString() }}원</strong> 초과했습니다.
+                    {{ meta.defendantName }}님 · <strong class="sys-card__amount">{{ overAmountLabel }}</strong> 초과
                 </p>
             </div>
+            <button
+                class="sys-card__cta"
+                @click="emit('open-trial', meta.indictmentId)"
+            >
+                변론 확인
+            </button>
         </div>
-        <button
-            class="sys-card__cta"
-            @click="emit('open-trial', meta.indictmentId)"
-        >
-            변론 확인
-        </button>
     </div>
 </template>
 
 <style scoped>
-.sys-card {
-    background: var(--tt-primary);
-    border-radius: var(--tt-radius-lg);
-    padding: var(--tt-space-4);
+.sys-card-wrap {
     display: flex;
-    flex-direction: column;
-    gap: var(--tt-space-3);
+    justify-content: center;
+    padding: 14px 0;
+    margin: 6px 0;
+    border-top: 1px solid var(--tt-border);
+    border-bottom: 1px solid var(--tt-border);
 }
 
-.sys-card__inner {
+.sys-card {
     display: flex;
-    gap: var(--tt-space-3);
     align-items: center;
+    gap: 10px;
+    background: #232842;
+    border-radius: 999px;
+    padding: 9px 11px;
+    width: 80%;
+    box-shadow: 0 6px 14px -6px rgba(35, 40, 66, 0.4);
 }
 
 .sys-card__avatar {
-    width: 48px;
-    height: 48px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    flex: none;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--tt-accent-subtle);
     object-fit: contain;
+    flex: none;
 }
 
 .sys-card__body {
@@ -64,28 +72,37 @@ const meta = computed(() => props.message.metadata ?? {});
 }
 
 .sys-card__title {
-    font-size: var(--tt-fs-subtitle);
+    font-size: 12px;
     font-weight: var(--tt-fw-black);
     color: #fff;
+    line-height: 1.3;
     margin: 0;
 }
 
 .sys-card__desc {
-    font-size: var(--tt-fs-caption);
-    color: rgba(255, 255, 255, 0.8);
-    margin: 4px 0 0;
+    font-size: 11px;
+    color: #C7CBDB;
+    font-weight: var(--tt-fw-semibold);
     line-height: 1.4;
+    margin: 2px 0 0;
+}
+
+.sys-card__amount {
+    color: #FF9E86;
+    font-weight: var(--tt-fw-black);
 }
 
 .sys-card__cta {
-    width: 100%;
-    padding: 10px;
     border: none;
-    border-radius: var(--tt-radius-md);
     background: var(--tt-accent);
-    color: var(--tt-primary);
-    font-size: var(--tt-fs-body);
+    color: #232842;
+    font-size: 11px;
     font-weight: var(--tt-fw-black);
+    padding: 6px 11px;
+    border-radius: var(--tt-radius-full);
     cursor: pointer;
+    font-family: inherit;
+    flex: none;
+    white-space: nowrap;
 }
 </style>

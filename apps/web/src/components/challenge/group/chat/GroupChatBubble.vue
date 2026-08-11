@@ -116,9 +116,6 @@ const initial = computed(() => {
     gap: 6px;
 }
 
-.bubble-row--mine .bubble-row__content-row {
-    flex-direction: row-reverse;
-}
 
 .bubble-row__bubble {
     padding: 10px 14px;
@@ -138,7 +135,7 @@ const initial = computed(() => {
     background: var(--tt-bg);
     color: var(--tt-text);
     border: 1px solid var(--tt-border);
-    border-bottom-left-radius: 4px;
+    border-top-left-radius: 4px;
 }
 
 .bubble-row__sticker {
