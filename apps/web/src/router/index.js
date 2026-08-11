@@ -156,6 +156,13 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupHonorCourtView.vue'),
         meta: { title: '명예 법정', hideTabBar: true },
     },
+    // ↓ 그룹 채팅 (#GC_08). 챌린지별 실시간 채팅방.
+    {
+        path: '/group-challenges/:id/chat',
+        name: 'groupChallengeChat',
+        component: () => import('@/views/challenge/group/GroupChatView.vue'),
+        meta: { title: '그룹 채팅', hideTabBar: true },
+    },
     // ↓ 변론 플로우 (#GC_07). 기소 상세 → 실제 부담금 → 변론 작성 → 완료 / 혐의 인정.
     {
         path: '/group-challenges/:id/defense/:indictmentId',
