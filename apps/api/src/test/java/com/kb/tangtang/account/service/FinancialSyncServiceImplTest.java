@@ -7,6 +7,7 @@ import com.kb.tangtang.account.client.sync.dto.BankTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardApprovalSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.domain.Card;
+import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.mapper.CardBillMapper;
 import com.kb.tangtang.account.mapper.CardMapper;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,29 +55,37 @@ import static org.mockito.Mockito.when;
 class FinancialSyncServiceImplTest {
 
     /**
+     * 트랜잭션 개시·커밋과 DB 쓰기를 **한 줄에** 기록한다. 순서를 검증하려면 둘을 같은 타임라인에
+     * 올려야 한다 — 트랜잭션 쪽은 목이 아니라 실제 구현이라 Mockito InOrder 하나로는 못 묶는다.
+     */
+    private List<String> timeline;
+
+    /**
      * 커넥션 없이 콜백만 그대로 실행하는 트랜잭션 매니저.
      *
      * TransactionTemplate 은 매니저를 목으로 줘도 콜백을 부르긴 하지만, 그건 목의 기본 반환값
-     * (getTransaction → null)에 기대는 동작이라 의도가 드러나지 않는다. "이 테스트는 트랜잭션을
-     * 검증하지 않고 통과시킨다" 를 코드로 못박는다. 실제 경계는 RootConfig 의 빈이 담당한다.
+     * (getTransaction → null)에 기대는 동작이라 의도가 드러나지 않는다. 여기서는 개시·커밋 시점을
+     * 직접 기록해 경계 순서까지 검증한다. 실제 경계는 RootConfig 의 빈이 담당한다.
      */
-    private static final PlatformTransactionManager NO_OP_TRANSACTION_MANAGER =
-            new PlatformTransactionManager() {
-                @Override
-                public TransactionStatus getTransaction(TransactionDefinition definition) {
-                    return new SimpleTransactionStatus();
-                }
+    private PlatformTransactionManager recordingTransactionManager() {
+        return new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(TransactionDefinition definition) {
+                timeline.add("BEGIN");
+                return new SimpleTransactionStatus();
+            }
 
-                @Override
-                public void commit(TransactionStatus status) {
-                    /* 할 일 없음 */
-                }
+            @Override
+            public void commit(TransactionStatus status) {
+                timeline.add("COMMIT");
+            }
 
-                @Override
-                public void rollback(TransactionStatus status) {
-                    /* 할 일 없음 */
-                }
-            };
+            @Override
+            public void rollback(TransactionStatus status) {
+                timeline.add("ROLLBACK");
+            }
+        };
+    }
 
     private FinancialSyncClient client;
     private ScenarioKeyProvider scenarioKeyProvider;
@@ -99,13 +109,14 @@ class FinancialSyncServiceImplTest {
         cardBillMapper = mock(CardBillMapper.class);
         transactionMapper = mock(TransactionMapper.class);
         syncHistoryMapper = mock(FinancialSyncHistoryMapper.class);
+        timeline = new ArrayList<>();
 
         Clock clock = Clock.fixed(Instant.parse("2026-08-12T01:00:00Z"), ZoneId.of("Asia/Seoul"));
 
         service = new FinancialSyncServiceImpl(
                 client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
-                syncHistoryMapper, clock, new TransactionTemplate(NO_OP_TRANSACTION_MANAGER));
+                syncHistoryMapper, clock, new TransactionTemplate(recordingTransactionManager()));
 
         when(scenarioKeyProvider.resolve(1L)).thenReturn("1");
         // 이번 테스트는 BANK 만 데이터가 있고 나머지 5개 소스는 빈 목록으로 둔다.
@@ -222,6 +233,70 @@ class FinancialSyncServiceImplTest {
 
         verify(transactionMapper).insert(argThat(t ->
                 "BANK".equals(t.getSourceType()) && "N2-CHK-0617".equals(t.getCorrelationId())));
+    }
+
+    @Test
+    @DisplayName("멱등키에 목서버 ID 가 아니라 우리 DB PK 를 쓴다 — 사용자끼리 키가 충돌하면 안 된다")
+    void codefTrKeyIsScopedByInternalId() {
+        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
+            ConnectedAccount saved = inv.getArgument(0);
+            saved.setId(77L);   // useGeneratedKeys 흉내
+            return 1;
+        });
+
+        service.sync(1L);
+
+        /* 목서버 계좌 ID(101)가 아니라 우리 PK(77)가 들어가야 한다. 101 이면 시나리오 키를 공유하는
+           다른 사용자와 같은 키가 만들어져 서로의 거래를 덮어쓴다. */
+        verify(transactionMapper).insert(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
+    }
+
+    @Test
+    @DisplayName("모든 DB 쓰기가 트랜잭션 개시 후 · 커밋 전에 일어난다 (이력 insert·연결 SQL 포함)")
+    void allWritesHappenInsideOneTransaction() {
+        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
+            timeline.add("WRITE:account");
+            return 1;
+        });
+        when(transactionMapper.insert(any())).thenAnswer(inv -> {
+            timeline.add("WRITE:transaction");
+            return 1;
+        });
+        when(transactionMapper.linkByCorrelation(1L)).thenAnswer(inv -> {
+            timeline.add("WRITE:link");
+            return 0;
+        });
+        when(syncHistoryMapper.insert(any())).thenAnswer(inv -> {
+            timeline.add("WRITE:history");
+            return 1;
+        });
+
+        service.sync(1L);
+
+        /*
+         * 순서를 통째로 못박는다. 예전 @Transactional 자기호출 버전이었다면 BEGIN/COMMIT 자체가 없어
+         * 이 단언이 깨진다. 연결 SQL 이나 이력 insert 를 나중에 트랜잭션 밖으로 빼도 마찬가지다.
+         */
+        assertEquals(
+                List.of("BEGIN", "WRITE:account", "WRITE:transaction", "WRITE:link", "WRITE:history",
+                        "COMMIT"),
+                timeline);
+    }
+
+    @Test
+    @DisplayName("저장 단계에서 터져도 실패 이력을 남긴다 — 500 만 뜨고 흔적이 없으면 안 된다")
+    void writeFailureIsRecordedInHistory() {
+        when(transactionMapper.insert(any())).thenThrow(
+                new IllegalStateException("Duplicate entry 'BANK-1-9001' for key 'uk_tx_codef_key'"));
+
+        assertThrows(IllegalStateException.class, () -> service.sync(1L));
+
+        verify(syncHistoryMapper).insert(argThat(h ->
+                "FAILED".equals(h.getStatus())
+                        && "SAVE".equals(h.getFailedSource())
+                        && h.getFailReason() != null && h.getFailReason().contains("Duplicate entry")));
+        /* 실패 이력은 롤백된 트랜잭션 밖에서 남겨야 한다. */
+        assertEquals(List.of("BEGIN", "ROLLBACK"), timeline);
     }
 
     @Test

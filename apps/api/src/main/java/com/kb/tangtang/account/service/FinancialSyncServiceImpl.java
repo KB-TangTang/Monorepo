@@ -65,6 +65,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private static final List<String> SOURCE_ORDER =
             List.of("BANK", "DEPOSIT", "SECURITIES", "LOAN", "PAY_MONEY", "CARD");
 
+    /**
+     * 수집이 아니라 **저장 단계**에서 실패했다는 표시. 이력의 failed_source 에 들어간다 —
+     * 소스 이름(BANK 등)과 섞이지 않게 별도 값을 쓴다. (컬럼은 VARCHAR(20))
+     */
+    private static final String SAVE_PHASE = "SAVE";
+
+    /** tbl_financial_sync_history.fail_reason 은 VARCHAR(500) 이다. DB 예외 메시지는 이보다 길 수 있다. */
+    private static final int FAIL_REASON_MAX = 500;
+
     /** rawJson 파싱 전용. ObjectMapper 는 스레드 안전하므로 한 번만 만든다. */
     private static final ObjectMapper RAW_JSON_READER = new ObjectMapper();
 
@@ -146,7 +155,17 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             throw e;
         }
 
-        saveAll(userId, bundle, startedAt);
+        /*
+         * 쓰기 실패도 이력을 남긴다. 트랜잭션은 이미 롤백된 뒤라(saveAll 이 경계를 닫고 나온다)
+         * 이 insert 는 별도 트랜잭션으로 커밋된다 — 실패 이력이 롤백에 휩쓸리지 않는다.
+         * 이게 없으면 저장 단계 실패는 이력 한 줄 없이 500 으로만 남는다.
+         */
+        try {
+            saveAll(userId, bundle, startedAt);
+        } catch (RuntimeException e) {
+            recordFailure(userId, SAVE_PHASE, e.getMessage(), startedAt);
+            throw e;
+        }
 
         return FinancialSyncResultDto.builder()
                 .status("COMPLETED")
@@ -214,7 +233,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .userId(userId)
                 .status("FAILED")
                 .failedSource(failedSource)
-                .failReason(failReason)
+                .failReason(truncate(failReason))
                 .startedAt(startedAt)
                 .finishedAt(LocalDateTime.now(clock))
                 .build());
@@ -253,7 +272,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                  */
                 RawJsonFields fields = RawJsonFields.parse(tx.getRawJson());
                 saveTransaction(userId, connectedAccountId, null, "BANK",
-                        "BANK-" + account.getAccountId() + "-" + tx.getTransactionId(),
+                        "BANK-" + connectedAccountId + "-" + tx.getTransactionId(),
                         tx.getAmount(), tx.getTransactedAt(), tx.getDescription(),
                         null, null, fields.correlationId, null, tx.getRawJson());
             }
@@ -316,7 +335,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             for (DepositTransactionSyncDto tx :
                     bundle.depositTransactions.getOrDefault(deposit.getDepositAccountId(), List.of())) {
                 saveTransaction(userId, accountId, null, "DEPOSIT",
-                        "DEPOSIT-" + deposit.getDepositAccountId() + "-" + tx.getTransactionId(),
+                        "DEPOSIT-" + accountId + "-" + tx.getTransactionId(),
                         tx.getAmount(), tx.getTransactedAt(), tx.getDescription(),
                         null, null, null, null, tx.getRawJson());
             }
@@ -364,7 +383,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         for (SecuritiesTransactionSyncDto tx :
                 bundle.securitiesTransactions.getOrDefault(bundle.stock.getAccountId(), List.of())) {
             saveTransaction(userId, accountId, null, "SECURITIES",
-                    "SECURITIES-" + bundle.stock.getAccountId() + "-" + tx.getTransactionId(),
+                    "SECURITIES-" + accountId + "-" + tx.getTransactionId(),
                     tx.getTransactionAmount(), tx.getTransactedAt(),
                     tx.getSecurityProductName(), null, null, null, null, null);
         }
@@ -388,11 +407,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .build();
             Long loanId;
             if (loanMapper.update(row) > 0) {
+                /* 방금 갱신한 행을 못 찾는 건 이상 상황이다. null 로 두면 account_id·loan_id 가 둘 다
+                   빈 고아 거래가 생기므로, 다른 upsert 헬퍼들과 똑같이 예외로 끊는다. */
                 loanId = loanMapper.findByUser(userId).stream()
                         .filter(l -> row.getLoanNoEncrypted().equals(l.getLoanNoEncrypted()))
                         .findFirst()
                         .map(Loan::getId)
-                        .orElse(null);
+                        .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
+                                "동기화한 대출을 다시 찾지 못했어요."));
             } else {
                 loanMapper.insert(row);
                 loanId = row.getId();   // useGeneratedKeys 로 insert 직후 채워진다
@@ -403,7 +425,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 Transaction txRow = Transaction.builder()
                         .userId(userId)
                         .loanId(loanId)
-                        .codefTrKey("LOAN-" + loan.getLoanId() + "-" + tx.getTransactionId())
+                        .codefTrKey("LOAN-" + loanId + "-" + tx.getTransactionId())
                         .amount(tx.getAmount())
                         /* 대출 거래는 실행(입금)과 상환(출금)이 섞여 있다 — 구분이 서기 전엔 비워 둔다. */
                         .direction(null)
@@ -438,7 +460,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             for (PayMoneyTransactionSyncDto tx :
                     bundle.payMoneyTransactions.getOrDefault(payMoney.getPayMoneyId(), List.of())) {
                 saveTransaction(userId, accountId, null, "PAYMONEY",
-                        "PAYMONEY-" + payMoney.getPayMoneyId() + "-" + tx.getTransactionId(),
+                        "PAYMONEY-" + accountId + "-" + tx.getTransactionId(),
                         tx.getAmount(), tx.getTransactedAt(), tx.getMerchantName(),
                         tx.getMerchantCategoryCode(), tx.getMerchantCategoryName(),
                         null, null, tx.getRawJson());
@@ -532,6 +554,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /**
      * 거래 한 건 upsert. 멱등키(codef_tr_key) 로 update 를 먼저 시도하고 0행이면 insert 한다 —
      * 재동기화로 같은 거래가 다시 들어와도 행이 늘지 않는다(설계 §9).
+     *
+     * ⚠ codefTrKey 의 상품 ID 자리에는 **반드시 우리 DB 의 PK** 를 넣는다(목서버 ID 금지).
+     *   `uk_tx_codef_key` 는 codef_tr_key 단독 UNIQUE 이고 update 의 WHERE 에도 user_id 가 없다.
+     *   목서버 ID 를 쓰면 시나리오 키를 공유하는 사용자들이 같은 키를 만들어, 두 번째 사용자의 동기화가
+     *   **첫 번째 사용자의 거래를 덮어쓰고 자기 행은 만들지 못한다**(6명이 같은 목서버로 데모한다).
+     *   우리 PK 는 상품 자연키 upsert 로 사용자마다 다르고 재동기화 사이에는 안 변한다.
      */
     private void saveTransaction(long userId, Long accountId, Long cardId, String sourceType,
                                  String codefTrKey, BigDecimal amount, String transactedAt,
@@ -572,6 +600,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     private static List<StockHoldingSyncDto> holdings(StockAssetSyncDto stock) {
         return stock.getHoldings() == null ? List.of() : stock.getHoldings();
+    }
+
+    /** 실패 사유를 컬럼 길이에 맞춘다 — 이력 남기려다 이력 insert 가 터지면 본말전도다. */
+    private static String truncate(String reason) {
+        if (reason == null || reason.length() <= FAIL_REASON_MAX) {
+            return reason;
+        }
+        return reason.substring(0, FAIL_REASON_MAX);
     }
 
     /** 목서버 날짜는 전부 yyyy-MM-dd 다. 빈 값은 그대로 비워 둔다. */
