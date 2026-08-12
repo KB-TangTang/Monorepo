@@ -113,7 +113,13 @@ export async function previewInviteCode(code) {
     if (isMockMode.value) {
         const entry = MOCK_INVITE_CODES[code];
         if (!entry) {
-            throw new Error('유효하지 않은 초대 코드입니다.');
+            /* 목데이터에는 실제로 만든 방의 코드가 당연히 없다. 이걸 「존재하지 않는 방」으로
+             * 보여주면 서버가 멀쩡한데도 코드가 틀린 줄 알게 된다. 사유를 구분해 던진다. */
+            const error = new Error(
+                `목데이터 모드에는 없는 코드예요 (${code}). 실제 그룹에 참여하려면 LIVE 로 전환하세요.`,
+            );
+            error.code = 'MOCK_CODE_NOT_FOUND';
+            throw error;
         }
         const group = MOCK_GROUPS[entry.groupId];
         return {

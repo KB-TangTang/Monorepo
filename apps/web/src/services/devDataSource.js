@@ -6,8 +6,12 @@
  * 어느 쪽을 보고 있는지 눈으로 구분할 수 없으면 연동 진척을 확인할 수가 없어서
  * 출처를 명시적으로 바꾸는 스위치를 둔다.
  *
- * - `mock`: 전부 목데이터. 팀 시연·디자인 확인용 (기본값)
- * - `live`: 실제 API 만. 아직 서버에 없는 화면은 그대로 실패한다 — 그게 이 모드의 목적이다.
+ * - `live`: 실제 API 만 (기본값). 아직 서버에 없는 화면은 그대로 실패한다 — 그게 이 모드의 목적이다.
+ * - `mock`: 전부 목데이터. 팀 시연·디자인 확인용.
+ *
+ * 기본값은 원래 `mock` 이었는데 생성·초대·참여·목록 API 가 모두 붙은 뒤로 함정이 됐다.
+ * 다른 브라우저(시크릿창·다른 프로필)에서 두 번째 계정으로 들어오면 localStorage 가 비어 있어
+ * 혼자만 목데이터를 보게 되고, 실제로 만든 방의 초대 코드가 "존재하지 않는 방"으로 뜬다.
  *
  * **프로덕션 빌드에서는 토글이 존재하지 않고 항상 `live` 다.**
  * `import.meta.env.DEV` 가 false 면 저장값을 읽지도 쓰지도 않는다.
@@ -19,7 +23,7 @@ const IS_DEV = import.meta.env.DEV;
 
 function readStored() {
     if (!IS_DEV) return 'live';
-    return localStorage.getItem(STORAGE_KEY) === 'live' ? 'live' : 'mock';
+    return localStorage.getItem(STORAGE_KEY) === 'mock' ? 'mock' : 'live';
 }
 
 /** 'mock' | 'live'. 화면이 이 값을 watch 해서 다시 불러온다. */
