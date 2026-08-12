@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     challenge: { type: Object, required: true },
@@ -32,11 +33,16 @@ const outcomeText = computed(() => {
     return null;
 });
 
-const evalDesc = computed(() =>
-    props.challenge.evalType === 'DAILY' ? '일일결산' : '기간평가',
-);
+const evalDesc = computed(() => (props.challenge.evalType === 'DAILY' ? '일일결산' : '기간평가'));
 
-const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
+const AVATAR_COLORS = [
+    'var(--tt-gold)',
+    'var(--tt-blue)',
+    'var(--tt-green)',
+    'var(--tt-red)',
+    'var(--tt-ink)',
+    'var(--tt-gold-deep)',
+];
 </script>
 
 <template>
@@ -53,9 +59,7 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
         </div>
 
         <!-- 중간: 평가타입 · 날짜 범위 -->
-        <p class="gec-card__desc">
-            {{ evalDesc }} · {{ dateRange }}
-        </p>
+        <p class="gec-card__desc">{{ evalDesc }} · {{ dateRange }}</p>
 
         <!-- 하단: 멤버 아바타 + 결과 금액 -->
         <div class="gec-card__bottom">
@@ -64,14 +68,18 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
                     <span
                         v-for="(m, i) in challenge.members"
                         :key="m.userId"
-                        class="gec-card__avatar"
+                        class="gec-card__avatar-wrap"
                         :style="{
-                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
                             marginLeft: i > 0 ? '-7px' : '0',
                             zIndex: challenge.members.length - i,
                         }"
                     >
-                        {{ m.initial }}
+                        <UserAvatar
+                            :image-url="m.profileImage || null"
+                            :name="m.nickname"
+                            :color="AVATAR_COLORS[i % AVATAR_COLORS.length]"
+                            :size="24"
+                        />
                     </span>
                 </div>
                 <span class="gec-card__member-count">{{ challenge.memberCount }}</span>
@@ -144,18 +152,14 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
     align-items: center;
 }
 
-.gec-card__avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-white);
-    border: 2px solid var(--tt-bg);
+.gec-card__avatar-wrap {
+    display: inline-flex;
     position: relative;
+}
+
+/* 겹침 경계 링 — UserAvatar 자체엔 테두리가 없어 여기서 그린다 */
+.gec-card__avatar-wrap :deep(.user-avatar) {
+    border: 2px solid var(--tt-bg);
 }
 
 .gec-card__member-count {
