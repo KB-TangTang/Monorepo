@@ -39,14 +39,16 @@ public class UserService {
     private static final int NICKNAME_MAX_LENGTH = 50;
 
     private final UserMapper userMapper;
+    private final ProfileImageUrlResolver profileImageUrlResolver;
 
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver) {
         this.userMapper = userMapper;
+        this.profileImageUrlResolver = profileImageUrlResolver;
     }
 
     @Transactional(readOnly = true)
     public UserMeDto me(long userId) {
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -64,7 +66,7 @@ public class UserService {
         if (userMapper.updateName(userId, name) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -84,7 +86,7 @@ public class UserService {
         if (userMapper.updateNickname(userId, nickname) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -149,7 +151,13 @@ public class UserService {
         if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
+    }
+
+    /** 조회 → URL 조립 → DTO. 네 곳이 같은 일을 하므로 여기 모은다. */
+    private UserMeDto meOf(long userId) {
+        UserDto user = findActive(userId);
+        return UserMeDto.from(user, profileImageUrlResolver.resolve(user));
     }
 
     private UserDto findActive(long userId) {

@@ -39,12 +39,13 @@ class UserServiceTest {
     private static final long USER_ID = 7L;
 
     @Mock private UserMapper userMapper;
+    @Mock private ProfileImageUrlResolver profileImageUrlResolver;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userMapper);
+        service = new UserService(userMapper, profileImageUrlResolver);
     }
 
     private static UserDto user(String name) {
