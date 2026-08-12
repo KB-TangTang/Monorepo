@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.LlmCategorizationJobItemMapper">
+
+    <insert id="insert" parameterType="com.kb.tangtang.transaction.domain.LlmCategorizationJobItem"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_llm_categorization_job_item (job_id, transaction_id)
+        VALUES (#{jobId}, #{transactionId})
+    </insert>
+
+</mapper>
