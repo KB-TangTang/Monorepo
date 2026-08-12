@@ -17,7 +17,7 @@ import java.time.LocalTime;
  */
 @Getter
 @Setter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 public class Transaction {
     private Long id;
