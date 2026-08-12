@@ -22,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final String PROVIDER_GOOGLE = "GOOGLE";
-    /** 가입 시 부여하는 난이도. db/seed.sql 의 tbl_mission_difficulty EASY 행 id. */
-    private static final long DEFAULT_DIFFICULTY_ID = 1L;
+    /** 가입 시 부여하는 난이도. db/seed.sql 의 tbl_mission_difficulty NORMAL 행 id. */
+    private static final long DEFAULT_DIFFICULTY_ID = 2L;
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final GoogleOAuthClient googleOAuthClient;
