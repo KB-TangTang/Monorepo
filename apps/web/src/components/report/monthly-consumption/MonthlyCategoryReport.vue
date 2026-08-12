@@ -9,7 +9,13 @@ const props = defineProps({
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
 const leadingCategory = computed(() => props.report.categories[0]);
 const comparisonCopy = computed(() => {
+    if (!leadingCategory.value) {
+        return '';
+    }
     const rate = leadingCategory.value.changeRate;
+    if (rate == null) {
+        return `${leadingCategory.value.name} 지출은 지난달과 비교하기 어려워요`;
+    }
     if (rate === 0) {
         return `${leadingCategory.value.name} 지출이 지난달과 같아요`;
     }
@@ -25,6 +31,9 @@ const CHART_COLORS = {
     soft: 'var(--tt-border-strong)',
 };
 const chartStyle = computed(() => {
+    if (!props.report.categories.length) {
+        return { background: 'var(--tt-border)' };
+    }
     let offset = 0;
     const segments = props.report.categories.map((category) => {
         const nextOffset = offset + category.ratio;
@@ -86,7 +95,7 @@ const chartStyle = computed(() => {
                 <span>합계</span><strong>{{ formatWon(report.totalSpent) }}</strong>
             </footer>
         </div>
-        <aside v-if="showComparison" class="category-report__sentence">
+        <aside v-if="showComparison && report.savingsStatement" class="category-report__sentence">
             이번 달 아낀 <strong>{{ formatWon(report.savingsStatement.amount) }}</strong
             >은<br />
             <b>{{ report.savingsStatement.category }}라떼 {{ report.savingsStatement.count }}잔</b>

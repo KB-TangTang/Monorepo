@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildMonthlyTrendSlots,
+    composeMonthlyConsumptionReport,
     formatChangeRate,
     getPreviousPeriod,
     isAvailableReportMonth,
@@ -10,6 +11,10 @@ import {
     resolveReportState,
 } from '../src/utils/monthlyConsumption.js';
 import { AVAILABLE_MONTHS, REPORTS } from '../src/fixtures/monthlyConsumption.js';
+import {
+    fetchTempMonthlyConsumptionMonths,
+    fetchTempMonthlyConsumptionReport,
+} from '../src/api/tempMonthlyConsumptionMock.js';
 
 test('기준일 이전의 리포트 보유 월만 조회 가능 월로 계산한다', () => {
     const referenceDate = new Date(2026, 7, 4);
@@ -76,11 +81,61 @@ test('카테고리 증감과 화면 상태를 표시한다', () => {
 });
 
 test('고정 지출 의심 건은 명시적인 배열 또는 false일 때만 확정한다', () => {
+    assert.equal(resolveFixedExpenseStatus(2), 'detected');
+    assert.equal(resolveFixedExpenseStatus(0), 'clear');
     assert.equal(resolveFixedExpenseStatus([{ id: 1 }]), 'detected');
     assert.equal(resolveFixedExpenseStatus([]), 'clear');
     assert.equal(resolveFixedExpenseStatus(false), 'clear');
     assert.equal(resolveFixedExpenseStatus(null), 'unknown');
     assert.equal(resolveFixedExpenseStatus(undefined), 'unknown');
+});
+
+test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () => {
+    const report = composeMonthlyConsumptionReport(
+        {
+            yearMonth: '2026-07',
+            totalSpent: 150000,
+            hasPreviousComparison: true,
+            monthOverMonthRate: -25,
+            fixedExpenseCandidateCount: 2,
+        },
+        {
+            items: [
+                { yearMonth: '2026-06', amount: 200000, hasData: true },
+                { yearMonth: '2026-07', amount: 150000, hasData: true },
+            ],
+        },
+        {
+            categories: [
+                {
+                    categoryId: 18,
+                    categoryName: '카페/간식',
+                    amount: 150000,
+                    ratio: 100,
+                    previousMonthAmount: 200000,
+                    changeRate: -25,
+                },
+            ],
+        },
+    );
+
+    assert.equal(report.period, '2026-07');
+    assert.equal(report.fixedExpenseCandidateCount, 2);
+    assert.deepEqual(
+        report.monthlyTrend.map((item) => item.yearMonth),
+        ['2026-06', '2026-07'],
+    );
+    assert.equal(report.categories[0].name, '카페/간식');
+});
+
+test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다', async () => {
+    const months = await fetchTempMonthlyConsumptionMonths();
+    const report = await fetchTempMonthlyConsumptionReport('2026-07');
+
+    assert.equal(months.find((month) => month.value === '2026-07').available, true);
+    assert.equal(report.fixedExpenseCandidateCount, 1);
+    assert.equal(report.monthlyTrend.at(-1).yearMonth, '2026-07');
+    assert.equal(report.monthlyTrend.at(-1).hasData, true);
 });
 
 test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지한다', () => {

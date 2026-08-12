@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.report.mapper.MonthlyReportMapper">
+
+    <sql id="reportConsumptionCondition">
+        t.user_id = #{userId}
+        AND t.tr_date &gt;= #{startDate}
+        AND t.tr_date &lt; #{endDate}
+        AND t.classification = 'CONSUMPTION'
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <sql id="netSpendingAmount">
+        CASE WHEN t.is_refund = 1
+             THEN -COALESCE(t.refunded_amount, t.amount)
+             ELSE t.amount END
+    </sql>
+
+    <select id="findUserCreatedDate" resultType="java.time.LocalDate">
+        SELECT DATE(created_at)
+        FROM tbl_user
+        WHERE id = #{userId}
+          AND status = 'ACTIVE'
+    </select>
+
+    <select id="sumNetSpending" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(<include refid="netSpendingAmount"/>), 0)
+        FROM tbl_transaction t
+        WHERE <include refid="reportConsumptionCondition"/>
+    </select>
+
+    <select id="findMonthlySpending"
+            resultType="com.kb.tangtang.report.domain.MonthlySpendingRow">
+        SELECT DATE_FORMAT(t.tr_date, '%Y-%m') AS `year_month`,
+               COALESCE(SUM(<include refid="netSpendingAmount"/>), 0) AS amount
+        FROM tbl_transaction t
+        WHERE <include refid="reportConsumptionCondition"/>
+        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m')
+        ORDER BY `year_month`
+    </select>
+
+    <select id="findMonthlyCategorySpending"
+            resultType="com.kb.tangtang.report.domain.MonthlyCategorySpendingRow">
+        SELECT DATE_FORMAT(t.tr_date, '%Y-%m') AS `year_month`,
+               t.category_id,
+               COALESCE(c.category_name, '미분류') AS category_name,
+               COALESCE(SUM(<include refid="netSpendingAmount"/>), 0) AS amount
+        FROM tbl_transaction t
+        LEFT JOIN tbl_category c ON c.id = t.category_id
+        WHERE <include refid="reportConsumptionCondition"/>
+        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m'), t.category_id, c.category_name
+        ORDER BY `year_month`, amount DESC, t.category_id
+    </select>
+
+    <select id="countActiveFixedExpenseCandidates" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+    </select>
+
+</mapper>

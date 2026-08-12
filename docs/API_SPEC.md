@@ -10,6 +10,33 @@
 인증이 필요한 요청은 `Authorization: Bearer <accessToken>` 헤더를 보낸다.
 리프레시 토큰은 httpOnly 쿠키(`refresh_token`, `Path=/api/auth`)로만 오간다.
 
+## 월간 소비 리포트
+
+모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.
+`yearMonth`는 `YYYY-MM` 형식이고 현재월·미래월·가입 이전 월은 상세 조회할 수 없다.
+
+| Method | Endpoint | 응답 책임 |
+|---|---|---|
+| GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
+| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
+| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 카테고리별 순소비 금액·비율·전월 증감률 |
+| GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
+
+집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
+일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
+기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
+
+최근 6개월 추이는 가입월 이전 슬롯을 `{amount:null, hasData:false}`로 표시한다.
+가입 이후 완료월에 소비가 없으면 `{amount:0, hasData:true}`로 표시하여 실제 0원 월과 구분한다.
+
+증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
+증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
+`hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
+
+카테고리 없는 소비는 `categoryId:null`, `categoryName:"미분류"`로 반환한다. 환불 반영 후
+카테고리 순소비가 0 이하이면 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
+이 API의 범위가 아니다.
+
 ## 공통
 
 | 메서드 | 경로 | 인증 | 응답 |
