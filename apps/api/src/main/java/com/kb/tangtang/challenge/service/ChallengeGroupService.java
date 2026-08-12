@@ -6,8 +6,7 @@ import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupSummaryDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.GroupMemberDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
@@ -130,19 +129,18 @@ public class ChallengeGroupService {
         }
 
         List<GroupMember> members = findMembers(group.getId());
-        ChallengeGroupDetailDto detail = toDetail(userId, group, members);
         String reason = joinBlockReason(group, members, userId);
 
         return InviteCodePreviewDto.builder()
-                .challenge(detail)
+                .challenge(toDto(userId, group, members, LocalDate.now(clock)))
                 .joinable(reason == null)
                 .reason(reason)
                 .build();
     }
 
-    /** 참여 (GC_01_06). 성공하면 참여한 그룹의 상세를 그대로 돌려준다 — 화면이 바로 상세로 넘어간다. */
+    /** 참여 (GC_01_06). 성공하면 참여한 그룹을 그대로 돌려준다 — 화면이 바로 상세로 넘어간다. */
     @Transactional
-    public ChallengeGroupDetailDto join(long userId, long groupId) {
+    public ChallengeGroupDto join(long userId, long groupId) {
         ChallengeGroup group = findGroupOrThrow(groupId);
         List<GroupMember> members = findMembers(groupId);
 
@@ -152,7 +150,7 @@ public class ChallengeGroupService {
         }
 
         groupMemberMapper.insertMember(newMember(group, userId));
-        return toDetail(userId, group, findMembers(groupId));
+        return toDto(userId, group, findMembers(groupId), LocalDate.now(clock));
     }
 
     /* ══ 조회 ══════════════════════════════════════════════ */
@@ -163,7 +161,7 @@ public class ChallengeGroupService {
      * @param statuses NULL·빈 목록이면 전체
      */
     @Transactional(readOnly = true)
-    public List<ChallengeGroupSummaryDto> findMyGroups(long userId, List<String> statuses) {
+    public List<ChallengeGroupDto> findMyGroups(long userId, List<String> statuses) {
         List<ChallengeGroup> groups = challengeGroupMapper.findMyGroups(userId, validateStatuses(statuses));
         if (groups.isEmpty()) {
             return List.of();
@@ -175,23 +173,23 @@ public class ChallengeGroupService {
                 .collect(Collectors.groupingBy(GroupMember::getGroupId));
 
         LocalDate today = LocalDate.now(clock);
-        List<ChallengeGroupSummaryDto> result = new ArrayList<>(groups.size());
+        List<ChallengeGroupDto> result = new ArrayList<>(groups.size());
         for (ChallengeGroup group : groups) {
             List<GroupMember> members = membersByGroup.getOrDefault(group.getId(), List.of());
-            result.add(toSummary(userId, group, members, today));
+            result.add(toDto(userId, group, members, today));
         }
         return result;
     }
 
     /** 그룹 상세 (GC_01_09). 참여자만 볼 수 있다 — 비참여자는 초대 코드 미리보기를 쓴다. */
     @Transactional(readOnly = true)
-    public ChallengeGroupDetailDto findDetail(long userId, long groupId) {
+    public ChallengeGroupDto findDetail(long userId, long groupId) {
         ChallengeGroup group = findGroupOrThrow(groupId);
         List<GroupMember> members = findMembers(groupId);
         if (!isMember(members, userId)) {
             throw new BusinessException("GROUP_NOT_MEMBER", "참여 중인 챌린지가 아닙니다.");
         }
-        return toDetail(userId, group, members);
+        return toDto(userId, group, members, LocalDate.now(clock));
     }
 
     /* ══ 검증 ══════════════════════════════════════════════ */
@@ -311,25 +309,15 @@ public class ChallengeGroupService {
 
     /* ══ 조립 ══════════════════════════════════════════════ */
 
-    private ChallengeGroupDetailDto toDetail(long userId, ChallengeGroup group, List<GroupMember> members) {
-        ChallengeGroupSummaryDto summary = toSummary(userId, group, members, LocalDate.now(clock));
-        return ChallengeGroupDetailDto.builder()
-                .challenge(summary)
-                .memo(group.getMemo())
-                .member(isMember(members, userId))
-                .joinable(joinBlockReason(group, members, userId) == null)
-                .build();
-    }
-
-    private ChallengeGroupSummaryDto toSummary(long userId,
-                                               ChallengeGroup group,
-                                               List<GroupMember> members,
-                                               LocalDate today) {
+    private ChallengeGroupDto toDto(long userId,
+                                    ChallengeGroup group,
+                                    List<GroupMember> members,
+                                    LocalDate today) {
         int totalDays = daysBetweenInclusive(group.getStartDate(), group.getEndDate());
         EvalType evalType = EvalType.valueOf(group.getEvalType());
         GroupMember me = findMember(members, userId);
 
-        return ChallengeGroupSummaryDto.builder()
+        return ChallengeGroupDto.builder()
                 .id(group.getId())
                 .adminId(group.getAdminId())
                 .groupName(group.getGroupName())
@@ -342,6 +330,7 @@ public class ChallengeGroupService {
                 .endDate(group.getEndDate())
                 .inviteCode(group.getInviteCode())
                 .status(group.getStatus())
+                .memo(group.getMemo())
                 .livesCount(me == null ? null : me.getLivesCount())
                 .finalOutcome(me == null ? null : me.getFinalOutcome())
                 .finalRank(me == null ? null : me.getFinalRank())
@@ -352,6 +341,8 @@ public class ChallengeGroupService {
                 .maxLives(evalType.livesFor(totalDays))
                 .memberCount(members.size())
                 .owner(group.getAdminId() != null && group.getAdminId() == userId)
+                .member(me != null)
+                .joinable(joinBlockReason(group, members, userId) == null)
                 .members(members.stream()
                         .map(m -> toMemberDto(m, group.getAdminId()))
                         .toList())

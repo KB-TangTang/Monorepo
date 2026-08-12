@@ -329,25 +329,30 @@
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | POST | `/api/group-challenges` | Bearer | `{ groupId, inviteCode }` |
-| GET | `/api/group-challenges?status=` | Bearer | `ChallengeGroupSummary[]` |
-| GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroupDetail` |
+| GET | `/api/group-challenges?status=` | Bearer | `ChallengeGroup[]` |
+| GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroup` |
 | GET | `/api/group-challenges/invite-codes/{inviteCode}` | Bearer | `{ challenge, joinable, reason }` |
-| POST | `/api/group-challenges/{groupId}/members` | Bearer | `ChallengeGroupDetail` |
+| POST | `/api/group-challenges/{groupId}/members` | Bearer | `ChallengeGroup` |
 
 생성 요청 본문은 `{ groupName, categoryId, limitAmount, evalType, startDate, endDate, memo }` 다.
 **정원(`maxMembers`)은 받지 않는다** — 생성 화면에 입력 UI 가 없어 서버가 6 으로 고정한다.
 프론트의 자유 규칙 입력값은 ERD 컬럼명에 맞춰 `memo` 로 보낸다.
 
-`ChallengeGroupSummary` 는 `tbl_challenge_group` 전 컬럼 + 로그인 사용자 본인의
+`ChallengeGroup` 은 목록·상세·미리보기가 **모두 같은 한 가지 모양**이다.
+`tbl_challenge_group` 전 컬럼(`memo` 포함) + 로그인 사용자 본인의
 `tbl_group_member` 값(`livesCount`, `finalOutcome`, `finalRank`, `finalChargeAmount`)
-+ 파생값(`totalDays`, `currentDay`, `daysUntilStart`, `maxLives`, `memberCount`, `owner`)
-+ `members[{userId, nickname, owner}]` 다.
-`ChallengeGroupDetail` 은 `{ challenge, memo, member, joinable }` 로 그 위를 감싼다.
++ 파생값(`totalDays`, `currentDay`, `daysUntilStart`, `maxLives`, `memberCount`,
+`owner`, `member`, `joinable`) + `members[{userId, nickname, owner}]`.
+
+> 목록/상세를 다른 모양으로 나누지 않았다. 차이가 `memo` 하나뿐인데 나누면 미리보기 응답이
+> `data.challenge.challenge.groupName` 처럼 두 겹으로 접혀 프론트가 매번 풀어야 한다.
 
 - `status` 는 콤마 또는 반복으로 여러 개를 넘긴다. 화면의 「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 본다.
   값을 안 주면 전체다. 열거값에 없는 값은 빈 목록이 아니라 400 이다.
 - **목숨은 참여 시점에 계산해 저장한다.** `lives_count` 가 NOT NULL 인데 기본값이 없어서다.
   DAILY = 기간 일수, PERIOD = 1. 늦게 참여해도 목숨은 같다 — 의도된 정책이다.
+- **초대 코드는 5자리 대문자·숫자다.** 참여 코드 입력 UI 가 5칸이라 거기에 맞췄다.
+  혼동되는 글자(`0 O 1 I L`)는 알파벳에서 뺐다.
 - **초대 코드에는 만료 컬럼이 없다.** `start_date` 에서 파생한다 — 시작일 당일 23:59 까지 모집하고
   그 다음 날부터 만료다. 코드는 대소문자를 가리지 않으며 저장은 항상 대문자다.
 - **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.

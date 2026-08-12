@@ -2,8 +2,7 @@ package com.kb.tangtang.challenge.controller;
 
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupSummaryDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.service.ChallengeGroupService;
 import com.kb.tangtang.common.auth.LoginUser;
@@ -44,7 +43,7 @@ public class ChallengeGroupController {
      * @param status 반복 또는 콤마 구분. 「종료됨」 탭은 {@code JUDGING,CLOSED} 를 함께 보낸다.
      */
     @GetMapping
-    public ApiResponse<List<ChallengeGroupSummaryDto>> findMyGroups(
+    public ApiResponse<List<ChallengeGroupDto>> findMyGroups(
             @LoginUser Long userId,
             @RequestParam(name = "status", required = false) List<String> status) {
         return ApiResponse.ok(challengeGroupService.findMyGroups(userId, status));
@@ -52,7 +51,7 @@ public class ChallengeGroupController {
 
     /** 상세 (GC_01_09). 참여자만 볼 수 있다. */
     @GetMapping("/{groupId}")
-    public ApiResponse<ChallengeGroupDetailDto> findDetail(@LoginUser Long userId,
+    public ApiResponse<ChallengeGroupDto> findDetail(@LoginUser Long userId,
                                                            @PathVariable Long groupId) {
         return ApiResponse.ok(challengeGroupService.findDetail(userId, groupId));
     }
@@ -71,7 +70,7 @@ public class ChallengeGroupController {
 
     /** 참여 (GC_01_06). 참여 직후 화면이 상세로 넘어가므로 상세를 그대로 돌려준다. */
     @PostMapping("/{groupId}/members")
-    public ApiResponse<ChallengeGroupDetailDto> join(@LoginUser Long userId,
+    public ApiResponse<ChallengeGroupDto> join(@LoginUser Long userId,
                                                      @PathVariable Long groupId) {
         return ApiResponse.ok(challengeGroupService.join(userId, groupId));
     }

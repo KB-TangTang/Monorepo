@@ -14,7 +14,7 @@ import lombok.Getter;
 @Builder
 public class InviteCodePreviewDto {
 
-    private ChallengeGroupDetailDto challenge;
+    private ChallengeGroupDto challenge;
 
     /** 지금 참여할 수 있는지. */
     private boolean joinable;

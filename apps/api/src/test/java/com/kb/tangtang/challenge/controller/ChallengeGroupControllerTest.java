@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupSummaryDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.GroupMemberDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.service.ChallengeGroupService;
@@ -62,7 +61,7 @@ class ChallengeGroupControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.groupId").value(7))
-                .andExpect(jsonPath("$.data.inviteCode").value("AB2C3D"));
+                .andExpect(jsonPath("$.data.inviteCode").value("AB2C3"));
 
         assertEquals("커피값 줄이기", stubService.lastCreateRequest.getGroupName());
         assertEquals(0, stubService.lastCreateRequest.getLimitAmount(),
@@ -98,14 +97,15 @@ class ChallengeGroupControllerTest {
     @Test
     @DisplayName("참여할 수 없는 초대 코드도 200 이고 사유가 함께 온다")
     void previewInviteCode() throws Exception {
-        mockMvc().perform(get("/api/group-challenges/invite-codes/AB2C3D"))
+        mockMvc().perform(get("/api/group-challenges/invite-codes/AB2C3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.joinable").value(false))
                 .andExpect(jsonPath("$.data.reason").value("FULL"))
-                .andExpect(jsonPath("$.data.challenge.challenge.groupName").value("커피값 줄이기"));
+                .andExpect(jsonPath("$.data.challenge.groupName").value("커피값 줄이기"))
+                .andExpect(jsonPath("$.data.challenge.memo").value("꼴찌가 커피 쏘기"));
 
-        assertEquals("AB2C3D", stubService.lastInviteCode);
+        assertEquals("AB2C3", stubService.lastInviteCode);
     }
 
     @Test
@@ -137,8 +137,8 @@ class ChallengeGroupControllerTest {
         };
     }
 
-    private static ChallengeGroupSummaryDto summary() {
-        return ChallengeGroupSummaryDto.builder()
+    private static ChallengeGroupDto group() {
+        return ChallengeGroupDto.builder()
                 .id(7L)
                 .adminId(USER_ID)
                 .groupName("커피값 줄이기")
@@ -147,14 +147,17 @@ class ChallengeGroupControllerTest {
                 .maxMembers(6)
                 .startDate(LocalDate.of(2026, 8, 12))
                 .endDate(LocalDate.of(2026, 8, 14))
-                .inviteCode("AB2C3D")
+                .inviteCode("AB2C3")
                 .status("ACTIVE")
+                .memo("꼴찌가 커피 쏘기")
                 .livesCount(3)
                 .totalDays(3)
                 .currentDay(1)
                 .maxLives(3)
                 .memberCount(1)
                 .owner(true)
+                .member(true)
+                .joinable(false)
                 .members(List.of(GroupMemberDto.builder()
                         .userId(USER_ID)
                         .nickname("절약왕")
@@ -176,23 +179,18 @@ class ChallengeGroupControllerTest {
         @Override
         public ChallengeGroupCreatedDto create(long userId, ChallengeGroupCreateRequestDto request) {
             this.lastCreateRequest = request;
-            return ChallengeGroupCreatedDto.builder().groupId(7L).inviteCode("AB2C3D").build();
+            return ChallengeGroupCreatedDto.builder().groupId(7L).inviteCode("AB2C3").build();
         }
 
         @Override
-        public List<ChallengeGroupSummaryDto> findMyGroups(long userId, List<String> statuses) {
+        public List<ChallengeGroupDto> findMyGroups(long userId, List<String> statuses) {
             this.lastStatuses = statuses;
-            return List.of(summary());
+            return List.of(group());
         }
 
         @Override
-        public ChallengeGroupDetailDto findDetail(long userId, long groupId) {
-            return ChallengeGroupDetailDto.builder()
-                    .challenge(summary())
-                    .memo("꼴찌가 커피 쏘기")
-                    .member(true)
-                    .joinable(false)
-                    .build();
+        public ChallengeGroupDto findDetail(long userId, long groupId) {
+            return group();
         }
 
         @Override
@@ -206,7 +204,7 @@ class ChallengeGroupControllerTest {
         }
 
         @Override
-        public ChallengeGroupDetailDto join(long userId, long groupId) {
+        public ChallengeGroupDto join(long userId, long groupId) {
             if (joinFailure != null) {
                 throw joinFailure;
             }

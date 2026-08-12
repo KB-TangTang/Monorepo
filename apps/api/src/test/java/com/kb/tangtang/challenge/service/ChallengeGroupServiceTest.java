@@ -4,8 +4,7 @@ import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
-import com.kb.tangtang.challenge.dto.ChallengeGroupSummaryDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
@@ -62,7 +61,7 @@ class ChallengeGroupServiceTest {
         }));
 
         assertNotNull(created.getGroupId());
-        assertEquals(6, created.getInviteCode().length());
+        assertEquals(5, created.getInviteCode().length(), "참여 코드 입력 UI 가 5칸이다");
 
         List<GroupMember> members = memberMapper.findByGroupIds(List.of(created.getGroupId()));
         assertEquals(1, members.size());
@@ -147,7 +146,7 @@ class ChallengeGroupServiceTest {
     @DisplayName("없는 초대 코드는 예외다")
     void unknownInviteCodeThrows() {
         BusinessException e = assertThrows(BusinessException.class,
-                () -> service.previewInviteCode(GUEST_ID, "ZZZZZZ"));
+                () -> service.previewInviteCode(GUEST_ID, "ZZZZZ"));
 
         assertEquals("GROUP_INVITE_CODE_NOT_FOUND", e.getCode());
     }
@@ -227,12 +226,12 @@ class ChallengeGroupServiceTest {
             r.setEndDate(TODAY.plusDays(2));   // 3일
         }));
 
-        ChallengeGroupDetailDto detail = service.join(GUEST_ID, created.getGroupId());
+        ChallengeGroupDto detail = service.join(GUEST_ID, created.getGroupId());
 
         assertTrue(detail.isMember());
-        assertEquals(3, detail.getChallenge().getLivesCount());
-        assertEquals(2, detail.getChallenge().getMemberCount());
-        assertFalse(detail.getChallenge().isOwner());
+        assertEquals(3, detail.getLivesCount());
+        assertEquals(2, detail.getMemberCount());
+        assertFalse(detail.isOwner());
     }
 
     @Test
@@ -278,17 +277,17 @@ class ChallengeGroupServiceTest {
             r.setEndDate(TODAY.plusDays(4));
         }));
 
-        ChallengeGroupSummaryDto beforeStart = service.findMyGroups(OWNER_ID, null).get(0);
+        ChallengeGroupDto beforeStart = service.findMyGroups(OWNER_ID, null).get(0);
         assertEquals(2, beforeStart.getDaysUntilStart());
         assertNull(beforeStart.getCurrentDay());
         assertEquals(3, beforeStart.getTotalDays());
         assertEquals(3, beforeStart.getMaxLives());
 
-        ChallengeGroupSummaryDto onDayTwo = newService(TODAY.plusDays(3)).findMyGroups(OWNER_ID, null).get(0);
+        ChallengeGroupDto onDayTwo = newService(TODAY.plusDays(3)).findMyGroups(OWNER_ID, null).get(0);
         assertNull(onDayTwo.getDaysUntilStart());
         assertEquals(2, onDayTwo.getCurrentDay());
 
-        ChallengeGroupSummaryDto afterEnd = newService(TODAY.plusDays(5)).findMyGroups(OWNER_ID, null).get(0);
+        ChallengeGroupDto afterEnd = newService(TODAY.plusDays(5)).findMyGroups(OWNER_ID, null).get(0);
         assertNull(afterEnd.getCurrentDay());
         assertNull(afterEnd.getDaysUntilStart());
     }
@@ -326,11 +325,11 @@ class ChallengeGroupServiceTest {
     void detailCarriesMemoAndOwnership() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> r.setMemo("꼴찌가 커피 쏘기")));
 
-        ChallengeGroupDetailDto detail = service.findDetail(OWNER_ID, created.getGroupId());
+        ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
 
         assertEquals("꼴찌가 커피 쏘기", detail.getMemo());
-        assertTrue(detail.getChallenge().isOwner());
-        assertTrue(detail.getChallenge().getMembers().get(0).isOwner());
+        assertTrue(detail.isOwner());
+        assertTrue(detail.getMembers().get(0).isOwner());
         assertFalse(detail.isJoinable(), "이미 참여 중이면 다시 참여할 수 없다");
     }
 
