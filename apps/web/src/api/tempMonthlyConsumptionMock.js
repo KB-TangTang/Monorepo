@@ -19,6 +19,12 @@ export async function fetchTempMonthlyConsumptionReport(period) {
     return {
         ...source,
         fixedExpenseCandidateCount: source.fixedExpenseCandidates?.length ?? 0,
+        parentCategories: source.categories?.map((category) => ({ ...category })),
+        categories: source.categories?.map((category) => ({
+            ...category,
+            parentCategoryId: category.categoryId ?? null,
+            parentCategoryName: category.name,
+        })),
         monthlyTrend: source.monthlyTrend?.map((item) => {
             const year = item.month <= currentMonth ? currentYear : currentYear - 1;
             return {

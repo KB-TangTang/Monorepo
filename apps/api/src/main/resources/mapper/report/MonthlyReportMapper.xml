@@ -43,13 +43,20 @@
     <select id="findMonthlyCategorySpending"
             resultType="com.kb.tangtang.report.domain.MonthlyCategorySpendingRow">
         SELECT DATE_FORMAT(t.tr_date, '%Y-%m') AS `year_month`,
+               COALESCE(c.parent_id, c.id) AS parent_category_id,
+               COALESCE(p.category_name, c.category_name, '미분류') AS parent_category_name,
                t.category_id,
                COALESCE(c.category_name, '미분류') AS category_name,
                COALESCE(SUM(<include refid="netSpendingAmount"/>), 0) AS amount
         FROM tbl_transaction t
         LEFT JOIN tbl_category c ON c.id = t.category_id
+        LEFT JOIN tbl_category p ON p.id = c.parent_id
         WHERE <include refid="reportConsumptionCondition"/>
-        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m'), t.category_id, c.category_name
+        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m'),
+                 COALESCE(c.parent_id, c.id),
+                 COALESCE(p.category_name, c.category_name, '미분류'),
+                 t.category_id,
+                 c.category_name
         ORDER BY `year_month`, amount DESC, t.category_id
     </select>
 

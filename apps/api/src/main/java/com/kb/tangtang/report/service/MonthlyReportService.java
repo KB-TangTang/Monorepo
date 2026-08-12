@@ -7,6 +7,7 @@ import com.kb.tangtang.report.dto.MonthlyCategoryItemDto;
 import com.kb.tangtang.report.dto.MonthlyCategoryReportDto;
 import com.kb.tangtang.report.dto.MonthlyReportMonthDto;
 import com.kb.tangtang.report.dto.MonthlyReportMonthsDto;
+import com.kb.tangtang.report.dto.MonthlyParentCategoryItemDto;
 import com.kb.tangtang.report.dto.MonthlySpendingTrendDto;
 import com.kb.tangtang.report.dto.MonthlySpendingTrendItemDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
@@ -106,18 +107,43 @@ public class MonthlyReportService {
 
         Map<CategoryKey, BigDecimal> previousAmounts = new HashMap<>();
         Map<CategoryKey, MonthlyCategorySpendingRow> currentRows = new LinkedHashMap<>();
+        Map<ParentCategoryKey, BigDecimal> currentParentAmounts = new HashMap<>();
         for (MonthlyCategorySpendingRow row : rows) {
             CategoryKey key = new CategoryKey(row.getCategoryId(), row.getCategoryName());
             if (previousMonth.toString().equals(row.getYearMonth())) {
                 previousAmounts.put(key, nonNegative(row.getAmount()));
-            } else if (period.yearMonth.toString().equals(row.getYearMonth())
-                    && nonNegative(row.getAmount()).signum() > 0) {
-                currentRows.put(key, row);
+            } else if (period.yearMonth.toString().equals(row.getYearMonth())) {
+                ParentCategoryKey parentKey = new ParentCategoryKey(
+                        row.getParentCategoryId(), row.getParentCategoryName());
+                currentParentAmounts.merge(parentKey, zeroIfNull(row.getAmount()), BigDecimal::add);
+                if (nonNegative(row.getAmount()).signum() > 0) {
+                    currentRows.put(key, row);
+                }
             }
         }
 
         BigDecimal totalSpent = sumMonth(userId, period.yearMonth);
         boolean hasPreviousComparison = !previousMonth.isBefore(period.joinedMonth);
+        List<MonthlyParentCategoryItemDto> parentCategories = new ArrayList<>();
+        for (Map.Entry<ParentCategoryKey, BigDecimal> entry : currentParentAmounts.entrySet()) {
+            BigDecimal amount = nonNegative(entry.getValue());
+            if (amount.signum() <= 0) {
+                continue;
+            }
+            parentCategories.add(MonthlyParentCategoryItemDto.builder()
+                    .categoryId(entry.getKey().categoryId)
+                    .categoryName(entry.getKey().categoryName)
+                    .amount(amount)
+                    .ratio(calculateRatio(amount, totalSpent))
+                    .build());
+        }
+        parentCategories.sort((first, second) -> {
+            int amountOrder = second.getAmount().compareTo(first.getAmount());
+            return amountOrder != 0
+                    ? amountOrder
+                    : first.getCategoryName().compareTo(second.getCategoryName());
+        });
+
         List<MonthlyCategoryItemDto> categories = new ArrayList<>();
         for (Map.Entry<CategoryKey, MonthlyCategorySpendingRow> entry : currentRows.entrySet()) {
             MonthlyCategorySpendingRow row = entry.getValue();
@@ -126,6 +152,8 @@ public class MonthlyReportService {
                     ? previousAmounts.getOrDefault(entry.getKey(), BigDecimal.ZERO)
                     : null;
             categories.add(MonthlyCategoryItemDto.builder()
+                    .parentCategoryId(row.getParentCategoryId())
+                    .parentCategoryName(row.getParentCategoryName())
                     .categoryId(row.getCategoryId())
                     .categoryName(row.getCategoryName())
                     .amount(amount)
@@ -147,6 +175,7 @@ public class MonthlyReportService {
         return MonthlyCategoryReportDto.builder()
                 .yearMonth(period.yearMonth.toString())
                 .totalSpent(totalSpent)
+                .parentCategories(parentCategories)
                 .categories(categories)
                 .build();
     }
@@ -232,6 +261,10 @@ public class MonthlyReportService {
         return amount;
     }
 
+    private BigDecimal zeroIfNull(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
+    }
+
     private static class ReportPeriod {
         private final YearMonth yearMonth;
         private final YearMonth joinedMonth;
@@ -260,6 +293,34 @@ public class MonthlyReportService {
                 return false;
             }
             CategoryKey that = (CategoryKey) other;
+            return java.util.Objects.equals(categoryId, that.categoryId)
+                    && java.util.Objects.equals(categoryName, that.categoryName);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(categoryId, categoryName);
+        }
+    }
+
+    private static class ParentCategoryKey {
+        private final Long categoryId;
+        private final String categoryName;
+
+        private ParentCategoryKey(Long categoryId, String categoryName) {
+            this.categoryId = categoryId;
+            this.categoryName = categoryName;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ParentCategoryKey)) {
+                return false;
+            }
+            ParentCategoryKey that = (ParentCategoryKey) other;
             return java.util.Objects.equals(categoryId, that.categoryId)
                     && java.util.Objects.equals(categoryName, that.categoryName);
         }

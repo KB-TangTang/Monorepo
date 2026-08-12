@@ -39,5 +39,8 @@ class MonthlyReportMapperXmlTest {
         assertFalse(xml.contains("${"));
         assertTrue(xml.contains("AS `year_month`"));
         assertTrue(xml.contains("ORDER BY `year_month`"));
+        assertTrue(xml.contains("LEFT JOIN tbl_category p ON p.id = c.parent_id"));
+        assertTrue(xml.contains("AS parent_category_id"));
+        assertTrue(xml.contains("AS parent_category_name"));
     }
 }

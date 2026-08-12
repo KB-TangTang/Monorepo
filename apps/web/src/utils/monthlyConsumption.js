@@ -1,6 +1,19 @@
 const CATEGORY_TONES = ['primary', 'accent', 'success', 'muted', 'soft'];
 
 export function composeMonthlyConsumptionReport(summary, trend, categoryReport) {
+    const parentCategories = categoryReport.parentCategories.map((category, index) => ({
+        ...category,
+        name: category.categoryName,
+        code: category.categoryName.slice(0, 1),
+        tone: CATEGORY_TONES[index % CATEGORY_TONES.length],
+    }));
+    const parentToneByKey = new Map(
+        parentCategories.map((category) => [
+            `${category.categoryId ?? 'unclassified'}:${category.categoryName}`,
+            category.tone,
+        ]),
+    );
+
     return {
         period: summary.yearMonth,
         status: 'report',
@@ -14,11 +27,15 @@ export function composeMonthlyConsumptionReport(summary, trend, categoryReport) 
             amount: item.amount,
             hasData: item.hasData,
         })),
-        categories: categoryReport.categories.map((category, index) => ({
+        parentCategories,
+        categories: categoryReport.categories.map((category) => ({
             ...category,
             name: category.categoryName,
             code: category.categoryName.slice(0, 1),
-            tone: CATEGORY_TONES[index % CATEGORY_TONES.length],
+            tone:
+                parentToneByKey.get(
+                    `${category.parentCategoryId ?? 'unclassified'}:${category.parentCategoryName}`,
+                ) ?? 'muted',
         })),
     };
 }

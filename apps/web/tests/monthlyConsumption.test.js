@@ -106,8 +106,18 @@ test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () =
             ],
         },
         {
+            parentCategories: [
+                {
+                    categoryId: 1,
+                    categoryName: '식비',
+                    amount: 150000,
+                    ratio: 100,
+                },
+            ],
             categories: [
                 {
+                    parentCategoryId: 1,
+                    parentCategoryName: '식비',
                     categoryId: 18,
                     categoryName: '카페/간식',
                     amount: 150000,
@@ -125,7 +135,9 @@ test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () =
         report.monthlyTrend.map((item) => item.yearMonth),
         ['2026-06', '2026-07'],
     );
+    assert.equal(report.parentCategories[0].name, '식비');
     assert.equal(report.categories[0].name, '카페/간식');
+    assert.equal(report.categories[0].tone, report.parentCategories[0].tone);
 });
 
 test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다', async () => {
@@ -134,6 +146,7 @@ test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다
 
     assert.equal(months.find((month) => month.value === '2026-07').available, true);
     assert.equal(report.fixedExpenseCandidateCount, 1);
+    assert.equal(report.parentCategories.length, report.categories.length);
     assert.equal(report.monthlyTrend.at(-1).yearMonth, '2026-07');
     assert.equal(report.monthlyTrend.at(-1).hasData, true);
 });

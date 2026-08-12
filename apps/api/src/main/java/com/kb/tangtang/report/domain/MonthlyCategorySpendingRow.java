@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 public class MonthlyCategorySpendingRow {
 
     private String yearMonth;
+    private Long parentCategoryId;
+    private String parentCategoryName;
     private Long categoryId;
     private String categoryName;
     private BigDecimal amount;

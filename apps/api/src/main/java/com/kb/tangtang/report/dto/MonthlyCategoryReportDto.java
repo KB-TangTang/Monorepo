@@ -12,5 +12,6 @@ public class MonthlyCategoryReportDto {
 
     private String yearMonth;
     private BigDecimal totalSpent;
+    private List<MonthlyParentCategoryItemDto> parentCategories;
     private List<MonthlyCategoryItemDto> categories;
 }

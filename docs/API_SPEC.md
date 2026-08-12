@@ -19,7 +19,7 @@
 |---|---|---|
 | GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
 | GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
-| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 카테고리별 순소비 금액·비율·전월 증감률 |
+| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 
 집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
@@ -33,8 +33,11 @@
 증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
 `hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
 
-카테고리 없는 소비는 `categoryId:null`, `categoryName:"미분류"`로 반환한다. 환불 반영 후
-카테고리 순소비가 0 이하이면 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
+카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
+선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
+`parentCategoryName`을 포함한다. 대분류가 직접 지정된 거래는 해당 대분류 자체를 명세 항목으로
+반환한다. 카테고리 없는 소비는 두 목록 모두 ID `null`, 이름 `"미분류"`로 반환한다. 환불 반영 후
+각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
 이 API의 범위가 아니다.
 
 ## 공통

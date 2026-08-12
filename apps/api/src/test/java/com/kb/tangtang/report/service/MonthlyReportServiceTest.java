@@ -112,23 +112,32 @@ class MonthlyReportServiceTest {
     @DisplayName("카테고리별 금액과 비율 및 전월 증감률을 계산한다")
     void returnsCategoryReport() {
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of(
-                new MonthlyCategorySpendingRow("2026-06", 18L, "카페/간식",
+                new MonthlyCategorySpendingRow("2026-06", 1L, "식비", 18L, "카페/간식",
                         new BigDecimal("200000")),
-                new MonthlyCategorySpendingRow("2026-07", 18L, "카페/간식",
-                        new BigDecimal("150000")),
-                new MonthlyCategorySpendingRow("2026-07", null, "미분류",
+                new MonthlyCategorySpendingRow("2026-07", 1L, "식비", 18L, "카페/간식",
+                        new BigDecimal("125000")),
+                new MonthlyCategorySpendingRow("2026-07", 1L, "식비", 19L, "배달앱",
+                        new BigDecimal("25000")),
+                new MonthlyCategorySpendingRow("2026-07", null, "미분류", null, "미분류",
                         new BigDecimal("50000")),
-                new MonthlyCategorySpendingRow("2026-07", 3L, "환불초과",
+                new MonthlyCategorySpendingRow("2026-07", 2L, "쇼핑", 3L, "환불초과",
                         new BigDecimal("-1000"))));
         when(mapper.sumNetSpending(eq(USER_ID), eq(LocalDate.of(2026, 7, 1)),
                 eq(LocalDate.of(2026, 8, 1)))).thenReturn(new BigDecimal("200000"));
 
         MonthlyCategoryReportDto result = service.getCategories(USER_ID, "2026-07");
 
-        assertEquals(2, result.getCategories().size());
+        assertEquals(2, result.getParentCategories().size());
+        assertEquals("식비", result.getParentCategories().get(0).getCategoryName());
+        assertEquals(new BigDecimal("150000"), result.getParentCategories().get(0).getAmount());
+        assertEquals(new BigDecimal("75.00"), result.getParentCategories().get(0).getRatio());
+        assertEquals("미분류", result.getParentCategories().get(1).getCategoryName());
+
+        assertEquals(3, result.getCategories().size());
         assertEquals("카페/간식", result.getCategories().get(0).getCategoryName());
-        assertEquals(new BigDecimal("75.00"), result.getCategories().get(0).getRatio());
-        assertEquals(new BigDecimal("-25.00"), result.getCategories().get(0).getChangeRate());
+        assertEquals("식비", result.getCategories().get(0).getParentCategoryName());
+        assertEquals(new BigDecimal("62.50"), result.getCategories().get(0).getRatio());
+        assertEquals(new BigDecimal("-37.50"), result.getCategories().get(0).getChangeRate());
         assertEquals("미분류", result.getCategories().get(1).getCategoryName());
     }
 

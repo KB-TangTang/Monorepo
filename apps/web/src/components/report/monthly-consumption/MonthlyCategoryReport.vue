@@ -31,11 +31,11 @@ const CHART_COLORS = {
     soft: 'var(--tt-border-strong)',
 };
 const chartStyle = computed(() => {
-    if (!props.report.categories.length) {
+    if (!props.report.parentCategories.length) {
         return { background: 'var(--tt-border)' };
     }
     let offset = 0;
-    const segments = props.report.categories.map((category) => {
+    const segments = props.report.parentCategories.map((category) => {
         const nextOffset = offset + category.ratio;
         const segment = `${CHART_COLORS[category.tone]} ${offset}% ${nextOffset}%`;
         offset = nextOffset;
@@ -65,7 +65,7 @@ const chartStyle = computed(() => {
                     <b>{{ reportMonth }}월</b>
                 </div>
                 <ul class="category-report__legend">
-                    <li v-for="category in report.categories" :key="category.name">
+                    <li v-for="category in report.parentCategories" :key="category.name">
                         <i :class="`category-report__dot--${category.tone}`"></i>
                         <span>{{ category.name }}</span
                         ><b>{{ category.ratio }}%</b>
