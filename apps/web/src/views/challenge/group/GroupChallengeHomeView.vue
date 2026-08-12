@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
@@ -7,12 +7,12 @@ import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.
 import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
+import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
+import { fetchMyGroupChallenges } from '@/api/groupChallenge';
+import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
-import {
-    MOCK_TODO_ITEMS,
-    MOCK_ACTIVE_CHALLENGES,
-} from '@/fixtures/groupChallenge';
+import { MOCK_TODO_ITEMS } from '@/fixtures/groupChallenge';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
@@ -30,9 +30,21 @@ const todayLabel = computed(() => {
     return `${yyyy}. ${mm}. ${dd} (${dayNames[d.getDay()]})`;
 });
 
-/* ── 목데이터 (추후 API 교체) ──────────── */
+/* ── 진행 중인 챌린지 ──────────────────── */
+const activeChallenges = ref([]);
+
+async function loadActiveChallenges() {
+    try {
+        activeChallenges.value = await fetchMyGroupChallenges(['ACTIVE']);
+    } catch {
+        /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비어 있으면 판사 탕이가
+         * "새로운 챌린지에 참여해보세요" 로 안내한다. */
+        activeChallenges.value = [];
+    }
+}
+
+/* ── TO-DO 는 아직 목데이터 (tbl_indictment 미구현) ── */
 const doneIds = ref([]);
-const activeChallenges = ref(MOCK_ACTIVE_CHALLENGES);
 
 const todoItems = computed(() =>
     MOCK_TODO_ITEMS
@@ -78,7 +90,10 @@ onMounted(() => {
     if (!hasSeenGroupTutorial()) {
         showTutorial.value = true;
     }
+    loadActiveChallenges();
 });
+
+watch(dataSource, loadActiveChallenges);
 
 /*
  * 완료 저장은 서버(tbl_user.group_tutorial_seen_at)로 나간다 — 비동기다.
@@ -262,7 +277,10 @@ function livesColor(challenge) {
             @complete="onTutorialComplete"
         />
 
-        <!-- DEV 상태 전환 플로팅 버튼 -->
+        <!-- DEV: 데이터 출처 전환 -->
+        <DevDataSourceFab />
+
+        <!-- DEV: TO-DO 상태 전환 (데이터 출처 버튼 위에 쌓는다) -->
         <button
             v-if="isDev"
             type="button"
@@ -285,7 +303,7 @@ function livesColor(challenge) {
 .gc-dev-fab {
     position: fixed;
     right: 16px;
-    bottom: calc(var(--tt-tabbar-height) + 16px);
+    bottom: calc(var(--tt-tabbar-height) + 56px);   /* DevDataSourceFab 위에 쌓는다 */
     height: 32px;
     padding: 0 12px;
     border-radius: var(--tt-radius-full);

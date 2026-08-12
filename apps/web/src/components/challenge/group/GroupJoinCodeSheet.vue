@@ -5,7 +5,7 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import GroupCodeInput from '@/components/challenge/group/GroupCodeInput.vue';
 import GroupExpiredModal from '@/components/challenge/group/GroupExpiredModal.vue';
 import GroupNotFoundModal from '@/components/challenge/group/GroupNotFoundModal.vue';
-import { validateInviteCode } from '@/api/groupChallenge';
+import { previewInviteCode } from '@/api/groupChallenge';
 
 defineProps({
     modelValue: { type: Boolean, required: true },
@@ -17,7 +17,8 @@ const router = useRouter();
 const code = ref('');
 const isLoading = ref(false);
 const showExpired = ref(false);
-const expiredGroup = ref(null);
+const blockedGroup = ref(null);
+const blockedReason = ref('');
 const showNotFound = ref(false);
 const notFoundCode = ref('');
 
@@ -31,9 +32,17 @@ async function handleEnter() {
 
     isLoading.value = true;
     try {
-        const result = await validateInviteCode(code.value);
-        if (result.expired) {
-            expiredGroup.value = result.group;
+        const result = await previewInviteCode(code.value);
+
+        /* 이미 참여 중이면 「참여할까요?」를 다시 물을 이유가 없다. 목록으로 보낸다. */
+        if (result.reason === 'ALREADY_JOINED') {
+            closeSheet();
+            router.push({ name: 'groupChallengeList' });
+            return;
+        }
+        if (!result.joinable) {
+            blockedGroup.value = result.group;
+            blockedReason.value = result.reason;
             showExpired.value = true;
             return;
         }
@@ -53,7 +62,8 @@ async function handleEnter() {
 function handleExpiredConfirm() {
     showExpired.value = false;
     code.value = '';
-    expiredGroup.value = null;
+    blockedGroup.value = null;
+    blockedReason.value = '';
 }
 
 function handleNotFoundConfirm() {
@@ -110,11 +120,12 @@ function handleNotFoundConfirm() {
         </div>
     </BaseBottomSheet>
 
-    <!-- 만료 모달 -->
+    <!-- 참여 불가 모달 (만료 · 정원 초과 · 종료) -->
     <GroupExpiredModal
         v-model="showExpired"
-        :group-name="expiredGroup?.groupName ?? ''"
-        :group-code="expiredGroup?.inviteCode ?? ''"
+        :reason="blockedReason"
+        :group-name="blockedGroup?.groupName ?? ''"
+        :group-code="blockedGroup?.inviteCode ?? ''"
         @confirm="handleExpiredConfirm"
     />
 

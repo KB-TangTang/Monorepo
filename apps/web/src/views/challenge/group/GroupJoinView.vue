@@ -2,13 +2,15 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vue';
-import { validateInviteCode, joinGroup } from '@/api/groupChallenge';
+import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
+import { previewInviteCode, joinGroup } from '@/api/groupChallenge';
 
 const route = useRoute();
 const router = useRouter();
 
 const group = ref(null);
 const isLoading = ref(false);
+const joinError = ref('');
 
 const evalTypeLabel = computed(() => {
     if (!group.value) return '';
@@ -35,8 +37,10 @@ onMounted(async () => {
         return;
     }
     try {
-        const result = await validateInviteCode(code);
-        if (!result.valid || !result.group) {
+        /* 참여 불가 사유는 바텀시트가 이미 걸러 낸다. 여기까지 왔는데 막혀 있다면
+         * 그 사이에 정원이 찼다는 뜻이라 그룹 홈으로 되돌린다. */
+        const result = await previewInviteCode(code);
+        if (!result.joinable || !result.group) {
             router.replace({ name: 'groupChallenge' });
             return;
         }
@@ -49,11 +53,14 @@ onMounted(async () => {
 async function handleJoin() {
     if (!group.value || isLoading.value) return;
     isLoading.value = true;
+    joinError.value = '';
     try {
         await joinGroup(group.value.id);
-        router.replace({ name: 'groupChallenge' });
-    } catch {
-        alert('그룹 참여에 실패했습니다.');
+        /* 상세 화면(재판 현황)은 아직 서버가 없다. 목록으로 보내면 방금 들어간
+         * 그룹이 「시작 전」 탭에 바로 보인다. 상세 API 가 붙으면 그리로 바꾼다. */
+        router.replace({ name: 'groupChallengeList' });
+    } catch (e) {
+        joinError.value = e.message ?? '그룹 참여에 실패했습니다.';
     } finally {
         isLoading.value = false;
     }
@@ -106,6 +113,8 @@ function goBack() {
             <div class="gjv-warning">
                 참여하면 그룹 멤버에게 이름과 소비 상태가 보여요.
             </div>
+
+            <p v-if="joinError" class="gjv-error">{{ joinError }}</p>
         </div>
 
         <div v-if="group" class="gjv-bottom">
@@ -121,6 +130,8 @@ function goBack() {
                 다른 코드 입력
             </button>
         </div>
+
+        <DevDataSourceFab />
     </div>
 </template>
 
@@ -230,6 +241,18 @@ function goBack() {
 .gjv-warning {
     font-size: 11.5px;
     color: var(--tt-text-hint);
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* ── 참여 실패 안내 ────────────────────── */
+.gjv-error {
+    padding: 10px 14px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
     text-align: center;
     line-height: 1.5;
 }
