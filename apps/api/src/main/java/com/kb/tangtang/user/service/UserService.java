@@ -114,6 +114,14 @@ public class UserService {
         imageStorage.store(jpeg, newKey);
 
         if (userMapper.updateProfileImageKey(userId, newKey) == 0) {
+            /*
+             * 탈퇴·차단 계정이 유효한 JWT 로 여기까지 들어오면 매번 이 경로를 탄다
+             * (findActive 는 status 를 보지 않고, updateProfileImageKey 는
+             *  WHERE status = 'ACTIVE' 라 0행이 된다). 방금 저장한 파일을 그대로 두면
+             * 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 NOT_FOUND 를 던진다.
+             * delete 는 멱등이라 정리 자체가 실패할 일은 없다.
+             */
+            imageStorage.delete(newKey);
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
         if (oldKey != null) {

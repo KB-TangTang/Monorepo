@@ -441,4 +441,22 @@ class UserServiceTest {
 
         verify(imageStorage, never()).delete(anyString());
     }
+
+    @Test
+    @DisplayName("DB 갱신이 0행이면 방금 저장한 파일을 지우고 NOT_FOUND — 탈퇴·차단 계정이 이 경로를 매번 탄다")
+    void uploadCleansUpNewFileWhenUpdateFails() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateProfileImage(USER_ID, new byte[]{1, 2}));
+
+        assertEquals("NOT_FOUND", ex.getCode());
+
+        ArgumentCaptor<String> storedKey = ArgumentCaptor.forClass(String.class);
+        verify(imageStorage).store(any(), storedKey.capture());
+        verify(imageStorage).delete(storedKey.getValue());
+    }
 }
