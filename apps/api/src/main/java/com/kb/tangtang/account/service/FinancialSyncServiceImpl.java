@@ -91,6 +91,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private static final String TRANS_TYPE_OUT = "02";
 
     /**
+     * 페이머니 거래유형 코드. **같은 `trans_type_code` 라도 소스마다 뜻이 다르다** —
+     * 은행 `02`=출금이지만 페이머니 `02`=결제, `03`=환불이다. 그래서 상수를 따로 둔다.
+     * (`seed-v2.sql`: `01`=충전 양수, `02`=결제 **음수**, `03`=환불 양수)
+     */
+    private static final String PAY_TYPE_TOPUP = "01";
+    private static final String PAY_TYPE_PAYMENT = "02";
+    private static final String PAY_TYPE_REFUND = "03";
+
+    /**
      * 목서버 카드 승인유형 코드 (`approval_type_code`). `01`=승인, `03`=취소다
      * (`seed-v2.sql` 의 취소 시드 `N2-C-0814-C` 가 `'03'` + 음수 금액 + raw_json.originalApprovalNo).
      */
@@ -482,9 +491,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted);
             for (PayMoneyTransactionSyncDto tx :
                     bundle.payMoneyTransactions.getOrDefault(payMoney.getPayMoneyId(), List.of())) {
+                /*
+                 * 충전·결제·환불이 한 테이블에 섞여 있고 amount 부호도 제각각이다(결제만 음수).
+                 * saveTransaction 이 절댓값을 취하므로 부호가 사라진다 — 유형 코드로 판정해야 한다.
+                 */
                 saveTransaction(userId, accountId, null, "PAYMONEY",
                         "PAYMONEY-" + accountId + "-" + tx.getTransactionId(),
-                        TxKind.PAY_MONEY, tx.getAmount(), false,
+                        payMoneyKind(tx.getTransTypeCode()), tx.getAmount(),
+                        PAY_TYPE_REFUND.equals(tx.getTransTypeCode()),
                         tx.getTransactedAt(), tx.getMerchantName(),
                         tx.getMerchantCategoryCode(), tx.getMerchantCategoryName(),
                         null, null, tx.getRawJson());
@@ -696,6 +710,28 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             return TxKind.BANK_OUT;
         }
         return TxKind.TRANSFER;
+    }
+
+    /**
+     * 목서버 페이머니 거래유형 코드 → 방향·3분류. `bankKind` 와 같은 모양이지만 코드 의미가 달라
+     * 별도 헬퍼다.
+     *
+     * - `01` 충전: 내 돈을 지갑으로 옮기는 것뿐이라 소비가 아니다 → 예적금·증권과 같은 TRANSFER.
+     *   (충전의 짝이 되는 은행 출금이 따로 잡히면 이중계상이 되지만, 그건 체크카드↔은행 연결과 같은
+     *    성격의 별개 과제다 — 여기서는 페이머니 자신의 분류만 바로잡는다.)
+     * - `02` 결제: 진짜 소비 → CONSUMPTION.
+     * - `03` 환불: 소비의 정정 → CONSUMPTION + is_refund (호출부가 refund 플래그를 세운다).
+     *   미션 집계가 `is_refund=1 이면 -refunded_amount` 로 상계하므로 이 조합이어야 맞는다.
+     * - 그 외: bankKind 와 같은 이유로 지어내지 않고 TRANSFER 로 둔다.
+     */
+    private static TxKind payMoneyKind(String transTypeCode) {
+        if (PAY_TYPE_TOPUP.equals(transTypeCode)) {
+            return TxKind.TRANSFER;
+        }
+        if (PAY_TYPE_PAYMENT.equals(transTypeCode) || PAY_TYPE_REFUND.equals(transTypeCode)) {
+            return TxKind.PAY_MONEY;
+        }
+        return TxKind.TRANSFER;     // 모르는 코드 — bankKind 와 같은 이유
     }
 
     /* ── 잡동사니 ──────────────────────────────────────── */

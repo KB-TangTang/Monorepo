@@ -8,6 +8,8 @@ import com.kb.tangtang.account.client.sync.dto.CardApprovalSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositTransactionSyncDto;
+import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
+import com.kb.tangtang.account.client.sync.dto.PayMoneyTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.SecuritiesTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.account.domain.Card;
@@ -406,6 +408,48 @@ class FinancialSyncServiceImplTest {
                 "DEPOSIT".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
         verify(transactionMapper).insert(argThat(t ->
                 "SECURITIES".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("페이머니는 충전(01)=TRANSFER, 결제(02)=CONSUMPTION, 환불(03)=is_refund 로 가른다")
+    void payMoneyTransTypeCodeDrivesClassification() {
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("KAKAO")
+                        .providerName("카카오페이").walletName("카카오페이 머니")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of(
+                /* 충전은 양수, 결제는 **음수**, 환불은 양수로 내려온다(seed-v2.sql). */
+                PayMoneyTransactionSyncDto.builder()
+                        .transactionId(6001L).transactedAt("2026-06-12T18:00:01+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("150000")).build(),
+                PayMoneyTransactionSyncDto.builder()
+                        .transactionId(6002L).transactedAt("2026-06-15T12:30:00+09:00")
+                        .transTypeCode("02").amount(new BigDecimal("-70000"))
+                        .merchantName("배달의민족").build(),
+                PayMoneyTransactionSyncDto.builder()
+                        .transactionId(6003L).transactedAt("2026-06-27T10:00:00+09:00")
+                        .transTypeCode("03").amount(new BigDecimal("10000"))
+                        .merchantName("배달의민족").build()));
+
+        service.sync(1L);
+
+        /* 충전은 내 돈을 지갑으로 옮긴 것뿐이다 — 소비로 잡으면 지출이 통째로 부풀려진다. */
+        verify(transactionMapper).insert(argThat(t ->
+                t.getCodefTrKey().endsWith("-6001")
+                        && "TRANSFER".equals(t.getClassification())
+                        && !t.isRefund()));
+        /* 결제는 음수로 오지만 저장은 양수 + CONSUMPTION 이다. */
+        verify(transactionMapper).insert(argThat(t ->
+                t.getCodefTrKey().endsWith("-6002")
+                        && "CONSUMPTION".equals(t.getClassification())
+                        && new BigDecimal("70000").compareTo(t.getAmount()) == 0
+                        && !t.isRefund()));
+        /* 환불은 CONSUMPTION + is_refund — 미션 집계가 -refunded_amount 로 상계한다. */
+        verify(transactionMapper).insert(argThat(t ->
+                t.getCodefTrKey().endsWith("-6003")
+                        && "CONSUMPTION".equals(t.getClassification())
+                        && t.isRefund()
+                        && new BigDecimal("10000").compareTo(t.getRefundedAmount()) == 0));
     }
 
     @Test
