@@ -5,18 +5,18 @@ export const AVAILABLE_MONTHS = [
     { value: '2026-05', year: 2026, month: 5, hasReport: true },
     { value: '2026-04', year: 2026, month: 4, hasReport: true },
     { value: '2026-03', year: 2026, month: 3, hasReport: true },
-    { value: '2026-02', year: 2026, month: 2, hasReport: false, status: 'onboarding' },
+    { value: '2026-02', year: 2026, month: 2, hasReport: false, status: 'ONBOARDING' },
     { value: '2026-01', year: 2026, month: 1, hasReport: false },
 ];
 
 export const REPORTS = {
     '2026-02': {
         period: '2026-02',
-        status: 'onboarding',
+        status: 'ONBOARDING',
     },
     '2026-03': {
         period: '2026-03',
-        status: 'report',
+        status: 'FIRST_REPORT',
         hasPreviousComparison: false,
         totalSpent: 1284000,
         comment: '첫 판결문이 나왔어요! 식비 비중이 가장 높았고, 배달과 쇼핑이 그 뒤를 이었어요.',
@@ -35,7 +35,7 @@ export const REPORTS = {
     },
     '2026-04': {
         period: '2026-04',
-        status: 'report',
+        status: 'READY',
         hasPreviousComparison: true,
         totalSpent: 1198000,
         monthOverMonthRate: -7,
