@@ -3,15 +3,17 @@
   1위가 가운데, 2위 왼쪽, 3위 오른쪽 — 높이가 다른 컬럼 형태.
 -->
 <script setup>
+import UserAvatar from '@/components/common/UserAvatar.vue';
+
 const props = defineProps({
     members: { type: Array, required: true },
 });
 
 /* 시상대 표시 순서: 2위(좌) · 1위(중) · 3위(우) */
 const podiumOrder = [
-    props.members.find(m => m.finalRank === 2),
-    props.members.find(m => m.finalRank === 1),
-    props.members.find(m => m.finalRank === 3),
+    props.members.find((m) => m.finalRank === 2),
+    props.members.find((m) => m.finalRank === 1),
+    props.members.find((m) => m.finalRank === 3),
 ].filter(Boolean);
 </script>
 
@@ -29,24 +31,26 @@ const podiumOrder = [
                 class="podium__col"
                 :class="{ 'podium__col--first': m.finalRank === 1 }"
             >
-                <div
-                    class="podium__avatar"
-                    :class="{ 'podium__avatar--first': m.finalRank === 1 }"
-                    :style="{ background: m.avatarColor }"
+                <span
+                    class="podium__avatar-wrap"
+                    :class="{ 'podium__avatar-wrap--first': m.finalRank === 1 }"
                 >
-                    {{ m.initial }}
-                </div>
+                    <UserAvatar
+                        :image-url="m.profileImage"
+                        :name="m.nickname"
+                        :color="m.avatarColor"
+                        :size="m.finalRank === 1 ? 54 : 38"
+                    />
+                </span>
                 <div class="podium__name-row">
                     <span
                         class="podium__name"
                         :class="{ 'podium__name--first': m.finalRank === 1 }"
-                    >{{ m.nickname }}</span>
+                        >{{ m.nickname }}</span
+                    >
                     <span v-if="m.userId === 1" class="podium__me-badge">나</span>
                 </div>
-                <div
-                    class="podium__rank-bar"
-                    :class="`podium__rank-bar--r${m.finalRank}`"
-                >
+                <div class="podium__rank-bar" :class="`podium__rank-bar--r${m.finalRank}`">
                     {{ m.finalRank }}
                 </div>
             </div>
@@ -86,24 +90,14 @@ const podiumOrder = [
     text-align: center;
 }
 
-.podium__avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: 14px;
-    font-weight: var(--tt-fw-black);
+.podium__avatar-wrap {
     display: flex;
-    align-items: center;
-    justify-content: center;
     margin: 0 auto;
+    border-radius: var(--tt-radius-full);
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
 }
 
-.podium__avatar--first {
-    width: 54px;
-    height: 54px;
-    font-size: 20px;
+.podium__avatar-wrap--first {
     box-shadow: 0 0 0 5px rgba(245, 185, 33, 0.24);
 }
 
@@ -151,13 +145,13 @@ const podiumOrder = [
     padding: 15px 0;
     font-size: 17px;
     background: rgba(255, 255, 255, 0.1);
-    color: #AEB2CC;
+    color: #aeb2cc;
 }
 
 .podium__rank-bar--r3 {
     padding: 9px 0;
     font-size: 17px;
     background: rgba(255, 255, 255, 0.1);
-    color: #AEB2CC;
+    color: #aeb2cc;
 }
 </style>

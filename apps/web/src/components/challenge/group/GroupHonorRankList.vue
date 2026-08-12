@@ -6,6 +6,7 @@
 <script setup>
 import gavelAlive from '@/assets/images/challenge_live/gavel-alive.png';
 import gavelDepleted from '@/assets/images/challenge_live/gavel-depleted.png';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 defineProps({
     rankings: { type: Array, required: true },
@@ -42,12 +43,12 @@ function getStatusStyle(type) {
             >
                 <span class="rank-list__rank">{{ r.rank }}</span>
 
-                <div
-                    class="rank-list__avatar"
-                    :style="{ background: r.avatarColor }"
-                >
-                    {{ r.initial }}
-                </div>
+                <UserAvatar
+                    :image-url="r.profileImage"
+                    :name="r.nickname"
+                    :color="r.avatarColor"
+                    :size="28"
+                />
 
                 <div class="rank-list__info">
                     <div class="rank-list__name-row">
@@ -66,14 +67,14 @@ function getStatusStyle(type) {
                             :src="gavelAlive"
                             alt="남은 목숨"
                             class="rank-list__life-icon"
-                        >
+                        />
                         <img
-                            v-for="i in (r.maxLives - r.livesCount)"
+                            v-for="i in r.maxLives - r.livesCount"
                             :key="'d' + i"
                             :src="gavelDepleted"
                             alt="차감된 목숨"
                             class="rank-list__life-icon"
-                        >
+                        />
                     </div>
                 </div>
 
@@ -132,7 +133,7 @@ function getStatusStyle(type) {
 }
 
 .rank-list__row--eliminated {
-    background: #FDF4F1;
+    background: #fdf4f1;
 }
 
 .rank-list__row--bordered {
@@ -145,19 +146,6 @@ function getStatusStyle(type) {
     font-size: 12.5px;
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
-}
-
-.rank-list__avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
 }
 
 .rank-list__info {

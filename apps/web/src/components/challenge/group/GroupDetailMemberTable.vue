@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     members: { type: Array, required: true },
@@ -12,7 +13,7 @@ const props = defineProps({
 });
 
 const isDaily = computed(() => props.evalType === 'DAILY');
-const sectionTitle = computed(() => isDaily.value ? '오늘의 소비 상태' : '멤버 누적 상태');
+const sectionTitle = computed(() => (isDaily.value ? '오늘의 소비 상태' : '멤버 누적 상태'));
 
 /** 기간결산에서 한도의 80% 이상 도달했지만 아직 초과는 아닌 상태 */
 function isNearLimit(m) {
@@ -52,19 +53,12 @@ function textColor(m) {
             >
                 <!-- 프로필 영역 -->
                 <div class="member-status__profile">
-                    <img
-                        v-if="m.profileImage"
-                        :src="m.profileImage"
-                        :alt="m.nickname"
-                        class="member-status__avatar-img"
-                    >
-                    <div
-                        v-else
-                        class="member-status__avatar"
-                        :style="{ background: m.avatarColor }"
-                    >
-                        {{ m.initial }}
-                    </div>
+                    <UserAvatar
+                        :image-url="m.profileImage"
+                        :name="m.nickname"
+                        :color="m.avatarColor"
+                        :size="64"
+                    />
                     <div class="member-status__name-row">
                         <span class="member-status__name">{{ m.nickname }}</span>
                         <!-- 초과 시 사이렌 -->
@@ -74,11 +68,36 @@ function textColor(m) {
                             viewBox="0 0 24 24"
                             fill="none"
                         >
-                            <line x1="5" y1="10" x2="2.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
-                            <line x1="19" y1="10" x2="21.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
+                            <line
+                                x1="5"
+                                y1="10"
+                                x2="2.5"
+                                y2="8"
+                                stroke="currentColor"
+                                stroke-width="1.6"
+                                stroke-linecap="round"
+                                opacity="0.35"
+                            />
+                            <line
+                                x1="19"
+                                y1="10"
+                                x2="21.5"
+                                y2="8"
+                                stroke="currentColor"
+                                stroke-width="1.6"
+                                stroke-linecap="round"
+                                opacity="0.35"
+                            />
                             <path d="M8 14c0-4 2-7 4-7s4 3 4 7" fill="currentColor" />
                             <rect x="6" y="14" width="12" height="3" rx="1" fill="currentColor" />
-                            <rect x="4.5" y="17" width="15" height="2.5" rx="1" fill="var(--tt-text-hint)" />
+                            <rect
+                                x="4.5"
+                                y="17"
+                                width="15"
+                                height="2.5"
+                                rx="1"
+                                fill="var(--tt-text-hint)"
+                            />
                         </svg>
                     </div>
                     <!-- 상태 뱃지 슬롯 (항상 고정 높이 — 프로필 위치 고정) -->
@@ -86,11 +105,13 @@ function textColor(m) {
                         <span
                             v-if="isDaily && m.isExceeded && m.trialStatus"
                             class="member-status__badge member-status__badge--trial"
-                        >재판중</span>
+                            >재판중</span
+                        >
                         <span
                             v-else-if="isNearLimit(m)"
                             class="member-status__badge member-status__badge--danger"
-                        >위험</span>
+                            >위험</span
+                        >
                     </div>
                 </div>
 
@@ -110,14 +131,12 @@ function textColor(m) {
                     </div>
 
                     <div class="member-status__stats">
-                        <span
-                            class="member-status__percent"
-                            :style="{ color: textColor(m) }"
-                        >{{ m.usagePercent }}%</span>
-                        <span
-                            class="member-status__amount"
-                            :style="{ color: textColor(m) }"
-                        >{{ m.dailyAmount.toLocaleString() }}원</span>
+                        <span class="member-status__percent" :style="{ color: textColor(m) }"
+                            >{{ m.usagePercent }}%</span
+                        >
+                        <span class="member-status__amount" :style="{ color: textColor(m) }"
+                            >{{ m.dailyAmount.toLocaleString() }}원</span
+                        >
                     </div>
                 </div>
             </div>
@@ -159,8 +178,8 @@ function textColor(m) {
 }
 
 .member-status__card--exceeded {
-    background: #FDF4F1;
-    border-color: #F0D2C9;
+    background: #fdf4f1;
+    border-color: #f0d2c9;
 }
 
 /* ── 프로필 ── */
@@ -170,26 +189,6 @@ function textColor(m) {
     align-items: center;
     gap: 6px;
     flex: 1;
-    justify-content: center;
-}
-
-.member-status__avatar-img {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--tt-border);
-}
-
-.member-status__avatar {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: var(--tt-fs-subtitle);
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
     justify-content: center;
 }
 
@@ -214,8 +213,14 @@ function textColor(m) {
 }
 
 @keyframes siren-flash {
-    0% { color: var(--tt-red-deep); opacity: 1; }
-    100% { color: var(--tt-red); opacity: 0.4; }
+    0% {
+        color: var(--tt-red-deep);
+        opacity: 1;
+    }
+    100% {
+        color: var(--tt-red);
+        opacity: 0.4;
+    }
 }
 
 .member-status__badge-slot {
@@ -233,13 +238,13 @@ function textColor(m) {
 }
 
 .member-status__badge--trial {
-    background: #FBE9E4;
-    color: #C24B31;
+    background: #fbe9e4;
+    color: #c24b31;
 }
 
 .member-status__badge--danger {
-    background: #FBE9E4;
-    color: #C24B31;
+    background: #fbe9e4;
+    color: #c24b31;
 }
 
 /* ── 하단: 바 + 수치 ── */
@@ -259,7 +264,7 @@ function textColor(m) {
 }
 
 .member-status__bar-track--exceeded {
-    background: #F3DFDA;
+    background: #f3dfda;
 }
 
 .member-status__bar-fill {

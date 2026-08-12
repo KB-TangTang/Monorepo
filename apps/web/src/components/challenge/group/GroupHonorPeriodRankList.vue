@@ -4,6 +4,8 @@
   위험 멤버(>=80%)는 배경이 빨갛게 하이라이트된다.
 -->
 <script setup>
+import UserAvatar from '@/components/common/UserAvatar.vue';
+
 defineProps({
     rankings: { type: Array, required: true },
     limitAmount: { type: Number, required: true },
@@ -47,12 +49,12 @@ function trackBg(percent) {
             >
                 <span class="period-rank__num">{{ r.rank }}</span>
 
-                <div
-                    class="period-rank__avatar"
-                    :style="{ background: r.avatarColor }"
-                >
-                    {{ r.initial }}
-                </div>
+                <UserAvatar
+                    :image-url="r.profileImage"
+                    :name="r.nickname"
+                    :color="r.avatarColor"
+                    :size="28"
+                />
 
                 <div class="period-rank__info">
                     <div class="period-rank__name-row">
@@ -61,10 +63,13 @@ function trackBg(percent) {
                         <span
                             v-if="r.usagePercent >= 80 && !r.isMe"
                             class="period-rank__danger-badge"
-                        >위험</span>
+                            >위험</span
+                        >
                         <span class="period-rank__amount">
                             {{ r.currentAmount.toLocaleString() }}원 ·
-                            <b :style="{ color: textColor(r.usagePercent) }">{{ r.usagePercent }}%</b>
+                            <b :style="{ color: textColor(r.usagePercent) }"
+                                >{{ r.usagePercent }}%</b
+                            >
                         </span>
                     </div>
                     <div
@@ -126,7 +131,7 @@ function trackBg(percent) {
 }
 
 .period-rank__row--danger {
-    background: #FDF4F1;
+    background: #fdf4f1;
 }
 
 .period-rank__row--bordered {
@@ -139,19 +144,6 @@ function trackBg(percent) {
     font-size: 12.5px;
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
-}
-
-.period-rank__avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
 }
 
 .period-rank__info {
