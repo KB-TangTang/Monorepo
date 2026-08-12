@@ -17,6 +17,9 @@ public class RelativeMissionAssignmentDto {
     private BigDecimal targetRate;
     private BigDecimal targetValue;
     private BigDecimal baseAmount;
+    private String missionType;
+    private String assignmentReason;
+    private String guideMessage;
 
     public static RelativeMissionAssignmentDto skipped(LocalDate assignDate) {
         return RelativeMissionAssignmentDto.builder().assigned(false).assignDate(assignDate).build();

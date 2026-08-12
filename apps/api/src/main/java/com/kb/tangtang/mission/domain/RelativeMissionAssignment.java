@@ -16,4 +16,5 @@ public class RelativeMissionAssignment {
     private BigDecimal targetRate;
     private BigDecimal targetValue;
     private BigDecimal baseAmount;
+    private String assignmentReason;
 }

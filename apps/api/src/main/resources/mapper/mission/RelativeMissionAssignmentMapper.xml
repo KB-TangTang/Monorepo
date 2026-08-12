@@ -7,6 +7,15 @@
         SELECT id FROM tbl_user WHERE status = 'ACTIVE' ORDER BY id
     </select>
 
+    <select id="findNoSpendMissions" resultType="com.kb.tangtang.mission.domain.MissionPoolItem">
+        SELECT id, mission_title, mission_content
+        FROM tbl_mission_pool
+        WHERE category_id = #{categoryId}
+          AND mission_type = 'ABSOLUTE'
+          AND limit_price = 0
+        ORDER BY id
+    </select>
+
     <select id="lockActiveUserDifficulty" resultType="java.lang.Long">
         SELECT difficulty_id FROM tbl_user
         WHERE id = #{userId} AND status = 'ACTIVE'
@@ -72,8 +81,10 @@
 
     <insert id="insertAssignment" parameterType="com.kb.tangtang.mission.domain.RelativeMissionAssignment">
         INSERT INTO tbl_user_mission_info
-            (user_id, mission_id, difficulty_id, assign_date, target_rate, target_value, base_amount)
+            (user_id, mission_id, difficulty_id, assign_date, target_rate, target_value, base_amount,
+             assignment_reason)
         VALUES
-            (#{userId}, #{missionId}, #{difficultyId}, #{assignDate}, #{targetRate}, #{targetValue}, #{baseAmount})
+            (#{userId}, #{missionId}, #{difficultyId}, #{assignDate}, #{targetRate}, #{targetValue}, #{baseAmount},
+             #{assignmentReason})
     </insert>
 </mapper>

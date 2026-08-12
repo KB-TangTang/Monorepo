@@ -31,17 +31,19 @@
 
     <select id="findNextPendingSnapshotForUpdate"
             resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
-        SELECT id, user_id, cycle_start_date, category_id, category_rank,
-               spending_amount, spending_ratio, transaction_count, assigned_date
-        FROM tbl_user_mission_analysis
-        WHERE user_id = #{userId}
-          AND assigned_date IS NULL
-          AND cycle_start_date = (
+        SELECT analysis.id, analysis.user_id, analysis.cycle_start_date, analysis.category_id,
+               category.category_name, analysis.category_rank, analysis.spending_amount,
+               analysis.spending_ratio, analysis.transaction_count, analysis.assigned_date
+        FROM tbl_user_mission_analysis analysis
+        JOIN tbl_category category ON category.id = analysis.category_id
+        WHERE analysis.user_id = #{userId}
+          AND analysis.assigned_date IS NULL
+          AND analysis.cycle_start_date = (
               SELECT MAX(latest.cycle_start_date)
               FROM tbl_user_mission_analysis latest
               WHERE latest.user_id = #{userId}
           )
-        ORDER BY category_rank
+        ORDER BY analysis.category_rank
         LIMIT 1
         FOR UPDATE
     </select>

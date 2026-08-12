@@ -25,6 +25,9 @@ public class RelativeMissionAssignmentService {
 
     private static final long NORMAL_DIFFICULTY_ID = 2L;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final String RELATIVE = "RELATIVE";
+    private static final String ABSOLUTE = "ABSOLUTE";
+    private static final String LOW_SPENDING_NO_SPEND = "LOW_SPENDING_NO_SPEND";
 
     private final RelativeMissionAssignmentMapper assignmentMapper;
     private final MissionAnalysisSnapshotMapper snapshotMapper;
@@ -91,16 +94,44 @@ public class RelativeMissionAssignmentService {
                 .multiply(ONE_HUNDRED.subtract(targetRate))
                 .divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
 
-        BigDecimal targetValue = calculatedTarget.max(stats.getMinimumPurchaseAmount())
-                .setScale(2, RoundingMode.HALF_UP);
-        Long lastMissionId = assignmentMapper.findLastMissionId(userId, snapshot.getCategoryId());
-        List<MissionPoolItem> missions = assignmentMapper.findRelativeMissions(
-                snapshot.getCategoryId(), lastMissionId);
-        if (missions.isEmpty()) {
-            missions = assignmentMapper.findRelativeMissions(snapshot.getCategoryId(), null);
-        }
-        if (missions.isEmpty()) {
-            throw new BusinessException("MISSION_POOL_EMPTY", "배정 가능한 상대형 미션이 없습니다.");
+        boolean switchToNoSpend = calculatedTarget.compareTo(stats.getMinimumPurchaseAmount()) < 0;
+        List<MissionPoolItem> missions;
+        Long assignmentDifficultyId;
+        BigDecimal assignmentTargetRate;
+        BigDecimal assignmentTargetValue;
+        BigDecimal assignmentBaseAmount;
+        String missionType;
+        String assignmentReason;
+        String guideMessage;
+
+        if (switchToNoSpend) {
+            missions = assignmentMapper.findNoSpendMissions(snapshot.getCategoryId());
+            if (missions.isEmpty()) {
+                throw new BusinessException("NO_SPEND_MISSION_NOT_FOUND", "같은 카테고리의 무지출 미션이 없습니다.");
+            }
+            assignmentDifficultyId = null;
+            assignmentTargetRate = null;
+            assignmentTargetValue = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            assignmentBaseAmount = null;
+            missionType = ABSOLUTE;
+            assignmentReason = LOW_SPENDING_NO_SPEND;
+            guideMessage = buildNoSpendGuideMessage(snapshot.getCategoryName());
+        } else {
+            Long lastMissionId = assignmentMapper.findLastMissionId(userId, snapshot.getCategoryId());
+            missions = assignmentMapper.findRelativeMissions(snapshot.getCategoryId(), lastMissionId);
+            if (missions.isEmpty()) {
+                missions = assignmentMapper.findRelativeMissions(snapshot.getCategoryId(), null);
+            }
+            if (missions.isEmpty()) {
+                throw new BusinessException("MISSION_POOL_EMPTY", "배정 가능한 상대형 미션이 없습니다.");
+            }
+            assignmentDifficultyId = effectiveDifficultyId;
+            assignmentTargetRate = targetRate;
+            assignmentTargetValue = calculatedTarget;
+            assignmentBaseAmount = stats.getBaseAmount();
+            missionType = RELATIVE;
+            assignmentReason = null;
+            guideMessage = null;
         }
 
         MissionPoolItem mission = missions.get(randomInclusive.applyAsInt(0, missions.size() - 1));
@@ -108,11 +139,12 @@ public class RelativeMissionAssignmentService {
         RelativeMissionAssignment assignment = RelativeMissionAssignment.builder()
                 .userId(userId)
                 .missionId(mission.getId())
-                .difficultyId(effectiveDifficultyId)
+                .difficultyId(assignmentDifficultyId)
                 .assignDate(assignDate)
-                .targetRate(targetRate)
-                .targetValue(targetValue)
-                .baseAmount(stats.getBaseAmount())
+                .targetRate(assignmentTargetRate)
+                .targetValue(assignmentTargetValue)
+                .baseAmount(assignmentBaseAmount)
+                .assignmentReason(assignmentReason)
                 .build();
         assignmentMapper.insertAssignment(assignment);
         if (snapshotMapper.markAssigned(snapshot.getId(), assignDate) != 1) {
@@ -125,9 +157,18 @@ public class RelativeMissionAssignmentService {
                 .missionTitle(mission.getMissionTitle())
                 .categoryId(snapshot.getCategoryId())
                 .assignDate(assignDate)
-                .targetRate(targetRate)
-                .targetValue(targetValue)
-                .baseAmount(stats.getBaseAmount())
+                .targetRate(assignmentTargetRate)
+                .targetValue(assignmentTargetValue)
+                .baseAmount(assignmentBaseAmount)
+                .missionType(missionType)
+                .assignmentReason(assignmentReason)
+                .guideMessage(guideMessage)
                 .build();
+    }
+
+    private String buildNoSpendGuideMessage(String categoryName) {
+        String displayName = categoryName == null || categoryName.isBlank() ? "해당 카테고리" : categoryName;
+        return "평소 " + displayName + " 지출이 이미 낮아 금액을 더 나누기 어려워요. "
+                + "오늘은 " + displayName + " 하루 쉬기에 도전해볼까요?";
     }
 }

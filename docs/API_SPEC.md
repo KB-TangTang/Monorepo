@@ -335,7 +335,12 @@
 - 직전에 같은 카테고리에서 배정한 미션을 우선 제외하되 후보가 없으면 재사용한다.
 - 절감률은 배정 시점 사용자 난이도의 DB 구간에서 양 끝을 포함한 정수로 선택한다.
 - `baseAmount`는 배정일 전 28일의 해당 카테고리 양수 일별 순소비 평균이다.
-- `targetValue = MAX(baseAmount × (1 - targetRate / 100), 최근 28일 최소 양수 단건 결제 금액)`이다.
+- 정상 상대형의 `targetValue = baseAmount × (1 - targetRate / 100)`이다.
+- 계산 목표가 해당 카테고리의 최근 28일 최소 양수 단건 결제 금액보다 낮으면 목표를 올리지 않고,
+  같은 카테고리의 `ABSOLUTE`이면서 `limit_price=0`인 무지출 미션으로 전환한다.
+- 무지출 전환 배정은 `targetValue=0`, `targetRate/baseAmount/difficultyId=NULL`로 저장한다.
+- `assignmentReason=LOW_SPENDING_NO_SPEND`를 저장하여 월 1회 절대형과 구분하고 다음 안내를 표시한다.
+  `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
 - 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.
 - 절대형 미션 우선 배정은 후속 이슈 범위이며, 절대형 배정일에는 이 배치를 호출하지 않아야 한다.
 

@@ -53,8 +53,8 @@ class RelativeMissionAssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("계산 목표가 최소 단건 결제 금액보다 낮으면 최소 결제 금액으로 보정한다")
-    void clampsTargetToMinimumPurchaseAmount() {
+    @DisplayName("계산 목표가 최소 단건 결제 금액보다 낮으면 같은 카테고리 무지출 미션으로 전환한다")
+    void switchesToNoSpendMissionWhenCalculatedTargetIsTooLow() {
         MissionAnalysisSnapshot snapshot = MissionAnalysisSnapshot.builder()
                 .id(31L).userId(USER_ID).categoryId(18L).categoryName("카페")
                 .categoryRank(1).build();
@@ -63,7 +63,7 @@ class RelativeMissionAssignmentServiceTest {
                 .minReductionRate(new BigDecimal("50"))
                 .maxReductionRate(new BigDecimal("50")).build();
         MissionPoolItem mission = MissionPoolItem.builder()
-                .id(101L).missionTitle("카페 영수증 심문").build();
+                .id(201L).missionTitle("무지출 명령 · 카페").build();
         CategorySpendingStats stats = CategorySpendingStats.builder()
                 .baseAmount(new BigDecimal("1600.00"))
                 .minimumPurchaseAmount(new BigDecimal("1600.00")).build();
@@ -72,8 +72,7 @@ class RelativeMissionAssignmentServiceTest {
         when(assignmentMapper.countAssignment(USER_ID, ASSIGN_DATE)).thenReturn(0);
         when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(snapshot);
         when(assignmentMapper.findDifficulty(3L)).thenReturn(difficulty);
-        when(assignmentMapper.findLastMissionId(USER_ID, 18L)).thenReturn(null);
-        when(assignmentMapper.findRelativeMissions(18L, null)).thenReturn(List.of(mission));
+        when(assignmentMapper.findNoSpendMissions(18L)).thenReturn(List.of(mission));
         when(assignmentMapper.findCategorySpendingStats(
                 USER_ID, 18L, ASSIGN_DATE.minusDays(28), ASSIGN_DATE.minusDays(1))).thenReturn(stats);
         when(snapshotMapper.markAssigned(31L, ASSIGN_DATE)).thenReturn(1);
@@ -81,14 +80,19 @@ class RelativeMissionAssignmentServiceTest {
         RelativeMissionAssignmentDto result = service.assign(USER_ID, ASSIGN_DATE);
 
         assertTrue(result.isAssigned());
-        assertEquals(new BigDecimal("1600.00"), result.getTargetValue());
-        assertEquals(new BigDecimal("50"), result.getTargetRate());
-        assertEquals(new BigDecimal("1600.00"), result.getBaseAmount());
+        assertEquals("ABSOLUTE", result.getMissionType());
+        assertEquals("LOW_SPENDING_NO_SPEND", result.getAssignmentReason());
+        assertEquals(new BigDecimal("0.00"), result.getTargetValue());
+        assertNull(result.getTargetRate());
+        assertNull(result.getBaseAmount());
+        assertEquals("평소 카페 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 카페 하루 쉬기에 도전해볼까요?",
+                result.getGuideMessage());
         ArgumentCaptor<com.kb.tangtang.mission.domain.RelativeMissionAssignment> captor =
                 ArgumentCaptor.forClass(com.kb.tangtang.mission.domain.RelativeMissionAssignment.class);
         verify(assignmentMapper).insertAssignment(captor.capture());
-        assertEquals(101L, captor.getValue().getMissionId());
-        assertEquals(3L, captor.getValue().getDifficultyId());
+        assertEquals(201L, captor.getValue().getMissionId());
+        assertNull(captor.getValue().getDifficultyId());
+        assertEquals("LOW_SPENDING_NO_SPEND", captor.getValue().getAssignmentReason());
         verify(snapshotMapper).markAssigned(31L, ASSIGN_DATE);
     }
 
@@ -115,8 +119,11 @@ class RelativeMissionAssignmentServiceTest {
 
         RelativeMissionAssignmentDto result = service.assign(USER_ID, ASSIGN_DATE);
 
+        assertEquals("RELATIVE", result.getMissionType());
         assertEquals(new BigDecimal("20"), result.getTargetRate());
         assertEquals(new BigDecimal("8000.00"), result.getTargetValue());
+        assertNull(result.getAssignmentReason());
+        verify(assignmentMapper, never()).findNoSpendMissions(anyLong());
     }
 
     @Test
