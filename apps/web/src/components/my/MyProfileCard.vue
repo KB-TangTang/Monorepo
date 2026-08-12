@@ -29,7 +29,16 @@ const subtitle = computed(() => {
 <template>
     <BaseCard>
         <div class="my-profile">
-            <UserAvatar :image-url="user?.profileImageUrl" :name="displayName" size="lg" />
+            <!--
+              UserAvatar 통일 전에는 64px · 배경 --tt-surface-strong · 글자 --tt-primary 였다.
+              size="lg"(96px)로 커진 회귀만 여기서 되돌린다. 배경·글자색은 되돌리지 않는다 —
+              --tt-surface-strong 은 2026-07-31 토큰 개편으로 값이 --tt-ink(#232842, 다크
+              스탯카드용, "하위 호환 · 제거 예정" 주석 붙음)로 바뀌어, 지금 그대로 넘기면 옛
+              라이트 배경이 아니라 새로운 다크 원이 되어 또 다른 회귀가 된다. 또한 UserAvatar 는
+              배경만 color prop 으로 덮어쓸 수 있고 이니셜 글자색(--tt-white 고정)은 prop 이 없어
+              --tt-primary 로 되돌릴 수 없다. 구조상 정확한 복원이 불가능해 크기만 되돌린다.
+            -->
+            <UserAvatar :image-url="user?.profileImageUrl" :name="displayName" :size="64" />
             <div class="my-profile__text">
                 <p class="my-profile__name">{{ displayName || '이름 없음' }}</p>
                 <p class="my-profile__sub">{{ subtitle }}</p>

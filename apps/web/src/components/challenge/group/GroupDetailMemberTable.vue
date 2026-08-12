@@ -53,12 +53,19 @@ function textColor(m) {
             >
                 <!-- 프로필 영역 -->
                 <div class="member-status__profile">
-                    <UserAvatar
-                        :image-url="m.profileImage"
-                        :name="m.nickname"
-                        :color="m.avatarColor"
-                        :size="64"
-                    />
+                    <!--
+                      UserAvatar 통일 전에는 .member-status__avatar-img 가 이미지 아바타에
+                      border: 2px solid var(--tt-border) 를 직접 그렸다. UserAvatar 는 테두리를
+                      그리지 않으므로 래퍼로 복원한다.
+                    -->
+                    <span class="member-status__avatar-wrap">
+                        <UserAvatar
+                            :image-url="m.profileImage"
+                            :name="m.nickname"
+                            :color="m.avatarColor"
+                            :size="64"
+                        />
+                    </span>
                     <div class="member-status__name-row">
                         <span class="member-status__name">{{ m.nickname }}</span>
                         <!-- 초과 시 사이렌 -->
@@ -190,6 +197,16 @@ function textColor(m) {
     gap: 6px;
     flex: 1;
     justify-content: center;
+}
+
+.member-status__avatar-wrap {
+    display: inline-flex;
+    border-radius: 50%;
+}
+
+/* 이미지 아바타에만 테두리를 그린다 — 이니셜 원은 원래도 테두리가 없었다 */
+.member-status__avatar-wrap :deep(.user-avatar--image) {
+    border: 2px solid var(--tt-border);
 }
 
 .member-status__name-row {

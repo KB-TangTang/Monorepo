@@ -68,7 +68,8 @@ const showImage = computed(() => Boolean(props.imageUrl) && !failed.value);
     flex: none;
     align-items: center;
     justify-content: center;
-    font-weight: var(--tt-fw-bold);
+    /* 교체된 9곳 전부가 --tt-fw-black 이었다. 통일 과정에서 --tt-fw-bold 로 내려간 회귀를 되돌린다. */
+    font-weight: var(--tt-fw-black);
     color: var(--tt-white);
     border-radius: var(--tt-radius-full);
 }
