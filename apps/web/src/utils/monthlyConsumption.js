@@ -3,6 +3,13 @@ const TOP_PARENT_CATEGORY_COUNT = 5;
 const OTHER_PARENT_CATEGORY_NAME = '그 외';
 const OTHER_PARENT_CATEGORY_TONE = 'other';
 
+export const MONTHLY_REPORT_STATUS = Object.freeze({
+    ONBOARDING: 'ONBOARDING',
+    FIRST_REPORT: 'FIRST_REPORT',
+    READY: 'READY',
+    CURRENT: 'CURRENT',
+});
+
 export function splitMonthlyCategories(categories, previewCount = 5) {
     return {
         primaryCategories: categories.slice(0, previewCount),
@@ -68,7 +75,9 @@ export function composeMonthlyConsumptionReport(summary, trend, categoryReport) 
 
     return {
         period: summary.yearMonth,
-        status: 'report',
+        status: summary.hasPreviousComparison
+            ? MONTHLY_REPORT_STATUS.READY
+            : MONTHLY_REPORT_STATUS.FIRST_REPORT,
         hasPreviousComparison: summary.hasPreviousComparison,
         totalSpent: summary.totalSpent,
         monthOverMonthRate: summary.monthOverMonthRate,
@@ -107,7 +116,7 @@ export function getPreviousPeriod(referenceDate = new Date()) {
 }
 
 export function isAvailableReportMonth(month, referenceDate = new Date()) {
-    if (month.status === 'onboarding') {
+    if (month.status === MONTHLY_REPORT_STATUS.ONBOARDING) {
         return true;
     }
     return month.hasReport && month.value <= getPreviousPeriod(referenceDate);
@@ -120,6 +129,13 @@ export function resolveSelectedReportPeriod(months, requestedPeriod, referenceDa
     const requestedMonth = availableMonths.find((month) => month.value === requestedPeriod);
 
     return requestedMonth?.value ?? availableMonths[0]?.value ?? '';
+}
+
+export async function fetchMonthlyConsumptionState(month, reportFetcher) {
+    if (month.status === MONTHLY_REPORT_STATUS.ONBOARDING) {
+        return { period: month.value, status: MONTHLY_REPORT_STATUS.ONBOARDING };
+    }
+    return reportFetcher(month.value);
 }
 
 export function formatChangeRate(rate) {
@@ -142,11 +158,17 @@ export function resolveReportState({ loading, error, report }) {
     if (!report) {
         return 'empty';
     }
-    if (report.status === 'onboarding') {
+    if (report.status === MONTHLY_REPORT_STATUS.ONBOARDING) {
         return 'onboarding';
     }
-    if (report.hasPreviousComparison === false) {
+    if (
+        report.status === MONTHLY_REPORT_STATUS.FIRST_REPORT ||
+        report.hasPreviousComparison === false
+    ) {
         return 'first-report';
+    }
+    if (report.status === MONTHLY_REPORT_STATUS.READY) {
+        return 'ready';
     }
     return 'ready';
 }

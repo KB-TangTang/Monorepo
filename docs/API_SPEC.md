@@ -22,6 +22,30 @@
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 
+월 선택기 응답은 다음 형태다.
+
+```json
+{
+  "months": [
+    {
+      "value": "2026-08",
+      "year": 2026,
+      "month": 8,
+      "available": true,
+      "hasReport": false,
+      "status": "ONBOARDING"
+    }
+  ]
+}
+```
+
+`status`는 `ONBOARDING`, `FIRST_REPORT`, `READY`, `CURRENT` 중 하나다. 가입월이 아직
+진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
+가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
+(`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
+`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
+선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
+
 집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
 일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
 기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
@@ -32,6 +56,11 @@
 증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
 증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
 `hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
+
+프론트 화면 상태는 월 목록의 `status`와 요약 응답의 `hasPreviousComparison`으로 결정한다.
+`ONBOARDING`은 온보딩 화면, `FIRST_REPORT`는 전월 비교가 없는 첫 리포트,
+`READY`는 일반 리포트로 표시한다. 상세 집계 응답에는 별도 상태 필드를 추가하지 않고,
+`hasPreviousComparison=false`인 응답을 `FIRST_REPORT` 화면 모델로 조합한다.
 
 카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
 선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와

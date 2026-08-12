@@ -5,7 +5,7 @@ import {
     fetchMonthlyConsumptionMonths,
     fetchMonthlyConsumptionReport,
 } from '@/api/monthlyConsumption';
-// TEMP(#154): 백엔드 안정화 후 mock API import와 source 전환 코드를 함께 삭제한다.
+// TEMP(#154): 월간 리포트 백엔드 전체 개발 완료 후 mock API import와 source 전환 코드를 함께 삭제한다.
 import {
     fetchTempMonthlyConsumptionMonths,
     fetchTempMonthlyConsumptionReport,
@@ -26,6 +26,7 @@ import savingTangi from '@/assets/images/emotions/42_thumbs_up.png';
 import { useAuthStore } from '@/stores/auth';
 import {
     buildMonthlyTrendSlots,
+    fetchMonthlyConsumptionState,
     formatPeriod,
     formatWon,
     resolveSelectedReportPeriod,
@@ -86,15 +87,11 @@ async function loadReport() {
     report.value = null;
     try {
         const selectedMonth = months.value.find((month) => month.value === selectedPeriod.value);
-        if (selectedMonth?.status === 'onboarding') {
-            report.value = { period: selectedPeriod.value, status: 'onboarding' };
-            selectedTrendPeriod.value = selectedPeriod.value;
-            return;
-        }
-        report.value =
+        const reportFetcher =
             reportSource.value === 'mock'
-                ? await fetchTempMonthlyConsumptionReport(selectedPeriod.value)
-                : await fetchMonthlyConsumptionReport(selectedPeriod.value);
+                ? fetchTempMonthlyConsumptionReport
+                : fetchMonthlyConsumptionReport;
+        report.value = await fetchMonthlyConsumptionState(selectedMonth, reportFetcher);
         selectedTrendPeriod.value = selectedPeriod.value;
     } catch (error) {
         errorMessage.value = error.message ?? '소비 리포트를 불러오지 못했습니다.';
@@ -103,7 +100,7 @@ async function loadReport() {
     }
 }
 
-// TEMP(#154): 백엔드 안정화 후 이 함수와 화면의 전환 버튼을 삭제한다.
+// TEMP(#154): 월간 리포트 백엔드 전체 개발 완료 후 이 함수와 화면의 전환 버튼을 삭제한다.
 async function switchReportSource(source) {
     if (source === reportSource.value || loading.value) {
         return;

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
     buildMonthlyTrendSlots,
     composeMonthlyConsumptionReport,
+    fetchMonthlyConsumptionState,
     formatChangeRate,
     getPreviousPeriod,
     isAvailableReportMonth,
+    MONTHLY_REPORT_STATUS,
     resolveSelectedReportPeriod,
     resolveFixedExpenseStatus,
     resolveReportState,
@@ -73,12 +75,54 @@ test('카테고리 증감과 화면 상태를 표시한다', () => {
     assert.equal(resolveReportState({ loading: true, error: '실패', report: {} }), 'loading');
     assert.equal(resolveReportState({ error: '실패', report: {} }), 'error');
     assert.equal(resolveReportState({ report: null }), 'empty');
-    assert.equal(resolveReportState({ report: { status: 'onboarding' } }), 'onboarding');
     assert.equal(
-        resolveReportState({ report: { status: 'report', hasPreviousComparison: false } }),
+        resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.ONBOARDING } }),
+        'onboarding',
+    );
+    assert.equal(
+        resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.FIRST_REPORT } }),
         'first-report',
     );
-    assert.equal(resolveReportState({ report: {} }), 'ready');
+    assert.equal(
+        resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.READY } }),
+        'ready',
+    );
+});
+
+test('온보딩 상태는 완료 월 집계 API를 호출하지 않고 로컬 화면 상태를 만든다', async () => {
+    let reportRequestCount = 0;
+    const report = await fetchMonthlyConsumptionState(
+        { value: '2026-08', status: MONTHLY_REPORT_STATUS.ONBOARDING },
+        async () => {
+            reportRequestCount += 1;
+            return {};
+        },
+    );
+
+    assert.equal(reportRequestCount, 0);
+    assert.deepEqual(report, {
+        period: '2026-08',
+        status: MONTHLY_REPORT_STATUS.ONBOARDING,
+    });
+});
+
+test('첫 리포트와 일반 리포트는 완료 월 집계 API를 호출한다', async () => {
+    const requestedPeriods = [];
+    const reportFetcher = async (period) => {
+        requestedPeriods.push(period);
+        return { period };
+    };
+
+    await fetchMonthlyConsumptionState(
+        { value: '2026-07', status: MONTHLY_REPORT_STATUS.FIRST_REPORT },
+        reportFetcher,
+    );
+    await fetchMonthlyConsumptionState(
+        { value: '2026-06', status: MONTHLY_REPORT_STATUS.READY },
+        reportFetcher,
+    );
+
+    assert.deepEqual(requestedPeriods, ['2026-07', '2026-06']);
 });
 
 test('고정 지출 의심 건은 명시적인 배열 또는 false일 때만 확정한다', () => {
@@ -216,7 +260,9 @@ test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다
 });
 
 test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지한다', () => {
-    assert.equal(REPORTS['2026-02'].status, 'onboarding');
+    assert.equal(REPORTS['2026-02'].status, MONTHLY_REPORT_STATUS.ONBOARDING);
+    assert.equal(REPORTS['2026-03'].status, MONTHLY_REPORT_STATUS.FIRST_REPORT);
+    assert.equal(REPORTS['2026-04'].status, MONTHLY_REPORT_STATUS.READY);
     assert.equal(REPORTS['2026-03'].hasPreviousComparison, false);
     assert.equal(REPORTS['2026-03'].monthlyTrend.length, 1);
     assert.equal(
