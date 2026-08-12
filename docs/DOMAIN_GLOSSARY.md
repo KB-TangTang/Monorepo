@@ -63,6 +63,11 @@
 | 가맹점 | `merchant` | transaction | — | 거래내역의 상호명 |
 | 결제주기 | `billingCycle` | fixedexpense | — | 월·연 등 반복 주기 |
 | 장부 | `ledger` | transaction | — | 사용자에게 보이는 거래 목록 화면 |
+| 카테고리 | `category` | transaction | `tbl_category` | 표준 소비 카테고리(대/소분류) |
+| 카테고리화 | `categorization` | transaction | — | 거래에 category_id 를 채우는 자동 분류 과정 |
+| 카테고리 출처 | `categorySource` | transaction | `tbl_transaction.category_source` | RULE_MCC/RULE_KEYWORD/LLM/USER |
+| 가맹점 키워드 규칙 | `merchantKeywordRule` | transaction | `tbl_merchant_keyword_rule` | 가맹점명 부분매칭 → 카테고리 |
+| LLM 분류 작업 | `llmCategorizationJob` | transaction | `tbl_llm_categorization_job` | 규칙 미분류 거래의 LLM 처리 배치 |
 
 ## 알림
 

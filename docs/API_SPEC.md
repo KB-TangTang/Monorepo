@@ -293,6 +293,36 @@
 > ⚠ `TOKEN_EXPIRED` 는 인증 절의 액세스 토큰 만료와 **이름만 같다.** 이쪽은 HTTP 400 이라
 > 프론트 `http.js` 의 자동 재발급(401 트리거)을 유발하지 않는다.
 
+## 금융 데이터 동기화 (이슈 #147)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/financial-syncs` | Bearer | `{ status, syncedSources, syncedAt, collectedTransactionCount, ruleCategorizedCount, llmPendingTransactionCount, llmCategorizationStatus }` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "COMPLETED",
+    "syncedSources": ["BANK", "DEPOSIT", "SECURITIES", "LOAN", "PAY_MONEY", "CARD"],
+    "syncedAt": "2026-08-13T10:00:00+09:00",
+    "collectedTransactionCount": 42,
+    "ruleCategorizedCount": 30,
+    "llmPendingTransactionCount": 12,
+    "llmCategorizationStatus": "PENDING"
+  }
+}
+```
+
+- `collectedTransactionCount`·`ruleCategorizedCount`·`llmPendingTransactionCount` 는 전부 **이번 호출 한 번에서 upsert 된 거래 기준**이다(사용자의 누적 미분류 거래 수가 아니다).
+- 저장이 끝난 뒤 규칙 1~4단계(사용자 가맹점 매핑 → 공용 가맹점 매핑 → MCC/업종명 → 키워드)로 **동기** 카테고리화한다. `ruleCategorizedCount` 는 이 응답 안에서 확정된 값이다.
+- 규칙으로도 분류하지 못한 소비 거래는 이 응답 이후 **비동기**로 LLM 분류 작업(`tbl_llm_categorization_job`, 사용자별 transaction_date 오름차순 최대 20건 배치)에 등록된다. 실제 LLM 호출은 이번 범위에 포함되지 않는다 — 작업 등록까지만 한다.
+- `llmCategorizationStatus`: `PENDING`(LLM 대상 거래가 있음) · `NOT_REQUIRED`(전부 규칙으로 분류됐거나 대상 자체가 없음).
+- 사용자가 직접 지정한 카테고리(`category_source='USER'`)는 재동기화로 자동 분류가 절대 덮어쓰지 않는다(DB 레벨 가드).
+- 환불 거래(`is_refund=1`)는 일반 거래와 동일하게 규칙 1~4단계를 적용하되, 전부 미스하면 LLM 대상에서는 제외한다. 원거래 카테고리를 그대로 물려받는(계승) 처리는 **후속 작업**이다.
+- `tbl_merchant_category_map`(공용 캐시)에 대한 write-back(3·4단계 판정 결과를 다시 채워 넣는 것)은 이번 범위가 아니다 — 비어 있으면 2단계는 항상 미스로 3단계로 넘어간다.
+- 정기 동기화 스케줄러, 연결된 전체 사용자 대상 자동 동기화, 증분 동기화 조회 범위 변경도 이번 범위 밖이다.
+
 ## 마이페이지 (이슈 #57)
 
 전용 엔드포인트를 새로 만들지 않았다. 아래 기존 API 를 조합해 그린다.
