@@ -12,6 +12,7 @@ import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
  * status 가 아니라 <b>날짜</b>를 기준으로 한다.
  */
 @Service
+@Log4j2
 public class ChallengeGroupService {
 
     /** 정원 고정값. DDL 의 {@code ck_cg_members} 는 2~6 을 허용하지만 화면에 선택 UI 가 없다. */
@@ -105,6 +107,8 @@ public class ChallengeGroupService {
         challengeGroupMapper.insertGroup(group);
 
         groupMemberMapper.insertMember(newMember(group, userId));
+        log.info("그룹 챌린지 생성 userId={} groupId={} inviteCode={} startDate={}",
+                userId, group.getId(), group.getInviteCode(), group.getStartDate());
 
         return ChallengeGroupCreatedDto.builder()
                 .groupId(group.getId())
@@ -125,11 +129,15 @@ public class ChallengeGroupService {
         String normalized = normalizeInviteCode(inviteCode);
         ChallengeGroup group = challengeGroupMapper.findByInviteCode(normalized);
         if (group == null) {
+            log.warn("초대 코드 조회 실패 userId={} inviteCode={} — 일치하는 그룹 없음", userId, normalized);
             throw new BusinessException("GROUP_INVITE_CODE_NOT_FOUND", "유효하지 않은 초대 코드입니다.");
         }
 
         List<GroupMember> members = findMembers(group.getId());
         String reason = joinBlockReason(group, members, userId);
+        log.info("초대 코드 조회 userId={} inviteCode={} groupId={} status={} startDate={} memberCount={} joinable={} reason={}",
+                userId, normalized, group.getId(), group.getStatus(), group.getStartDate(),
+                members.size(), reason == null, reason);
 
         return InviteCodePreviewDto.builder()
                 .challenge(toDto(userId, group, members, LocalDate.now(clock)))
@@ -141,16 +149,23 @@ public class ChallengeGroupService {
     /** 참여 (GC_01_06). 성공하면 참여한 그룹을 그대로 돌려준다 — 화면이 바로 상세로 넘어간다. */
     @Transactional
     public ChallengeGroupDto join(long userId, long groupId) {
+        log.info("그룹 참여 요청 userId={} groupId={}", userId, groupId);
+
         ChallengeGroup group = findGroupOrThrow(groupId);
         List<GroupMember> members = findMembers(groupId);
 
         String reason = joinBlockReason(group, members, userId);
         if (reason != null) {
+            log.warn("그룹 참여 차단 userId={} groupId={} reason={} status={} startDate={} memberCount={}",
+                    userId, groupId, reason, group.getStatus(), group.getStartDate(), members.size());
             throw joinBlocked(reason);
         }
 
         groupMemberMapper.insertMember(newMember(group, userId));
-        return toDto(userId, group, findMembers(groupId), LocalDate.now(clock));
+        List<GroupMember> joined = findMembers(groupId);
+        log.info("그룹 참여 완료 userId={} groupId={} memberCount={}", userId, groupId, joined.size());
+
+        return toDto(userId, group, joined, LocalDate.now(clock));
     }
 
     /* ══ 조회 ══════════════════════════════════════════════ */
