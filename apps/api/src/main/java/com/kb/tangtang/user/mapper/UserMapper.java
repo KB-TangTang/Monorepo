@@ -32,6 +32,15 @@ public interface UserMapper {
     int updateNickname(@Param("id") Long id, @Param("nickname") String nickname);
 
     /**
+     * 프로필 이미지 키 갱신. **삭제도 이 메서드로 한다** — null 을 넣으면 미설정으로 돌아간다.
+     * 설정과 해제를 한 메서드로 두는 이유는 updateTutorialSeenAt 과 같다.
+     *
+     * @return 바뀐 행 수. 0 이면 그 사용자가 없다는 뜻이라 서비스가 404 로 바꾼다.
+     */
+    int updateProfileImageKey(@Param("id") Long id,
+                              @Param("profileImageKey") String profileImageKey);
+
+    /**
      * 튜토리얼 완료 시각 갱신 (이슈 #128).
      *
      * 완료·해제를 한 메서드로 처리한다 — `seenAt` 이 null 이면 「다시 보기」다.
