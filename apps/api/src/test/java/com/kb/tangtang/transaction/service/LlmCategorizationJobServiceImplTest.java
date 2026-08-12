@@ -9,6 +9,7 @@ import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDate;
@@ -49,6 +50,14 @@ class LlmCategorizationJobServiceImplTest {
     }
 
     @Test
+    @DisplayName("null 목록이면 아무 매퍼도 호출하지 않는다")
+    void nullListDoesNothing() {
+        service.registerPendingJobs(1L, null);
+
+        verify(transactionMapper, times(0)).findByIds(anyList());
+    }
+
+    @Test
     @DisplayName("25건을 넣으면 20건·5건 두 작업으로 나뉜다")
     void splitsIntoTwentyItemBatches() {
         List<Long> ids = LongStream.rangeClosed(1, 25).boxed().collect(Collectors.toList());
@@ -59,7 +68,12 @@ class LlmCategorizationJobServiceImplTest {
 
         service.registerPendingJobs(1L, ids);
 
-        verify(jobMapper, times(2)).insert(any(LlmCategorizationJob.class));
+        ArgumentCaptor<LlmCategorizationJob> jobCaptor = ArgumentCaptor.forClass(LlmCategorizationJob.class);
+        verify(jobMapper, times(2)).insert(jobCaptor.capture());
+        assertEquals(List.of(20, 5),
+                jobCaptor.getAllValues().stream()
+                        .map(LlmCategorizationJob::getTransactionCount)
+                        .collect(Collectors.toList()));
         verify(jobItemMapper, times(25)).insert(any(LlmCategorizationJobItem.class));
     }
 
