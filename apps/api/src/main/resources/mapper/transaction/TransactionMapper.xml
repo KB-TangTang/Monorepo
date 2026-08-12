@@ -65,4 +65,45 @@
           AND card.linked_transaction_id IS NULL
     </update>
 
+    <!--
+      카테고리 갱신 전용 update. 기존 update(재동기화 upsert)와 분리된 이유는 클래스 주석 참고.
+      category_source 가 'USER' 인 행은 WHERE 절에서 걸러져 0행이 된다 — 애플리케이션 로직만으로는
+      동시성·재실행에 취약해 DB 레벨에서도 사용자 지정 카테고리를 보호한다.
+    -->
+    <update id="updateCategory">
+        UPDATE tbl_transaction
+           SET category_id = #{categoryId},
+               category_source = #{categorySource}
+         WHERE id = #{id}
+           AND (category_source IS NULL OR category_source <> 'USER')
+    </update>
+
+    <select id="findIdByCodefTrKey" resultType="long">
+        SELECT id
+          FROM tbl_transaction
+         WHERE codef_tr_key = #{codefTrKey}
+    </select>
+
+    <select id="findEligibleForRuleCategorization" resultType="com.kb.tangtang.transaction.domain.Transaction">
+        SELECT id, user_id, account_id, codef_tr_key, merchant_name, merchant_name_normalized,
+               amount, direction, tr_date, tr_time, description1, classification, category_id,
+               category_source, is_excluded_from_summary, loan_id, source_type, card_id,
+               correlation_id, linked_transaction_id, original_approval_no,
+               merchant_category_code, merchant_category_name, is_refund, refunded_amount
+          FROM tbl_transaction
+         WHERE user_id = #{userId}
+           AND id IN
+           <foreach item="txId" collection="ids" open="(" separator="," close=")">#{txId}</foreach>
+           AND classification = 'CONSUMPTION'
+           AND (category_source IS NULL OR category_source &lt;&gt; 'USER')
+           AND NOT (source_type = 'BANK' AND linked_transaction_id IS NOT NULL)
+    </select>
+
+    <select id="findByIds" resultType="com.kb.tangtang.transaction.domain.Transaction">
+        SELECT id, user_id, tr_date
+          FROM tbl_transaction
+         WHERE id IN
+         <foreach item="txId" collection="ids" open="(" separator="," close=")">#{txId}</foreach>
+    </select>
+
 </mapper>
