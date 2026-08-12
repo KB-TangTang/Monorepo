@@ -27,13 +27,21 @@
 | GET | `/api/users/me` | Bearer | 사용자정보 |
 | PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
 | PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
+| POST | `/api/users/me/profile-image` | Bearer | 요청 multipart (파트명 `file`) → 갱신된 사용자정보 |
+| DELETE | `/api/users/me/profile-image` | Bearer | 갱신된 사용자정보 (기본 아바타로 되돌리기) |
 
-**사용자정보** = `{ id, nickname, socialName, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+**사용자정보** = `{ id, nickname, socialName, profileImageUrl, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
 
 **이 모양은 `GET /api/users/me` · `POST /api/auth/refresh` 의 `user` · 사용자 정보를 바꾸는 모든
-`PATCH` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto)` 한 곳에서만 만든다 — 경로마다
-따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만 값이 비는** 버그가 난다.
+`PATCH`·`POST`·`DELETE` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto, profileImageUrl)`
+한 곳에서만 만든다 — 경로마다 따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만
+값이 비는** 버그가 난다.
 
+- `profileImageUrl` 은 **미설정이면 `null`** 이고 화면은 이니셜 아바타를 그린다. 값이 있으면
+  서버가 조립을 끝낸 완성 URL(`/uploads/profile/{userId}/{uuid}.jpg` 형태)이다 — 화면은 URL 을
+  조립하지 않으므로 로컬 저장소 → S3 전환에 프론트 수정이 없다.
+- `POST /api/users/me/profile-image` 는 업로드된 이미지를 **256x256 정사각 JPEG 로 다시 구워
+  저장**한다(가운데 크롭). 원본은 보관하지 않는다.
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
@@ -112,6 +120,9 @@
 | `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 (실명 갱신 대상이 탈퇴·차단 상태일 때도 이 코드다) |
 | `INVALID_NAME` | 400 | `/api/users/me/name` 의 이름이 형식에 맞지 않음 (2~50자·한글/영문/공백) |
 | `INVALID_REQUEST` | 400 | `/api/users/me/nickname` 의 닉네임이 비었거나 50자를 넘음 |
+| `IMAGE_REQUIRED` | 400 | `/api/users/me/profile-image` 요청에 이미지가 비어 있음 |
+| `IMAGE_TOO_LARGE` | 400 | 업로드 이미지가 5MB 초과 |
+| `INVALID_IMAGE` | 400 | 이미지로 디코딩할 수 없는 파일 (확장자·Content-Type 은 신뢰하지 않는다) |
 
 ### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 
@@ -299,7 +310,8 @@
 
 | 화면 | 쓰는 API |
 |---|---|
-| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, name, email, socialProvider}` |
+| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, profileImageUrl, name, email, socialProvider}` |
+| 프로필 이미지 변경 (`/my`) | `POST /api/users/me/profile-image` (업로드) · `DELETE /api/users/me/profile-image` (기본 아바타로 되돌리기) |
 | 동의 관리 (`/my/consents`) | `GET /api/consents/me` · `POST /api/consents/{type}/withdraw` · `POST /api/consents` (재동의) |
 | 로그아웃 | `POST /api/auth/logout` |
 

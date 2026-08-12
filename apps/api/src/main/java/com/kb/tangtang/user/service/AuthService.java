@@ -36,19 +36,22 @@ public class AuthService {
      * (apps/api/AGENTS.md 「모듈 간 직접 호출 최소화」)
      */
     private final ConnectedAccountQuery connectedAccountQuery;
+    private final ProfileImageUrlResolver profileImageUrlResolver;
 
     public AuthService(GoogleOAuthClient googleOAuthClient,
                        RefreshTokenService refreshTokenService,
                        UserMapper userMapper,
                        JwtProvider jwtProvider,
                        ConsentService consentService,
-                       ConnectedAccountQuery connectedAccountQuery) {
+                       ConnectedAccountQuery connectedAccountQuery,
+                       ProfileImageUrlResolver profileImageUrlResolver) {
         this.googleOAuthClient = googleOAuthClient;
         this.refreshTokenService = refreshTokenService;
         this.userMapper = userMapper;
         this.jwtProvider = jwtProvider;
         this.consentService = consentService;
         this.connectedAccountQuery = connectedAccountQuery;
+        this.profileImageUrlResolver = profileImageUrlResolver;
     }
 
     /** 구글 콜백에서 받은 code 로 로그인/가입을 마치고 토큰 쌍을 만든다. */
@@ -128,7 +131,7 @@ public class AuthService {
                          * 그래서 /users/me 와 **같은 모양**을 내려준다. 필드가 빠지면
                          * 그 경로에서만 튜토리얼이 다시 뜨거나 온보딩으로 튕기는 버그가 난다.
                          */
-                        .user(UserMeDto.from(user))
+                        .user(UserMeDto.from(user, profileImageUrlResolver.resolve(user)))
                         .needsConsent(needsConsent)
                         .needsFinancialConsent(needsFinancialConsent)
                         .needsAccountLink(needsAccountLink)

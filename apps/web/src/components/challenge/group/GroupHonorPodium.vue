@@ -6,6 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     podium: { type: Array, required: true },
@@ -29,6 +30,10 @@ function podiumPadding(rank) {
 function avatarSize(rank) {
     return AVATAR_SIZE[rank] ?? 38;
 }
+
+function avatarRing(rank) {
+    return rank === 1 ? '0 0 0 5px rgba(245,185,33,.24)' : '0 0 0 2px rgba(255,255,255,.18)';
+}
 </script>
 
 <template>
@@ -41,33 +46,20 @@ function avatarSize(rank) {
         </div>
 
         <div class="podium__row">
-            <div
-                v-for="(p, idx) in ordered"
-                :key="p.userId"
-                class="podium__col"
-            >
+            <div v-for="p in ordered" :key="p.userId" class="podium__col">
                 <!-- 아바타 -->
-                <div
-                    class="podium__avatar"
-                    :style="{
-                        width: avatarSize(p.rank) + 'px',
-                        height: avatarSize(p.rank) + 'px',
-                        background: p.avatarColor,
-                        boxShadow: p.rank === 1
-                            ? '0 0 0 5px rgba(245,185,33,.24)'
-                            : '0 0 0 2px rgba(255,255,255,.18)',
-                        fontSize: p.rank === 1 ? '18px' : '14px',
-                    }"
-                >
-                    {{ p.initial }}
-                </div>
+                <span class="podium__avatar-wrap" :style="{ boxShadow: avatarRing(p.rank) }">
+                    <UserAvatar
+                        :image-url="p.profileImage"
+                        :name="p.nickname"
+                        :color="p.avatarColor"
+                        :size="avatarSize(p.rank)"
+                    />
+                </span>
 
                 <!-- 닉네임 + "나" 뱃지 -->
                 <div class="podium__name-row">
-                    <span
-                        class="podium__name"
-                        :class="{ 'podium__name--1st': p.rank === 1 }"
-                    >
+                    <span class="podium__name" :class="{ 'podium__name--1st': p.rank === 1 }">
                         {{ p.nickname }}
                     </span>
                     <span v-if="p.isMe" class="podium__me-badge">나</span>
@@ -126,15 +118,16 @@ function avatarSize(rank) {
     text-align: center;
 }
 
-.podium__avatar {
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/*
+ * display: flex(block-level)에 width 를 안 주면 부모(.podium__col) 폭을
+ * 그대로 채워버려 margin: 0 auto 가 0으로 풀린다(가운데 정렬 무효화).
+ * inline-flex 는 shrink-to-fit 이라 내용(아바타) 폭만 가지므로
+ * margin: 0 auto 가 정상 동작하고 box-shadow 링도 원 모양을 유지한다.
+ */
+.podium__avatar-wrap {
+    display: inline-flex;
     margin: 0 auto;
-    object-fit: cover;
+    border-radius: var(--tt-radius-full);
 }
 
 .podium__name-row {
@@ -181,7 +174,7 @@ function avatarSize(rank) {
 .podium__rank-num {
     font-size: 17px;
     font-weight: var(--tt-fw-black);
-    color: #AEB2CC;
+    color: #aeb2cc;
 }
 
 .podium__rank-num--1st {

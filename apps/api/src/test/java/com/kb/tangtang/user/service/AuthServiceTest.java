@@ -37,13 +37,14 @@ class AuthServiceTest {
     @Mock private JwtProvider jwtProvider;
     @Mock private ConsentService consentService;
     @Mock private com.kb.tangtang.account.service.ConnectedAccountQuery connectedAccountQuery;
+    @Mock private ProfileImageUrlResolver profileImageUrlResolver;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider,
-                consentService, connectedAccountQuery);
+                consentService, connectedAccountQuery, profileImageUrlResolver);
     }
 
     private static GoogleProfileDto profile() {

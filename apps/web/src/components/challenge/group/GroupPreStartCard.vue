@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     challenge: { type: Object, required: true },
@@ -9,7 +10,14 @@ defineEmits(['invite']);
 
 const isFull = computed(() => props.challenge.memberCount >= props.challenge.maxMembers);
 
-const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
+const AVATAR_COLORS = [
+    'var(--tt-gold)',
+    'var(--tt-blue)',
+    'var(--tt-green)',
+    'var(--tt-red)',
+    'var(--tt-ink)',
+    'var(--tt-gold-deep)',
+];
 </script>
 
 <template>
@@ -25,11 +33,10 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
             {{ challenge.evalType === 'DAILY' ? '일일결산' : '기간평가' }}
             · {{ challenge.totalDays }}일
             <template v-if="challenge.limitAmount > 0">
-                · {{ challenge.evalType === 'DAILY' ? '일' : '총' }} {{ challenge.limitAmount.toLocaleString() }}원
+                · {{ challenge.evalType === 'DAILY' ? '일' : '총' }}
+                {{ challenge.limitAmount.toLocaleString() }}원
             </template>
-            <template v-else>
-                · 무지출
-            </template>
+            <template v-else> · 무지출 </template>
         </p>
 
         <!-- 하단: 멤버 + 초대/모집완료 -->
@@ -39,14 +46,18 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
                     <span
                         v-for="(m, i) in challenge.members"
                         :key="m.userId"
-                        class="gps-card__avatar"
+                        class="gps-card__avatar-wrap"
                         :style="{
-                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
                             marginLeft: i > 0 ? '-7px' : '0',
                             zIndex: challenge.members.length - i,
                         }"
                     >
-                        {{ m.initial }}
+                        <UserAvatar
+                            :image-url="m.profileImage || null"
+                            :name="m.nickname"
+                            :color="AVATAR_COLORS[i % AVATAR_COLORS.length]"
+                            :size="26"
+                        />
                     </span>
                 </div>
                 <span class="gps-card__member-count">
@@ -54,7 +65,12 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
                 </span>
             </div>
             <span v-if="isFull" class="gps-card__full">모집 완료</span>
-            <button v-else type="button" class="gps-card__invite" @click.stop="$emit('invite', challenge)">
+            <button
+                v-else
+                type="button"
+                class="gps-card__invite"
+                @click.stop="$emit('invite', challenge)"
+            >
                 친구 초대하기
             </button>
         </div>
@@ -116,18 +132,14 @@ const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'v
     align-items: center;
 }
 
-.gps-card__avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-white);
-    border: 2px solid var(--tt-bg);
+.gps-card__avatar-wrap {
+    display: inline-flex;
     position: relative;
+}
+
+/* 겹침 경계 링 — UserAvatar 자체엔 테두리가 없어 여기서 그린다 */
+.gps-card__avatar-wrap :deep(.user-avatar) {
+    border: 2px solid var(--tt-bg);
 }
 
 .gps-card__member-count {

@@ -9,8 +9,8 @@
 
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
-        id, social_provider, provider_user_id, email, nickname, social_name, name,
-        status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
+        id, social_provider, provider_user_id, email, nickname, social_name, profile_image_key,
+        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -82,6 +82,21 @@
                group_tutorial_seen_at = CASE WHEN #{target} = 'GROUP'
                                              THEN #{seenAt,jdbcType=TIMESTAMP}
                                              ELSE group_tutorial_seen_at END
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      프로필 이미지 키 갱신. profileImageKey 가 null 이면 미설정으로 되돌린다.
+      #{} 는 null 을 그대로 NULL 로 바인딩하므로 분기가 필요 없다.
+
+      status = 'ACTIVE' 가드는 형제 갱신문(updateName·updateNickname·updateTutorialSeenAt)과 같다.
+      UserService.findActive() 는 이름과 달리 status 를 보지 않으므로(null 체크만 한다)
+      **이 가드가 탈퇴·차단 계정의 쓰기를 막는 유일한 장치다.** 빼면 0행 대신 1행이 갱신된다.
+    -->
+    <update id="updateProfileImageKey">
+        UPDATE tbl_user
+           SET profile_image_key = #{profileImageKey}
          WHERE id     = #{id}
            AND status = 'ACTIVE'
     </update>

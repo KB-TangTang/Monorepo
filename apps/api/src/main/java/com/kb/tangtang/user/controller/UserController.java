@@ -2,15 +2,22 @@ package com.kb.tangtang.user.controller;
 
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
+import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.dto.UserNameUpdateRequestDto;
 import com.kb.tangtang.user.dto.UserNicknameUpdateRequestDto;
 import com.kb.tangtang.user.service.UserService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 /**
  * 로그인한 사용자 본인 정보.
@@ -21,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final ImageProcessor imageProcessor;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, ImageProcessor imageProcessor) {
         this.userService = userService;
+        this.imageProcessor = imageProcessor;
     }
 
     @GetMapping("/me")
@@ -55,5 +64,29 @@ public class UserController {
     public ApiResponse<UserMeDto> updateNickname(@LoginUser Long userId,
                                                  @RequestBody UserNicknameUpdateRequestDto request) {
         return ApiResponse.ok(userService.updateNickname(userId, request.getNickname()));
+    }
+
+    /**
+     * 프로필 이미지 업로드 (multipart, 파트 이름은 `file` 고정).
+     *
+     * 닉네임과 엔드포인트를 나눈 이유: 온보딩에서 사진을 고르는 즉시 올라가야 하고
+     * 마이페이지에서는 사진만 바꿀 수 있어야 한다. 하는 일이 다르면 엔드포인트도 나눈다.
+     *
+     * ⚠ **`file.getBytes()` 를 부르기 전에 크기부터 본다.** {@code ImageProcessor.toSquareJpeg}
+     *   의 5MB 검사는 바이트 배열을 이미 메모리에 올린 뒤에야 동작해 상한이 할당 자체를
+     *   막지 못한다 — {@code getSize()} 는 본문을 읽지 않고도 알 수 있으므로 여기서 먼저 막는다.
+     */
+    @PostMapping("/me/profile-image")
+    public ApiResponse<UserMeDto> uploadProfileImage(
+            @LoginUser Long userId,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        imageProcessor.requireWithinLimit(file.getSize());
+        return ApiResponse.ok(userService.updateProfileImage(userId, file.getBytes()));
+    }
+
+    /** 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다. 이미 없어도 성공이다. */
+    @DeleteMapping("/me/profile-image")
+    public ApiResponse<UserMeDto> deleteProfileImage(@LoginUser Long userId) {
+        return ApiResponse.ok(userService.deleteProfileImage(userId));
     }
 }
