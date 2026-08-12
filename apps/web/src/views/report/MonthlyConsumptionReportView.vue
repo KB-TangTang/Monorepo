@@ -5,10 +5,16 @@ import {
     fetchMonthlyConsumptionMonths,
     fetchMonthlyConsumptionReport,
 } from '@/api/monthlyConsumption';
+// TEMP(#154): 백엔드 안정화 후 mock API import와 source 전환 코드를 함께 삭제한다.
+import {
+    fetchTempMonthlyConsumptionMonths,
+    fetchTempMonthlyConsumptionReport,
+} from '@/api/tempMonthlyConsumptionMock';
 import MonthlyCategoryReport from '@/components/report/monthly-consumption/MonthlyCategoryReport.vue';
 import MonthlyReportOnboarding from '@/components/report/monthly-consumption/MonthlyReportOnboarding.vue';
 import MonthlyReportMonthPicker from '@/components/report/monthly-consumption/MonthlyReportMonthPicker.vue';
 import MonthlySavingsCompleteTicket from '@/components/report/monthly-consumption/MonthlySavingsCompleteTicket.vue';
+import TempMonthlyReportSourceToggle from '@/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue';
 import MonthlyVerdictSummary from '@/components/report/monthly-consumption/MonthlyVerdictSummary.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -37,25 +43,30 @@ const loading = ref(true);
 const errorMessage = ref('');
 const isMonthPickerOpen = ref(false);
 const selectedPeriod = ref('');
-const selectedTrendMonth = ref(null);
+const selectedTrendPeriod = ref('');
+const reportSource = ref('api');
 const state = computed(() =>
     resolveReportState({ loading: loading.value, error: errorMessage.value, report: report.value }),
 );
 const displayName = computed(() => resolveDisplayName(auth.user) || '고객');
 const isFirstReport = computed(() => state.value === 'first-report');
 const fixedExpenseStatus = computed(() =>
-    resolveFixedExpenseStatus(report.value?.fixedExpenseCandidates),
+    resolveFixedExpenseStatus(report.value?.fixedExpenseCandidateCount),
+);
+const availableTrendAmounts = computed(
+    () =>
+        report.value?.monthlyTrend?.filter((item) => item.hasData).map((item) => item.amount) ?? [],
 );
 const trendMax = computed(() =>
-    Math.max(...(report.value?.monthlyTrend?.map((item) => item.amount) ?? [1])),
+    availableTrendAmounts.value.length ? Math.max(...availableTrendAmounts.value) : 1,
 );
 const trendMin = computed(() =>
-    Math.min(...(report.value?.monthlyTrend?.map((item) => item.amount) ?? [0])),
+    availableTrendAmounts.value.length ? Math.min(...availableTrendAmounts.value) : 0,
 );
 const selectedTrend = computed(
     () =>
-        report.value?.monthlyTrend?.find((item) => item.month === selectedTrendMonth.value) ??
-        report.value?.monthlyTrend?.at(-1) ??
+        report.value?.monthlyTrend?.find((item) => item.yearMonth === selectedTrendPeriod.value) ??
+        report.value?.monthlyTrend?.filter((item) => item.hasData).at(-1) ??
         null,
 );
 const trendMonths = computed(() => {
@@ -63,7 +74,10 @@ const trendMonths = computed(() => {
 });
 
 async function loadMonths() {
-    months.value = await fetchMonthlyConsumptionMonths();
+    months.value =
+        reportSource.value === 'mock'
+            ? await fetchTempMonthlyConsumptionMonths()
+            : await fetchMonthlyConsumptionMonths();
 }
 
 async function loadReport() {
@@ -71,11 +85,47 @@ async function loadReport() {
     errorMessage.value = '';
     report.value = null;
     try {
-        report.value = await fetchMonthlyConsumptionReport(selectedPeriod.value);
-        selectedTrendMonth.value = Number(selectedPeriod.value.slice(5));
+        const selectedMonth = months.value.find((month) => month.value === selectedPeriod.value);
+        if (selectedMonth?.status === 'onboarding') {
+            report.value = { period: selectedPeriod.value, status: 'onboarding' };
+            selectedTrendPeriod.value = selectedPeriod.value;
+            return;
+        }
+        report.value =
+            reportSource.value === 'mock'
+                ? await fetchTempMonthlyConsumptionReport(selectedPeriod.value)
+                : await fetchMonthlyConsumptionReport(selectedPeriod.value);
+        selectedTrendPeriod.value = selectedPeriod.value;
     } catch (error) {
         errorMessage.value = error.message ?? '소비 리포트를 불러오지 못했습니다.';
     } finally {
+        loading.value = false;
+    }
+}
+
+// TEMP(#154): 백엔드 안정화 후 이 함수와 화면의 전환 버튼을 삭제한다.
+async function switchReportSource(source) {
+    if (source === reportSource.value || loading.value) {
+        return;
+    }
+
+    reportSource.value = source;
+    loading.value = true;
+    errorMessage.value = '';
+    try {
+        await loadMonths();
+        selectedPeriod.value = resolveSelectedReportPeriod(months.value, selectedPeriod.value);
+        if (!selectedPeriod.value) {
+            throw new Error('조회 가능한 소비 리포트가 없습니다.');
+        }
+        await router.replace({
+            name: 'monthlyConsumptionReport',
+            query: { month: selectedPeriod.value },
+        });
+        await loadReport();
+    } catch (error) {
+        report.value = null;
+        errorMessage.value = error.message ?? '리포트 데이터 소스를 전환하지 못했습니다.';
         loading.value = false;
     }
 }
@@ -102,8 +152,8 @@ function openTrialReport() {
     router.push({ name: 'challengeReport', query: { month: selectedPeriod.value } });
 }
 
-function selectTrend(month) {
-    selectedTrendMonth.value = month;
+function selectTrend(yearMonth) {
+    selectedTrendPeriod.value = yearMonth;
 }
 
 function getTrendBarHeight(amount) {
@@ -168,7 +218,11 @@ onMounted(async () => {
             <p class="monthly-report__period">{{ formatPeriod(report.period) }}</p>
             <MonthlyVerdictSummary :report="report" :show-comparison="!isFirstReport" />
 
-            <section class="monthly-report__message" aria-labelledby="message-title">
+            <section
+                v-if="report.comment"
+                class="monthly-report__message"
+                aria-labelledby="message-title"
+            >
                 <h2 id="message-title">탕이의 한마디</h2>
                 <p>{{ report.comment }}</p>
             </section>
@@ -186,7 +240,7 @@ onMounted(async () => {
                     <div class="monthly-report__first-flow-chart" aria-label="첫 소비 기록 흐름">
                         <span
                             v-for="item in trendMonths"
-                            :key="item.month"
+                            :key="item.yearMonth"
                             :class="{ 'monthly-report__first-flow-month--active': item.active }"
                         >
                             <i></i>{{ item.month }}월
@@ -206,22 +260,24 @@ onMounted(async () => {
                     <div class="monthly-report__chart" aria-label="최근 6개월 소비 그래프">
                         <button
                             v-for="item in trendMonths"
-                            :key="item.month"
+                            :key="item.yearMonth"
                             type="button"
                             class="monthly-report__bar-item"
                             :class="{
                                 'monthly-report__bar-item--selected':
-                                    item.month === selectedTrend?.month,
+                                    item.yearMonth === selectedTrend?.yearMonth,
                                 'monthly-report__bar-item--empty': !item.hasData,
                             }"
                             :disabled="!item.hasData"
-                            :aria-pressed="item.hasData && item.month === selectedTrend?.month"
+                            :aria-pressed="
+                                item.hasData && item.yearMonth === selectedTrend?.yearMonth
+                            "
                             :aria-label="
                                 item.hasData
                                     ? `${item.month}월 소비 ${formatWon(item.amount)}`
                                     : `${item.month}월 소비 내역 없음`
                             "
-                            @click="selectTrend(item.month)"
+                            @click="selectTrend(item.yearMonth)"
                         >
                             <span
                                 :style="
@@ -231,13 +287,13 @@ onMounted(async () => {
                                 "
                                 :class="{
                                     'monthly-report__bar--current':
-                                        item.month === selectedTrend?.month,
+                                        item.yearMonth === selectedTrend?.yearMonth,
                                 }"
                             ></span>
                             <b
                                 :class="{
                                     'monthly-report__month--current':
-                                        item.month === selectedTrend?.month,
+                                        item.yearMonth === selectedTrend?.yearMonth,
                                 }"
                                 >{{ item.month }}월</b
                             >
@@ -255,7 +311,7 @@ onMounted(async () => {
                     </div>
                     <p v-if="fixedExpenseStatus === 'detected'">
                         고정 지출로 의심되는 내역이
-                        {{ report.fixedExpenseCandidates.length }}건 있어요
+                        {{ report.fixedExpenseCandidateCount }}건 있어요
                     </p>
                     <p v-else>절약 리포트를 확인해보세요</p>
                 </div>
@@ -284,6 +340,11 @@ onMounted(async () => {
             active="monthly"
             @open-monthly-report="openMonthlyReport"
             @open-trial-report="openTrialReport"
+        />
+        <TempMonthlyReportSourceToggle
+            :source="reportSource"
+            :loading="loading"
+            @toggle="switchReportSource"
         />
     </article>
 </template>

@@ -1,32 +1,42 @@
 <script setup>
-import { computed } from 'vue';
-import { formatChangeRate, formatWon } from '@/utils/monthlyConsumption';
+import { computed, ref, watch } from 'vue';
+import { formatChangeRate, formatWon, splitMonthlyCategories } from '@/utils/monthlyConsumption';
 
 const props = defineProps({
     report: { type: Object, required: true },
     showComparison: { type: Boolean, default: true },
 });
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
-const leadingCategory = computed(() => props.report.categories[0]);
-const comparisonCopy = computed(() => {
-    const rate = leadingCategory.value.changeRate;
-    if (rate === 0) {
-        return `${leadingCategory.value.name} 지출이 지난달과 같아요`;
-    }
-    return `${leadingCategory.value.name} 지출이 지난달보다 ${Math.abs(rate)}% ${
-        rate > 0 ? '늘었어요' : '줄었어요'
-    }`;
-});
+const isReceiptExpanded = ref(false);
+const categoryGroups = computed(() => splitMonthlyCategories(props.report.categories));
+const primaryCategories = computed(() => categoryGroups.value.primaryCategories);
+const additionalCategories = computed(() => categoryGroups.value.additionalCategories);
+
+watch(
+    () => props.report.period,
+    () => {
+        isReceiptExpanded.value = false;
+    },
+);
+
+function toggleReceipt() {
+    isReceiptExpanded.value = !isReceiptExpanded.value;
+}
+
 const CHART_COLORS = {
     primary: 'var(--tt-primary)',
     accent: 'var(--tt-accent)',
     success: 'var(--tt-success)',
-    muted: 'var(--tt-text-muted)',
-    soft: 'var(--tt-border-strong)',
+    danger: 'var(--tt-danger)',
+    info: 'var(--tt-info)',
+    other: 'var(--tt-text-muted)',
 };
 const chartStyle = computed(() => {
+    if (!props.report.parentCategories.length) {
+        return { background: 'var(--tt-border)' };
+    }
     let offset = 0;
-    const segments = props.report.categories.map((category) => {
+    const segments = props.report.parentCategories.map((category) => {
         const nextOffset = offset + category.ratio;
         const segment = `${CHART_COLORS[category.tone]} ${offset}% ${nextOffset}%`;
         offset = nextOffset;
@@ -40,12 +50,7 @@ const chartStyle = computed(() => {
     <section class="category-report" aria-labelledby="category-title">
         <h2 id="category-title">카테고리별</h2>
         <div class="category-report__ratio-card">
-            <h3 v-if="showComparison">
-                {{ comparisonCopy }}
-            </h3>
-            <h3 v-else>
-                이번 달 소비 비중 <span>{{ reportMonth }}월 지출 기준</span>
-            </h3>
+            <h3>TOP 5</h3>
             <div class="category-report__chart-row">
                 <div
                     class="category-report__donut"
@@ -56,7 +61,7 @@ const chartStyle = computed(() => {
                     <b>{{ reportMonth }}월</b>
                 </div>
                 <ul class="category-report__legend">
-                    <li v-for="category in report.categories" :key="category.name">
+                    <li v-for="category in report.parentCategories" :key="category.name">
                         <i :class="`category-report__dot--${category.tone}`"></i>
                         <span>{{ category.name }}</span
                         ><b>{{ category.ratio }}%</b>
@@ -67,7 +72,7 @@ const chartStyle = computed(() => {
         <div class="category-report__receipt">
             <p>선고 명세&nbsp; · &nbsp;카테고리별</p>
             <ul>
-                <li v-for="category in report.categories" :key="category.name">
+                <li v-for="category in primaryCategories" :key="category.categoryId">
                     <i :class="`category-report__icon--${category.tone}`">{{ category.code }}</i>
                     <span>{{ category.name }}</span>
                     <strong>{{ formatWon(category.amount) }}</strong>
@@ -82,11 +87,42 @@ const chartStyle = computed(() => {
                     </b>
                 </li>
             </ul>
+            <Transition name="receipt-slide">
+                <ul v-if="isReceiptExpanded" class="category-report__receipt-additional">
+                    <li v-for="category in additionalCategories" :key="category.categoryId">
+                        <i :class="`category-report__icon--${category.tone}`">{{
+                            category.code
+                        }}</i>
+                        <span>{{ category.name }}</span>
+                        <strong>{{ formatWon(category.amount) }}</strong>
+                        <b
+                            v-if="showComparison"
+                            :class="{
+                                'category-report__change--up': category.changeRate > 0,
+                                'category-report__change--down': category.changeRate < 0,
+                            }"
+                        >
+                            {{ formatChangeRate(category.changeRate) }}
+                        </b>
+                    </li>
+                </ul>
+            </Transition>
+            <button
+                v-if="additionalCategories.length"
+                type="button"
+                class="category-report__receipt-more"
+                :aria-expanded="isReceiptExpanded"
+                @click="toggleReceipt"
+            >
+                <span>
+                    {{ isReceiptExpanded ? '접기' : `더보기 ${additionalCategories.length}개` }}
+                </span>
+            </button>
             <footer>
                 <span>합계</span><strong>{{ formatWon(report.totalSpent) }}</strong>
             </footer>
         </div>
-        <aside v-if="showComparison" class="category-report__sentence">
+        <aside v-if="showComparison && report.savingsStatement" class="category-report__sentence">
             이번 달 아낀 <strong>{{ formatWon(report.savingsStatement.amount) }}</strong
             >은<br />
             <b>{{ report.savingsStatement.category }}라떼 {{ report.savingsStatement.count }}잔</b>
@@ -185,13 +221,17 @@ const chartStyle = computed(() => {
 .category-report__icon--success {
     --tt-category-color: var(--tt-success);
 }
-.category-report__dot--muted,
-.category-report__icon--muted {
-    --tt-category-color: var(--tt-gray-600);
+.category-report__dot--danger,
+.category-report__icon--danger {
+    --tt-category-color: var(--tt-danger);
 }
-.category-report__dot--soft,
-.category-report__icon--soft {
-    --tt-category-color: var(--tt-gray-400);
+.category-report__dot--info,
+.category-report__icon--info {
+    --tt-category-color: var(--tt-info);
+}
+.category-report__dot--other,
+.category-report__icon--other {
+    --tt-category-color: var(--tt-text-muted);
 }
 .category-report__legend i {
     background: var(--tt-category-color);
@@ -213,6 +253,9 @@ const chartStyle = computed(() => {
     flex-direction: column;
     gap: var(--tt-space-4);
 }
+.category-report__receipt-additional {
+    margin-top: var(--tt-space-4);
+}
 .category-report__receipt li {
     display: grid;
     grid-template-columns: 42px 1fr auto auto;
@@ -222,8 +265,9 @@ const chartStyle = computed(() => {
 .category-report__icon--primary,
 .category-report__icon--accent,
 .category-report__icon--success,
-.category-report__icon--muted,
-.category-report__icon--soft {
+.category-report__icon--danger,
+.category-report__icon--info,
+.category-report__icon--other {
     display: grid;
     width: 40px;
     height: 40px;
@@ -249,6 +293,38 @@ const chartStyle = computed(() => {
 }
 .category-report__change--down {
     color: var(--tt-success) !important;
+}
+.category-report__receipt-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-1);
+    width: 100%;
+    margin-top: var(--tt-space-4);
+    padding: var(--tt-space-3) 0 0;
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    background: transparent;
+    border: 0;
+    border-top: 2px dashed var(--tt-border);
+    cursor: pointer;
+}
+.category-report__receipt-more:hover {
+    color: var(--tt-text);
+}
+.receipt-slide-enter-active,
+.receipt-slide-leave-active {
+    max-height: 4000px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+.receipt-slide-enter-from,
+.receipt-slide-leave-to {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
 }
 .category-report__receipt footer {
     display: flex;
