@@ -246,6 +246,12 @@ function livesColor(challenge) {
                         </span>
                     </div>
                 </div>
+
+                <!-- 참여코드 진입로. 목록 「시작 전」 탭까지 들어가지 않아도 코드를 넣을 수 있다 -->
+                <button type="button" class="gc-join-cta" @click="showJoinSheet = true">
+                    <span class="gc-join-cta__title">참여코드가 있나요?</span>
+                    <span class="gc-join-cta__arrow">›</span>
+                </button>
             </div>
         </main>
 
@@ -563,6 +569,33 @@ function livesColor(challenge) {
 .gc-challenge-card__lives {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
+}
+
+/* ── 참여코드 진입로 ──────────────────── */
+.gc-join-cta {
+    width: 100%;
+    margin-top: 11px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--tt-bg);
+    border: 1.5px dashed var(--tt-border-strong);
+    border-radius: 18px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.gc-join-cta__title {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.gc-join-cta__arrow {
+    font-size: var(--tt-fs-subtitle);
+    color: var(--tt-text-hint);
+    line-height: 1;
 }
 
 /* ── 토스트 ────────────────────────────── */
