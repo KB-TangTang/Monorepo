@@ -14,13 +14,44 @@ import MyProfileCard from '@/components/my/MyProfileCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMe, logout } from '@/api/auth';
-import { updateMyNickname } from '@/api/user';
+import { deleteMyProfileImage, updateMyNickname, uploadMyProfileImage } from '@/api/user';
 import { useAuthStore } from '@/stores/auth';
 import { resetPersonalTutorial, resetGroupTutorial } from '@/services/tutorialGuide';
 import { NICKNAME_MAX_LENGTH, resolveDisplayName, validateNickname } from '@/utils/user';
 
 const router = useRouter();
 const auth = useAuthStore();
+
+const photoSheetOpen = ref(false);
+const photoSheet = ref(null);
+const photoInput = ref(null);
+const photoBusy = ref(false);
+const photoError = ref('');
+
+async function runPhoto(action) {
+    photoBusy.value = true;
+    photoError.value = '';
+    try {
+        const updated = await action();
+        /* 이 화면은 fetchMe() 결과를 따로 들고 있다 — 스토어와 함께 갈아끼워야 카드가 바뀐다 */
+        user.value = { ...user.value, ...updated };
+        auth.mergeUser(updated);
+        photoSheet.value?.releaseHistory();
+        photoSheetOpen.value = false;
+    } catch (err) {
+        photoError.value = err.message ?? '사진을 바꾸지 못했어요.';
+    } finally {
+        photoBusy.value = false;
+    }
+}
+
+function onPickPhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) {
+        runPhoto(() => uploadMyProfileImage(file));
+    }
+}
 
 const MENU = [
     { key: 'nickname', label: '닉네임 수정' },
@@ -186,7 +217,9 @@ async function confirmLogout() {
             -->
             <StateError v-if="errorMessage" :message="errorMessage" @retry="load" />
             <template v-else>
-                <MyProfileCard :user="user" />
+                <button type="button" class="my-page__profile" @click="photoSheetOpen = true">
+                    <MyProfileCard :user="user" />
+                </button>
                 <MyMenuList :items="MENU" @select="onSelect" />
             </template>
 
@@ -250,6 +283,31 @@ async function confirmLogout() {
                 <BaseButton variant="ghost" block @click="logoutSheetOpen = false">취소</BaseButton>
             </div>
         </BaseBottomSheet>
+
+        <BaseBottomSheet ref="photoSheet" v-model="photoSheetOpen" title="프로필 사진">
+            <div class="my-page__sheet">
+                <BaseButton block :loading="photoBusy" @click="photoInput?.click()">
+                    사진 변경
+                </BaseButton>
+                <BaseButton
+                    v-if="user?.profileImageUrl"
+                    block
+                    variant="ghost"
+                    :loading="photoBusy"
+                    @click="runPhoto(deleteMyProfileImage)"
+                >
+                    기본 이미지로 되돌리기
+                </BaseButton>
+                <p v-if="photoError" class="my-page__sheet-error" role="alert">{{ photoError }}</p>
+                <input
+                    ref="photoInput"
+                    type="file"
+                    accept="image/*"
+                    class="my-page__file"
+                    @change="onPickPhoto"
+                />
+            </div>
+        </BaseBottomSheet>
     </div>
 </template>
 
@@ -303,5 +361,19 @@ async function confirmLogout() {
 .my-page__sheet-text {
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
+}
+
+.my-page__profile {
+    display: block;
+    width: 100%;
+    padding: 0;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.my-page__file {
+    display: none;
 }
 </style>

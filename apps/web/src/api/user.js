@@ -40,3 +40,31 @@ export function updateMyName(name) {
 export function updateMyNickname(nickname) {
     return http.patch('/users/me/nickname', { nickname });
 }
+
+/**
+ * 프로필 이미지 업로드. 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 함께 쓴다.
+ *
+ * ⚠ **Content-Type 을 직접 지정하지 않는다.** FormData 를 넘기면 브라우저가 boundary 를
+ * 포함해 자동으로 채운다. 손으로 지정하면 boundary 가 빠져 서버가 파싱하지 못한다.
+ *
+ * 응답은 갱신된 사용자 정보 전체다 — 닉네임과 같은 규칙이라 호출부가 auth.mergeUser() 로
+ * 반영해야 카드가 그 자리에서 바뀐다.
+ *
+ * @param {File} file 이미지 파일
+ * @returns {Promise<object>} 갱신된 사용자 정보 (profileImageUrl 포함)
+ */
+export function uploadMyProfileImage(file) {
+    const form = new FormData();
+    form.append('file', file);
+    return http.post('/users/me/profile-image', form);
+}
+
+/**
+ * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+ * 이미 미설정이어도 성공한다.
+ *
+ * @returns {Promise<object>} 갱신된 사용자 정보 (profileImageUrl 은 null)
+ */
+export function deleteMyProfileImage() {
+    return http.delete('/users/me/profile-image');
+}

@@ -6,7 +6,8 @@
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import { profileInitial, providerLabel } from '@/utils/my';
+import UserAvatar from '@/components/common/UserAvatar.vue';
+import { providerLabel } from '@/utils/my';
 import { resolveDisplayName } from '@/utils/user';
 
 const props = defineProps({
@@ -15,11 +16,9 @@ const props = defineProps({
 
 /*
  * 표시명 규칙은 `nickname ?? socialName` 이고 서버가 displayName 으로 계산해 내려준다.
- * 규칙 자체는 utils/user.js 한 곳에 있다 — 이름과 아바타 이니셜이 서로 다른 값을 보는 일이 없게
- * **둘 다 같은 값에서 뽑는다.** (DECISIONS.md 2026-08-11)
+ * 규칙 자체는 utils/user.js 한 곳에 있다.
  */
 const displayName = computed(() => resolveDisplayName(props.user));
-const initial = computed(() => profileInitial(displayName.value));
 const subtitle = computed(() => {
     const provider = providerLabel(props.user?.socialProvider);
     const email = props.user?.email ?? '';
@@ -30,7 +29,7 @@ const subtitle = computed(() => {
 <template>
     <BaseCard>
         <div class="my-profile">
-            <span class="my-profile__avatar" aria-hidden="true">{{ initial }}</span>
+            <UserAvatar :image-url="user?.profileImageUrl" :name="displayName" size="lg" />
             <div class="my-profile__text">
                 <p class="my-profile__name">{{ displayName || '이름 없음' }}</p>
                 <p class="my-profile__sub">{{ subtitle }}</p>
@@ -44,19 +43,6 @@ const subtitle = computed(() => {
     display: flex;
     align-items: center;
     gap: var(--tt-space-4);
-}
-
-.my-profile__avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    font-size: var(--tt-fs-section);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-primary);
-    background: var(--tt-surface-strong);
-    border-radius: var(--tt-radius-full);
 }
 
 .my-profile__name {

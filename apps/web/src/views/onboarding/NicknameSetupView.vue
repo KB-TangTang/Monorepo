@@ -11,12 +11,39 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseInput from '@/components/common/BaseInput.vue';
-import { updateMyNickname } from '@/api/user';
+import UserAvatar from '@/components/common/UserAvatar.vue';
+import { updateMyNickname, uploadMyProfileImage } from '@/api/user';
 import { useAuthStore } from '@/stores/auth';
 import { NICKNAME_MAX_LENGTH, validateNickname } from '@/utils/user';
 
 const router = useRouter();
 const auth = useAuthStore();
+
+const fileInput = ref(null);
+const uploading = ref(false);
+const imageError = ref('');
+
+/*
+ * 고르는 즉시 올린다. 닉네임 저장을 기다리지 않는 이유는 사진이 **선택**이기 때문이다 —
+ * 사진만 바꾸고 이름은 그대로 두고 넘어갈 수 있어야 한다.
+ */
+async function onPickImage(event) {
+    const file = event.target.files?.[0];
+    /* 같은 파일을 다시 고를 수 있게 값을 비운다 — 안 비우면 change 가 안 뜬다 */
+    event.target.value = '';
+    if (!file || uploading.value) {
+        return;
+    }
+    uploading.value = true;
+    imageError.value = '';
+    try {
+        auth.mergeUser(await uploadMyProfileImage(file));
+    } catch (err) {
+        imageError.value = err.message ?? '사진을 올리지 못했어요.';
+    } finally {
+        uploading.value = false;
+    }
+}
 
 /*
  * 구글 계정 이름(socialName)으로 미리 채운다 — 그대로 확인만 하고 넘어갈 수 있어야 한다.
@@ -66,6 +93,32 @@ async function onSubmit() {
                 재판정과 랭킹에 보여줄 이름이에요.<br />
                 나중에 마이페이지에서 바꿀 수 있어요.
             </p>
+
+            <div class="nickname-setup__avatar">
+                <button
+                    type="button"
+                    class="nickname-setup__avatar-button"
+                    :disabled="uploading"
+                    @click="fileInput?.click()"
+                >
+                    <UserAvatar
+                        :image-url="auth.user?.profileImageUrl"
+                        :name="nickname"
+                        size="lg"
+                    />
+                    <span class="nickname-setup__avatar-hint">
+                        {{ uploading ? '올리는 중…' : '사진 추가' }}
+                    </span>
+                </button>
+                <input
+                    ref="fileInput"
+                    type="file"
+                    accept="image/*"
+                    class="nickname-setup__file"
+                    @change="onPickImage"
+                />
+            </div>
+            <p v-if="imageError" class="nickname-setup__error" role="alert">{{ imageError }}</p>
 
             <BaseInput
                 v-model="nickname"
@@ -128,6 +181,32 @@ async function onSubmit() {
     font-size: var(--tt-fs-caption);
     line-height: var(--tt-lh-normal);
     color: var(--tt-text-muted);
+}
+
+.nickname-setup__avatar {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--tt-space-6);
+}
+
+.nickname-setup__avatar-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tt-space-2);
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.nickname-setup__avatar-hint {
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.nickname-setup__file {
+    display: none;
 }
 
 .nickname-setup__field {
