@@ -349,6 +349,45 @@
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
 
+## 오늘의 개인 미션 조회 (이슈 #160)
+
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/api/missions/today` | Bearer | 로그인 사용자의 오늘 배정된 개인 미션 조회 |
+
+응답은 `{ missionId, missionTitle, missionContent, missionType, categoryId, parentCategoryName,
+categoryName, assignDate, difficultyName, targetRate, baseAmount, targetValue, result,
+assignmentReason, guideMessage }` 형태다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "missionId": 11,
+    "missionTitle": "배달 현장 급습",
+    "missionContent": "오늘 배달 지출을 목표 금액 안으로 묶는다.",
+    "missionType": "RELATIVE",
+    "categoryId": 18,
+    "parentCategoryName": "식비",
+    "categoryName": "배달앱",
+    "assignDate": "2026-08-12",
+    "difficultyName": "NORMAL",
+    "targetRate": 25,
+    "baseAmount": 24000,
+    "targetValue": 18000,
+    "result": "PENDING",
+    "assignmentReason": null,
+    "guideMessage": null
+  }
+}
+```
+
+- 오늘 날짜는 `Asia/Seoul` 기준으로 판단한다.
+- 조회 API는 미션을 새로 배정하지 않는다.
+- `LOW_SPENDING_NO_SPEND` 배정은 카테고리명과 배정 사유를 조합해 `guideMessage`를 생성한다.
+- 일반 배정의 `guideMessage`는 `null`이다.
+- 오늘 배정된 미션이 없으면 `TODAY_MISSION_NOT_FOUND`를 반환한다.
+
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -380,7 +419,8 @@
 - 정상 상대형의 `targetValue = baseAmount × (1 - targetRate / 100)`이다.
 - 계산 목표가 해당 카테고리의 최근 28일 최소 양수 단건 결제 금액보다 낮으면 목표를 올리지 않고,
   같은 카테고리의 `ABSOLUTE`이면서 `limit_price=0`인 무지출 미션으로 전환한다.
-- 무지출 전환 배정은 `targetValue=0`, `targetRate/baseAmount/difficultyId=NULL`로 저장한다.
+- 무지출 전환 배정은 실제 수행 목표인 `targetValue=0`으로 저장하되,
+  전환 판단 근거를 추적할 수 있도록 `targetRate`, `baseAmount`, `difficultyId`는 유지한다.
 - `assignmentReason=LOW_SPENDING_NO_SPEND`를 저장하여 월 1회 절대형과 구분하고 다음 안내를 표시한다.
   `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
 - 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.

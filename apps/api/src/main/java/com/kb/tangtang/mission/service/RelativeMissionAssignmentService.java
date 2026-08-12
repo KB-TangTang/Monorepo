@@ -109,10 +109,10 @@ public class RelativeMissionAssignmentService {
             if (missions.isEmpty()) {
                 throw new BusinessException("NO_SPEND_MISSION_NOT_FOUND", "같은 카테고리의 무지출 미션이 없습니다.");
             }
-            assignmentDifficultyId = null;
-            assignmentTargetRate = null;
+            assignmentDifficultyId = effectiveDifficultyId;
+            assignmentTargetRate = targetRate;
             assignmentTargetValue = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-            assignmentBaseAmount = null;
+            assignmentBaseAmount = stats.getBaseAmount();
             missionType = ABSOLUTE;
             assignmentReason = LOW_SPENDING_NO_SPEND;
             guideMessage = buildNoSpendGuideMessage(snapshot.getCategoryName());
