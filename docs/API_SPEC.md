@@ -168,21 +168,27 @@
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/consents/catalog?scope=SIGNUP\|FINANCIAL` | Bearer | `{ scope, termsVersion, items:[{type,required,label,termsUrl}] }` |
+| GET | `/api/consents/catalog?scope=SIGNUP\|FINANCIAL\|CHALLENGE` | Bearer | `{ scope, termsVersion, items:[{type,required,label,termsUrl}] }` |
 | POST | `/api/consents` | Bearer | `{ needsConsent }` — 본문 `{ scope, agreements:[{type,agreed}] }` |
 | GET | `/api/consents/me` | Bearer | `{ items:[{type,scope,required,label,termsUrl,agreed,withdrawable,termsVersion,expiresAt}] }` |
 | POST | `/api/consents/{type}/withdraw` | Bearer | `{ needsConsent }` |
 
-동의 그룹은 2종이다.
+동의 그룹은 3종이다.
 
 | scope | 항목 |
 |---|---|
 | `SIGNUP` | 필수 `TERMS`·`PRIVACY`·`FINANCIAL_DATA` / 선택 `AI_USAGE`·`MARKETING` |
 | `FINANCIAL` | 필수 `THIRD_PARTY` |
+| `CHALLENGE` | 선택 `CHALLENGE` — 개인·그룹 공통 챌린지 참여 동의 |
 
 약관 본문은 서버가 갖지 않는다. `termsUrl` 은 노션 공개 페이지이고 새 탭으로 연다.
 `terms_version` 은 요청값을 무시하고 서버 카탈로그 값을 저장한다.
 `needsConsent` 는 `SIGNUP` 필수 3종 기준으로만 판정한다.
+
+`CHALLENGE` 동의는 사용자가 메인 챌린지를 처음 시작할 때 한 번 받는다. 이후에는 다시 묻지 않으며,
+마이페이지 동의 관리에서 철회하거나 재동의한다. 최초 동의와 철회 후 재동의가 완료되면 커밋 이후
+`ChallengeConsentAgreedEvent`를 발행해 오늘 미션이 없는 사용자에게 당일 미션 배정을 시도한다.
+이미 활성인 동의를 다시 제출해도 이벤트를 중복 발행하지 않는다. 챌린지 약관 URL은 확정 전까지 `null`이다.
 
 동의를 기록하려면 `agreed: true` 를 명시적으로 보내야 한다. `agreed` 를 생략하거나 `null` 로 보내면 원시형 기본값 `false` 로 바인딩되어, 해당 항목을 요청에 넣지 않은 것과 동일하게 미동의로 저장된다.
 
@@ -407,10 +413,17 @@ assignmentReason, guideMessage }` 형태다.
 
 ### 상대형 미션 자동 배정 (이슈 #139)
 
-화면 요청으로 배정하지 않고 서버 스케줄러가 매일 한국 시간 00:10에 실행한다.
+정규 배정은 서버 스케줄러가 매일 한국 시간 00:10에 실행한다.
 실행 시간은 `mission.assignment.cron`, 타임존은 `mission.assignment.zone` 설정으로 변경할 수 있다.
 
-- 활성 사용자별로 하루 한 개만 배정하며 `uk_umi_user_date`를 최종 중복 방어선으로 사용한다.
+- 정규 배정 대상은 `CHALLENGE` 동의가 활성 상태이고 오늘 미션이 없는 활성 사용자다.
+- 최초 동의 또는 철회 후 재동의 시에는 해당 사용자만 당일 즉시 배정한다.
+- 서버 시작 시 한 번, 이후 30분마다 같은 조건으로 누락 배정을 복구한다.
+- 복구 주기는 `mission.assignment.recovery-cron`으로 변경할 수 있다.
+- 동의를 철회하면 기존 미션 기록은 유지하고 이후 정규·복구 배정 대상에서 제외한다.
+- 사용자 한 명의 실패가 나머지 사용자 배정을 중단하지 않으며, 다음 복구 주기에 다시 대상이 된다.
+
+- 사용자별로 하루 한 개만 배정하며 `uk_umi_user_date`를 최종 중복 방어선으로 사용한다.
 - 최신 분석 주기의 미소진 항목 중 `category_rank` 숫자가 가장 낮은 카테고리를 먼저 사용한다.
 - 미소진 항목이 없으면 최근 28일 소비를 다시 분석해 새 스냅샷을 만든다.
 - 직전에 같은 카테고리에서 배정한 미션을 우선 제외하되 후보가 없으면 재사용한다.

@@ -7,6 +7,7 @@ import com.kb.tangtang.user.dto.ConsentRecordDto;
 import com.kb.tangtang.user.dto.MyConsentDto;
 import com.kb.tangtang.user.dto.MyConsentRowDto;
 import com.kb.tangtang.user.domain.ConsentWithdrawnEvent;
+import com.kb.tangtang.user.event.ChallengeConsentAgreedEvent;
 import com.kb.tangtang.user.mapper.ConsentMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
@@ -171,6 +172,37 @@ class ConsentServiceTest {
     }
 
     @Test
+    @DisplayName("챌린지 최초 동의 또는 재동의는 당일 배정 이벤트를 발행한다")
+    void submitChallengePublishesEventWhenPreviouslyInactive() {
+        when(consentMapper.countActive(eq(1L), eq(List.of("CHALLENGE")), any(LocalDateTime.class)))
+                .thenReturn(0);
+        when(consentMapper.countActive(eq(1L),
+                eq(List.of("TERMS", "PRIVACY", "FINANCIAL_DATA")), any(LocalDateTime.class)))
+                .thenReturn(3);
+
+        service().submit(1L, ConsentScope.CHALLENGE, List.of(agree("CHALLENGE", true)));
+
+        ArgumentCaptor<ChallengeConsentAgreedEvent> captor =
+                ArgumentCaptor.forClass(ChallengeConsentAgreedEvent.class);
+        verify(events).publishEvent(captor.capture());
+        assertEquals(1L, captor.getValue().userId());
+    }
+
+    @Test
+    @DisplayName("이미 활성인 챌린지 동의를 다시 제출해도 배정 이벤트를 중복 발행하지 않는다")
+    void submitChallengeDoesNotPublishEventWhenAlreadyActive() {
+        when(consentMapper.countActive(eq(1L), eq(List.of("CHALLENGE")), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(consentMapper.countActive(eq(1L),
+                eq(List.of("TERMS", "PRIVACY", "FINANCIAL_DATA")), any(LocalDateTime.class)))
+                .thenReturn(3);
+
+        service().submit(1L, ConsentScope.CHALLENGE, List.of(agree("CHALLENGE", true)));
+
+        verify(events, never()).publishEvent(any(ChallengeConsentAgreedEvent.class));
+    }
+
+    @Test
     @DisplayName("FINANCIAL_DATA 동의에만 1년 만료가 붙는다")
     void submitSetsExpiryOnlyForFinancialData() {
         when(consentMapper.countActive(anyLong(), any(), any(LocalDateTime.class))).thenReturn(3);
@@ -275,7 +307,7 @@ class ConsentServiceTest {
 
         List<MyConsentDto> result = service().myConsents(1L);
 
-        assertEquals(6, result.size(), "카탈로그의 SIGNUP 5종 + FINANCIAL 1종");
+        assertEquals(7, result.size(), "카탈로그의 SIGNUP 5종 + FINANCIAL 1종 + CHALLENGE 1종");
         MyConsentDto terms = result.stream().filter(d -> "TERMS".equals(d.getType())).findFirst().orElseThrow();
         MyConsentDto marketing = result.stream().filter(d -> "MARKETING".equals(d.getType())).findFirst().orElseThrow();
 
@@ -296,6 +328,7 @@ class ConsentServiceTest {
         assertEquals("SIGNUP", find(result, "FINANCIAL_DATA").getScope());
         assertEquals("FINANCIAL", find(result, "THIRD_PARTY").getScope(),
                 "CODEF 제3자 제공은 FINANCIAL 묶음이다. SIGNUP 으로 저장하면 요청이 거부된다");
+        assertEquals("CHALLENGE", find(result, "CHALLENGE").getScope());
     }
 
     private MyConsentDto find(List<MyConsentDto> items, String type) {

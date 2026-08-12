@@ -21,7 +21,7 @@ class RelativeMissionAssignmentBatchServiceTest {
     @Test
     void oneUserFailureDoesNotStopOtherUsers() {
         LocalDate date = LocalDate.of(2026, 8, 12);
-        when(mapper.findActiveUserIds()).thenReturn(List.of(1L, 2L, 3L));
+        when(mapper.findUnassignedChallengeConsentedUserIds(date)).thenReturn(List.of(1L, 2L, 3L));
         when(assignmentService.assign(2L, date))
                 .thenThrow(new BusinessException("MISSION_POOL_EMPTY", "미션 없음"));
 

@@ -21,7 +21,7 @@ public class RelativeMissionAssignmentBatchService {
     }
 
     public void assignDailyMissions(LocalDate assignDate) {
-        for (Long userId : assignmentMapper.findActiveUserIds()) {
+        for (Long userId : assignmentMapper.findUnassignedChallengeConsentedUserIds(assignDate)) {
             try {
                 assignmentService.assign(userId, assignDate);
             } catch (BusinessException exception) {

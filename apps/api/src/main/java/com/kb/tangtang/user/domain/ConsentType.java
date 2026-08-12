@@ -14,8 +14,8 @@ public enum ConsentType {
     THIRD_PARTY("CODEF 제3자 제공", true, true),
     AI_USAGE("AI 소비 분석 활용", false, true),
     MARKETING("마케팅 알림 수신", false, true),
-    /** 그룹챌린지 참가 동의. 아직 어떤 scope 에도 속하지 않는다(해당 이슈에서 scope 추가). */
-    CHALLENGE("그룹챌린지 참가", false, true);
+    /** 개인·그룹 공통 챌린지 참여 동의. 최초 메인 챌린지 시작 시 한 번 동의받는다. */
+    CHALLENGE("챌린지 참여", false, true);
 
     private final String label;
     private final boolean required;

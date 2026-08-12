@@ -9,6 +9,7 @@ import com.kb.tangtang.user.dto.MyConsentDto;
 import com.kb.tangtang.user.dto.MyConsentRowDto;
 import com.kb.tangtang.user.mapper.ConsentMapper;
 import com.kb.tangtang.user.domain.ConsentWithdrawnEvent;
+import com.kb.tangtang.user.event.ChallengeConsentAgreedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -103,6 +104,9 @@ public class ConsentService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        boolean challengeAgreed = Boolean.TRUE.equals(requested.get(ConsentType.CHALLENGE.name()));
+        boolean challengeWasActive = scope == ConsentScope.CHALLENGE
+                && consentMapper.countActive(userId, List.of(ConsentType.CHALLENGE.name()), now) == 1;
         for (ConsentType type : scopeTypes) {
             boolean agreed = Boolean.TRUE.equals(requested.get(type.name()));
             consentMapper.upsert(ConsentRecordDto.builder()
@@ -114,6 +118,10 @@ public class ConsentService {
                     .withdrawnAt(agreed ? null : now)
                     .expiresAt(agreed && type == ConsentType.FINANCIAL_DATA ? now.plusYears(1) : null)
                     .build());
+        }
+
+        if (scope == ConsentScope.CHALLENGE && challengeAgreed && !challengeWasActive) {
+            events.publishEvent(new ChallengeConsentAgreedEvent(userId, now));
         }
 
         return needsConsent(userId);

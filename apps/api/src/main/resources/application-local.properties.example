@@ -46,4 +46,5 @@ google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
 # 공통 기본값은 매일 Asia/Seoul 00:10이다. 로컬에서 다른 주기로
 # 테스트할 때만 아래 주석을 해제한다. 예시는 매분 0초에 실행한다.
 #mission.assignment.cron=0 * * * * *
+#mission.assignment.recovery-cron=0 */5 * * * *
 #mission.assignment.zone=Asia/Seoul
