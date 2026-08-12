@@ -102,4 +102,19 @@ class ImageProcessorTest {
 
         assertEquals("IMAGE_TOO_LARGE", e.getCode());
     }
+
+    @Test
+    @DisplayName("requireWithinLimit 은 5MB 이하면 통과한다 — 본문을 만들지 않고 크기만 본다")
+    void requireWithinLimitAllowsUpToFiveMb() {
+        processor.requireWithinLimit(5 * 1024 * 1024L);
+    }
+
+    @Test
+    @DisplayName("requireWithinLimit 은 5MB 를 넘으면 IMAGE_TOO_LARGE — 컨트롤러가 getBytes() 전에 부른다")
+    void requireWithinLimitRejectsTooLarge() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> processor.requireWithinLimit(5 * 1024 * 1024L + 1));
+
+        assertEquals("IMAGE_TOO_LARGE", e.getCode());
+    }
 }

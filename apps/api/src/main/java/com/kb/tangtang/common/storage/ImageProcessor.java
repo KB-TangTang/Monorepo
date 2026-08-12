@@ -41,13 +41,25 @@ public class ImageProcessor {
         if (source == null || source.length == 0) {
             throw new BusinessException("IMAGE_REQUIRED", "올릴 이미지를 선택해주세요.");
         }
-        if (source.length > MAX_BYTES) {
-            throw new BusinessException("IMAGE_TOO_LARGE", "5MB 이하 이미지만 올릴 수 있어요.");
-        }
+        requireWithinLimit(source.length);
 
         BufferedImage original = decode(source);
         BufferedImage square = cropCenterSquare(original);
         return encodeJpeg(square);
+    }
+
+    /**
+     * 크기만 검사한다 — 본문을 메모리에 올리기 전에 컨트롤러가 먼저 부른다.
+     *
+     * {@code toSquareJpeg} 는 바이트 배열을 받으므로 이미 메모리에 올라온 뒤에야 크기를 본다.
+     * 그래서는 5MB 상한이 할당 자체를 막지 못한다(실제 상한은 서블릿 컨테이너의 파일 10MB
+     * 설정이 잡는다). 컨트롤러가 {@code MultipartFile#getSize()} 로 여기부터 부르면
+     * {@code getBytes()} 호출 전에 막을 수 있다. 상한 상수는 이 클래스 한 곳에만 둔다.
+     */
+    public void requireWithinLimit(long sizeInBytes) {
+        if (sizeInBytes > MAX_BYTES) {
+            throw new BusinessException("IMAGE_TOO_LARGE", "5MB 이하 이미지만 올릴 수 있어요.");
+        }
     }
 
     /** ImageIO 가 null 을 돌려주면 지원하지 않는 형식이거나 이미지가 아니다. */

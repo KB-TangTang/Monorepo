@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -40,12 +43,14 @@ class UserServiceTest {
 
     @Mock private UserMapper userMapper;
     @Mock private ProfileImageUrlResolver profileImageUrlResolver;
+    @Mock private ImageStorage imageStorage;
+    @Mock private ImageProcessor imageProcessor;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userMapper, profileImageUrlResolver);
+        service = new UserService(userMapper, profileImageUrlResolver, imageStorage, imageProcessor);
     }
 
     private static UserDto user(String name) {
@@ -376,5 +381,64 @@ class UserServiceTest {
 
         assertEquals("NOT_FOUND", ex.getCode());
         verify(userMapper, never()).findById(anyLong());
+    }
+
+    /* ── 프로필 이미지 (이슈 #150) ───────────────────────── */
+
+    @Test
+    @DisplayName("업로드하면 새 키로 저장하고 옛 이미지를 지운다 — 순서를 뒤집으면 실패 시 원본까지 잃는다")
+    void uploadReplacesOldImage() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(1);
+
+        service.updateProfileImage(USER_ID, new byte[]{1, 2});
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(imageStorage).store(any(), key.capture());
+        assertTrue(key.getValue().startsWith("profile/" + USER_ID + "/"));
+        assertTrue(key.getValue().endsWith(".jpg"));
+        verify(imageStorage).delete("profile/7/old.jpg");
+    }
+
+    @Test
+    @DisplayName("옛 이미지가 없으면 삭제를 부르지 않는다")
+    void uploadWithoutOldImage() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(1);
+
+        service.updateProfileImage(USER_ID, new byte[]{1, 2});
+
+        verify(imageStorage, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("삭제하면 파일을 지우고 키를 비운다")
+    void deleteClearsKey() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        service.deleteProfileImage(USER_ID);
+
+        verify(imageStorage).delete("profile/7/old.jpg");
+        verify(userMapper).updateProfileImageKey(USER_ID, null);
+    }
+
+    @Test
+    @DisplayName("이미 미설정이어도 삭제는 성공이다 — 없는 것을 지우는 건 오류가 아니다")
+    void deleteIsIdempotent() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        service.deleteProfileImage(USER_ID);
+
+        verify(imageStorage, never()).delete(anyString());
     }
 }

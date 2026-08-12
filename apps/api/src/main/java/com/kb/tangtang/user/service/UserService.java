@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -40,10 +43,15 @@ public class UserService {
 
     private final UserMapper userMapper;
     private final ProfileImageUrlResolver profileImageUrlResolver;
+    private final ImageStorage imageStorage;
+    private final ImageProcessor imageProcessor;
 
-    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver) {
+    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
+                       ImageStorage imageStorage, ImageProcessor imageProcessor) {
         this.userMapper = userMapper;
         this.profileImageUrlResolver = profileImageUrlResolver;
+        this.imageStorage = imageStorage;
+        this.imageProcessor = imageProcessor;
     }
 
     @Transactional(readOnly = true)
@@ -85,6 +93,49 @@ public class UserService {
         String nickname = normalizeNickname(rawNickname);
         if (userMapper.updateNickname(userId, nickname) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 업로드 (온보딩 AU_03_01 · 마이페이지 MY_01_03 공용).
+     *
+     * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
+     *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
+     *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
+     */
+    @Transactional
+    public UserMeDto updateProfileImage(long userId, byte[] content) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        byte[] jpeg = imageProcessor.toSquareJpeg(content);
+        String newKey = "profile/" + userId + "/" + UUID.randomUUID() + ".jpg";
+        imageStorage.store(jpeg, newKey);
+
+        if (userMapper.updateProfileImageKey(userId, newKey) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+     * 이미 미설정이어도 성공으로 처리한다. 없는 것을 지우는 것은 오류가 아니다.
+     */
+    @Transactional
+    public UserMeDto deleteProfileImage(long userId) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        if (userMapper.updateProfileImageKey(userId, null) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
         }
         return meOf(userId);
     }

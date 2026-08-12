@@ -3,6 +3,7 @@ package com.kb.tangtang.user.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.exception.CommonExceptionAdvice;
+import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,8 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -55,7 +58,7 @@ class UserControllerTest {
             }
         };
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService, new ImageProcessor()))
                 .setCustomArgumentResolvers(loginUser)
                 .setControllerAdvice(new CommonExceptionAdvice())
                 .build();
@@ -144,5 +147,45 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("INVALID_NAME"));
+    }
+
+    /* ── 프로필 이미지 (이슈 #150) ───────────────────────── */
+
+    @Test
+    @DisplayName("프로필 이미지를 올리면 갱신된 사용자 정보를 돌려준다")
+    void uploadsProfileImage() throws Exception {
+        when(userService.updateProfileImage(eq(USER_ID), any())).thenReturn(me("장재한"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/users/me/profile-image")
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "file", "a.jpg", "image/jpeg", new byte[]{1, 2, 3})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @DisplayName("파일 파트가 비면 400 이다")
+    void rejectsEmptyFile() throws Exception {
+        when(userService.updateProfileImage(eq(USER_ID), any()))
+                .thenThrow(new BusinessException("IMAGE_REQUIRED", "올릴 이미지를 선택해주세요."));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/users/me/profile-image")
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "file", "a.jpg", "image/jpeg", new byte[0])))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("프로필 이미지를 지우면 갱신된 사용자 정보를 돌려준다")
+    void deletesProfileImage() throws Exception {
+        when(userService.deleteProfileImage(USER_ID)).thenReturn(me("장재한"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/users/me/profile-image"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 }
