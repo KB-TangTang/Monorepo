@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.TodayMissionMapper">
+
+    <select id="findTodayMission" resultType="com.kb.tangtang.mission.dto.TodayMissionDto">
+        SELECT mission.id AS mission_id,
+               mission.mission_title,
+               mission.mission_content,
+               mission.mission_type,
+               category.id AS category_id,
+               parent_category.category_name AS parent_category_name,
+               category.category_name,
+               assignment.assign_date,
+               difficulty.difficulty_name,
+               assignment.target_rate,
+               assignment.base_amount,
+               assignment.target_value,
+               assignment.result,
+               assignment.assignment_reason
+        FROM tbl_user_mission_info assignment
+        JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
+        JOIN tbl_category category ON category.id = mission.category_id
+        JOIN tbl_category parent_category ON parent_category.id = category.parent_id
+        LEFT JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
+        WHERE assignment.user_id = #{userId}
+          AND assignment.assign_date = #{assignDate}
+    </select>
+
+</mapper>
