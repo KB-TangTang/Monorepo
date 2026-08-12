@@ -324,6 +324,77 @@
 - 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
 - `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
 
+## 그룹 챌린지 — 생성·초대·참여·조회 (이슈 #151)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/group-challenges` | Bearer | `{ groupId, inviteCode }` |
+| GET | `/api/group-challenges?status=` | Bearer | `ChallengeGroupSummary[]` |
+| GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroupDetail` |
+| GET | `/api/group-challenges/invite-codes/{inviteCode}` | Bearer | `{ challenge, joinable, reason }` |
+| POST | `/api/group-challenges/{groupId}/members` | Bearer | `ChallengeGroupDetail` |
+
+생성 요청 본문은 `{ groupName, categoryId, limitAmount, evalType, startDate, endDate, memo }` 다.
+**정원(`maxMembers`)은 받지 않는다** — 생성 화면에 입력 UI 가 없어 서버가 6 으로 고정한다.
+프론트의 자유 규칙 입력값은 ERD 컬럼명에 맞춰 `memo` 로 보낸다.
+
+`ChallengeGroupSummary` 는 `tbl_challenge_group` 전 컬럼 + 로그인 사용자 본인의
+`tbl_group_member` 값(`livesCount`, `finalOutcome`, `finalRank`, `finalChargeAmount`)
++ 파생값(`totalDays`, `currentDay`, `daysUntilStart`, `maxLives`, `memberCount`, `owner`)
++ `members[{userId, nickname, owner}]` 다.
+`ChallengeGroupDetail` 은 `{ challenge, memo, member, joinable }` 로 그 위를 감싼다.
+
+- `status` 는 콤마 또는 반복으로 여러 개를 넘긴다. 화면의 「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 본다.
+  값을 안 주면 전체다. 열거값에 없는 값은 빈 목록이 아니라 400 이다.
+- **목숨은 참여 시점에 계산해 저장한다.** `lives_count` 가 NOT NULL 인데 기본값이 없어서다.
+  DAILY = 기간 일수, PERIOD = 1. 늦게 참여해도 목숨은 같다 — 의도된 정책이다.
+- **초대 코드에는 만료 컬럼이 없다.** `start_date` 에서 파생한다 — 시작일 당일 23:59 까지 모집하고
+  그 다음 날부터 만료다. 코드는 대소문자를 가리지 않으며 저장은 항상 대문자다.
+- **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.
+- 방장도 `tbl_group_member` 에 들어간다. 정원·목숨·랭킹이 전부 이 테이블을 세기 때문이다.
+- 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
+- `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
+  절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
+- 상태 전이(`RECRUITING` → `ACTIVE`)와 시작 알림은 이 API 가 하지 않는다 — 별도 배치(이슈 #152).
+  그래서 시작일이 지나도 `status` 가 한동안 `RECRUITING` 일 수 있고, 참여 가능 판정은
+  status 가 아니라 **날짜**를 기준으로 한다.
+
+### 초대 코드 미리보기가 200 인 이유
+
+코드 자체가 없으면 `GROUP_INVITE_CODE_NOT_FOUND` 로 끝내지만, **코드는 유효한데 참여만 못 하는**
+경우는 200 + `joinable:false` + `reason` 으로 내려간다. 참여 확인 화면(GC_01_06)이 그룹 정보를
+먼저 보여준 다음 사유를 안내해야 하기 때문이다.
+
+| `reason` | 뜻 |
+|---|---|
+| `ALREADY_JOINED` | 이미 참여 중 (다른 사유보다 먼저 판정한다 — 그룹으로 보내야 하므로) |
+| `CLOSED` | 상태가 `JUDGING` 또는 `CLOSED` |
+| `EXPIRED` | 시작일이 지났다 |
+| `FULL` | 정원(6명) 초과 |
+
+같은 상황에서 **참여 API** 는 200 이 아니라 400 이다 — 아래 코드로 매핑된다.
+
+### 그룹 챌린지 에러 코드
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NAME_REQUIRED` | 400 | 이름이 비었거나 공백뿐 |
+| `GROUP_NAME_TOO_LONG` | 400 | 이름 100자 초과 |
+| `GROUP_LIMIT_AMOUNT_INVALID` | 400 | 제한 금액이 없거나 음수 (0원은 정상) |
+| `GROUP_EVAL_TYPE_INVALID` | 400 | `DAILY`/`PERIOD` 가 아님 |
+| `GROUP_PERIOD_INVALID` | 400 | 기간 누락 · 종료일이 시작일보다 앞 · 7일 초과 |
+| `GROUP_START_DATE_INVALID` | 400 | 시작일이 과거 |
+| `GROUP_MEMO_TOO_LONG` | 400 | 메모 300자 초과 |
+| `GROUP_STATUS_INVALID` | 400 | 알 수 없는 `status` 필터 |
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
+| `GROUP_INVITE_CODE_NOT_FOUND` | 400 | 없는 초대 코드 |
+| `GROUP_INVITE_CODE_EXPIRED` | 400 | 모집 마감 후 참여 시도 |
+| `GROUP_CLOSED` | 400 | 종료된 챌린지에 참여 시도 |
+| `GROUP_FULL` | 400 | 정원 초과 |
+| `GROUP_ALREADY_JOINED` | 400 | 이미 참여 중인데 다시 참여 시도 |
+| `GROUP_INVITE_CODE_EXHAUSTED` | 400 | 초대 코드 채번 재시도 실패 (사실상 발생하지 않는다) |
+
 ## 알림 (이슈 #58)
 
 | 메서드 | 경로 | 인증 | 응답 |
