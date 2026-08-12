@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import GroupListSegment from '@/components/challenge/group/GroupListSegment.vue';
 import GroupPreStartCard from '@/components/challenge/group/GroupPreStartCard.vue';
@@ -12,8 +12,8 @@ import { fetchMyGroupChallenges } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import mascotCheering from '@/assets/images/emotions/09_cheering.png';
 
+const route = useRoute();
 const router = useRouter();
-const activeTab = ref('active');
 const showJoinSheet = ref(false);
 
 const preStartList = ref([]);
@@ -30,6 +30,11 @@ const STATUS_BY_TAB = {
     active: ['ACTIVE'],
     ended: ['JUDGING', 'CLOSED'],
 };
+
+/* 참여·생성 직후처럼 특정 탭을 열어야 하는 이동이 있다. 그때 ?tab= 으로 넘긴다. */
+const activeTab = ref(
+    Object.hasOwn(STATUS_BY_TAB, route.query.tab) ? route.query.tab : 'active',
+);
 
 const LIST_BY_TAB = {
     'pre-start': preStartList,
