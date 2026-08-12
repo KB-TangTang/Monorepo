@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -39,14 +42,21 @@ public class UserService {
     private static final int NICKNAME_MAX_LENGTH = 50;
 
     private final UserMapper userMapper;
+    private final ProfileImageUrlResolver profileImageUrlResolver;
+    private final ImageStorage imageStorage;
+    private final ImageProcessor imageProcessor;
 
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
+                       ImageStorage imageStorage, ImageProcessor imageProcessor) {
         this.userMapper = userMapper;
+        this.profileImageUrlResolver = profileImageUrlResolver;
+        this.imageStorage = imageStorage;
+        this.imageProcessor = imageProcessor;
     }
 
     @Transactional(readOnly = true)
     public UserMeDto me(long userId) {
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -64,7 +74,7 @@ public class UserService {
         if (userMapper.updateName(userId, name) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -84,7 +94,58 @@ public class UserService {
         if (userMapper.updateNickname(userId, nickname) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 업로드 (온보딩 AU_03_01 · 마이페이지 MY_01_03 공용).
+     *
+     * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
+     *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
+     *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
+     */
+    @Transactional
+    public UserMeDto updateProfileImage(long userId, byte[] content) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        byte[] jpeg = imageProcessor.toSquareJpeg(content);
+        String newKey = "profile/" + userId + "/" + UUID.randomUUID() + ".jpg";
+        imageStorage.store(jpeg, newKey);
+
+        if (userMapper.updateProfileImageKey(userId, newKey) == 0) {
+            /*
+             * 탈퇴·차단 계정이 유효한 JWT 로 여기까지 들어오면 매번 이 경로를 탄다
+             * (findActive 는 status 를 보지 않고, updateProfileImageKey 는
+             *  WHERE status = 'ACTIVE' 라 0행이 된다). 방금 저장한 파일을 그대로 두면
+             * 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 NOT_FOUND 를 던진다.
+             * delete 는 멱등이라 정리 자체가 실패할 일은 없다.
+             */
+            imageStorage.delete(newKey);
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+     * 이미 미설정이어도 성공으로 처리한다. 없는 것을 지우는 것은 오류가 아니다.
+     */
+    @Transactional
+    public UserMeDto deleteProfileImage(long userId) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        if (userMapper.updateProfileImageKey(userId, null) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
+        }
+        return meOf(userId);
     }
 
     /**
@@ -149,7 +210,13 @@ public class UserService {
         if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
+    }
+
+    /** 조회 → URL 조립 → DTO. 네 곳이 같은 일을 하므로 여기 모은다. */
+    private UserMeDto meOf(long userId) {
+        UserDto user = findActive(userId);
+        return UserMeDto.from(user, profileImageUrlResolver.resolve(user));
     }
 
     private UserDto findActive(long userId) {

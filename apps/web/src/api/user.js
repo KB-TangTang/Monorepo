@@ -40,3 +40,38 @@ export function updateMyName(name) {
 export function updateMyNickname(nickname) {
     return http.patch('/users/me/nickname', { nickname });
 }
+
+/**
+ * 프로필 이미지 업로드. 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 함께 쓴다.
+ *
+ * ⚠ **`headers: { 'Content-Type': undefined }` 를 반드시 넘긴다.** "지정하지 않는다"가 아니라
+ * **인스턴스 기본값을 지워야 한다**가 핵심이다 — `http.js` 의 axios 인스턴스가 기본 헤더로
+ * `Content-Type: application/json` 을 박아두고 있어서, 아무것도 넘기지 않으면 이 기본값이
+ * 그대로 살아남는다. axios 는 FormData 라도 Content-Type 에 application/json 이 있으면
+ * JSON.stringify 로 바꿔버려 파일이 브라우저를 떠나지 못하고, 서버는 multipart 가 아니라서
+ * MultipartException(500)을 낸다(실측). `undefined` 를 명시하면 axios 가 헤더를 지우고
+ * 브라우저가 boundary 를 포함해 채운다.
+ *
+ * 응답은 갱신된 사용자 정보 전체다 — 닉네임과 같은 규칙이라 호출부가 auth.mergeUser() 로
+ * 반영해야 카드가 그 자리에서 바뀐다.
+ *
+ * @param {File} file 이미지 파일
+ * @returns {Promise<object>} 갱신된 사용자 정보 (profileImageUrl 포함)
+ */
+export function uploadMyProfileImage(file) {
+    const form = new FormData();
+    form.append('file', file);
+    return http.post('/users/me/profile-image', form, {
+        headers: { 'Content-Type': undefined },
+    });
+}
+
+/**
+ * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+ * 이미 미설정이어도 성공한다.
+ *
+ * @returns {Promise<object>} 갱신된 사용자 정보 (profileImageUrl 은 null)
+ */
+export function deleteMyProfileImage() {
+    return http.delete('/users/me/profile-image');
+}

@@ -3,6 +3,7 @@ package com.kb.tangtang.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.auth.JwtAuthInterceptor;
 import com.kb.tangtang.common.auth.LoginUserArgumentResolver;
+import com.kb.tangtang.common.storage.ImageStorageProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -47,6 +48,13 @@ public class ServletConfig implements WebMvcConfigurer {
 
     @Autowired
     private LoginUserArgumentResolver loginUserArgumentResolver;
+
+    /*
+     * 서블릿 컨텍스트에는 PropertySourcesPlaceholderConfigurer 가 없어 @Value 가 풀리지 않는다.
+     * 값을 루트 컨텍스트의 빈에서 받아온다 — 위 두 빈과 같은 경로다.
+     */
+    @Autowired
+    private ImageStorageProperties imageStorageProperties;
 
     /** RootConfig 의 ObjectMapper 빈(JavaTimeModule 등록됨) — JwtAuthInterceptor/GoogleOAuthClient 와 동일 설정을 공유한다. */
     @Autowired
@@ -98,6 +106,14 @@ public class ServletConfig implements WebMvcConfigurer {
         // 운영 배포 시 Vue 빌드 산출물을 webapp/resources 아래에 두고 서빙하기 위한 설정
         registry.addResourceHandler("/resources/**")
                 .addResourceLocations("/resources/");
+
+        /*
+         * 업로드된 프로필 이미지. 인터셉터는 /api/** 에만 걸려 있으므로 이 경로는 인증 없이 열린다 —
+         * 그룹 멤버에게 보이는 값이라 의도된 결과이며, 키에 UUID 가 들어 있어 추측으로 열 수 없다.
+         * 경로 끝의 '/' 가 없으면 매핑이 조용히 실패한다.
+         */
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:" + imageStorageProperties.getLocalDir() + "/");
     }
 
     @Bean

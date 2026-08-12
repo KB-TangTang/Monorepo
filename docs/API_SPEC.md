@@ -10,6 +10,36 @@
 인증이 필요한 요청은 `Authorization: Bearer <accessToken>` 헤더를 보낸다.
 리프레시 토큰은 httpOnly 쿠키(`refresh_token`, `Path=/api/auth`)로만 오간다.
 
+## 월간 소비 리포트
+
+모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.
+`yearMonth`는 `YYYY-MM` 형식이고 현재월·미래월·가입 이전 월은 상세 조회할 수 없다.
+
+| Method | Endpoint | 응답 책임 |
+|---|---|---|
+| GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
+| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
+| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
+| GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
+
+집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
+일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
+기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
+
+최근 6개월 추이는 가입월 이전 슬롯을 `{amount:null, hasData:false}`로 표시한다.
+가입 이후 완료월에 소비가 없으면 `{amount:0, hasData:true}`로 표시하여 실제 0원 월과 구분한다.
+
+증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
+증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
+`hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
+
+카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
+선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
+`parentCategoryName`을 포함한다. 대분류가 직접 지정된 거래는 해당 대분류 자체를 명세 항목으로
+반환한다. 카테고리 없는 소비는 두 목록 모두 ID `null`, 이름 `"미분류"`로 반환한다. 환불 반영 후
+각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
+이 API의 범위가 아니다.
+
 ## 공통
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -27,13 +57,21 @@
 | GET | `/api/users/me` | Bearer | 사용자정보 |
 | PATCH | `/api/users/me/name` | Bearer | 요청 `{ name }` → 갱신된 사용자정보 |
 | PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
+| POST | `/api/users/me/profile-image` | Bearer | 요청 multipart (파트명 `file`) → 갱신된 사용자정보 |
+| DELETE | `/api/users/me/profile-image` | Bearer | 갱신된 사용자정보 (기본 아바타로 되돌리기) |
 
-**사용자정보** = `{ id, nickname, socialName, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
+**사용자정보** = `{ id, nickname, socialName, profileImageUrl, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
 
 **이 모양은 `GET /api/users/me` · `POST /api/auth/refresh` 의 `user` · 사용자 정보를 바꾸는 모든
-`PATCH` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto)` 한 곳에서만 만든다 — 경로마다
-따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만 값이 비는** 버그가 난다.
+`PATCH`·`POST`·`DELETE` 응답이 똑같이 쓴다.** 서버는 `UserMeDto.from(UserDto, profileImageUrl)`
+한 곳에서만 만든다 — 경로마다 따로 조립하면 필드를 추가할 때 한 곳을 빠뜨려 **그 경로에서만
+값이 비는** 버그가 난다.
 
+- `profileImageUrl` 은 **미설정이면 `null`** 이고 화면은 이니셜 아바타를 그린다. 값이 있으면
+  서버가 조립을 끝낸 완성 URL(`/uploads/profile/{userId}/{uuid}.jpg` 형태)이다 — 화면은 URL 을
+  조립하지 않으므로 로컬 저장소 → S3 전환에 프론트 수정이 없다.
+- `POST /api/users/me/profile-image` 는 업로드된 이미지를 **256x256 정사각 JPEG 로 다시 구워
+  저장**한다(가운데 크롭). 원본은 보관하지 않는다.
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.
@@ -112,6 +150,9 @@
 | `NOT_FOUND` | 400 | `/api/users/me` 조회 시 사용자를 찾을 수 없음 (실명 갱신 대상이 탈퇴·차단 상태일 때도 이 코드다) |
 | `INVALID_NAME` | 400 | `/api/users/me/name` 의 이름이 형식에 맞지 않음 (2~50자·한글/영문/공백) |
 | `INVALID_REQUEST` | 400 | `/api/users/me/nickname` 의 닉네임이 비었거나 50자를 넘음 |
+| `IMAGE_REQUIRED` | 400 | `/api/users/me/profile-image` 요청에 이미지가 비어 있음 |
+| `IMAGE_TOO_LARGE` | 400 | 업로드 이미지가 5MB 초과 |
+| `INVALID_IMAGE` | 400 | 이미지로 디코딩할 수 없는 파일 (확장자·Content-Type 은 신뢰하지 않는다) |
 
 ### 콜백 리다이렉트 error 쿼리 (`/api/auth/google/callback` 이 붙이는 값)
 
@@ -299,13 +340,53 @@
 
 | 화면 | 쓰는 API |
 |---|---|
-| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, name, email, socialProvider}` |
+| 프로필 카드 (`/my`) | `GET /api/users/me` — `{id, nickname, profileImageUrl, name, email, socialProvider}` |
+| 프로필 이미지 변경 (`/my`) | `POST /api/users/me/profile-image` (업로드) · `DELETE /api/users/me/profile-image` (기본 아바타로 되돌리기) |
 | 동의 관리 (`/my/consents`) | `GET /api/consents/me` · `POST /api/consents/{type}/withdraw` · `POST /api/consents` (재동의) |
 | 로그아웃 | `POST /api/auth/logout` |
 
 - `socialProvider` 는 마이페이지가 "google · 이메일" 형식으로 표시하려고 추가한 필드다.
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
+
+## 오늘의 개인 미션 조회 (이슈 #160)
+
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/api/missions/today` | Bearer | 로그인 사용자의 오늘 배정된 개인 미션 조회 |
+
+응답은 `{ missionId, missionTitle, missionContent, missionType, categoryId, parentCategoryName,
+categoryName, assignDate, difficultyName, targetRate, baseAmount, targetValue, result,
+assignmentReason, guideMessage }` 형태다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "missionId": 11,
+    "missionTitle": "배달 현장 급습",
+    "missionContent": "오늘 배달 지출을 목표 금액 안으로 묶는다.",
+    "missionType": "RELATIVE",
+    "categoryId": 18,
+    "parentCategoryName": "식비",
+    "categoryName": "배달앱",
+    "assignDate": "2026-08-12",
+    "difficultyName": "NORMAL",
+    "targetRate": 25,
+    "baseAmount": 24000,
+    "targetValue": 18000,
+    "result": "PENDING",
+    "assignmentReason": null,
+    "guideMessage": null
+  }
+}
+```
+
+- 오늘 날짜는 `Asia/Seoul` 기준으로 판단한다.
+- 조회 API는 미션을 새로 배정하지 않는다.
+- `LOW_SPENDING_NO_SPEND` 배정은 카테고리명과 배정 사유를 조합해 `guideMessage`를 생성한다.
+- 일반 배정의 `guideMessage`는 `null`이다.
+- 오늘 배정된 미션이 없으면 `TODAY_MISSION_NOT_FOUND`를 반환한다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
@@ -323,6 +404,27 @@
 - 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
 - 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
 - `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
+
+### 상대형 미션 자동 배정 (이슈 #139)
+
+화면 요청으로 배정하지 않고 서버 스케줄러가 매일 한국 시간 00:10에 실행한다.
+실행 시간은 `mission.assignment.cron`, 타임존은 `mission.assignment.zone` 설정으로 변경할 수 있다.
+
+- 활성 사용자별로 하루 한 개만 배정하며 `uk_umi_user_date`를 최종 중복 방어선으로 사용한다.
+- 최신 분석 주기의 미소진 항목 중 `category_rank` 숫자가 가장 낮은 카테고리를 먼저 사용한다.
+- 미소진 항목이 없으면 최근 28일 소비를 다시 분석해 새 스냅샷을 만든다.
+- 직전에 같은 카테고리에서 배정한 미션을 우선 제외하되 후보가 없으면 재사용한다.
+- 절감률은 배정 시점 사용자 난이도의 DB 구간에서 양 끝을 포함한 정수로 선택한다.
+- `baseAmount`는 배정일 전 28일의 해당 카테고리 양수 일별 순소비 평균이다.
+- 정상 상대형의 `targetValue = baseAmount × (1 - targetRate / 100)`이다.
+- 계산 목표가 해당 카테고리의 최근 28일 최소 양수 단건 결제 금액보다 낮으면 목표를 올리지 않고,
+  같은 카테고리의 `ABSOLUTE`이면서 `limit_price=0`인 무지출 미션으로 전환한다.
+- 무지출 전환 배정은 실제 수행 목표인 `targetValue=0`으로 저장하되,
+  전환 판단 근거를 추적할 수 있도록 `targetRate`, `baseAmount`, `difficultyId`는 유지한다.
+- `assignmentReason=LOW_SPENDING_NO_SPEND`를 저장하여 월 1회 절대형과 구분하고 다음 안내를 표시한다.
+  `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
+- 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.
+- 절대형 미션 우선 배정은 후속 이슈 범위이며, 절대형 배정일에는 이 배치를 호출하지 않아야 한다.
 
 ## 그룹 챌린지 — 생성·초대·참여·조회 (이슈 #151)
 

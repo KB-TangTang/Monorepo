@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     challenge: { type: Object, required: true },
@@ -13,10 +14,10 @@ const props = defineProps({
  *   그 외               → 순항중
  */
 const BADGE_MAP = {
-    defendant: { label: '변론필요', bg: 'var(--tt-red-soft)',  color: 'var(--tt-red-deep)' },
-    voting:    { label: '투표중',   bg: 'var(--tt-gold-soft)', color: 'var(--tt-gold-deep)' },
-    voted:     { label: '투표완료', bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' },
-    cruising:  { label: '순항중',   bg: 'var(--tt-bg-fill)',   color: 'var(--tt-text-body)' },
+    defendant: { label: '변론필요', bg: 'var(--tt-red-soft)', color: 'var(--tt-red-deep)' },
+    voting: { label: '투표중', bg: 'var(--tt-gold-soft)', color: 'var(--tt-gold-deep)' },
+    voted: { label: '투표완료', bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' },
+    cruising: { label: '순항중', bg: 'var(--tt-bg-fill)', color: 'var(--tt-text-body)' },
 };
 
 const badgeKey = computed(() => {
@@ -39,7 +40,14 @@ const limitDesc = computed(() => {
     return type;
 });
 
-const AVATAR_COLORS = ['var(--tt-gold)', 'var(--tt-blue)', 'var(--tt-green)', 'var(--tt-red)', 'var(--tt-ink)', 'var(--tt-gold-deep)'];
+const AVATAR_COLORS = [
+    'var(--tt-gold)',
+    'var(--tt-blue)',
+    'var(--tt-green)',
+    'var(--tt-red)',
+    'var(--tt-ink)',
+    'var(--tt-gold-deep)',
+];
 
 /** 채팅 안읽음 표시 텍스트 */
 const chatLabel = computed(() => {
@@ -75,14 +83,18 @@ const chatLabel = computed(() => {
                     <span
                         v-for="(m, i) in challenge.members"
                         :key="m.userId"
-                        class="gac-card__avatar"
+                        class="gac-card__avatar-wrap"
                         :style="{
-                            background: AVATAR_COLORS[i % AVATAR_COLORS.length],
                             marginLeft: i > 0 ? '-7px' : '0',
                             zIndex: challenge.members.length - i,
                         }"
                     >
-                        {{ m.initial }}
+                        <UserAvatar
+                            :image-url="m.profileImage || null"
+                            :name="m.nickname"
+                            :color="AVATAR_COLORS[i % AVATAR_COLORS.length]"
+                            :size="24"
+                        />
                     </span>
                 </div>
                 <span class="gac-card__member-count">{{ challenge.memberCount }}</span>
@@ -160,18 +172,14 @@ const chatLabel = computed(() => {
     align-items: center;
 }
 
-.gac-card__avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-white);
-    border: 2px solid var(--tt-bg);
+.gac-card__avatar-wrap {
+    display: inline-flex;
     position: relative;
+}
+
+/* 겹침 경계 링 — UserAvatar 자체엔 테두리가 없어 여기서 그린다 */
+.gac-card__avatar-wrap :deep(.user-avatar) {
+    border: 2px solid var(--tt-bg);
 }
 
 .gac-card__member-count {

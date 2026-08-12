@@ -21,6 +21,12 @@ export default defineConfig({
                 target: 'http://localhost:8080',
                 changeOrigin: true,
             },
+            // 프로필 이미지 등 정적 업로드 파일. 없으면 /uploads/... 를 SPA fallback 이 삼켜
+            // index.html(200)을 돌려주고, <img> 는 HTML 디코딩에 실패해 이니셜로 조용히 폴백한다.
+            '/uploads': {
+                target: 'http://localhost:8080',
+                changeOrigin: true,
+            },
         },
     },
 });

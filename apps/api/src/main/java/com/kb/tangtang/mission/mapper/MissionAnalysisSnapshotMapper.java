@@ -11,5 +11,10 @@ public interface MissionAnalysisSnapshotMapper {
 
     List<MissionAnalysisSnapshot> findPendingSnapshots(@Param("userId") long userId);
 
+    MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(@Param("userId") long userId);
+
     int insertSnapshots(@Param("snapshots") List<MissionAnalysisSnapshot> snapshots);
+
+    int markAssigned(@Param("snapshotId") long snapshotId,
+                     @Param("assignedDate") java.time.LocalDate assignedDate);
 }

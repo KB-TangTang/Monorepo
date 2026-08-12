@@ -6,6 +6,7 @@
 <script setup>
 import gavelAlive from '@/assets/images/challenge_live/gavel-alive.png';
 import gavelDepleted from '@/assets/images/challenge_live/gavel-depleted.png';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     members: { type: Array, required: true },
@@ -49,36 +50,37 @@ function statusBadge(m) {
                 }"
             >
                 <span class="ranking-table__rank">{{ m.finalRank }}</span>
-                <div
-                    class="ranking-table__avatar"
-                    :style="{ background: m.avatarColor }"
-                >
-                    {{ m.initial }}
-                </div>
+                <UserAvatar
+                    :image-url="m.profileImage"
+                    :name="m.nickname"
+                    :color="m.avatarColor"
+                    :size="28"
+                />
                 <div class="ranking-table__info">
                     <div class="ranking-table__name-row">
                         <span
                             class="ranking-table__name"
                             :class="{ 'ranking-table__name--dim': m.finalOutcome === 'ELIMINATED' }"
-                        >{{ m.nickname }}</span>
+                            >{{ m.nickname }}</span
+                        >
                         <span v-if="m.userId === 1" class="ranking-table__me-badge">나</span>
                     </div>
                     <!-- 일일결산: 목숨 아이콘 -->
                     <div v-if="isDaily" class="ranking-table__lives">
                         <img
-                            v-for="i in (m.livesCount ?? 0)"
+                            v-for="i in m.livesCount ?? 0"
                             :key="'a' + i"
                             :src="gavelAlive"
                             alt="남은 목숨"
                             class="ranking-table__life-icon"
-                        >
+                        />
                         <img
-                            v-for="i in (maxLives - (m.livesCount ?? 0))"
+                            v-for="i in maxLives - (m.livesCount ?? 0)"
                             :key="'d' + i"
                             :src="gavelDepleted"
                             alt="차감된 목숨"
                             class="ranking-table__life-icon"
-                        >
+                        />
                     </div>
                 </div>
                 <span
@@ -87,7 +89,8 @@ function statusBadge(m) {
                         background: statusBadge(m).bg,
                         color: statusBadge(m).color,
                     }"
-                >{{ statusBadge(m).label }}</span>
+                    >{{ statusBadge(m).label }}</span
+                >
             </div>
         </div>
     </div>
@@ -137,7 +140,7 @@ function statusBadge(m) {
 }
 
 .ranking-table__row--eliminated {
-    background: #FDF4F1;
+    background: #fdf4f1;
 }
 
 .ranking-table__rank {
@@ -146,19 +149,6 @@ function statusBadge(m) {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
-    flex: none;
-}
-
-.ranking-table__avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     flex: none;
 }
 

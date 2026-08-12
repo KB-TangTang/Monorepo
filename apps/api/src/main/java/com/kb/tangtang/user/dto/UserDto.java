@@ -8,7 +8,8 @@ import lombok.Setter;
 
 /**
  * tbl_user 행 매핑.
- * 프로필 이미지 컬럼은 스키마에 없다. 구글 picture 클레임은 저장하지 않는다.
+ * 프로필 이미지는 사용자가 직접 올린 것만 저장한다(profileImageKey).
+ * 구글 picture 클레임은 저장하지 않는다 — 제공자 URL 은 만료·변경되고 우리 저장소 밖에 있다.
  */
 @Getter
 @Setter
@@ -31,9 +32,15 @@ public class UserDto {
      */
     private String nickname;
     private String socialName;
+    /**
+     * 프로필 이미지 저장 키. **URL 이 아니다.** 형식은 profile/{userId}/{uuid}.jpg 다.
+     * URL 은 ImageStorage 구현이 조립하므로 로컬 → S3 전환에 이 값은 바뀌지 않는다.
+     * null 이면 미설정이고 화면은 이니셜 아바타를 그린다.
+     */
+    private String profileImageKey;
     private String name;
     private String status;           // ACTIVE / WITHDRAWN / BLOCKED
-    private Long difficultyId;       // 가입 시 EASY(1)
+    private Long difficultyId;       // 가입 시 NORMAL(2)
 
     /* 튜토리얼 완료 시각. NULL 이면 아직 안 봤다는 뜻이다. (이슈 #128) */
     private java.time.LocalDateTime tutorialSeenAt;       // 메인(개인·대법원) MC_01_05

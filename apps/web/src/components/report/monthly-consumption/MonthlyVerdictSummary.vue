@@ -7,11 +7,14 @@ const props = defineProps({
     showComparison: { type: Boolean, default: true },
 });
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
-const verdictCopy = computed(() =>
-    props.report.monthOverMonthRate <= 0
+const verdictCopy = computed(() => {
+    if (props.report.monthOverMonthRate == null) {
+        return '지난달 소비가 0원이라 비교하기 어려워요';
+    }
+    return props.report.monthOverMonthRate <= 0
         ? `지난달보다 ${Math.abs(props.report.monthOverMonthRate)}% 절약`
-        : `지난달보다 ${props.report.monthOverMonthRate}% 증가`,
-);
+        : `지난달보다 ${props.report.monthOverMonthRate}% 증가`;
+});
 </script>
 
 <template>

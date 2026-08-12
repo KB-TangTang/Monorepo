@@ -4,6 +4,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     members: { type: Array, required: true },
@@ -14,8 +15,8 @@ const props = defineProps({
 const emit = defineEmits(['invite']);
 
 const hasRoom = computed(() => props.memberCount < props.maxMembers);
-const recruitLabel = computed(() =>
-    `${props.memberCount} / ${props.maxMembers}명 · 첫날 23:59까지 모집`
+const recruitLabel = computed(
+    () => `${props.memberCount} / ${props.maxMembers}명 · 첫날 23:59까지 모집`,
 );
 </script>
 
@@ -26,17 +27,13 @@ const recruitLabel = computed(() =>
             <span class="member-grid__label">{{ recruitLabel }}</span>
         </div>
         <div class="member-grid__grid">
-            <div
-                v-for="m in members"
-                :key="m.userId"
-                class="member-grid__item"
-            >
-                <div
-                    class="member-grid__avatar"
-                    :style="{ background: m.avatarColor }"
-                >
-                    {{ m.initial }}
-                </div>
+            <div v-for="m in members" :key="m.userId" class="member-grid__item">
+                <UserAvatar
+                    :image-url="m.profileImage"
+                    :name="m.nickname"
+                    :color="m.avatarColor"
+                    :size="42"
+                />
                 <span class="member-grid__name">{{ m.nickname }}</span>
             </div>
 
@@ -44,7 +41,9 @@ const recruitLabel = computed(() =>
             <div v-if="hasRoom" class="member-grid__item" @click="emit('invite')">
                 <div class="member-grid__invite-btn">
                     <svg class="member-grid__invite-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                        <path
+                            d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                        />
                     </svg>
                 </div>
                 <span class="member-grid__invite-label">소환</span>
@@ -92,18 +91,6 @@ const recruitLabel = computed(() =>
     flex-direction: column;
     align-items: center;
     gap: 5px;
-}
-
-.member-grid__avatar {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: 14px;
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .member-grid__name {
