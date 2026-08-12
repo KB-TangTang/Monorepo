@@ -97,7 +97,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("처음 로그인하는 사용자는 EASY 난이도로 새로 만든다")
+    @DisplayName("처음 로그인하는 사용자는 NORMAL 난이도로 새로 만든다")
     void firstLoginCreatesUser() {
         when(googleOAuthClient.exchangeCodeForProfile("code")).thenReturn(profile());
         when(userMapper.findBySocialId("GOOGLE", "google-sub-1")).thenReturn(null);
@@ -127,7 +127,7 @@ class AuthServiceTest {
         assertEquals("지윤", created.getSocialName());
         assertNull(created.getNickname(), "가입 시 닉네임은 비어 있어야 온보딩이 뜬다");
         assertEquals("ACTIVE", created.getStatus());
-        assertEquals(1L, created.getDifficultyId(), "가입 시 EASY(1) 를 부여한다");
+        assertEquals(2L, created.getDifficultyId(), "가입 시 NORMAL(2) 를 부여한다");
 
         assertEquals("access-jwt", result.getResponse().getAccessToken());
         assertEquals("refresh-raw", result.getRefreshToken());

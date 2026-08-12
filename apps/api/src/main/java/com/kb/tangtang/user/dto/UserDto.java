@@ -33,7 +33,7 @@ public class UserDto {
     private String socialName;
     private String name;
     private String status;           // ACTIVE / WITHDRAWN / BLOCKED
-    private Long difficultyId;       // 가입 시 EASY(1)
+    private Long difficultyId;       // 가입 시 NORMAL(2)
 
     /* 튜토리얼 완료 시각. NULL 이면 아직 안 봤다는 뜻이다. (이슈 #128) */
     private java.time.LocalDateTime tutorialSeenAt;       // 메인(개인·대법원) MC_01_05
