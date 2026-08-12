@@ -75,7 +75,7 @@
            SET category_id = #{categoryId},
                category_source = #{categorySource}
          WHERE id = #{id}
-           AND (category_source IS NULL OR category_source <> 'USER')
+           AND (category_source IS NULL OR category_source &lt;&gt; 'USER')
     </update>
 
     <select id="findIdByCodefTrKey" resultType="long">
