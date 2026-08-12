@@ -118,8 +118,14 @@ function avatarRing(rank) {
     text-align: center;
 }
 
+/*
+ * display: flex(block-level)에 width 를 안 주면 부모(.podium__col) 폭을
+ * 그대로 채워버려 margin: 0 auto 가 0으로 풀린다(가운데 정렬 무효화).
+ * inline-flex 는 shrink-to-fit 이라 내용(아바타) 폭만 가지므로
+ * margin: 0 auto 가 정상 동작하고 box-shadow 링도 원 모양을 유지한다.
+ */
 .podium__avatar-wrap {
-    display: flex;
+    display: inline-flex;
     margin: 0 auto;
     border-radius: var(--tt-radius-full);
 }
