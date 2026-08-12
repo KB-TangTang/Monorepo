@@ -360,10 +360,24 @@ function goBack() {
 .vote-done__avatar-wrap {
     flex: none;
     display: inline-flex;
+    border-radius: var(--tt-radius-full);
 }
 
+/*
+ * 미투표 멤버 표시. 원래는 점선 원 + 흐린 이니셜(git show 8e4651b)로 옆 도장 자리의 점선 원
+ * (.vote-done__seal-empty, 아래)과 짝을 이뤘는데, UserAvatar 통일 과정에서 래퍼의
+ * opacity 하나로 대체되며 사진도 그냥 흐려지기만 하는 상태가 됐다. 점선 원을 래퍼에 복원하고
+ * 아바타(사진/이니셜)만 :deep 으로 흐리게 해 원래 조합을 되살린다.
+ * 색은 tokens.css 의 --tt-border-divider(#D4D9E2, 쿨톤)가 가장 가깝지만 같은 화면의
+ * .vote-done__seal-empty 가 이미 웜톤 #d8d3c8 을 하드코딩해 쓰고 있어(고치지 말 것 목록) 짝을
+ * 맞추려 원래 값을 그대로 유지한다.
+ */
 .vote-done__avatar-wrap--pending {
-    opacity: 0.35;
+    border: 1.5px dashed #d8d3c8;
+}
+
+.vote-done__avatar-wrap--pending :deep(.user-avatar) {
+    opacity: 0.55;
 }
 
 .vote-done__name {
