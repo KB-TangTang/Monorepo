@@ -83,15 +83,17 @@ class RelativeMissionAssignmentServiceTest {
         assertEquals("ABSOLUTE", result.getMissionType());
         assertEquals("LOW_SPENDING_NO_SPEND", result.getAssignmentReason());
         assertEquals(new BigDecimal("0.00"), result.getTargetValue());
-        assertNull(result.getTargetRate());
-        assertNull(result.getBaseAmount());
+        assertEquals(new BigDecimal("50"), result.getTargetRate());
+        assertEquals(new BigDecimal("1600.00"), result.getBaseAmount());
         assertEquals("평소 카페 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 카페 하루 쉬기에 도전해볼까요?",
                 result.getGuideMessage());
         ArgumentCaptor<com.kb.tangtang.mission.domain.RelativeMissionAssignment> captor =
                 ArgumentCaptor.forClass(com.kb.tangtang.mission.domain.RelativeMissionAssignment.class);
         verify(assignmentMapper).insertAssignment(captor.capture());
         assertEquals(201L, captor.getValue().getMissionId());
-        assertNull(captor.getValue().getDifficultyId());
+        assertEquals(3L, captor.getValue().getDifficultyId());
+        assertEquals(new BigDecimal("50"), captor.getValue().getTargetRate());
+        assertEquals(new BigDecimal("1600.00"), captor.getValue().getBaseAmount());
         assertEquals("LOW_SPENDING_NO_SPEND", captor.getValue().getAssignmentReason());
         verify(snapshotMapper).markAssigned(31L, ASSIGN_DATE);
     }

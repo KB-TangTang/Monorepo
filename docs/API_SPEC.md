@@ -338,7 +338,8 @@
 - 정상 상대형의 `targetValue = baseAmount × (1 - targetRate / 100)`이다.
 - 계산 목표가 해당 카테고리의 최근 28일 최소 양수 단건 결제 금액보다 낮으면 목표를 올리지 않고,
   같은 카테고리의 `ABSOLUTE`이면서 `limit_price=0`인 무지출 미션으로 전환한다.
-- 무지출 전환 배정은 `targetValue=0`, `targetRate/baseAmount/difficultyId=NULL`로 저장한다.
+- 무지출 전환 배정은 실제 수행 목표인 `targetValue=0`으로 저장하되,
+  전환 판단 근거를 추적할 수 있도록 `targetRate`, `baseAmount`, `difficultyId`는 유지한다.
 - `assignmentReason=LOW_SPENDING_NO_SPEND`를 저장하여 월 1회 절대형과 구분하고 다음 안내를 표시한다.
   `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
 - 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.
