@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -108,6 +109,18 @@ class TransactionCategorizationServiceImplTest {
 
         verify(transactionMapper).updateCategory(12L, 1L, "RULE_MCC");
         verify(transactionMapper).updateCategory(13L, 2L, "LLM");
+    }
+
+    @Test
+    @DisplayName("2순위: 공용 가맹점 매핑의 source 가 MCC/KEYWORD/LLM 이 아니면 IllegalStateException 을 던진다")
+    void priority2ThrowsOnUnknownSource() {
+        when(transactionMapper.findEligibleForRuleCategorization(1L, List.of(20L)))
+                .thenReturn(List.of(consumption(20L, "이마트")));
+        when(userCategoryMapMapper.findByUserAndMerchant(eq(1L), any())).thenReturn(null);
+        when(merchantCategoryMapMapper.findByMerchantNameNormalized("이마트"))
+                .thenReturn(MerchantCategoryMap.builder().categoryId(1L).source("BOGUS").build());
+
+        assertThrows(IllegalStateException.class, () -> service.categorizeRuleBased(1L, List.of(20L)));
     }
 
     @Test
