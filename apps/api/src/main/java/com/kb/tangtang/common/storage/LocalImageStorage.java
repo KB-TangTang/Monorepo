@@ -1,7 +1,5 @@
 package com.kb.tangtang.common.storage;
 
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -13,15 +11,22 @@ import java.nio.file.Paths;
  *
  * ⚠ **docker-compose 의 api 서비스에 볼륨이 없으면 배포마다 파일이 전부 사라진다.**
  * dev push 자동배포가 `docker compose down && up --build` 를 돌리기 때문이다.
+ *
+ * ⚠ **`@Component` 를 붙이지 않는다.** 빈 등록은 `ImageStorageConfig` 팩토리 한 곳에서만 한다 —
+ * 여기 붙이면 구현체가 하나뿐인 지금은 문제없어 보여도, `S3ImageStorage` 를 `@Component` 로
+ * 추가하는 순간 `NoUniqueBeanDefinitionException` 으로 기동이 실패한다.
  */
-@Component
 public class LocalImageStorage implements ImageStorage {
 
     private final Path root;
     private final String baseUrl;
 
     public LocalImageStorage(ImageStorageProperties properties) {
-        this.root = Paths.get(properties.getLocalDir()).toAbsolutePath().normalize();
+        /*
+         * getLocalDir() 이 이미 정규화된 절대경로를 돌려준다(ImageStorageProperties 참고) —
+         * ServletConfig 의 리소스 핸들러와 같은 값을 보도록 정규화를 그 한 곳에만 둔다.
+         */
+        this.root = Paths.get(properties.getLocalDir());
         this.baseUrl = properties.getLocalBaseUrl();
     }
 

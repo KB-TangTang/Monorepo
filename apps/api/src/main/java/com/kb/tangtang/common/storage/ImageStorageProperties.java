@@ -3,6 +3,8 @@ package com.kb.tangtang.common.storage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Paths;
+
 /**
  * 저장소 설정 값 홀더.
  *
@@ -20,8 +22,15 @@ public class ImageStorageProperties {
     @Value("${image.local.base-url}")
     private String localBaseUrl;
 
+    /**
+     * 정규화된 절대경로 문자열을 돌려준다. **정규화는 이 한 곳에서만 한다** —
+     * ServletConfig(정적 리소스 핸들러)와 LocalImageStorage 가 각자 정규화하면, Windows 의
+     * java.io.tmpdir 이 `\` 로 끝나는 탓에 `image.local.dir=${java.io.tmpdir}/tangtang-images`
+     * 조합에서 `C:\...\Temp\/tangtang-images` 처럼 구분자가 섞인 문자열이 만들어지고, 두 곳이
+     * 서로 다른 시점에 정규화하면 같은 디렉터리를 가리키면서도 문자열이 어긋날 수 있다.
+     */
     public String getLocalDir() {
-        return localDir;
+        return Paths.get(localDir).toAbsolutePath().normalize().toString();
     }
 
     public void setLocalDir(String localDir) {
