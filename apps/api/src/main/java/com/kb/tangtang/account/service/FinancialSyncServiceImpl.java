@@ -24,6 +24,7 @@ import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.domain.FinancialSyncHistory;
 import com.kb.tangtang.account.domain.InvestmentHolding;
 import com.kb.tangtang.account.domain.Loan;
+import com.kb.tangtang.account.domain.LlmCategorizationRequestedEvent;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.mapper.CardBillMapper;
 import com.kb.tangtang.account.mapper.CardMapper;
@@ -33,8 +34,11 @@ import com.kb.tangtang.account.mapper.InvestmentHoldingMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Transaction;
+import com.kb.tangtang.transaction.dto.RuleCategorizationResultDto;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
+import com.kb.tangtang.transaction.service.TransactionCategorizationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -117,6 +121,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private final CardBillMapper cardBillMapper;
     private final TransactionMapper transactionMapper;
     private final FinancialSyncHistoryMapper syncHistoryMapper;
+    private final TransactionCategorizationService transactionCategorizationService;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
@@ -136,9 +142,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                                     CardBillMapper cardBillMapper,
                                     TransactionMapper transactionMapper,
                                     FinancialSyncHistoryMapper syncHistoryMapper,
+                                    TransactionCategorizationService transactionCategorizationService,
+                                    ApplicationEventPublisher eventPublisher,
                                     TransactionTemplate transactionTemplate) {
         this(client, scenarioKeyProvider, connectedAccountMapper, loanMapper, investmentHoldingMapper,
                 cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
+                transactionCategorizationService, eventPublisher,
                 Clock.systemDefaultZone(), transactionTemplate);
     }
 
@@ -152,6 +161,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                              CardBillMapper cardBillMapper,
                              TransactionMapper transactionMapper,
                              FinancialSyncHistoryMapper syncHistoryMapper,
+                             TransactionCategorizationService transactionCategorizationService,
+                             ApplicationEventPublisher eventPublisher,
                              Clock clock,
                              TransactionTemplate transactionTemplate) {
         this.client = client;
@@ -163,6 +174,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         this.cardBillMapper = cardBillMapper;
         this.transactionMapper = transactionMapper;
         this.syncHistoryMapper = syncHistoryMapper;
+        this.transactionCategorizationService = transactionCategorizationService;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.transactionTemplate = transactionTemplate;
     }
@@ -191,11 +204,28 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          * 이 insert 는 별도 트랜잭션으로 커밋된다 — 실패 이력이 롤백에 휩쓸리지 않는다.
          * 이게 없으면 저장 단계 실패는 이력 한 줄 없이 500 으로만 남는다.
          */
+        List<Long> upsertedTransactionIds;
         try {
-            saveAll(userId, bundle, startedAt);
+            upsertedTransactionIds = saveAll(userId, bundle, startedAt);
         } catch (RuntimeException e) {
             recordFailure(userId, SAVE_PHASE, e.getMessage(), startedAt);
             throw e;
+        }
+
+        /*
+         * 카테고리화는 saveAll() 이 커밋된 뒤에 돈다(계획 문서 참고). 규칙 1~4단계(동기)는 모듈 경계
+         * 원칙의 명시적 예외로 transaction 모듈을 직접 호출한다 — ruleCategorizedCount 를 이 응답에
+         * 담아야 해서 이벤트로는 불가능하다. 5단계(LLM 작업 등록)는 응답을 기다릴 이유가 없어 이벤트로
+         * 분리한다.
+         */
+        RuleCategorizationResultDto categorization =
+                transactionCategorizationService.categorizeRuleBased(userId, upsertedTransactionIds);
+
+        String llmCategorizationStatus = "NOT_REQUIRED";
+        if (!categorization.getLlmEligibleTransactionIds().isEmpty()) {
+            eventPublisher.publishEvent(new LlmCategorizationRequestedEvent(
+                    userId, categorization.getLlmEligibleTransactionIds()));
+            llmCategorizationStatus = "PENDING";
         }
 
         return FinancialSyncResultDto.builder()
@@ -203,6 +233,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .syncedSources(SOURCE_ORDER)
                 .syncedAt(LocalDateTime.now(clock).atZone(clock.getZone())
                         .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                .collectedTransactionCount(upsertedTransactionIds.size())
+                .ruleCategorizedCount(categorization.getRuleCategorizedCount())
+                .llmPendingTransactionCount(categorization.getLlmEligibleTransactionIds().size())
+                .llmCategorizationStatus(llmCategorizationStatus)
                 .build();
     }
 
@@ -280,16 +314,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      *    설계 §8 이 요구하는 "전부 성공한 뒤 하나의 커밋" 을 실제로 보장하려면 경계를 코드로 명시해야
      *    해서 TransactionTemplate 을 쓴다. 콜백 안에서 예외가 나면 그때까지의 쓰기가 전부 롤백된다.
      */
-    private void saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
-        transactionTemplate.execute(status -> {
-            writeAll(userId, bundle, startedAt);
-            return null;
-        });
+    private List<Long> saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
+        return transactionTemplate.execute(status -> writeAll(userId, bundle, startedAt));
     }
 
-    /** 실제 쓰기. 순서: 상품 upsert → 거래 upsert → correlation 연결 → 성공 이력. */
-    private void writeAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
+    /** 실제 쓰기. 순서: 상품 upsert → 거래 upsert → correlation 연결 → 성공 이력. 이번 호출에서 upsert 된 거래 id 목록을 돌려준다. */
+    private List<Long> writeAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
         LocalDateTime now = LocalDateTime.now(clock);
+        List<Transaction> upserted = new ArrayList<>();
 
         /* BANK: 계좌 upsert + 거래 upsert. 계좌 타입은 목서버 accountTypeCode 를 그대로 안 쓰고
            우리 도메인 값(DEMAND_DEPOSIT)으로 저장한다 — AccountLinkService 관례와 동일. */
@@ -302,11 +334,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                  * correlation_id 로 잇는데(설계 §7), 여기서 비워 두면 연결이 한 건도 성립하지 않는다.
                  */
                 RawJsonFields fields = RawJsonFields.parse(tx.getRawJson());
-                saveTransaction(userId, connectedAccountId, null, "BANK",
+                upserted.add(saveTransaction(userId, connectedAccountId, null, "BANK",
                         "BANK-" + connectedAccountId + "-" + tx.getTransactionId(),
                         bankKind(tx.getTransTypeCode()), tx.getAmount(), false,
                         tx.getTransactedAt(), tx.getDescription(),
-                        null, null, fields.correlationId, null, tx.getRawJson());
+                        null, null, fields.correlationId, null, tx.getRawJson()));
             }
         }
 
@@ -325,12 +357,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                  */
                 boolean cancelled = APPROVAL_TYPE_CANCEL.equals(approval.getApprovalTypeCode());
                 /* 원거래 승인번호는 취소·환불 후속 처리가 참조한다(설계 §7). 컬럼에도 남긴다. */
-                saveTransaction(userId, null, cardId, sourceType,
+                upserted.add(saveTransaction(userId, null, cardId, sourceType,
                         sourceType + "-" + cardId + "-" + approval.getApprovalNo(),
                         TxKind.CARD_SPEND, approval.getApprovedAmount(), cancelled,
                         approval.getApprovedAt(), approval.getMerchantName(),
                         approval.getMerchantCategoryCode(), approval.getMerchantCategoryName(),
-                        fields.correlationId, fields.originalApprovalNo, approval.getRawJson());
+                        fields.correlationId, fields.originalApprovalNo, approval.getRawJson()));
             }
             for (CardBillSyncDto bill : bundle.cardBills.getOrDefault(card.getCardId(), List.of())) {
                 upsertCardBill(cardId, bill);
@@ -338,10 +370,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
 
         /* 나머지 소스(DEPOSIT/SECURITIES/LOAN/PAY_MONEY)도 같은 upsert-then-transaction 패턴. */
-        saveDeposits(userId, bundle, now);
-        saveSecurities(userId, bundle, now);
-        saveLoans(userId, bundle);
-        savePayMoney(userId, bundle, now);
+        saveDeposits(userId, bundle, now, upserted);
+        saveSecurities(userId, bundle, now, upserted);
+        saveLoans(userId, bundle, upserted);
+        savePayMoney(userId, bundle, now, upserted);
 
         /* 반환값은 연결된 쌍의 수가 아니라 갱신된 행 수(쌍당 2)다 — 다중 테이블 UPDATE 라서. */
         transactionMapper.linkByCorrelation(userId);
@@ -353,9 +385,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .startedAt(startedAt)
                 .finishedAt(LocalDateTime.now(clock))
                 .build());
+
+        return upserted.stream().map(Transaction::getId).collect(java.util.stream.Collectors.toList());
     }
 
-    private void saveDeposits(long userId, SyncBundle bundle, LocalDateTime now) {
+    private void saveDeposits(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
         for (DepositSyncDto deposit : bundle.deposits) {
             String accountNoEncrypted = "MOCK-DEPOSIT-" + deposit.getDepositAccountId();
             ConnectedAccount row = ConnectedAccount.builder()
@@ -374,16 +408,16 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             for (DepositTransactionSyncDto tx :
                     bundle.depositTransactions.getOrDefault(deposit.getDepositAccountId(), List.of())) {
                 /* 예적금 납입은 소비가 아니라 상품으로의 자금 이동이다 — 소비 집계에 섞이면 안 된다. */
-                saveTransaction(userId, accountId, null, "DEPOSIT",
+                upserted.add(saveTransaction(userId, accountId, null, "DEPOSIT",
                         "DEPOSIT-" + accountId + "-" + tx.getTransactionId(),
                         TxKind.TRANSFER, tx.getAmount(), false,
                         tx.getTransactedAt(), tx.getDescription(),
-                        null, null, null, null, tx.getRawJson());
+                        null, null, null, null, tx.getRawJson()));
             }
         }
     }
 
-    private void saveSecurities(long userId, SyncBundle bundle, LocalDateTime now) {
+    private void saveSecurities(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
         if (bundle.stock == null) {
             return;
         }
@@ -428,15 +462,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         for (SecuritiesTransactionSyncDto tx :
                 bundle.securitiesTransactions.getOrDefault(bundle.stock.getAccountId(), List.of())) {
             /* 매수·매도 모두 소비가 아니다(매도 대금을 소비로 잡으면 지출이 부풀려진다). */
-            saveTransaction(userId, accountId, null, "SECURITIES",
+            upserted.add(saveTransaction(userId, accountId, null, "SECURITIES",
                     "SECURITIES-" + accountId + "-" + tx.getTransactionId(),
                     TxKind.TRANSFER, tx.getTransactionAmount(), false,
                     tx.getTransactedAt(), tx.getSecurityProductName(),
-                    null, null, null, null, null);
+                    null, null, null, null, null));
         }
     }
 
-    private void saveLoans(long userId, SyncBundle bundle) {
+    private void saveLoans(long userId, SyncBundle bundle, List<Transaction> upserted) {
         for (LoanSyncDto loan : bundle.loans) {
             Loan row = Loan.builder()
                     .userId(userId)
@@ -469,12 +503,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                         .sourceType("LOAN")
                         .rawJson(tx.getRawJson())
                         .build();
-                upsertTransaction(txRow);
+                upserted.add(upsertTransaction(txRow));
             }
         }
     }
 
-    private void savePayMoney(long userId, SyncBundle bundle, LocalDateTime now) {
+    private void savePayMoney(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
         for (PayMoneySyncDto payMoney : bundle.payMoney) {
             String accountNoEncrypted = "MOCK-PAYMONEY-" + payMoney.getPayMoneyId();
             ConnectedAccount row = ConnectedAccount.builder()
@@ -495,13 +529,13 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                  * 충전·결제·환불이 한 테이블에 섞여 있고 amount 부호도 제각각이다(결제만 음수).
                  * saveTransaction 이 절댓값을 취하므로 부호가 사라진다 — 유형 코드로 판정해야 한다.
                  */
-                saveTransaction(userId, accountId, null, "PAYMONEY",
+                upserted.add(saveTransaction(userId, accountId, null, "PAYMONEY",
                         "PAYMONEY-" + accountId + "-" + tx.getTransactionId(),
                         payMoneyKind(tx.getTransTypeCode()), tx.getAmount(),
                         PAY_TYPE_REFUND.equals(tx.getTransTypeCode()),
                         tx.getTransactedAt(), tx.getMerchantName(),
                         tx.getMerchantCategoryCode(), tx.getMerchantCategoryName(),
-                        null, null, tx.getRawJson());
+                        null, null, tx.getRawJson()));
             }
         }
     }
@@ -650,7 +684,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      *   **첫 번째 사용자의 거래를 덮어쓰고 자기 행은 만들지 못한다**(6명이 같은 목서버로 데모한다).
      *   우리 PK 는 상품 자연키 upsert 로 사용자마다 다르고 재동기화 사이에는 안 변한다.
      */
-    private void saveTransaction(long userId, Long accountId, Long cardId, String sourceType,
+    private Transaction saveTransaction(long userId, Long accountId, Long cardId, String sourceType,
                                  String codefTrKey, TxKind kind, BigDecimal amount, boolean refund,
                                  String transactedAt, String merchantName,
                                  String merchantCategoryCode, String merchantCategoryName,
@@ -679,11 +713,16 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .merchantCategoryName(merchantCategoryName)
                 .rawJson(rawJson)
                 .build();
-        upsertTransaction(row);
+        return upsertTransaction(row);
     }
 
-    /** 거래 upsert 한 곳. 대출 거래처럼 Transaction 을 직접 조립하는 경로도 여기를 탄다. */
-    private void upsertTransaction(Transaction row) {
+    /**
+     * 거래 upsert 한 곳. 대출 거래처럼 Transaction 을 직접 조립하는 경로도 여기를 탄다.
+     *
+     * update 경로(재동기화)는 PK 를 돌려주지 않아 row.getId() 가 계속 null 이다. 카테고리화 파이프라인이
+     * "이번 호출에서 upsert 된 거래의 id" 를 알아야 해서, id 가 비어 있으면 멱등키로 한 번 더 조회해 채운다.
+     */
+    private Transaction upsertTransaction(Transaction row) {
         if (transactionMapper.update(row) == 0) {
             try {
                 transactionMapper.insert(row);
@@ -692,6 +731,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 transactionMapper.update(row);
             }
         }
+        if (row.getId() == null) {
+            row.setId(transactionMapper.findIdByCodefTrKey(row.getCodefTrKey()));
+        }
+        return row;
     }
 
     /**

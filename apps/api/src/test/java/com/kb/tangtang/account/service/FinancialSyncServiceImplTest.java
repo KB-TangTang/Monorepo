@@ -14,6 +14,7 @@ import com.kb.tangtang.account.client.sync.dto.SecuritiesTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.account.domain.Card;
 import com.kb.tangtang.account.domain.ConnectedAccount;
+import com.kb.tangtang.account.domain.LlmCategorizationRequestedEvent;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.mapper.CardBillMapper;
 import com.kb.tangtang.account.mapper.CardMapper;
@@ -22,10 +23,14 @@ import com.kb.tangtang.account.mapper.FinancialSyncHistoryMapper;
 import com.kb.tangtang.account.mapper.InvestmentHoldingMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.transaction.dto.RuleCategorizationResultDto;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
+import com.kb.tangtang.transaction.service.TransactionCategorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -43,6 +48,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.anyString;
@@ -103,6 +109,8 @@ class FinancialSyncServiceImplTest {
     private CardBillMapper cardBillMapper;
     private TransactionMapper transactionMapper;
     private FinancialSyncHistoryMapper syncHistoryMapper;
+    private TransactionCategorizationService transactionCategorizationService;
+    private ApplicationEventPublisher eventPublisher;
     private FinancialSyncServiceImpl service;
 
     @BeforeEach
@@ -120,10 +128,19 @@ class FinancialSyncServiceImplTest {
 
         Clock clock = Clock.fixed(Instant.parse("2026-08-12T01:00:00Z"), ZoneId.of("Asia/Seoul"));
 
+        transactionCategorizationService = mock(TransactionCategorizationService.class);
+        when(transactionCategorizationService.categorizeRuleBased(anyLong(), any()))
+                .thenReturn(RuleCategorizationResultDto.builder()
+                        .ruleCategorizedCount(0)
+                        .llmEligibleTransactionIds(List.of())
+                        .build());
+        eventPublisher = mock(ApplicationEventPublisher.class);
+
         service = new FinancialSyncServiceImpl(
                 client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
-                syncHistoryMapper, clock, new TransactionTemplate(recordingTransactionManager()));
+                syncHistoryMapper, transactionCategorizationService, eventPublisher,
+                clock, new TransactionTemplate(recordingTransactionManager()));
 
         when(scenarioKeyProvider.resolve(1L)).thenReturn("1");
         // 이번 테스트는 BANK 만 데이터가 있고 나머지 5개 소스는 빈 목록으로 둔다.
@@ -501,5 +518,56 @@ class FinancialSyncServiceImplTest {
         /* 경합에서 진 쪽은 상대 행을 우리 값으로 갱신하고 넘어간다 (update 2회: 최초 시도 + 재시도). */
         verify(transactionMapper, times(2)).update(any());
         assertEquals(List.of("BEGIN", "COMMIT"), timeline);
+    }
+
+    @Test
+    @DisplayName("저장 후 upsert 된 거래 id 로 규칙 카테고리화를 호출하고, 결과를 응답에 담는다")
+    void callsRuleCategorizationWithUpsertedIdsAndReflectsResultInResponse() {
+        when(transactionCategorizationService.categorizeRuleBased(eq(1L), anyList()))
+                .thenReturn(RuleCategorizationResultDto.builder()
+                        .ruleCategorizedCount(1)
+                        .llmEligibleTransactionIds(List.of())
+                        .build());
+
+        FinancialSyncResultDto result = service.sync(1L);
+
+        assertEquals(1, result.getCollectedTransactionCount());
+        assertEquals(1, result.getRuleCategorizedCount());
+        assertEquals(0, result.getLlmPendingTransactionCount());
+        assertEquals("NOT_REQUIRED", result.getLlmCategorizationStatus());
+        verify(transactionCategorizationService).categorizeRuleBased(eq(1L), anyList());
+    }
+
+    @Test
+    @DisplayName("규칙으로 못 채운 거래가 있으면 LlmCategorizationRequestedEvent 를 발행하고 상태를 PENDING 으로 둔다")
+    void publishesLlmEventWhenEligibleTransactionsRemain() {
+        when(transactionCategorizationService.categorizeRuleBased(eq(1L), anyList()))
+                .thenReturn(RuleCategorizationResultDto.builder()
+                        .ruleCategorizedCount(0)
+                        .llmEligibleTransactionIds(List.of(999L))
+                        .build());
+
+        FinancialSyncResultDto result = service.sync(1L);
+
+        assertEquals(1, result.getLlmPendingTransactionCount());
+        assertEquals("PENDING", result.getLlmCategorizationStatus());
+        /*
+         * ApplicationEventPublisher 는 publishEvent(ApplicationEvent)/publishEvent(Object) 오버로드가
+         * 둘 다 있다. argThat(람다) 를 타입 힌트 없이 쓰면 javac 가 더 구체적인 ApplicationEvent 오버로드로
+         * 고정해버려, 그와 무관한 record 타입(LlmCategorizationRequestedEvent) 로의 instanceof/캐스팅이
+         * 컴파일 에러가 된다. Object 로 타입 힌트를 줘 Object 오버로드를 타게 한다.
+         */
+        verify(eventPublisher).publishEvent(Mockito.<Object>argThat(event ->
+                event instanceof LlmCategorizationRequestedEvent
+                        && ((LlmCategorizationRequestedEvent) event).userId().equals(1L)
+                        && ((LlmCategorizationRequestedEvent) event).transactionIds().equals(List.of(999L))));
+    }
+
+    @Test
+    @DisplayName("LLM 대상이 없으면 이벤트를 발행하지 않는다")
+    void doesNotPublishEventWhenNoLlmEligibleTransactions() {
+        service.sync(1L);
+
+        verify(eventPublisher, never()).publishEvent(any(LlmCategorizationRequestedEvent.class));
     }
 }
