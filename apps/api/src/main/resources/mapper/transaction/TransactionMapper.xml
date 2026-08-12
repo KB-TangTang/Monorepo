@@ -13,6 +13,8 @@
             tr_time                  = #{trTime},
             description1             = #{description1},
             classification           = #{classification},
+            category_id              = #{categoryId},
+            category_source          = #{categorySource},
             source_type              = #{sourceType},
             correlation_id           = #{correlationId},
             original_approval_no     = #{originalApprovalNo},

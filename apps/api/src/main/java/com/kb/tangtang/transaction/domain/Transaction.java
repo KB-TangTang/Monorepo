@@ -33,6 +33,8 @@ public class Transaction {
     private String description1;
     private String classification;
     private Long categoryId;
+    /** category_id 판정 출처. RULE_MCC/RULE_KEYWORD/LLM/USER. category_id 가 없으면 null. */
+    private String categorySource;
     private Boolean isExcludedFromSummary;
     private Long loanId;
     private String sourceType;
@@ -55,8 +57,8 @@ public class Transaction {
     public Transaction(Long id, Long userId, Long accountId, String codefTrKey, String merchantName,
                         String merchantNameNormalized, BigDecimal amount, String direction,
                         LocalDate trDate, LocalTime trTime, String description1, String classification,
-                        Long categoryId, Boolean isExcludedFromSummary, Long loanId, String sourceType,
-                        Long cardId, String correlationId, Long linkedTransactionId,
+                        Long categoryId, String categorySource, Boolean isExcludedFromSummary, Long loanId,
+                        String sourceType, Long cardId, String correlationId, Long linkedTransactionId,
                         String originalApprovalNo, String merchantCategoryCode,
                         String merchantCategoryName, String rawJson, boolean isRefund,
                         BigDecimal refundedAmount) {
@@ -73,6 +75,7 @@ public class Transaction {
         this.description1 = description1;
         this.classification = classification;
         this.categoryId = categoryId;
+        this.categorySource = categorySource;
         this.isExcludedFromSummary = isExcludedFromSummary;
         this.loanId = loanId;
         this.sourceType = sourceType;
