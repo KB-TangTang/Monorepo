@@ -23,7 +23,6 @@ const router = useRouter();
 const auth = useAuthStore();
 
 const photoSheetOpen = ref(false);
-const photoSheet = ref(null);
 const photoInput = ref(null);
 const photoBusy = ref(false);
 const photoError = ref('');
@@ -36,7 +35,12 @@ async function runPhoto(action) {
         /* 이 화면은 fetchMe() 결과를 따로 들고 있다 — 스토어와 함께 갈아끼워야 카드가 바뀐다 */
         user.value = { ...user.value, ...updated };
         auth.mergeUser(updated);
-        photoSheet.value?.releaseHistory();
+        /*
+         * ⚠ releaseHistory() 를 부르지 않는다. 그건 **오버레이 안에서 라우터 이동이 뒤따를 때만**
+         * 쓰는 것이다(useOverlay.js 참고). 여기는 그냥 닫기라 deactivate() 가 history.back() 으로
+         * 자기가 쌓은 항목을 걷어가야 한다. 부르면 고아 히스토리가 남아 뒤로가기 첫 번째 누름이
+         * 먹통이 된다. 같은 화면의 saveNickname() 도 부르지 않는다 — 그쪽이 올바른 본보기다.
+         */
         photoSheetOpen.value = false;
     } catch (err) {
         photoError.value = err.message ?? '사진을 바꾸지 못했어요.';
@@ -284,7 +288,7 @@ async function confirmLogout() {
             </div>
         </BaseBottomSheet>
 
-        <BaseBottomSheet ref="photoSheet" v-model="photoSheetOpen" title="프로필 사진">
+        <BaseBottomSheet v-model="photoSheetOpen" title="프로필 사진">
             <div class="my-page__sheet">
                 <BaseButton block :loading="photoBusy" @click="photoInput?.click()">
                     사진 변경
