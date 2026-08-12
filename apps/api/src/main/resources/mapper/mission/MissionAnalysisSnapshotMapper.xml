@@ -29,6 +29,23 @@
         ORDER BY analysis.category_rank
     </select>
 
+    <select id="findNextPendingSnapshotForUpdate"
+            resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
+        SELECT id, user_id, cycle_start_date, category_id, category_rank,
+               spending_amount, spending_ratio, transaction_count, assigned_date
+        FROM tbl_user_mission_analysis
+        WHERE user_id = #{userId}
+          AND assigned_date IS NULL
+          AND cycle_start_date = (
+              SELECT MAX(latest.cycle_start_date)
+              FROM tbl_user_mission_analysis latest
+              WHERE latest.user_id = #{userId}
+          )
+        ORDER BY category_rank
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <insert id="insertSnapshots">
         INSERT INTO tbl_user_mission_analysis (
             user_id,
@@ -52,5 +69,11 @@
             )
         </foreach>
     </insert>
+
+    <update id="markAssigned">
+        UPDATE tbl_user_mission_analysis
+        SET assigned_date = #{assignedDate}
+        WHERE id = #{snapshotId} AND assigned_date IS NULL
+    </update>
 
 </mapper>

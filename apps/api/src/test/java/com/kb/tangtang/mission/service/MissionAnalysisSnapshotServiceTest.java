@@ -35,9 +35,19 @@ class MissionAnalysisSnapshotServiceTest {
         }
 
         @Override
+        public MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(long userId) {
+            return pendingSnapshots.isEmpty() ? null : pendingSnapshots.get(0);
+        }
+
+        @Override
         public int insertSnapshots(List<MissionAnalysisSnapshot> snapshots) {
             insertedSnapshots.addAll(snapshots);
             return snapshots.size();
+        }
+
+        @Override
+        public int markAssigned(long snapshotId, LocalDate assignedDate) {
+            return 1;
         }
     }
 
