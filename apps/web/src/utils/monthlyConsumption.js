@@ -3,6 +3,13 @@ const TOP_PARENT_CATEGORY_COUNT = 5;
 const OTHER_PARENT_CATEGORY_NAME = '그 외';
 const OTHER_PARENT_CATEGORY_TONE = 'other';
 
+export function splitMonthlyCategories(categories, previewCount = 5) {
+    return {
+        primaryCategories: categories.slice(0, previewCount),
+        additionalCategories: categories.slice(previewCount),
+    };
+}
+
 function summarizeParentCategories(categories) {
     const sortedCategories = [...categories].sort(
         (first, second) =>

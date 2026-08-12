@@ -9,6 +9,7 @@ import {
     resolveSelectedReportPeriod,
     resolveFixedExpenseStatus,
     resolveReportState,
+    splitMonthlyCategories,
 } from '../src/utils/monthlyConsumption.js';
 import { AVAILABLE_MONTHS, REPORTS } from '../src/fixtures/monthlyConsumption.js';
 import {
@@ -186,6 +187,20 @@ test('대분류 차트는 비중 상위 5개와 전용 색상의 그 외 항목�
     assert.notEqual(
         report.parentCategories.find((category) => category.name === '기타').tone,
         report.parentCategories.at(-1).tone,
+    );
+});
+
+test('선고 명세는 상위 5개와 더보기 목록으로 나눈다', () => {
+    const categories = Array.from({ length: 8 }, (_, index) => ({ categoryId: index + 1 }));
+    const { primaryCategories, additionalCategories } = splitMonthlyCategories(categories);
+
+    assert.deepEqual(
+        primaryCategories.map((category) => category.categoryId),
+        [1, 2, 3, 4, 5],
+    );
+    assert.deepEqual(
+        additionalCategories.map((category) => category.categoryId),
+        [6, 7, 8],
     );
 });
 

@@ -1,12 +1,28 @@
 <script setup>
-import { computed } from 'vue';
-import { formatChangeRate, formatWon } from '@/utils/monthlyConsumption';
+import { computed, ref, watch } from 'vue';
+import { formatChangeRate, formatWon, splitMonthlyCategories } from '@/utils/monthlyConsumption';
 
 const props = defineProps({
     report: { type: Object, required: true },
     showComparison: { type: Boolean, default: true },
 });
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
+const isReceiptExpanded = ref(false);
+const categoryGroups = computed(() => splitMonthlyCategories(props.report.categories));
+const primaryCategories = computed(() => categoryGroups.value.primaryCategories);
+const additionalCategories = computed(() => categoryGroups.value.additionalCategories);
+
+watch(
+    () => props.report.period,
+    () => {
+        isReceiptExpanded.value = false;
+    },
+);
+
+function toggleReceipt() {
+    isReceiptExpanded.value = !isReceiptExpanded.value;
+}
+
 const CHART_COLORS = {
     primary: 'var(--tt-primary)',
     accent: 'var(--tt-accent)',
@@ -56,7 +72,7 @@ const chartStyle = computed(() => {
         <div class="category-report__receipt">
             <p>선고 명세&nbsp; · &nbsp;카테고리별</p>
             <ul>
-                <li v-for="category in report.categories" :key="category.name">
+                <li v-for="category in primaryCategories" :key="category.categoryId">
                     <i :class="`category-report__icon--${category.tone}`">{{ category.code }}</i>
                     <span>{{ category.name }}</span>
                     <strong>{{ formatWon(category.amount) }}</strong>
@@ -71,6 +87,37 @@ const chartStyle = computed(() => {
                     </b>
                 </li>
             </ul>
+            <Transition name="receipt-slide">
+                <ul v-if="isReceiptExpanded" class="category-report__receipt-additional">
+                    <li v-for="category in additionalCategories" :key="category.categoryId">
+                        <i :class="`category-report__icon--${category.tone}`">{{
+                            category.code
+                        }}</i>
+                        <span>{{ category.name }}</span>
+                        <strong>{{ formatWon(category.amount) }}</strong>
+                        <b
+                            v-if="showComparison"
+                            :class="{
+                                'category-report__change--up': category.changeRate > 0,
+                                'category-report__change--down': category.changeRate < 0,
+                            }"
+                        >
+                            {{ formatChangeRate(category.changeRate) }}
+                        </b>
+                    </li>
+                </ul>
+            </Transition>
+            <button
+                v-if="additionalCategories.length"
+                type="button"
+                class="category-report__receipt-more"
+                :aria-expanded="isReceiptExpanded"
+                @click="toggleReceipt"
+            >
+                <span>
+                    {{ isReceiptExpanded ? '접기' : `더보기 ${additionalCategories.length}개` }}
+                </span>
+            </button>
             <footer>
                 <span>합계</span><strong>{{ formatWon(report.totalSpent) }}</strong>
             </footer>
@@ -206,6 +253,9 @@ const chartStyle = computed(() => {
     flex-direction: column;
     gap: var(--tt-space-4);
 }
+.category-report__receipt-additional {
+    margin-top: var(--tt-space-4);
+}
 .category-report__receipt li {
     display: grid;
     grid-template-columns: 42px 1fr auto auto;
@@ -243,6 +293,38 @@ const chartStyle = computed(() => {
 }
 .category-report__change--down {
     color: var(--tt-success) !important;
+}
+.category-report__receipt-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-1);
+    width: 100%;
+    margin-top: var(--tt-space-4);
+    padding: var(--tt-space-3) 0 0;
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    background: transparent;
+    border: 0;
+    border-top: 2px dashed var(--tt-border);
+    cursor: pointer;
+}
+.category-report__receipt-more:hover {
+    color: var(--tt-text);
+}
+.receipt-slide-enter-active,
+.receipt-slide-leave-active {
+    max-height: 4000px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+.receipt-slide-enter-from,
+.receipt-slide-leave-to {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
 }
 .category-report__receipt footer {
     display: flex;
