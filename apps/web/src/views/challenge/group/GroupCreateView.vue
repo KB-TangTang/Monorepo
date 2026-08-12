@@ -6,12 +6,16 @@ import GroupCreateStepBasic from '@/components/challenge/group/GroupCreateStepBa
 import GroupCreateStepScope from '@/components/challenge/group/GroupCreateStepScope.vue';
 import GroupCreateStepSettings from '@/components/challenge/group/GroupCreateStepSettings.vue';
 import GroupCreateStepConfirm from '@/components/challenge/group/GroupCreateStepConfirm.vue';
+import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
+import { createGroupChallenge } from '@/api/groupChallenge';
 import celebrationImg from '@/assets/images/emotions/10_celebration.png';
 
 const router = useRouter();
 
 const currentStep = ref(0); // 0~3 = 위자드, 4 = 성공 화면
 const createdGroupId = ref(null);
+const isCreating = ref(false);
+const createError = ref('');
 const form = reactive({
     evalType: 'DAILY',
     groupName: '',
@@ -53,10 +57,21 @@ function goPrev() {
     }
 }
 
-function handleCreate() {
-    // API 연동 전이므로 바로 성공 화면으로 전환
-    createdGroupId.value = 1;
-    currentStep.value = 4;
+async function handleCreate() {
+    if (isCreating.value) return;
+    isCreating.value = true;
+    createError.value = '';
+    try {
+        const created = await createGroupChallenge(form);
+        createdGroupId.value = created.groupId;
+        currentStep.value = 4;
+    } catch (e) {
+        /* 서버 검증(기간 7일 초과·시작일 과거 등)은 사유가 그대로 내려온다.
+         * 최종 확인 화면에 남겨서 사용자가 앞 단계로 돌아가 고칠 수 있게 한다. */
+        createError.value = e.message ?? '그룹을 만들지 못했습니다.';
+    } finally {
+        isCreating.value = false;
+    }
 }
 
 function goToInvite() {
@@ -137,6 +152,8 @@ function formatDate(dateStr) {
                     @confirm="handleCreate"
                 />
             </Transition>
+
+            <p v-if="createError" class="gcv-error">{{ createError }}</p>
         </template>
 
         <!-- ===== 성공 화면 (step 4) ===== -->
@@ -186,6 +203,8 @@ function formatDate(dateStr) {
                 </button>
             </div>
         </template>
+
+        <DevDataSourceFab />
     </div>
 </template>
 
@@ -213,6 +232,19 @@ function formatDate(dateStr) {
 .gcv-eval-badge--blue {
     background: rgba(62, 99, 214, 0.28);
     color: #B9C6F2;
+}
+
+/* ── 생성 실패 안내 ──────────────────────── */
+.gcv-error {
+    margin: 0 var(--tt-screen-padding) var(--tt-space-4);
+    padding: 10px 14px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
+    text-align: center;
+    line-height: 1.5;
 }
 
 /* ── step transition ─────────────────────── */

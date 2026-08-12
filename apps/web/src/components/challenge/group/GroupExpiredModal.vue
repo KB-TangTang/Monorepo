@@ -1,14 +1,36 @@
 <script setup>
+import { computed } from 'vue';
 import BaseModal from '@/components/common/BaseModal.vue';
 import worriedImg from '@/assets/images/emotions/16_worried.png';
 
-defineProps({
+const props = defineProps({
     modelValue: { type: Boolean, required: true },
+    /** 서버가 내려준 참여 불가 사유. 'EXPIRED' | 'FULL' | 'CLOSED' */
+    reason: { type: String, default: 'EXPIRED' },
     groupName: { type: String, default: '' },
     groupCode: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:model-value', 'confirm']);
+
+/* 코드는 맞는데 못 들어가는 이유가 셋이다. 만료라고만 적으면 사용자가
+ * 방장에게 코드를 다시 달라고 하게 되므로 사유별로 문구를 나눈다. */
+const COPY = {
+    EXPIRED: {
+        title: '초대 가능한 시간이<br>지났어요',
+        desc: '이 그룹은 첫날 23:59에<br>초대가 마감됐어요.',
+    },
+    FULL: {
+        title: '자리가<br>가득 찼어요',
+        desc: '한 그룹에는 최대 6명까지<br>들어갈 수 있어요.',
+    },
+    CLOSED: {
+        title: '이미 끝난<br>재판이에요',
+        desc: '판결이 마무리된 그룹에는<br>참여할 수 없어요.',
+    },
+};
+
+const copy = computed(() => COPY[props.reason] ?? COPY.EXPIRED);
 
 function handleConfirm() {
     emit('confirm');
@@ -27,15 +49,13 @@ function handleConfirm() {
             <div class="gem-mascot-wrap">
                 <img
                     :src="worriedImg"
-                    alt="초대 만료 경고"
+                    alt="참여 불가 안내"
                     class="gem-mascot"
                 />
             </div>
 
-            <h3 class="gem-title">초대 가능한 시간이<br>지났어요</h3>
-            <p class="gem-desc">
-                이 그룹은 첫날 23:59에<br>초대가 마감됐어요.
-            </p>
+            <h3 class="gem-title" v-html="copy.title" />
+            <p class="gem-desc" v-html="copy.desc" />
 
             <div v-if="groupName || groupCode" class="gem-info-banner">
                 {{ groupName }}<template v-if="groupCode"> · {{ groupCode }}</template>
