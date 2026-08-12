@@ -1,7 +1,7 @@
 package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
-import com.kb.tangtang.mission.domain.CategoryDailySpendingStats;
+import com.kb.tangtang.mission.domain.CategorySpendingStats;
 import com.kb.tangtang.mission.domain.MissionAnalysisSnapshot;
 import com.kb.tangtang.mission.domain.MissionDifficulty;
 import com.kb.tangtang.mission.domain.MissionPoolItem;
@@ -78,6 +78,21 @@ public class RelativeMissionAssignmentService {
             throw new BusinessException("MISSION_DIFFICULTY_NOT_FOUND", "미션 난이도 정책을 찾을 수 없습니다.");
         }
 
+        CategorySpendingStats stats = assignmentMapper.findCategorySpendingStats(
+                userId, snapshot.getCategoryId(), assignDate.minusDays(28), assignDate.minusDays(1));
+        if (stats == null || stats.getBaseAmount() == null || stats.getMinimumPurchaseAmount() == null) {
+            throw new BusinessException("MISSION_BASE_AMOUNT_NOT_FOUND", "목표 금액을 계산할 소비 내역이 없습니다.");
+        }
+
+        int minimumRate = difficulty.getMinReductionRate().intValueExact();
+        int maximumRate = difficulty.getMaxReductionRate().intValueExact();
+        BigDecimal targetRate = BigDecimal.valueOf(randomInclusive.applyAsInt(minimumRate, maximumRate));
+        BigDecimal calculatedTarget = stats.getBaseAmount()
+                .multiply(ONE_HUNDRED.subtract(targetRate))
+                .divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
+
+        BigDecimal targetValue = calculatedTarget.max(stats.getMinimumPurchaseAmount())
+                .setScale(2, RoundingMode.HALF_UP);
         Long lastMissionId = assignmentMapper.findLastMissionId(userId, snapshot.getCategoryId());
         List<MissionPoolItem> missions = assignmentMapper.findRelativeMissions(
                 snapshot.getCategoryId(), lastMissionId);
@@ -88,19 +103,6 @@ public class RelativeMissionAssignmentService {
             throw new BusinessException("MISSION_POOL_EMPTY", "배정 가능한 상대형 미션이 없습니다.");
         }
 
-        CategoryDailySpendingStats stats = assignmentMapper.findDailySpendingStats(
-                userId, snapshot.getCategoryId(), assignDate.minusDays(28), assignDate.minusDays(1));
-        if (stats == null || stats.getBaseAmount() == null || stats.getFloorAmount() == null) {
-            throw new BusinessException("MISSION_BASE_AMOUNT_NOT_FOUND", "목표 금액을 계산할 소비 내역이 없습니다.");
-        }
-
-        int minimumRate = difficulty.getMinReductionRate().intValueExact();
-        int maximumRate = difficulty.getMaxReductionRate().intValueExact();
-        BigDecimal targetRate = BigDecimal.valueOf(randomInclusive.applyAsInt(minimumRate, maximumRate));
-        BigDecimal calculatedTarget = stats.getBaseAmount()
-                .multiply(ONE_HUNDRED.subtract(targetRate))
-                .divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
-        BigDecimal targetValue = calculatedTarget.max(stats.getFloorAmount()).setScale(2, RoundingMode.HALF_UP);
         MissionPoolItem mission = missions.get(randomInclusive.applyAsInt(0, missions.size() - 1));
 
         RelativeMissionAssignment assignment = RelativeMissionAssignment.builder()

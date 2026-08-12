@@ -1,6 +1,6 @@
 package com.kb.tangtang.mission.mapper;
 
-import com.kb.tangtang.mission.domain.CategoryDailySpendingStats;
+import com.kb.tangtang.mission.domain.CategorySpendingStats;
 import com.kb.tangtang.mission.domain.MissionDifficulty;
 import com.kb.tangtang.mission.domain.MissionPoolItem;
 import com.kb.tangtang.mission.domain.RelativeMissionAssignment;
@@ -19,9 +19,9 @@ public interface RelativeMissionAssignmentMapper {
     List<MissionPoolItem> findRelativeMissions(@Param("categoryId") long categoryId,
                                                @Param("excludedMissionId") Long excludedMissionId);
     Long findLastMissionId(@Param("userId") long userId, @Param("categoryId") long categoryId);
-    CategoryDailySpendingStats findDailySpendingStats(@Param("userId") long userId,
-                                                      @Param("categoryId") long categoryId,
-                                                      @Param("startDate") LocalDate startDate,
-                                                      @Param("endDate") LocalDate endDate);
+    CategorySpendingStats findCategorySpendingStats(@Param("userId") long userId,
+                                                    @Param("categoryId") long categoryId,
+                                                    @Param("startDate") LocalDate startDate,
+                                                    @Param("endDate") LocalDate endDate);
     int insertAssignment(RelativeMissionAssignment assignment);
 }

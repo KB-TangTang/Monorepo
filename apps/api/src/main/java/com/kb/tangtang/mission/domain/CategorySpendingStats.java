@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CategoryDailySpendingStats {
+public class CategorySpendingStats {
     private BigDecimal baseAmount;
-    private BigDecimal floorAmount;
+    private BigDecimal minimumPurchaseAmount;
 }

@@ -19,7 +19,7 @@ class RelativeMissionAssignmentMapperXmlTest {
         }
         String namespace = RelativeMissionAssignmentMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findActiveUserIds"));
-        assertTrue(configuration.hasStatement(namespace + ".findDailySpendingStats"));
+        assertTrue(configuration.hasStatement(namespace + ".findCategorySpendingStats"));
         assertTrue(configuration.hasStatement(namespace + ".insertAssignment"));
     }
 }

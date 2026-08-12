@@ -41,9 +41,20 @@
         ORDER BY id
     </select>
 
-    <select id="findDailySpendingStats" resultType="com.kb.tangtang.mission.domain.CategoryDailySpendingStats">
+    <select id="findCategorySpendingStats" resultType="com.kb.tangtang.mission.domain.CategorySpendingStats">
         SELECT ROUND(AVG(daily.net_amount), 2) AS base_amount,
-               MIN(daily.net_amount) AS floor_amount
+               (
+                   SELECT MIN(purchase.amount)
+                   FROM tbl_transaction purchase
+                   WHERE purchase.user_id = #{userId}
+                     AND purchase.category_id = #{categoryId}
+                     AND purchase.tr_date BETWEEN #{startDate} AND #{endDate}
+                     AND purchase.classification = 'CONSUMPTION'
+                     AND purchase.direction = 'OUT'
+                     AND purchase.is_excluded_from_summary = 0
+                     AND purchase.is_refund = 0
+                     AND purchase.amount &gt; 0
+               ) AS minimum_purchase_amount
         FROM (
             SELECT tr_date,
                    SUM(CASE WHEN is_refund = 1 THEN -COALESCE(refunded_amount, amount) ELSE amount END) AS net_amount

@@ -1,6 +1,6 @@
 package com.kb.tangtang.mission.service;
 
-import com.kb.tangtang.mission.domain.CategoryDailySpendingStats;
+import com.kb.tangtang.mission.domain.CategorySpendingStats;
 import com.kb.tangtang.mission.domain.MissionAnalysisSnapshot;
 import com.kb.tangtang.mission.domain.MissionDifficulty;
 import com.kb.tangtang.mission.domain.MissionPoolItem;
@@ -53,40 +53,70 @@ class RelativeMissionAssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("최소 절감률과 일별 최솟값 하한을 적용해 상대형 미션을 배정한다")
-    void assignsRelativeMissionWithFloor() {
+    @DisplayName("계산 목표가 최소 단건 결제 금액보다 낮으면 최소 결제 금액으로 보정한다")
+    void clampsTargetToMinimumPurchaseAmount() {
         MissionAnalysisSnapshot snapshot = MissionAnalysisSnapshot.builder()
-                .id(31L).userId(USER_ID).categoryId(18L).categoryRank(1).build();
+                .id(31L).userId(USER_ID).categoryId(18L).categoryName("카페")
+                .categoryRank(1).build();
         MissionDifficulty difficulty = MissionDifficulty.builder()
-                .id(2L).difficultyName("NORMAL")
-                .minReductionRate(new BigDecimal("20"))
-                .maxReductionRate(new BigDecimal("40")).build();
+                .id(3L).difficultyName("HARD")
+                .minReductionRate(new BigDecimal("50"))
+                .maxReductionRate(new BigDecimal("50")).build();
         MissionPoolItem mission = MissionPoolItem.builder()
-                .id(101L).missionTitle("배달 현장 급습").build();
-        CategoryDailySpendingStats stats = CategoryDailySpendingStats.builder()
-                .baseAmount(new BigDecimal("10000.00"))
-                .floorAmount(new BigDecimal("9000.00")).build();
+                .id(101L).missionTitle("카페 영수증 심문").build();
+        CategorySpendingStats stats = CategorySpendingStats.builder()
+                .baseAmount(new BigDecimal("1600.00"))
+                .minimumPurchaseAmount(new BigDecimal("1600.00")).build();
 
-        when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(2L);
+        when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(3L);
         when(assignmentMapper.countAssignment(USER_ID, ASSIGN_DATE)).thenReturn(0);
         when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(snapshot);
-        when(assignmentMapper.findDifficulty(2L)).thenReturn(difficulty);
+        when(assignmentMapper.findDifficulty(3L)).thenReturn(difficulty);
         when(assignmentMapper.findLastMissionId(USER_ID, 18L)).thenReturn(null);
         when(assignmentMapper.findRelativeMissions(18L, null)).thenReturn(List.of(mission));
-        when(assignmentMapper.findDailySpendingStats(
+        when(assignmentMapper.findCategorySpendingStats(
                 USER_ID, 18L, ASSIGN_DATE.minusDays(28), ASSIGN_DATE.minusDays(1))).thenReturn(stats);
         when(snapshotMapper.markAssigned(31L, ASSIGN_DATE)).thenReturn(1);
 
         RelativeMissionAssignmentDto result = service.assign(USER_ID, ASSIGN_DATE);
 
         assertTrue(result.isAssigned());
-        assertEquals(new BigDecimal("20"), result.getTargetRate());
-        assertEquals(new BigDecimal("9000.00"), result.getTargetValue());
+        assertEquals(new BigDecimal("1600.00"), result.getTargetValue());
+        assertEquals(new BigDecimal("50"), result.getTargetRate());
+        assertEquals(new BigDecimal("1600.00"), result.getBaseAmount());
         ArgumentCaptor<com.kb.tangtang.mission.domain.RelativeMissionAssignment> captor =
                 ArgumentCaptor.forClass(com.kb.tangtang.mission.domain.RelativeMissionAssignment.class);
         verify(assignmentMapper).insertAssignment(captor.capture());
         assertEquals(101L, captor.getValue().getMissionId());
+        assertEquals(3L, captor.getValue().getDifficultyId());
         verify(snapshotMapper).markAssigned(31L, ASSIGN_DATE);
+    }
+
+    @Test
+    @DisplayName("계산 목표가 최소 단건 결제 금액 이상이면 절감률을 그대로 적용한 상대형 미션을 배정한다")
+    void assignsCalculatedRelativeTargetWithoutClamping() {
+        MissionAnalysisSnapshot snapshot = MissionAnalysisSnapshot.builder()
+                .id(32L).userId(USER_ID).categoryId(19L).categoryName("배달앱")
+                .categoryRank(1).build();
+        when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(2L);
+        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(snapshot);
+        when(assignmentMapper.findDifficulty(2L)).thenReturn(MissionDifficulty.builder()
+                .id(2L).minReductionRate(new BigDecimal("20"))
+                .maxReductionRate(new BigDecimal("40")).build());
+        when(assignmentMapper.findCategorySpendingStats(
+                USER_ID, 19L, ASSIGN_DATE.minusDays(28), ASSIGN_DATE.minusDays(1))).thenReturn(
+                CategorySpendingStats.builder()
+                        .baseAmount(new BigDecimal("10000.00"))
+                        .minimumPurchaseAmount(new BigDecimal("2000.00")).build());
+        when(assignmentMapper.findLastMissionId(USER_ID, 19L)).thenReturn(null);
+        when(assignmentMapper.findRelativeMissions(19L, null)).thenReturn(List.of(
+                MissionPoolItem.builder().id(103L).missionTitle("배달 현장 급습").build()));
+        when(snapshotMapper.markAssigned(32L, ASSIGN_DATE)).thenReturn(1);
+
+        RelativeMissionAssignmentDto result = service.assign(USER_ID, ASSIGN_DATE);
+
+        assertEquals(new BigDecimal("20"), result.getTargetRate());
+        assertEquals(new BigDecimal("8000.00"), result.getTargetValue());
     }
 
     @Test
@@ -101,8 +131,9 @@ class RelativeMissionAssignmentServiceTest {
         when(assignmentMapper.findLastMissionId(USER_ID, 20L)).thenReturn(null);
         when(assignmentMapper.findRelativeMissions(20L, null)).thenReturn(List.of(
                 MissionPoolItem.builder().id(102L).missionTitle("미션").build()));
-        when(assignmentMapper.findDailySpendingStats(anyLong(), anyLong(), any(), any())).thenReturn(
-                CategoryDailySpendingStats.builder().baseAmount(BigDecimal.TEN).floorAmount(BigDecimal.ONE).build());
+        when(assignmentMapper.findCategorySpendingStats(anyLong(), anyLong(), any(), any())).thenReturn(
+                CategorySpendingStats.builder().baseAmount(BigDecimal.TEN)
+                        .minimumPurchaseAmount(BigDecimal.ONE).build());
         when(snapshotMapper.markAssigned(44L, ASSIGN_DATE)).thenReturn(1);
 
         assertTrue(service.assign(USER_ID, ASSIGN_DATE).isAssigned());
