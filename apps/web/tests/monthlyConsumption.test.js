@@ -140,6 +140,55 @@ test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () =
     assert.equal(report.categories[0].tone, report.parentCategories[0].tone);
 });
 
+test('대분류 차트는 비중 상위 5개와 전용 색상의 그 외 항목으로 요약한다', () => {
+    const parentCategories = [
+        ['기타', 12],
+        ['식비', 30],
+        ['교통', 15],
+        ['주거', 20],
+        ['쇼핑', 10],
+        ['여가', 8],
+        ['의료', 5],
+    ].map(([categoryName, ratio], index) => ({
+        categoryId: index + 1,
+        categoryName,
+        amount: ratio * 1000,
+        ratio,
+    }));
+    const report = composeMonthlyConsumptionReport(
+        {
+            yearMonth: '2026-07',
+            totalSpent: 100000,
+            hasPreviousComparison: true,
+            monthOverMonthRate: 0,
+            fixedExpenseCandidateCount: 0,
+        },
+        { items: [] },
+        {
+            parentCategories,
+            categories: parentCategories.map((category) => ({
+                ...category,
+                parentCategoryId: category.categoryId,
+                parentCategoryName: category.categoryName,
+            })),
+        },
+    );
+
+    assert.deepEqual(
+        report.parentCategories.map((category) => category.name),
+        ['식비', '주거', '교통', '기타', '쇼핑', '그 외'],
+    );
+    assert.equal(report.parentCategories.at(-1).ratio, 13);
+    assert.equal(report.parentCategories.at(-1).tone, 'other');
+    assert.equal(report.parentCategories[3].tone, 'danger');
+    assert.equal(report.parentCategories[4].tone, 'info');
+    assert.equal(report.categories.find((category) => category.name === '여가').tone, 'other');
+    assert.notEqual(
+        report.parentCategories.find((category) => category.name === '기타').tone,
+        report.parentCategories.at(-1).tone,
+    );
+});
+
 test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다', async () => {
     const months = await fetchTempMonthlyConsumptionMonths();
     const report = await fetchTempMonthlyConsumptionReport('2026-07');

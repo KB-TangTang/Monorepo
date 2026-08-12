@@ -7,28 +7,13 @@ const props = defineProps({
     showComparison: { type: Boolean, default: true },
 });
 const reportMonth = computed(() => Number(props.report.period.slice(5)));
-const leadingCategory = computed(() => props.report.categories[0]);
-const comparisonCopy = computed(() => {
-    if (!leadingCategory.value) {
-        return '';
-    }
-    const rate = leadingCategory.value.changeRate;
-    if (rate == null) {
-        return `${leadingCategory.value.name} 지출은 지난달과 비교하기 어려워요`;
-    }
-    if (rate === 0) {
-        return `${leadingCategory.value.name} 지출이 지난달과 같아요`;
-    }
-    return `${leadingCategory.value.name} 지출이 지난달보다 ${Math.abs(rate)}% ${
-        rate > 0 ? '늘었어요' : '줄었어요'
-    }`;
-});
 const CHART_COLORS = {
     primary: 'var(--tt-primary)',
     accent: 'var(--tt-accent)',
     success: 'var(--tt-success)',
-    muted: 'var(--tt-text-muted)',
-    soft: 'var(--tt-border-strong)',
+    danger: 'var(--tt-danger)',
+    info: 'var(--tt-info)',
+    other: 'var(--tt-text-muted)',
 };
 const chartStyle = computed(() => {
     if (!props.report.parentCategories.length) {
@@ -49,12 +34,7 @@ const chartStyle = computed(() => {
     <section class="category-report" aria-labelledby="category-title">
         <h2 id="category-title">카테고리별</h2>
         <div class="category-report__ratio-card">
-            <h3 v-if="showComparison">
-                {{ comparisonCopy }}
-            </h3>
-            <h3 v-else>
-                이번 달 소비 비중 <span>{{ reportMonth }}월 지출 기준</span>
-            </h3>
+            <h3>TOP 5</h3>
             <div class="category-report__chart-row">
                 <div
                     class="category-report__donut"
@@ -194,13 +174,17 @@ const chartStyle = computed(() => {
 .category-report__icon--success {
     --tt-category-color: var(--tt-success);
 }
-.category-report__dot--muted,
-.category-report__icon--muted {
-    --tt-category-color: var(--tt-gray-600);
+.category-report__dot--danger,
+.category-report__icon--danger {
+    --tt-category-color: var(--tt-danger);
 }
-.category-report__dot--soft,
-.category-report__icon--soft {
-    --tt-category-color: var(--tt-gray-400);
+.category-report__dot--info,
+.category-report__icon--info {
+    --tt-category-color: var(--tt-info);
+}
+.category-report__dot--other,
+.category-report__icon--other {
+    --tt-category-color: var(--tt-text-muted);
 }
 .category-report__legend i {
     background: var(--tt-category-color);
@@ -231,8 +215,9 @@ const chartStyle = computed(() => {
 .category-report__icon--primary,
 .category-report__icon--accent,
 .category-report__icon--success,
-.category-report__icon--muted,
-.category-report__icon--soft {
+.category-report__icon--danger,
+.category-report__icon--info,
+.category-report__icon--other {
     display: grid;
     width: 40px;
     height: 40px;

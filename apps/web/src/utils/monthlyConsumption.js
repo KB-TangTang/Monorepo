@@ -1,18 +1,63 @@
-const CATEGORY_TONES = ['primary', 'accent', 'success', 'muted', 'soft'];
+const CATEGORY_TONES = ['primary', 'accent', 'success', 'danger', 'info'];
+const TOP_PARENT_CATEGORY_COUNT = 5;
+const OTHER_PARENT_CATEGORY_NAME = '그 외';
+const OTHER_PARENT_CATEGORY_TONE = 'other';
+
+function summarizeParentCategories(categories) {
+    const sortedCategories = [...categories].sort(
+        (first, second) =>
+            second.ratio - first.ratio ||
+            second.amount - first.amount ||
+            first.categoryName.localeCompare(second.categoryName, 'ko'),
+    );
+    const topCategories = sortedCategories
+        .slice(0, TOP_PARENT_CATEGORY_COUNT)
+        .map((category, index) => ({
+            ...category,
+            name: category.categoryName,
+            code: category.categoryName.slice(0, 1),
+            tone: CATEGORY_TONES[index],
+        }));
+    const remainingCategories = sortedCategories.slice(TOP_PARENT_CATEGORY_COUNT);
+
+    if (!remainingCategories.length) {
+        return { chartCategories: topCategories, remainingCategories };
+    }
+
+    const otherCategory = {
+        categoryId: 'other-parent-categories',
+        categoryName: OTHER_PARENT_CATEGORY_NAME,
+        name: OTHER_PARENT_CATEGORY_NAME,
+        code: OTHER_PARENT_CATEGORY_NAME.slice(0, 1),
+        amount: remainingCategories.reduce((sum, category) => sum + category.amount, 0),
+        ratio: Number(
+            remainingCategories.reduce((sum, category) => sum + category.ratio, 0).toFixed(2),
+        ),
+        tone: OTHER_PARENT_CATEGORY_TONE,
+        summarized: true,
+    };
+
+    return { chartCategories: [...topCategories, otherCategory], remainingCategories };
+}
 
 export function composeMonthlyConsumptionReport(summary, trend, categoryReport) {
-    const parentCategories = categoryReport.parentCategories.map((category, index) => ({
-        ...category,
-        name: category.categoryName,
-        code: category.categoryName.slice(0, 1),
-        tone: CATEGORY_TONES[index % CATEGORY_TONES.length],
-    }));
-    const parentToneByKey = new Map(
-        parentCategories.map((category) => [
-            `${category.categoryId ?? 'unclassified'}:${category.categoryName}`,
-            category.tone,
-        ]),
+    const { chartCategories: parentCategories, remainingCategories } = summarizeParentCategories(
+        categoryReport.parentCategories,
     );
+    const parentToneByKey = new Map(
+        parentCategories
+            .filter((category) => !category.summarized)
+            .map((category) => [
+                `${category.categoryId ?? 'unclassified'}:${category.categoryName}`,
+                category.tone,
+            ]),
+    );
+    remainingCategories.forEach((category) => {
+        parentToneByKey.set(
+            `${category.categoryId ?? 'unclassified'}:${category.categoryName}`,
+            OTHER_PARENT_CATEGORY_TONE,
+        );
+    });
 
     return {
         period: summary.yearMonth,
