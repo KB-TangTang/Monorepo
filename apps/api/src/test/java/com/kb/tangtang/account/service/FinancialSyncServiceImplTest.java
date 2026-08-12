@@ -6,6 +6,10 @@ import com.kb.tangtang.account.client.sync.dto.BankAccountSyncDto;
 import com.kb.tangtang.account.client.sync.dto.BankTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardApprovalSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
+import com.kb.tangtang.account.client.sync.dto.DepositSyncDto;
+import com.kb.tangtang.account.client.sync.dto.DepositTransactionSyncDto;
+import com.kb.tangtang.account.client.sync.dto.SecuritiesTransactionSyncDto;
+import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.account.domain.Card;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
@@ -20,6 +24,7 @@ import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -140,7 +145,8 @@ class FinancialSyncServiceImplTest {
         when(client.getPayMoney("1")).thenReturn(List.of());
         when(client.getCards("1")).thenReturn(List.of());
 
-        when(connectedAccountMapper.updateSynced(anyLong(), eq(1L), any(), any())).thenReturn(0);
+        /* reactivate 가 0 을 돌려주므로 기본 시나리오는 insert 경로다. update 경로는
+           resyncReusesExistingRowOnUpdatePath 가 따로 검증한다. */
         when(connectedAccountMapper.insert(any())).thenAnswer(inv -> 1);
         when(transactionMapper.update(any())).thenReturn(0);
         when(transactionMapper.insert(any())).thenReturn(1);
@@ -184,6 +190,37 @@ class FinancialSyncServiceImplTest {
 
         verify(transactionMapper, times(1)).insert(any());
         verify(transactionMapper, times(2)).update(any());
+    }
+
+    @Test
+    @DisplayName("두 번째 동기화는 update 경로를 타고 첫 동기화가 만든 행의 PK 를 그대로 재사용한다")
+    void resyncReusesExistingRowOnUpdatePath() {
+        /*
+         * 1차: reactivate 0행 → insert (PK 77 부여). 2차: reactivate 1행 → 자연키 재조회로 같은 77.
+         * 이 스텁이 없으면 두 번째 sync 도 insert 분기를 타 update 경로(재조회 포함)가 통째로
+         * 검증되지 않는다 — 예전 테스트가 그랬다.
+         */
+        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
+            ConnectedAccount saved = inv.getArgument(0);
+            saved.setId(77L);   // useGeneratedKeys 흉내
+            return 1;
+        });
+        when(connectedAccountMapper.reactivate(any())).thenReturn(0).thenReturn(1);
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().id(77L).userId(1L)
+                        .accountNoEncrypted("MOCK-BANK-101").build()));
+        when(transactionMapper.update(any())).thenReturn(0).thenReturn(1);
+
+        service.sync(1L);
+        service.sync(1L);
+
+        /* 계좌는 한 번만 만들어진다 — 2차는 되살리기(update) 경로다. */
+        verify(connectedAccountMapper, times(1)).insert(any());
+        verify(connectedAccountMapper, times(2)).reactivate(any());
+        /* 핵심: 2차의 멱등키가 1차와 같은 내부 PK(77)를 쓴다. 목서버 ID(101)를 쓰거나 재조회가
+           엉뚱한 행을 집으면 새 행이 하나 더 생긴다. */
+        verify(transactionMapper, times(2)).update(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
+        verify(transactionMapper, times(1)).insert(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
     }
 
     @Test
@@ -300,25 +337,125 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
-    @DisplayName("direction 은 카드 승인만 OUT 이고 나머지 소스는 비운다 — 지어내지 않는다")
-    void directionIsSetOnlyForCardApprovals() {
+    @DisplayName("은행 입금(01)은 IN/INCOME, 출금(02)은 OUT/CONSUMPTION 으로 저장한다")
+    void bankTransTypeCodeDrivesDirectionAndClassification() {
+        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+                BankTransactionSyncDto.builder()
+                        .transactionId(9001L).transactedAt("2026-08-10T09:05:01+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("2500000")).description("급여")
+                        .build(),
+                BankTransactionSyncDto.builder()
+                        .transactionId(9002L).transactedAt("2026-08-11T09:05:01+09:00")
+                        .transTypeCode("02").amount(new BigDecimal("15000")).description("체크카드 출금")
+                        .build()));
+
+        service.sync(1L);
+
+        /* 급여 입금을 CONSUMPTION 으로 넣으면 미션·리포트의 소비 집계가 통째로 오염된다. */
+        verify(transactionMapper).insert(argThat(t ->
+                "급여".equals(t.getMerchantName())
+                        && "IN".equals(t.getDirection())
+                        && "INCOME".equals(t.getClassification())));
+        verify(transactionMapper).insert(argThat(t ->
+                "체크카드 출금".equals(t.getMerchantName())
+                        && "OUT".equals(t.getDirection())
+                        && "CONSUMPTION".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("모르는 거래유형 코드는 지어내지 않는다 — direction 은 비우고 TRANSFER 로 둔다")
+    void unknownBankTransTypeCodeFallsBackToTransfer() {
+        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+                BankTransactionSyncDto.builder()
+                        .transactionId(9003L).transactedAt("2026-08-10T09:05:01+09:00")
+                        .transTypeCode("99").amount(new BigDecimal("1000")).description("정체불명")
+                        .build()));
+
+        service.sync(1L);
+
+        /* classification 은 NOT NULL + CHECK 라 비울 수 없다 — 소비도 수입도 아닌 값을 고른다. */
+        verify(transactionMapper).insert(argThat(t ->
+                t.getDirection() == null && "TRANSFER".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("예적금·증권 거래는 소비가 아니라 TRANSFER 다")
+    void depositAndSecuritiesAreTransfer() {
+        when(client.getDeposits("1")).thenReturn(List.of(
+                DepositSyncDto.builder().depositAccountId(201L).institutionCode("0004")
+                        .institutionName("KB국민은행").productName("KB 적금")
+                        .accountNoMasked("110-***-999999").balance(new BigDecimal("1000000")).build()));
+        when(client.getDepositTransactions(eq("1"), eq(201L))).thenReturn(List.of(
+                DepositTransactionSyncDto.builder()
+                        .transactionId(7001L).transactedAt("2026-08-05T09:00:00+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("300000")).description("납입")
+                        .build()));
+        when(client.getStockAsset("1")).thenReturn(
+                StockAssetSyncDto.builder().accountId(301L).institutionName("KB증권")
+                        .currency("KRW").cashBalance(new BigDecimal("50000")).build());
+        when(client.getSecuritiesTransactions(eq("1"), eq(301L))).thenReturn(List.of(
+                SecuritiesTransactionSyncDto.builder()
+                        .transactionId(8001L).transactedAt("2026-08-06T10:00:00+09:00")
+                        .transTypeCode("02").securityProductName("삼성전자")
+                        .transactionAmount(new BigDecimal("700000")).build()));
+
+        service.sync(1L);
+
+        /* 적금 납입·주식 매도 대금을 CONSUMPTION 으로 잡으면 지출이 없는 돈까지 부풀려진다. */
+        verify(transactionMapper).insert(argThat(t ->
+                "DEPOSIT".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
+        verify(transactionMapper).insert(argThat(t ->
+                "SECURITIES".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("카드 취소(03)는 음수 금액을 양수 + is_refund=1 로 저장한다")
+    void cardCancellationIsStoredAsPositiveRefund() {
         when(client.getCards("1")).thenReturn(List.of(
                 CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
                         .cardTypeCode("01").currency("KRW").build()));
         when(client.getCardApprovals(eq("1"), eq(1L))).thenReturn(List.of(
-                CardApprovalSyncDto.builder().approvalId(1L).approvalNo("APV-CREDIT-1")
-                        .approvedAt("2026-08-10T12:00:00+09:00").approvedAmount(new BigDecimal("30000"))
-                        .rawJson(null).build()));
+                CardApprovalSyncDto.builder().approvalId(1L).approvalNo("N2-C-0814")
+                        .approvedAt("2026-08-14T18:10:00+09:00").approvalTypeCode("01")
+                        .merchantName("이마트 역삼점").approvedAmount(new BigDecimal("100000"))
+                        .rawJson(null).build(),
+                CardApprovalSyncDto.builder().approvalId(2L).approvalNo("N2-C-0814-C")
+                        .approvedAt("2026-08-15T09:00:00+09:00").approvalTypeCode("03")
+                        .merchantName("이마트 역삼점").approvedAmount(new BigDecimal("-20000"))
+                        .rawJson("{\"originalApprovalNo\":\"N2-C-0814\"}").build()));
         when(client.getCardBills(anyString(), anyLong())).thenReturn(List.of());
         when(cardMapper.update(any())).thenReturn(0);
 
         service.sync(1L);
 
-        /* 카드 승인은 무조건 출금이다. */
+        /* amount 는 "항상 양수. 환불도 양수 + is_refund=1" 이 스키마 규약이다. */
         verify(transactionMapper).insert(argThat(t ->
-                "CARD_CREDIT".equals(t.getSourceType()) && "OUT".equals(t.getDirection())));
-        /* 은행 거래는 금액이 항상 양수라 부호로 판정할 수 없다 — 잘못 채우느니 비운다. */
+                t.getCodefTrKey().endsWith("N2-C-0814-C")
+                        && new BigDecimal("20000").compareTo(t.getAmount()) == 0
+                        && t.isRefund()
+                        && new BigDecimal("20000").compareTo(t.getRefundedAmount()) == 0
+                        && "N2-C-0814".equals(t.getOriginalApprovalNo())));
+        /* 정상 승인은 환불 플래그가 서면 안 된다. */
         verify(transactionMapper).insert(argThat(t ->
-                "BANK".equals(t.getSourceType()) && t.getDirection() == null));
+                t.getCodefTrKey().endsWith("N2-C-0814")
+                        && !t.isRefund() && t.getRefundedAmount() == null
+                        && "OUT".equals(t.getDirection())
+                        && "CONSUMPTION".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("동시 동기화가 같은 행을 먼저 넣어도 500 이 아니라 update 로 흡수한다")
+    void concurrentInsertRaceFallsBackToUpdate() {
+        /* update 0행 → insert 시도 → 상대가 이미 넣어 UNIQUE 위반. 여기서 터지면 사용자에게 500 이다. */
+        when(transactionMapper.update(any())).thenReturn(0).thenReturn(1);
+        when(transactionMapper.insert(any())).thenThrow(
+                new DuplicateKeyException("Duplicate entry 'BANK-1-9001' for key 'uk_tx_codef_key'"));
+
+        FinancialSyncResultDto result = service.sync(1L);
+
+        assertEquals("COMPLETED", result.getStatus());
+        /* 경합에서 진 쪽은 상대 행을 우리 값으로 갱신하고 넘어간다 (update 2회: 최초 시도 + 재시도). */
+        verify(transactionMapper, times(2)).update(any());
+        assertEquals(List.of("BEGIN", "COMMIT"), timeline);
     }
 }

@@ -35,6 +35,7 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Transaction;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -58,6 +59,14 @@ import java.util.Map;
  * 실패 이력만 남긴 뒤 BusinessException 을 그대로 올린다(설계 문서 §8).
  *
  * 저장은 전부 "자연키로 update 시도 → 0행이면 insert" 패턴이라 몇 번을 다시 돌려도 결과가 같다(§9).
+ *
+ * <h3>동시 insert 경합</h3>
+ * 위 패턴은 원자적이지 않다. 같은 사용자의 동기화 요청이 겹치면 둘 다 update 0행을 보고 둘 다 insert 를
+ * 시도해, 늦은 쪽이 UNIQUE 제약에 걸려 500 이 난다. 매퍼 XML 6개를 전부
+ * `INSERT ... ON DUPLICATE KEY UPDATE` 로 고치는 건 이 시점에 너무 큰 변경이라,
+ * **각 insert 를 {@link DuplicateKeyException} 으로 감싸 한 번만 update 로 되돌리는** 방식으로 막는다.
+ * (MySQL/InnoDB 는 insert 하나가 제약에 걸려도 트랜잭션이 죽지 않아 같은 트랜잭션 안에서 이어갈 수 있다.
+ *  PostgreSQL 이라면 이 방식이 통하지 않는다.)
  */
 @Service
 public class FinancialSyncServiceImpl implements FinancialSyncService {
@@ -73,6 +82,19 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     /** tbl_financial_sync_history.fail_reason 은 VARCHAR(500) 이다. DB 예외 메시지는 이보다 길 수 있다. */
     private static final int FAIL_REASON_MAX = 500;
+
+    /**
+     * 목서버 거래유형 코드 (`trans_type_code`). 시드(`seed-v2.sql`)에서 확인한 값이다 —
+     * 은행 `01`=입금 / `02`=출금. 공식 enum 이 없어 시드 관례를 상수로 못박는다.
+     */
+    private static final String TRANS_TYPE_IN = "01";
+    private static final String TRANS_TYPE_OUT = "02";
+
+    /**
+     * 목서버 카드 승인유형 코드 (`approval_type_code`). `01`=승인, `03`=취소다
+     * (`seed-v2.sql` 의 취소 시드 `N2-C-0814-C` 가 `'03'` + 음수 금액 + raw_json.originalApprovalNo).
+     */
+    private static final String APPROVAL_TYPE_CANCEL = "03";
 
     /** rawJson 파싱 전용. ObjectMapper 는 스레드 안전하므로 한 번만 만든다. */
     private static final ObjectMapper RAW_JSON_READER = new ObjectMapper();
@@ -273,7 +295,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 RawJsonFields fields = RawJsonFields.parse(tx.getRawJson());
                 saveTransaction(userId, connectedAccountId, null, "BANK",
                         "BANK-" + connectedAccountId + "-" + tx.getTransactionId(),
-                        tx.getAmount(), tx.getTransactedAt(), tx.getDescription(),
+                        bankKind(tx.getTransTypeCode()), tx.getAmount(), false,
+                        tx.getTransactedAt(), tx.getDescription(),
                         null, null, fields.correlationId, null, tx.getRawJson());
             }
         }
@@ -286,10 +309,17 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             for (CardApprovalSyncDto approval :
                     bundle.cardApprovals.getOrDefault(card.getCardId(), List.of())) {
                 RawJsonFields fields = RawJsonFields.parse(approval.getRawJson());
+                /*
+                 * 취소(승인유형 03)는 목서버가 **음수** 금액으로 준다. tbl_transaction.amount 는
+                 * "항상 양수 + is_refund=1" 이 규약이라(스키마 주석) saveTransaction 이 절댓값으로
+                 * 저장하고 여기서 환불 플래그만 세운다.
+                 */
+                boolean cancelled = APPROVAL_TYPE_CANCEL.equals(approval.getApprovalTypeCode());
                 /* 원거래 승인번호는 취소·환불 후속 처리가 참조한다(설계 §7). 컬럼에도 남긴다. */
                 saveTransaction(userId, null, cardId, sourceType,
                         sourceType + "-" + cardId + "-" + approval.getApprovalNo(),
-                        approval.getApprovedAmount(), approval.getApprovedAt(), approval.getMerchantName(),
+                        TxKind.CARD_SPEND, approval.getApprovedAmount(), cancelled,
+                        approval.getApprovedAt(), approval.getMerchantName(),
                         approval.getMerchantCategoryCode(), approval.getMerchantCategoryName(),
                         fields.correlationId, fields.originalApprovalNo, approval.getRawJson());
             }
@@ -334,9 +364,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted);
             for (DepositTransactionSyncDto tx :
                     bundle.depositTransactions.getOrDefault(deposit.getDepositAccountId(), List.of())) {
+                /* 예적금 납입은 소비가 아니라 상품으로의 자금 이동이다 — 소비 집계에 섞이면 안 된다. */
                 saveTransaction(userId, accountId, null, "DEPOSIT",
                         "DEPOSIT-" + accountId + "-" + tx.getTransactionId(),
-                        tx.getAmount(), tx.getTransactedAt(), tx.getDescription(),
+                        TxKind.TRANSFER, tx.getAmount(), false,
+                        tx.getTransactedAt(), tx.getDescription(),
                         null, null, null, null, tx.getRawJson());
             }
         }
@@ -377,15 +409,21 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .profitLossRate(holding.getProfitLossRate())
                     .build();
             if (investmentHoldingMapper.update(ih) == 0) {
-                investmentHoldingMapper.insert(ih);
+                try {
+                    investmentHoldingMapper.insert(ih);
+                } catch (DuplicateKeyException e) {
+                    investmentHoldingMapper.update(ih);
+                }
             }
         }
         for (SecuritiesTransactionSyncDto tx :
                 bundle.securitiesTransactions.getOrDefault(bundle.stock.getAccountId(), List.of())) {
+            /* 매수·매도 모두 소비가 아니다(매도 대금을 소비로 잡으면 지출이 부풀려진다). */
             saveTransaction(userId, accountId, null, "SECURITIES",
                     "SECURITIES-" + accountId + "-" + tx.getTransactionId(),
-                    tx.getTransactionAmount(), tx.getTransactedAt(),
-                    tx.getSecurityProductName(), null, null, null, null, null);
+                    TxKind.TRANSFER, tx.getTransactionAmount(), false,
+                    tx.getTransactedAt(), tx.getSecurityProductName(),
+                    null, null, null, null, null);
         }
     }
 
@@ -405,39 +443,24 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .monthlyPayment(loan.getMonthlyPayment())
                     .nextPaymentDate(date(loan.getNextPaymentDate()))
                     .build();
-            Long loanId;
-            if (loanMapper.update(row) > 0) {
-                /* 방금 갱신한 행을 못 찾는 건 이상 상황이다. null 로 두면 account_id·loan_id 가 둘 다
-                   빈 고아 거래가 생기므로, 다른 upsert 헬퍼들과 똑같이 예외로 끊는다. */
-                loanId = loanMapper.findByUser(userId).stream()
-                        .filter(l -> row.getLoanNoEncrypted().equals(l.getLoanNoEncrypted()))
-                        .findFirst()
-                        .map(Loan::getId)
-                        .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
-                                "동기화한 대출을 다시 찾지 못했어요."));
-            } else {
-                loanMapper.insert(row);
-                loanId = row.getId();   // useGeneratedKeys 로 insert 직후 채워진다
-            }
+            Long loanId = upsertLoan(userId, row);
 
             for (LoanTransactionSyncDto tx :
                     bundle.loanTransactions.getOrDefault(loan.getLoanId(), List.of())) {
+                /* 대출 실행(입금)·상환(출금) 모두 소비가 아니다 → TRANSFER. 방향은 단정하지 않는다. */
                 Transaction txRow = Transaction.builder()
                         .userId(userId)
                         .loanId(loanId)
                         .codefTrKey("LOAN-" + loanId + "-" + tx.getTransactionId())
-                        .amount(tx.getAmount())
-                        /* 대출 거래는 실행(입금)과 상환(출금)이 섞여 있다 — 구분이 서기 전엔 비워 둔다. */
-                        .direction(null)
+                        .amount(tx.getAmount() == null ? null : tx.getAmount().abs())
+                        .direction(TxKind.TRANSFER.direction)
                         .trDate(OffsetDateTime.parse(tx.getTransactedAt()).toLocalDate())
-                        .classification("TRANSFER")
+                        .classification(TxKind.TRANSFER.classification)
                         .isExcludedFromSummary(false)
                         .sourceType("LOAN")
                         .rawJson(tx.getRawJson())
                         .build();
-                if (transactionMapper.update(txRow) == 0) {
-                    transactionMapper.insert(txRow);
-                }
+                upsertTransaction(txRow);
             }
         }
     }
@@ -461,7 +484,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     bundle.payMoneyTransactions.getOrDefault(payMoney.getPayMoneyId(), List.of())) {
                 saveTransaction(userId, accountId, null, "PAYMONEY",
                         "PAYMONEY-" + accountId + "-" + tx.getTransactionId(),
-                        tx.getAmount(), tx.getTransactedAt(), tx.getMerchantName(),
+                        TxKind.PAY_MONEY, tx.getAmount(), false,
+                        tx.getTransactedAt(), tx.getMerchantName(),
                         tx.getMerchantCategoryCode(), tx.getMerchantCategoryName(),
                         null, null, tx.getRawJson());
             }
@@ -497,16 +521,54 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      */
     private Long upsertConnectedAccount(long userId, ConnectedAccount row, String accountNoEncrypted) {
         if (connectedAccountMapper.reactivate(row) > 0) {
-            /* update 경로는 PK 를 돌려주지 않는다. 자연키로 다시 찾는다. */
-            return connectedAccountMapper.findActiveByUser(userId).stream()
-                    .filter(a -> accountNoEncrypted.equals(a.getAccountNoEncrypted()))
-                    .findFirst()
-                    .map(ConnectedAccount::getId)
-                    .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
-                            "동기화한 계좌를 다시 찾지 못했어요."));
+            return findConnectedAccountId(userId, accountNoEncrypted);
         }
-        connectedAccountMapper.insert(row);
+        try {
+            connectedAccountMapper.insert(row);
+        } catch (DuplicateKeyException e) {
+            /* 경합에서 졌다(클래스 주석 「동시 insert 경합」). 상대 행에 우리 값을 덮고 그 PK 를 쓴다. */
+            connectedAccountMapper.reactivate(row);
+            return findConnectedAccountId(userId, accountNoEncrypted);
+        }
         return row.getId();     // useGeneratedKeys 로 insert 직후 채워진다
+    }
+
+    /** update/경합 경로는 PK 를 돌려주지 않는다. 자연키로 다시 찾는다. */
+    private Long findConnectedAccountId(long userId, String accountNoEncrypted) {
+        return connectedAccountMapper.findActiveByUser(userId).stream()
+                .filter(a -> accountNoEncrypted.equals(a.getAccountNoEncrypted()))
+                .findFirst()
+                .map(ConnectedAccount::getId)
+                .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
+                        "동기화한 계좌를 다시 찾지 못했어요."));
+    }
+
+    /**
+     * 대출 upsert (update 시도 → 0행이면 insert). PK 를 돌려준다.
+     *
+     * 방금 갱신한 행을 못 찾는 건 이상 상황이다. null 로 두면 account_id·loan_id 가 둘 다 빈
+     * 고아 거래가 생기므로 다른 upsert 헬퍼들과 똑같이 예외로 끊는다.
+     */
+    private Long upsertLoan(long userId, Loan row) {
+        if (loanMapper.update(row) > 0) {
+            return findLoanId(userId, row.getLoanNoEncrypted());
+        }
+        try {
+            loanMapper.insert(row);
+        } catch (DuplicateKeyException e) {
+            loanMapper.update(row);
+            return findLoanId(userId, row.getLoanNoEncrypted());
+        }
+        return row.getId();
+    }
+
+    private Long findLoanId(long userId, String loanNoEncrypted) {
+        return loanMapper.findByUser(userId).stream()
+                .filter(l -> loanNoEncrypted.equals(l.getLoanNoEncrypted()))
+                .findFirst()
+                .map(Loan::getId)
+                .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
+                        "동기화한 대출을 다시 찾지 못했어요."));
     }
 
     private Long upsertCard(long userId, CardSyncDto card, LocalDateTime now) {
@@ -524,15 +586,24 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .lastSyncAt(now)
                 .build();
         if (cardMapper.update(row) > 0) {
-            return cardMapper.findByUser(userId).stream()
-                    .filter(c -> card.getCardNoMasked().equals(c.getCardNoMasked()))
-                    .findFirst()
-                    .map(Card::getId)
-                    .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
-                            "동기화한 카드를 다시 찾지 못했어요."));
+            return findCardId(userId, card.getCardNoMasked());
         }
-        cardMapper.insert(row);
+        try {
+            cardMapper.insert(row);
+        } catch (DuplicateKeyException e) {
+            cardMapper.update(row);
+            return findCardId(userId, card.getCardNoMasked());
+        }
         return row.getId();
+    }
+
+    private Long findCardId(long userId, String cardNoMasked) {
+        return cardMapper.findByUser(userId).stream()
+                .filter(c -> cardNoMasked.equals(c.getCardNoMasked()))
+                .findFirst()
+                .map(Card::getId)
+                .orElseThrow(() -> new BusinessException("EXTERNAL_API_ERROR",
+                        "동기화한 카드를 다시 찾지 못했어요."));
     }
 
     /** 카드 청구서는 거래가 아니다 — tbl_card_bill 에만 넣는다(설계 §7). */
@@ -547,7 +618,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .paidAmount(bill.getPaidAmount())
                 .build();
         if (cardBillMapper.update(row) == 0) {
-            cardBillMapper.insert(row);
+            try {
+                cardBillMapper.insert(row);
+            } catch (DuplicateKeyException e) {
+                cardBillMapper.update(row);
+            }
         }
     }
 
@@ -562,10 +637,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      *   우리 PK 는 상품 자연키 upsert 로 사용자마다 다르고 재동기화 사이에는 안 변한다.
      */
     private void saveTransaction(long userId, Long accountId, Long cardId, String sourceType,
-                                 String codefTrKey, BigDecimal amount, String transactedAt,
-                                 String merchantName, String merchantCategoryCode,
-                                 String merchantCategoryName, String correlationId,
-                                 String originalApprovalNo, String rawJson) {
+                                 String codefTrKey, TxKind kind, BigDecimal amount, boolean refund,
+                                 String transactedAt, String merchantName,
+                                 String merchantCategoryCode, String merchantCategoryName,
+                                 String correlationId, String originalApprovalNo, String rawJson) {
+        /* tbl_transaction.amount 규약: "항상 양수. 환불도 양수 + is_refund=1". 여기 한곳에서 강제한다. */
+        BigDecimal positiveAmount = amount == null ? null : amount.abs();
         Transaction row = Transaction.builder()
                 .userId(userId)
                 .accountId(accountId)
@@ -573,17 +650,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .codefTrKey(codefTrKey)
                 .merchantName(merchantName)
                 .merchantNameNormalized(merchantName)
-                .amount(amount)
-                /*
-                 * 금액 부호로는 입출금을 못 가른다 — tbl_transaction.amount 는 "항상 양수" 이고
-                 * 목서버도 양수만 준다. 카드 승인은 성격상 무조건 출금이라 OUT 으로 확정하고,
-                 * 나머지 소스는 원천 거래유형 코드의 의미가 확정되지 않아 **지어내지 않고 비운다**
-                 * (direction 은 nullable). 코드 해석이 정리되면 그때 채운다.
-                 */
-                .direction(sourceType.startsWith("CARD_") ? "OUT" : null)
+                .amount(positiveAmount)
+                /* 방향·3분류는 소스마다 규칙이 달라 호출부가 TxKind 로 정해 넘긴다(아래 enum 참고). */
+                .direction(kind.direction)
                 .trDate(OffsetDateTime.parse(transactedAt).toLocalDate())
-                .classification("CONSUMPTION")
+                .classification(kind.classification)
                 .isExcludedFromSummary(false)
+                .isRefund(refund)
+                .refundedAmount(refund ? positiveAmount : null)
                 .sourceType(sourceType)
                 .correlationId(correlationId)
                 .originalApprovalNo(originalApprovalNo)
@@ -591,9 +665,37 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .merchantCategoryName(merchantCategoryName)
                 .rawJson(rawJson)
                 .build();
+        upsertTransaction(row);
+    }
+
+    /** 거래 upsert 한 곳. 대출 거래처럼 Transaction 을 직접 조립하는 경로도 여기를 탄다. */
+    private void upsertTransaction(Transaction row) {
         if (transactionMapper.update(row) == 0) {
-            transactionMapper.insert(row);
+            try {
+                transactionMapper.insert(row);
+            } catch (DuplicateKeyException e) {
+                /* 동시 동기화가 같은 멱등키를 먼저 넣었다. 그 행을 우리 값으로 갱신하고 넘어간다. */
+                transactionMapper.update(row);
+            }
         }
+    }
+
+    /**
+     * 목서버 은행 거래유형 코드 → 방향·3분류.
+     *
+     * 급여·이자 입금을 CONSUMPTION 으로 저장하면 미션·리포트의 소비 집계
+     * (`MissionCategoryAnalysisMapper`: `classification='CONSUMPTION'`)가 통째로 오염된다.
+     * 아는 코드만 단정하고, 모르는 코드는 지어내지 않고 소비도 수입도 아닌 TRANSFER 로 둔다
+     * (classification 은 NOT NULL + CHECK 라 비울 수 없다).
+     */
+    private static TxKind bankKind(String transTypeCode) {
+        if (TRANS_TYPE_IN.equals(transTypeCode)) {
+            return TxKind.BANK_IN;
+        }
+        if (TRANS_TYPE_OUT.equals(transTypeCode)) {
+            return TxKind.BANK_OUT;
+        }
+        return TxKind.TRANSFER;
     }
 
     /* ── 잡동사니 ──────────────────────────────────────── */
@@ -624,6 +726,34 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             sb.append('"').append(values.get(i)).append('"');
         }
         return sb.append(']').toString();
+    }
+
+    /**
+     * 거래 한 건의 방향(`direction`)과 3분류(`classification`) 조합.
+     *
+     * `classification` 은 NOT NULL + CHECK(CONSUMPTION/TRANSFER/INCOME) 이므로 **절대 null 이 될 수
+     * 없다.** 반대로 `direction` 은 nullable 이라 확신이 없으면 비운다 — 금액 부호로는 판정할 수 없다
+     * (amount 는 항상 양수). 소스별로 규칙이 다르므로 호출부가 골라서 넘긴다.
+     */
+    private enum TxKind {
+        /** 은행 입금(`trans_type_code=01`) — 급여·이자 등 유입. 소비가 아니라 수입이다. */
+        BANK_IN("IN", "INCOME"),
+        /** 은행 출금(`trans_type_code=02`) — 실제 지출. */
+        BANK_OUT("OUT", "CONSUMPTION"),
+        /** 카드 승인 — 가맹점 결제라 성격상 무조건 출금·소비다(취소도 소비 거래의 정정으로 남긴다). */
+        CARD_SPEND("OUT", "CONSUMPTION"),
+        /** 페이머니 — 충전·결제가 섞여 있으나 소비 지갑으로 본다. 방향은 단정하지 않는다. */
+        PAY_MONEY(null, "CONSUMPTION"),
+        /** 예적금 납입·증권 매매·대출 실행/상환 — 돈이 상품으로 옮겨갈 뿐 소비가 아니다. */
+        TRANSFER(null, "TRANSFER");
+
+        private final String direction;
+        private final String classification;
+
+        TxKind(String direction, String classification) {
+            this.direction = direction;
+            this.classification = classification;
+        }
     }
 
     /** collectAll 이 지금 어느 소스를 처리 중인지. 호출마다 새로 만들어 넘긴다(싱글턴 빈이라 필드 금지). */

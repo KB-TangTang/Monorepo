@@ -43,6 +43,14 @@ public class Transaction {
     private String merchantCategoryCode;
     private String merchantCategoryName;
     private String rawJson;
+    /**
+     * 환불·취소 거래 여부. amount 는 "항상 양수" 라(스키마 주석) 취소 금액도 절댓값으로 저장하고
+     * 이 플래그로 구분한다. tbl_transaction.is_refund 는 NOT NULL 이라 **primitive** 로 둔다 —
+     * Boolean 이면 빌더에서 안 채운 거래가 null 로 들어가 insert 가 터진다.
+     */
+    private boolean isRefund;
+    /** 이 환불 행이 환불한 금액(부분환불 가능). 환불이 아니면 null. */
+    private BigDecimal refundedAmount;
 
     public Transaction(Long id, Long userId, Long accountId, String codefTrKey, String merchantName,
                         String merchantNameNormalized, BigDecimal amount, String direction,
@@ -50,7 +58,8 @@ public class Transaction {
                         Long categoryId, Boolean isExcludedFromSummary, Long loanId, String sourceType,
                         Long cardId, String correlationId, Long linkedTransactionId,
                         String originalApprovalNo, String merchantCategoryCode,
-                        String merchantCategoryName, String rawJson) {
+                        String merchantCategoryName, String rawJson, boolean isRefund,
+                        BigDecimal refundedAmount) {
         this.id = id;
         this.userId = userId;
         this.accountId = accountId;
@@ -74,5 +83,7 @@ public class Transaction {
         this.merchantCategoryCode = merchantCategoryCode;
         this.merchantCategoryName = merchantCategoryName;
         this.rawJson = rawJson;
+        this.isRefund = isRefund;
+        this.refundedAmount = refundedAmount;
     }
 }
