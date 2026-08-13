@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +207,32 @@ public class ConsentService {
         }
 
         return needsConsent(userId);
+    }
+
+    /**
+     * 회원 탈퇴용 — 동의를 전건 철회한다.
+     *
+     * ⚠ 개별 철회(withdraw)와 달리 **withdrawable 가드를 거치지 않는다.**
+     * ConsentType 이 TERMS·PRIVACY 를 철회 불가로 둔 이유가 「철회 = 탈퇴」이기 때문이고,
+     * 여기가 바로 그 탈퇴 경로다. 개별 철회 화면에서는 여전히 막힌다.
+     *
+     * 0행이어도 예외를 던지지 않는다 — 동의를 하나도 하지 않은 사용자(온보딩 중 이탈)도
+     * 탈퇴할 수 있어야 한다. 이미 철회된 행은 매퍼의 `withdrawn_at IS NULL` 이 걸러낸다.
+     *
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     */
+    @Transactional
+    public void withdrawAll(Long userId) {
+        List<String> allTypes = Arrays.stream(ConsentType.values())
+                .map(Enum::name)
+                .collect(Collectors.toList());
+        consentMapper.withdraw(userId, allTypes, LocalDateTime.now());
+
+        /*
+         * 조건 없이 발행한다. 금융 동의를 한 적 없는 사용자여도 disconnectAll 은
+         * 연동된 계좌가 없어 no-op 이다 — 분기를 두는 것보다 빠뜨릴 위험이 없다.
+         */
+        events.publishEvent(new ConsentWithdrawnEvent(userId, ConsentType.FINANCIAL_DATA.name()));
     }
 
     private ConsentType parseType(String raw) {

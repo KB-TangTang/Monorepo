@@ -2,6 +2,7 @@ package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.user.domain.ConsentScope;
+import com.kb.tangtang.user.domain.ConsentType;
 import com.kb.tangtang.user.dto.ConsentAgreementDto;
 import com.kb.tangtang.user.dto.ConsentRecordDto;
 import com.kb.tangtang.user.dto.MyConsentDto;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -329,6 +331,40 @@ class ConsentServiceTest {
         assertEquals("FINANCIAL", find(result, "THIRD_PARTY").getScope(),
                 "CODEF 제3자 제공은 FINANCIAL 묶음이다. SIGNUP 으로 저장하면 요청이 거부된다");
         assertEquals("CHALLENGE", find(result, "CHALLENGE").getScope());
+    }
+
+    @Test
+    @DisplayName("withdrawAll 은 철회 불가 항목(TERMS·PRIVACY)까지 전부 철회한다")
+    void withdrawAllCoversEveryType() {
+        service().withdrawAll(1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(consentMapper).withdraw(eq(1L), captor.capture(), any(LocalDateTime.class));
+
+        assertEquals(ConsentType.values().length, captor.getValue().size());
+        assertTrue(captor.getValue().contains("TERMS"));
+        assertTrue(captor.getValue().contains("PRIVACY"));
+        assertTrue(captor.getValue().contains("FINANCIAL_DATA"));
+    }
+
+    @Test
+    @DisplayName("동의 이력이 하나도 없어도 예외를 던지지 않는다 — 온보딩 중 이탈한 사용자도 탈퇴할 수 있어야 한다")
+    void withdrawAllSucceedsWithNoRows() {
+        when(consentMapper.withdraw(eq(1L), anyList(), any(LocalDateTime.class))).thenReturn(0);
+
+        service().withdrawAll(1L);   // 예외가 없으면 통과
+    }
+
+    @Test
+    @DisplayName("withdrawAll 은 ConsentWithdrawnEvent 를 발행해 계좌 연동을 끊는다")
+    void withdrawAllPublishesEvent() {
+        service().withdrawAll(1L);
+
+        ArgumentCaptor<ConsentWithdrawnEvent> captor =
+                ArgumentCaptor.forClass(ConsentWithdrawnEvent.class);
+        verify(events).publishEvent(captor.capture());
+        assertEquals(1L, captor.getValue().userId());
     }
 
     private MyConsentDto find(List<MyConsentDto> items, String type) {
