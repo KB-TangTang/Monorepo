@@ -41,3 +41,7 @@ google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
 #
 # public-key 가 없으면 codef 모드 기동 시 즉시 실패한다 —
 # CODEF 는 평문 비밀번호를 거부하므로 이 값 없이는 인증이 성립하지 않는다.
+
+# ── OpenAI (LLM 거래 카테고리화, 이슈 #147 후속) ─────────
+# https://platform.openai.com/api-keys 에서 발급. 팀 공용 키가 있으면 팀 채널에서 받는다.
+openai.api.key=CHANGE_ME_OPENAI_API_KEY
