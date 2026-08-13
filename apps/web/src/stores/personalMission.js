@@ -200,6 +200,12 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.isHydrated = true;
         },
 
+        setDemoWithdrawnWithoutMission() {
+            this.hasAgreed = false;
+            this.consentState = CHALLENGE_CONSENT_STATE.WITHDRAWN;
+            this.todayMission = null;
+        },
+
         /* 데모용: 판정 테스트 */
         setDemoVerdict(verdict) {
             this.pendingVerdict = verdict;

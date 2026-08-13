@@ -150,6 +150,12 @@ function openConsentManage() {
     router.push({ name: 'myConsents' });
 }
 
+function handleConsentLater() {
+    afterOverlayClosed(() => {
+        router.push({ name: 'home' });
+    });
+}
+
 function resetDemo() {
     store.resetDemo();
     isConsentOpen.value = true;
@@ -163,6 +169,10 @@ function setDemoSuccess() {
 function setDemoFail() {
     store.setDemoVerdict(MOCK_VERDICT_FAIL);
     isVerdictOpen.value = true;
+}
+
+function showWithdrawnWithoutMissionDemo() {
+    store.setDemoWithdrawnWithoutMission();
 }
 
 async function reassignTodayMission() {
@@ -189,6 +199,7 @@ async function reassignTodayMission() {
             :loading="isConsentSubmitting"
             :error-message="consentError"
             @agree="handleAgree"
+            @later="handleConsentLater"
         />
         <PersonalTangiSheet
             v-model="isTangiSheetOpen"
@@ -479,6 +490,13 @@ async function reassignTodayMission() {
                 {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
             </button>
             <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
+            <button
+                type="button"
+                class="personal-home__dev-btn"
+                @click="showWithdrawnWithoutMissionDemo"
+            >
+                철회·미션 없음 화면
+            </button>
             <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
                 미션 성공 팝업
             </button>
