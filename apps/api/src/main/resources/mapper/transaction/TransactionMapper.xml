@@ -98,7 +98,7 @@
     </select>
 
     <select id="findByIds" resultType="com.kb.tangtang.transaction.domain.Transaction">
-        SELECT id, user_id, tr_date
+        SELECT id, user_id, tr_date, merchant_name, amount, description1
           FROM tbl_transaction
          WHERE id IN
          <foreach item="txId" collection="ids" open="(" separator="," close=")">#{txId}</foreach>

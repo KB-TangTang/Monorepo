@@ -9,4 +9,10 @@
         VALUES (#{jobId}, #{transactionId})
     </insert>
 
+    <select id="findTransactionIdsByJobId" resultType="long">
+        SELECT transaction_id
+          FROM tbl_llm_categorization_job_item
+         WHERE job_id = #{jobId}
+    </select>
+
 </mapper>

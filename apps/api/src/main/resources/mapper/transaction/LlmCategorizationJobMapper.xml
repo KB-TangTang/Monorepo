@@ -9,4 +9,27 @@
         VALUES (#{userId}, #{status}, #{transactionCount})
     </insert>
 
+    <select id="findPending" resultType="com.kb.tangtang.transaction.domain.LlmCategorizationJob">
+        SELECT id, user_id, status, transaction_count, started_at, finished_at
+          FROM tbl_llm_categorization_job
+         WHERE status = 'PENDING'
+         ORDER BY created_at ASC
+         LIMIT #{limit}
+    </select>
+
+    <update id="markProcessing">
+        UPDATE tbl_llm_categorization_job
+           SET status = 'PROCESSING',
+               started_at = #{startedAt}
+         WHERE id = #{id}
+           AND status = 'PENDING'
+    </update>
+
+    <update id="markFinished">
+        UPDATE tbl_llm_categorization_job
+           SET status = #{status},
+               finished_at = #{finishedAt}
+         WHERE id = #{id}
+    </update>
+
 </mapper>
