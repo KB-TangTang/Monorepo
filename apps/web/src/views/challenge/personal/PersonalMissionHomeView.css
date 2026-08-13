@@ -13,6 +13,42 @@
         calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
 }
 
+.personal-home__content--withdrawn {
+    min-height: calc(100vh - 210px - var(--tt-tabbar-height));
+    justify-content: center;
+    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-12));
+}
+
+.personal-home__withdrawn-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.personal-home__withdrawn-tangi {
+    width: 144px;
+    height: 144px;
+    margin-bottom: var(--tt-space-4);
+    object-fit: contain;
+}
+
+.personal-home__withdrawn-state h2 {
+    margin: 0;
+    color: var(--tt-text);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+}
+
+.personal-home__withdrawn-state p {
+    max-width: 320px;
+    margin: var(--tt-space-3) 0 var(--tt-space-5);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    word-break: keep-all;
+}
+
 /* ── 판정 안내 텍스트 ──────────────────────────────── */
 .personal-home__verdict-info {
     display: flex;
@@ -212,6 +248,17 @@
     font-family: var(--tt-font-mono);
 }
 
+.personal-home__withdrawn-notice {
+    padding: var(--tt-space-3) var(--tt-space-4);
+    color: var(--tt-text-body);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    line-height: var(--tt-lh-normal);
+    background: var(--tt-accent-subtle);
+    border: 1px solid var(--tt-accent-subtle-border);
+    border-radius: var(--tt-radius-md);
+}
+
 /* ── 데모 버튼 ──────────────────────────────────── */
 .personal-home__dev-controls {
     position: fixed;
@@ -232,6 +279,21 @@
     border-radius: var(--tt-radius-full);
     cursor: pointer;
     white-space: nowrap;
+}
+
+.personal-home__dev-btn:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.personal-home__dev-message {
+    max-width: 180px;
+    padding: var(--tt-space-1) var(--tt-space-2);
+    color: var(--tt-text-body);
+    font-size: var(--tt-fs-mono-chip);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-md);
 }
 
 /* ── 반응형 ─────────────────────────────────────── */

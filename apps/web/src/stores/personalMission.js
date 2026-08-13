@@ -10,12 +10,13 @@ import {
     MOCK_MONTHLY_SCORE,
     MOCK_COMMON_MISSION,
 } from '@/fixtures/personalChallenge';
-import {
-    MOCK_PERSONAL_MISSION_PROFILE,
-} from '@/fixtures/personalMission';
+import { MOCK_PERSONAL_MISSION_PROFILE } from '@/fixtures/personalMission';
 import {
     hasEnoughPersonalMissionData,
+    toTodayMissionBriefing,
 } from '@/services/personalMissionFlow';
+import { fetchTodayMission, reassignTodayMission as requestTodayMissionReassignment } from '@/api/personalMission';
+import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
@@ -26,6 +27,12 @@ const STORAGE_KEY = 'tangtang-personal-mission-challenge';
  */
 const LEGACY_PROSECUTOR_ID = { TOUGH: 'HARD', STRICT: 'NORMAL', LENIENT: 'EASY' };
 const DEFAULT_PROSECUTOR_ID = 'NORMAL';
+const TODAY_MISSION_RETRY_COUNT = 5;
+const TODAY_MISSION_RETRY_DELAY_MS = 200;
+
+function delay(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
 
 function normalizeProsecutorId(id) {
     return LEGACY_PROSECUTOR_ID[id] ?? id ?? DEFAULT_PROSECUTOR_ID;
@@ -42,6 +49,8 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     state: () => ({
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
+        consentState: null,
+        todayMission: null,
         selectedProsecutorId: DEFAULT_PROSECUTOR_ID,
         pendingVerdict: null,
         courtMode: 'supreme',
@@ -83,11 +92,23 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
          * 5. 정상 → active
          */
         screenState() {
-            if (!this.hasAgreed) return 'consent';
+            if (this.consentState === null) return 'loading';
+            if (this.consentState === 'ERROR') return 'error';
+            if (this.consentState === CHALLENGE_CONSENT_STATE.FIRST) return 'consent';
+            if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN && !this.todayMission) {
+                return 'withdrawn';
+            }
+            if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN) {
+                return this.hasPendingVerdict ? 'verdict' : 'active';
+            }
             if (!this.isAccountLinked) return 'no-account';
             if (!this.hasEnoughData) return 'insufficient';
             if (this.hasPendingVerdict) return 'verdict';
             return 'active';
+        },
+
+        todayBriefing(state) {
+            return toTodayMissionBriefing(state.todayMission) ?? state.briefing;
         },
     },
 
@@ -118,7 +139,43 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         agree() {
             this.hasAgreed = true;
+            this.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
             this.save();
+        },
+
+        setConsentState(consentState) {
+            this.consentState = consentState;
+            this.hasAgreed = consentState === CHALLENGE_CONSENT_STATE.ACTIVE;
+        },
+
+        async loadTodayMission() {
+            try {
+                this.todayMission = await fetchTodayMission();
+                return true;
+            } catch (error) {
+                if (error.code === 'TODAY_MISSION_NOT_FOUND') {
+                    this.todayMission = null;
+                    return false;
+                }
+                throw error;
+            }
+        },
+
+        async waitForTodayMission() {
+            for (let attempt = 0; attempt < TODAY_MISSION_RETRY_COUNT; attempt += 1) {
+                if (await this.loadTodayMission()) {
+                    return true;
+                }
+                if (attempt < TODAY_MISSION_RETRY_COUNT - 1) {
+                    await delay(TODAY_MISSION_RETRY_DELAY_MS);
+                }
+            }
+            return false;
+        },
+
+        async reassignTodayMission() {
+            this.todayMission = await requestTodayMissionReassignment();
+            return this.todayMission;
         },
 
         selectProsecutor(prosecutorId) {
@@ -135,10 +192,18 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             localStorage.removeItem(STORAGE_KEY);
 
             this.hasAgreed = false;
+            this.consentState = CHALLENGE_CONSENT_STATE.FIRST;
+            this.todayMission = null;
             this.selectedProsecutorId = DEFAULT_PROSECUTOR_ID;
             this.pendingVerdict = null;
             this.courtMode = 'supreme';
             this.isHydrated = true;
+        },
+
+        setDemoWithdrawnWithoutMission() {
+            this.hasAgreed = false;
+            this.consentState = CHALLENGE_CONSENT_STATE.WITHDRAWN;
+            this.todayMission = null;
         },
 
         /* 데모용: 판정 테스트 */

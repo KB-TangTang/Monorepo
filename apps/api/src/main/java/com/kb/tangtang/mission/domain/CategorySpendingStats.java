@@ -13,5 +13,4 @@ import java.math.BigDecimal;
 @Builder
 public class CategorySpendingStats {
     private BigDecimal baseAmount;
-    private BigDecimal minimumPurchaseAmount;
 }

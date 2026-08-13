@@ -16,6 +16,21 @@
                assignment.target_rate,
                assignment.base_amount,
                assignment.target_value,
+               COALESCE((
+                   SELECT SUM(
+                       CASE WHEN today_transaction.is_refund = 1
+                            THEN -COALESCE(today_transaction.refunded_amount, today_transaction.amount)
+                            ELSE today_transaction.amount
+                       END
+                   )
+                   FROM tbl_transaction today_transaction
+                   WHERE today_transaction.user_id = assignment.user_id
+                     AND today_transaction.category_id = mission.category_id
+                     AND today_transaction.tr_date = assignment.assign_date
+                     AND today_transaction.classification = 'CONSUMPTION'
+                     AND today_transaction.direction = 'OUT'
+                     AND today_transaction.is_excluded_from_summary = 0
+               ), 0) AS current_amount,
                assignment.result,
                assignment.assignment_reason
         FROM tbl_user_mission_info assignment
