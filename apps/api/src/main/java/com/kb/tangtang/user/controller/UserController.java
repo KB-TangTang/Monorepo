@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.controller;
 
+import com.kb.tangtang.user.docs.UserControllerDocs;
 import com.kb.tangtang.common.auth.AuthCookieWriter;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
@@ -28,7 +29,7 @@ import java.io.IOException;
  */
 @RestController
 @RequestMapping("/api/users")
-public class UserController {
+public class UserController implements UserControllerDocs {
 
     private final UserService userService;
     private final ImageProcessor imageProcessor;

@@ -1,5 +1,6 @@
 package com.kb.tangtang.account.controller;
 
+import com.kb.tangtang.account.docs.AccountLinkControllerDocs;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.service.AccountLinkService;
 import com.kb.tangtang.common.auth.LoginUser;
@@ -25,7 +26,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/accounts")
-public class AccountLinkController {
+public class AccountLinkController implements AccountLinkControllerDocs {
 
     private final AccountLinkService accountLinkService;
 

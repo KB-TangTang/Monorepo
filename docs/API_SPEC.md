@@ -10,6 +10,31 @@
 인증이 필요한 요청은 `Authorization: Bearer <accessToken>` 헤더를 보낸다.
 리프레시 토큰은 httpOnly 쿠키(`refresh_token`, `Path=/api/auth`)로만 오간다.
 
+## Swagger UI — 실행 중인 서버에서 직접 확인한다
+
+백엔드를 띄운 뒤 **<http://localhost:8080/swagger-ui.html>** 을 연다.
+`@ApiOperation` 애노테이션에서 **코드가 바뀌면 문서도 함께 바뀐다** — 이 문서(`API_SPEC.md`)처럼
+손으로 맞출 필요가 없다.
+
+| 그룹 | 내용 |
+|---|---|
+| `01. 서비스 API` | 정식 엔드포인트 52개 |
+| `02. 개발 전용 API` | `/api/dev/**` — 배치 트리거·미션 재배정. 로컬에서만 동작한다 |
+
+- 인증이 필요한 API 를 호출하려면 우측 상단 **Authorize** 에 `Bearer {accessToken}` 을 넣는다.
+  (`Bearer ` 접두사까지 포함해야 한다 — 인터셉터가 접두사를 직접 잘라낸다)
+- 문서 원문(JSON): `/v2/api-docs?group=01. 서비스 API`
+- `GET /api/auth/google`·`/google/callback` 은 브라우저 전체 이동이라 **Try it out 으로 확인할 수 없다.**
+  `GET /api/notifications/stream` 도 SSE 라 응답이 끝나지 않아 확인할 수 없다.
+
+문서 애노테이션은 컨트롤러가 아니라 **각 모듈의 `docs/` 패키지 인터페이스**에 있다
+(`user/docs/UserControllerDocs.java` 등). 컨트롤러는 그 인터페이스를 `implements` 하기만 한다.
+설명을 고칠 일이 있으면 컨트롤러가 아니라 `docs/` 쪽을 고친다.
+
+> 이 `API_SPEC.md` 와 산출물 엑셀(`탕탕_API_연동규격_정의서`)을 **대체하지 않는다.**
+> 제출 정본은 엑셀이고, Swagger 는 개발·시연·QA 용이다.
+> 설정 근거는 `.claude/context/DECISIONS.md` 2026-08-13 (4) 참고.
+
 ## 월간 소비 리포트
 
 모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.

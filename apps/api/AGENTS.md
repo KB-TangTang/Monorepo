@@ -20,6 +20,7 @@ config          앱 전역 설정 (RootConfig / ServletConfig / WebConfig)
 ```
 
 각 모듈 내부는 `controller / service / mapper / dto / domain` 으로 나눈다.
+Swagger 문서 애노테이션을 쓰는 모듈은 `docs` 를 하나 더 둔다 (아래 「API 문서(Swagger)」 참고).
 
 ## 모듈 경계 (중요)
 
@@ -84,6 +85,29 @@ events.publishEvent(new NotificationRequestedEvent(
   MyBatis VFS 가 Tomcat WebappClassLoader 와 충돌해 기동이 실패한다. (2026-07-31 실제 발생)
   별칭이 필요하면 `SqlSessionFactoryBean#setTypeAliasesPackage` 를 쓴다.
 - 컬럼·테이블명은 `db/` 의 SQL 이 기준이다. ERD 문서와 다르면 **SQL 이 맞다.**
+
+## API 문서 (Swagger)
+
+문서는 **Springfox 2.9.2** 가 코드에서 만든다. 서버를 띄우고 <http://localhost:8080/swagger-ui.html> 을 연다.
+(springdoc 은 금지 대상인 Boot 모듈을 의존성으로 끌고 와 쓸 수 없다 — DECISIONS.md 2026-08-13 (4))
+
+**엔드포인트를 추가하면 문서 애노테이션도 같이 단다.** 규칙은 셋뿐이다.
+
+1. 문서 애노테이션은 **컨트롤러가 아니라 `<모듈>/docs/<컨트롤러명>Docs` 인터페이스**에 단다.
+   컨트롤러는 그 인터페이스를 `implements` 하기만 한다.
+   - 컨트롤러에 직접 달면 `io.swagger.annotations.ApiResponse` 와 우리 공통 래퍼
+     `com.kb.tangtang.common.dto.ApiResponse` 의 **import 가 충돌한다.**
+   - Spring 5.3 이 인터페이스 쪽 파라미터 애노테이션까지 합쳐 주므로 그대로 반영된다.
+2. `@LoginUser Long userId` 파라미터에는 **`@ApiIgnore` 를 붙인다.** 안 붙이면 문서에
+   `userId` 라는 가짜 쿼리 파라미터가 뜨고, 프론트가 그걸 보내야 하는 줄 안다.
+3. **`@ApiResponses` 는 쓰지 않는다.** 업무 오류는 전부 `BusinessException` → 400 이고
+   구분은 응답 본문의 `code` 로 한다. HTTP 상태를 나열해봐야 정보가 없다.
+   알아야 할 오류 코드는 `@ApiOperation(notes = ...)` 에 적는다.
+
+`/api/dev/**` 는 `SwaggerConfig` 가 「02. 개발 전용 API」 그룹으로 자동 분리한다 — 따로 할 일은 없다.
+
+> `SwaggerConfig` 에 **`@Configuration` 을 붙이지 말 것.** `RootConfig` 가 `com.kb.tangtang` 전체를
+> 스캔해 루트 컨텍스트에도 중복 등록된다. `WebConfig#getServletConfigClasses()` 에만 등록한다.
 
 ## 트랜잭션 · 예외
 
