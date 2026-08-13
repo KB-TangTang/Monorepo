@@ -164,6 +164,20 @@ export async function fetchGroupChallengeDetail(groupId) {
 }
 
 /**
+ * 시작 상태 전이 배치를 즉시 돌린다 (개발 전용, 이슈 #152).
+ *
+ * 원래는 매일 00:01 에 도는 배치다. 시연·검증 때 자정을 기다릴 수 없어서 열어 둔 문이다.
+ * 서버가 `app.env=local` 이 아니면 `DEV_API_DISABLED` 로 거절한다 — 배포 환경에서는 눌러도 막힌다.
+ *
+ * 목데이터 모드에서도 실제 서버로 나간다. 배치는 DB 를 건드리는 일이라 흉내낼 것이 없다.
+ *
+ * @returns {{ batch: string, baseDate: string, affected: number }} affected = 상태가 바뀐 그룹 수
+ */
+export async function runGroupChallengeStatusBatch() {
+    return http.post('/dev/batches/group-challenge-status');
+}
+
+/**
  * 그룹 챌린지 생존/누적 순위 (명예 법정).
  * 서버 미구현 — 일일 평가 결과가 쌓여야 만들 수 있다.
  */

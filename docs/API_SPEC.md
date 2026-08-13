@@ -543,9 +543,9 @@ assignmentReason, guideMessage }` 형태다.
 - 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
 - `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
   절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
-- 상태 전이(`RECRUITING` → `ACTIVE`)와 시작 알림은 이 API 가 하지 않는다 — 별도 배치(이슈 #152).
-  그래서 시작일이 지나도 `status` 가 한동안 `RECRUITING` 일 수 있고, 참여 가능 판정은
-  status 가 아니라 **날짜**를 기준으로 한다.
+- 상태 전이(`RECRUITING` → `ACTIVE`/`CLOSED`)와 시작 알림은 이 API 가 하지 않는다 —
+  별도 배치(이슈 #152, 아래 참고). **참여 가능 판정은 날짜가 아니라 `status` 하나를 기준으로 한다.**
+  그래서 배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있을 수 있다.
 
 ### 초대 코드 미리보기가 200 인 이유
 
@@ -557,7 +557,7 @@ assignmentReason, guideMessage }` 형태다.
 |---|---|
 | `ALREADY_JOINED` | 이미 참여 중 (다른 사유보다 먼저 판정한다 — 그룹으로 보내야 하므로) |
 | `CLOSED` | 상태가 `JUDGING` 또는 `CLOSED` |
-| `EXPIRED` | 시작일이 지났다 |
+| `EXPIRED` | 이미 시작됐다 (`status=ACTIVE`. 상태 전이 배치가 바꿔 놓는다) |
 | `FULL` | 정원(6명) 초과 |
 
 같은 상황에서 **참여 API** 는 200 이 아니라 400 이다 — 아래 코드로 매핑된다.
@@ -582,6 +582,53 @@ assignmentReason, guideMessage }` 형태다.
 | `GROUP_FULL` | 400 | 정원 초과 |
 | `GROUP_ALREADY_JOINED` | 400 | 이미 참여 중인데 다시 참여 시도 |
 | `GROUP_INVITE_CODE_EXHAUSTED` | 400 | 초대 코드 채번 재시도 실패 (사실상 발생하지 않는다) |
+
+## 그룹 챌린지 — 시작 상태 전이 배치 (이슈 #152)
+
+시작일이 된 그룹의 `status` 를 서버 스케줄러가 바꾼다. **API 는 상태를 전이시키지 않는다.**
+
+실행은 매일 한국 시간 **00:01**이다. 시각은 `challenge.group.status-transition.cron`,
+타임존은 `challenge.group.status-transition.zone` 으로 바꾼다.
+
+> **00:00 정각으로 당기지 않는다.** 기준일을 배치 안에서 `LocalDate.now(zone)` 으로 계산하는데
+> 정각에는 이 값이 전날로 나올 수 있어(트리거가 미세하게 일찍 발화하거나 NTP 가 시계를 되돌림)
+> 그날 시작하는 그룹이 통째로 누락된다. 미션 자동 배정(00:10)보다 앞서야 한다는 제약도 있다 —
+> 미션은 챌린지가 `ACTIVE` 인 것을 전제로 한다.
+
+- 대상은 `status=RECRUITING` 이면서 `start_date <= 기준일` 인 그룹이다.
+  **등호가 아니라 부등호다** — 서버가 내려가 배치를 건너뛰었어도 다음 실행이 밀린 그룹을 주워 담는다.
+- 참여자 **2명 이상**이면 `ACTIVE`, **1명(방장뿐)**이면 `CLOSED` 로 간다. 혼자서는 재판이 성립하지 않는다.
+- 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED`,
+  `CLOSED` 면 방장에게 `GROUP_CHALLENGE_CANCELED`. 딥링크는 `/group-challenges/{groupId}` 다.
+- 트랜잭션은 **그룹 한 건 단위**다. 한 그룹이 실패해도 나머지는 처리되고, 실패분은 다음 실행이 다시 집는다.
+- 멱등하다. 상태를 `RECRUITING` 인 행만 골라 UPDATE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
+  같은 날 두 번 돌려도 알림이 두 번 나가지 않는다.
+
+### 배치 수동 트리거 (DEV 전용)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/dev/batches/{name}?date=` | Bearer | `{ batch, baseDate, affected }` |
+
+자정을 기다리지 않고 배치를 돌리기 위한 시연·검증용이다.
+
+**로컬에서만 동작한다.** 판단 기준은 `app.env` 이며, 로컬은 `APP_ENV` 가 없어 기본값 `local`,
+도커는 compose 가 `docker` 를 주입한다. `/api/dev/missions/**`(이슈 #165)와 같은 규칙·같은 에러 코드다.
+별도 on/off 프로퍼티는 두지 않는다 — **배포 환경에서 쓸 계획이 없는 도구**라 스위치를 달면
+로컬에서 쓸 때마다 설정을 고쳐야 하고, 켜진 채 배포될 위험만 새로 생긴다.
+
+- `name` 은 현재 `group-challenge-status` 하나다. 배치가 늘어나면 여기에 추가된다.
+- `date` 는 `yyyy-MM-dd`. 생략하면 오늘이다. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다.
+- `affected` 는 실제로 상태가 바뀐 그룹 수다.
+
+프론트에서는 개발 서버(`import.meta.env.DEV`)에서만 그룹 챌린지 홈 우하단에
+**「챌린지 시작 배치」** 버튼이 뜬다. 누르면 `date` 없이(=오늘) 호출하고 결과 건수를 토스트로 알린다.
+프로덕션 빌드에는 버튼이 포함되지 않는다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
+| `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
 
 ## 알림 (이슈 #58)
 
@@ -608,7 +655,9 @@ assignmentReason, guideMessage }` 형태다.
 
 | 값 | 기본 제목 | 발행 주체 |
 |---|---|---|
-| `ACCOUNT_RECONNECT` | 계좌 재연동이 필요해요 | `AccountReconnectRequiredEvent` (**현재 유일하게 실제 발행됨**) |
+| `ACCOUNT_RECONNECT` | 계좌 재연동이 필요해요 | `AccountReconnectRequiredEvent` |
+| `GROUP_CHALLENGE_STARTED` | 챌린지가 시작됐어요 | challenge — 상태 전이 배치 (#152) |
+| `GROUP_CHALLENGE_CANCELED` | 챌린지가 성립되지 않았어요 | challenge — 상태 전이 배치 (#152). 시작일에 참여자가 방장 1명뿐일 때 |
 | `GROUP_JUDGMENT` | 판결이 확정됐어요 | challenge — 백엔드 미구현 |
 | `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 백엔드 미구현 |
 | `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission — 백엔드 미구현 |

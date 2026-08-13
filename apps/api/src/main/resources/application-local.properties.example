@@ -58,3 +58,12 @@ openai.read-timeout-millis=15000
 #mission.assignment.cron=0 * * * * *
 #mission.assignment.recovery-cron=0 */5 * * * *
 #mission.assignment.zone=Asia/Seoul
+
+# ── 그룹 챌린지 상태 전이 배치 시간(선택) ─────────────────
+# 공통 기본값은 매일 Asia/Seoul 00:01이다. 시연·테스트로 자정을 기다릴 수 없을 때만
+# 주석을 해제한다. 예시는 매분 0초에 실행한다.
+#challenge.group.status-transition.cron=0 * * * * *
+#challenge.group.status-transition.zone=Asia/Seoul
+
+# 배치를 자정까지 기다리지 않고 돌리려면 그룹 챌린지 홈의 DEV 버튼을 누른다
+# (POST /api/dev/batches/group-challenge-status). 로컬에서는 별도 설정 없이 켜져 있다.

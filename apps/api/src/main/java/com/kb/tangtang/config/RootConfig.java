@@ -121,11 +121,16 @@ public class RootConfig {
      *   NotificationDlqRetryScheduler.retryDue(60초)가 그 한 스레드를 나눠 쓰게 되고,
      *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
      *   하트비트가 막으려던 바로 그 상황이다.
+     *
+     * poolSize 는 @Scheduled 개수보다 넉넉해야 한다. 자리가 모자라면 오래 걸리는 배치가 자리를
+     * 점유하는 동안 하트비트가 밀린다. 2026-08-13 기준 스케줄러 4개
+     * (SseHeartbeat · NotificationDlqRetry · RelativeMissionAssignment · ChallengeGroupStatus)
+     * 이고 그룹챌린지 배치가 3개 더 붙을 예정(#168 · #170 · #172)이라 8 로 둔다.
      */
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(3);
+        scheduler.setPoolSize(8);
         scheduler.setThreadNamePrefix("tt-sched-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);

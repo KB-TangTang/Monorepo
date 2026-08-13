@@ -176,8 +176,25 @@ class ChallengeGroupServiceTest {
     }
 
     @Test
-    @DisplayName("시작일 다음 날부터는 만료다 — 만료 컬럼 없이 날짜로 판정한다")
-    void expiresDayAfterStartDate() {
+    @DisplayName("배치가 ACTIVE 로 바꾼 뒤에는 만료다 — 날짜가 아니라 status 로 판정한다(#152)")
+    void expiresOnceBatchActivates() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
+            r.setStartDate(TODAY.plusDays(1));
+            r.setEndDate(TODAY.plusDays(3));
+        }));
+        groupMapper.updateStatusIfCurrent(created.getGroupId(), "RECRUITING", "ACTIVE");
+
+        InviteCodePreviewDto preview = newService(TODAY.plusDays(2))
+                .previewInviteCode(GUEST_ID, created.getInviteCode());
+
+        assertFalse(preview.isJoinable());
+        assertEquals("EXPIRED", preview.getReason());
+        assertNotNull(preview.getChallenge(), "참여 불가여도 그룹 정보는 보여줘야 한다");
+    }
+
+    @Test
+    @DisplayName("배치가 아직 안 돌았으면 시작일이 지나도 모집 중이다 — status 단일 기준의 대가(#152)")
+    void stillJoinableUntilBatchRuns() {
         String code = service.create(OWNER_ID, request(r -> {
             r.setStartDate(TODAY.plusDays(1));
             r.setEndDate(TODAY.plusDays(3));
@@ -185,9 +202,19 @@ class ChallengeGroupServiceTest {
 
         InviteCodePreviewDto preview = newService(TODAY.plusDays(2)).previewInviteCode(GUEST_ID, code);
 
+        assertTrue(preview.isJoinable());
+    }
+
+    @Test
+    @DisplayName("종료된 챌린지는 CLOSED 사유다")
+    void previewReportsClosed() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        groupMapper.updateStatusIfCurrent(created.getGroupId(), "RECRUITING", "CLOSED");
+
+        InviteCodePreviewDto preview = service.previewInviteCode(GUEST_ID, created.getInviteCode());
+
         assertFalse(preview.isJoinable());
-        assertEquals("EXPIRED", preview.getReason());
-        assertNotNull(preview.getChallenge(), "참여 불가여도 그룹 정보는 보여줘야 한다");
+        assertEquals("CLOSED", preview.getReason());
     }
 
     @Test
@@ -389,6 +416,41 @@ class ChallengeGroupServiceTest {
         @Override
         public int countByInviteCode(String inviteCode) {
             return (int) groups.stream().filter(g -> g.getInviteCode().equals(inviteCode)).count();
+        }
+
+        @Override
+        public List<ChallengeGroup> findGroupsToStart(String status, LocalDate today) {
+            return groups.stream()
+                    .filter(g -> g.getStatus().equals(status))
+                    .filter(g -> !g.getStartDate().isAfter(today))
+                    .toList();
+        }
+
+        @Override
+        public int updateStatusIfCurrent(Long groupId, String fromStatus, String toStatus) {
+            for (int i = 0; i < groups.size(); i++) {
+                ChallengeGroup group = groups.get(i);
+                if (group.getId().equals(groupId) && group.getStatus().equals(fromStatus)) {
+                    // status 에는 세터가 없다(배치 SQL 만 바꾸라는 뜻). 복제해 갈아 끼운다.
+                    groups.set(i, ChallengeGroup.builder()
+                            .id(group.getId())
+                            .adminId(group.getAdminId())
+                            .groupName(group.getGroupName())
+                            .categoryId(group.getCategoryId())
+                            .limitAmount(group.getLimitAmount())
+                            .evalType(group.getEvalType())
+                            .maxMembers(group.getMaxMembers())
+                            .startDate(group.getStartDate())
+                            .endDate(group.getEndDate())
+                            .inviteCode(group.getInviteCode())
+                            .status(toStatus)
+                            .memo(group.getMemo())
+                            .categoryName(group.getCategoryName())
+                            .build());
+                    return 1;
+                }
+            }
+            return 0;   // compare-and-set 실패 — 배치 멱등성이 이 0 에 걸려 있다
         }
     }
 
