@@ -48,7 +48,7 @@ class UserMapperTest {
                 .socialProvider("GOOGLE")
                 .providerUserId("test-sub-0001")
                 .email("test@example.com")
-                .nickname("테스트지윤")
+                .socialName("테스트지윤")
                 .status("ACTIVE")
                 .difficultyId(1L)
                 .build();
@@ -58,7 +58,15 @@ class UserMapperTest {
 
         UserDto found = userMapper.findBySocialId("GOOGLE", "test-sub-0001");
         assertNotNull(found);
-        assertEquals("테스트지윤", found.getNickname());
+        /*
+         * [정정 2026-08-13] 이 테스트는 nickname 을 넣고 다시 읽히기를 기대했으나,
+         * insert 는 2026-08-11 닉네임 온보딩 결정 이후 **nickname 을 넣지 않는다**
+         * (가입 시점에 NULL 이어야 「닉네임 미설정」으로 판별된다).
+         * 형제 테스트 insertLeavesNicknameNull 이 그 동작을 검증하고 있어 기대값이 서로 모순이었다.
+         * @Disabled 클래스라 드러나지 않았을 뿐 계속 실패하던 단언이다 — 실제 동작에 맞춘다.
+         */
+        assertEquals("테스트지윤", found.getSocialName());
+        assertNull(found.getNickname(), "가입 시 nickname 은 NULL 이다");
         assertEquals("ACTIVE", found.getStatus());
         assertEquals(1L, found.getDifficultyId());
     }
@@ -172,5 +180,53 @@ class UserMapperTest {
 
         RefreshTokenDto revoked = refreshTokenMapper.findByHash("a".repeat(64));
         assertTrue(revoked.isRevoked(), "폐기 후에도 조회는 되어야 재사용 감지가 가능하다");
+    }
+
+    @Test
+    @DisplayName("탈퇴하면 식별정보가 지워지고 provider_user_id 에 접미사가 붙는다")
+    void 탈퇴_익명화() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("sub-withdraw-1")
+                .email("a@b.com").socialName("홍길동")
+                .status("ACTIVE").difficultyId(2L)
+                .build();
+        userMapper.insert(user);
+
+        assertEquals(1, userMapper.withdraw(user.getId(), LocalDateTime.now()));
+
+        UserDto after = userMapper.findById(user.getId());
+        assertEquals("WITHDRAWN", after.getStatus());
+        assertNull(after.getEmail());
+        assertNull(after.getSocialName());
+        assertEquals("sub-withdraw-1_withdrawn_" + user.getId(), after.getProviderUserId());
+    }
+
+    @Test
+    @DisplayName("탈퇴 후 같은 소셜 ID 로 조회되지 않는다 — 재가입이 가능해진다")
+    void 탈퇴후_소셜조회_미스() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("sub-withdraw-2")
+                .email("c@d.com").status("ACTIVE").difficultyId(2L)
+                .build();
+        userMapper.insert(user);
+        userMapper.withdraw(user.getId(), LocalDateTime.now());
+
+        assertNull(userMapper.findBySocialId("GOOGLE", "sub-withdraw-2"));
+    }
+
+    @Test
+    @DisplayName("두 번 탈퇴해도 접미사가 두 번 붙지 않는다 — 멱등")
+    void 탈퇴_멱등() {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId("sub-withdraw-3")
+                .status("ACTIVE").difficultyId(2L)
+                .build();
+        userMapper.insert(user);
+
+        assertEquals(1, userMapper.withdraw(user.getId(), LocalDateTime.now()));
+        assertEquals(0, userMapper.withdraw(user.getId(), LocalDateTime.now()));
+
+        assertEquals("sub-withdraw-3_withdrawn_" + user.getId(),
+                userMapper.findById(user.getId()).getProviderUserId());
     }
 }

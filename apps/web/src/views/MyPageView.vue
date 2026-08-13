@@ -235,6 +235,17 @@ async function confirmLogout() {
                 >
                     로그아웃
                 </button>
+                <!--
+                  로그아웃과 달리 바텀시트를 띄우지 않는다 — 파기 항목 고지가 시트에 담기에는 길고,
+                  되돌아 나올 수 있는 화면이어야 한다. (DECISIONS.md 2026-08-13 회원 탈퇴)
+                -->
+                <button
+                    type="button"
+                    class="my-page__withdraw-button"
+                    @click="router.push({ name: 'myWithdraw' })"
+                >
+                    회원 탈퇴
+                </button>
             </div>
         </template>
 
@@ -334,6 +345,20 @@ async function confirmLogout() {
 .my-page__logout {
     margin-top: var(--tt-space-2);
     text-align: center;
+}
+
+/* 로그아웃보다 한 단계 약한 위계 — 실수로 누르는 것을 막는다 */
+.my-page__withdraw-button {
+    display: block;
+    margin: var(--tt-space-1) auto 0;
+    padding: var(--tt-space-2);
+    border: 0;
+    background: none;
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .my-page__logout-button {

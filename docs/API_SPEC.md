@@ -88,6 +88,7 @@
 | PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
 | POST | `/api/users/me/profile-image` | Bearer | 요청 multipart (파트명 `file`) → 갱신된 사용자정보 |
 | DELETE | `/api/users/me/profile-image` | Bearer | 갱신된 사용자정보 (기본 아바타로 되돌리기) |
+| DELETE | `/api/users/me` | Bearer | 회원 탈퇴. `{"success":true,"data":null}` + 리프레시 쿠키 만료 |
 
 **사용자정보** = `{ id, nickname, socialName, profileImageUrl, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
 
@@ -101,6 +102,12 @@
   조립하지 않으므로 로컬 저장소 → S3 전환에 프론트 수정이 없다.
 - `POST /api/users/me/profile-image` 는 업로드된 이미지를 **256x256 정사각 JPEG 로 다시 구워
   저장**한다(가운데 크롭). 원본은 보관하지 않는다.
+- `DELETE /api/users/me` (회원 탈퇴, `MY_01_05`)는 **물리 삭제하지 않는다.** 동의를 전건 철회하고
+  (→ 연동 계좌 자동 해제) 리프레시 토큰을 전부 폐기한 뒤 식별정보를 `NULL` 로 익명화한다.
+  `provider_user_id` 에 `_withdrawn_{id}` 접미사가 붙어 유니크 키가 비므로 **같은 소셜 계정으로
+  재가입할 수 있다** — 재가입자는 신규 가입자와 같은 온보딩을 다시 거치며 과거 데이터는 딸려오지 않는다.
+  이미 탈퇴한 계정의 재요청도 200 이다(멱등). 액세스 토큰은 만료(15분)까지 유효하다.
+  (`DECISIONS.md` 2026-08-13)
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.

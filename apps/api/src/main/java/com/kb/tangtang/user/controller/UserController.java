@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.controller;
 
+import com.kb.tangtang.common.auth.AuthCookieWriter;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.storage.ImageProcessor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /**
@@ -29,10 +31,13 @@ public class UserController {
 
     private final UserService userService;
     private final ImageProcessor imageProcessor;
+    private final AuthCookieWriter cookieWriter;
 
-    public UserController(UserService userService, ImageProcessor imageProcessor) {
+    public UserController(UserService userService, ImageProcessor imageProcessor,
+                          AuthCookieWriter cookieWriter) {
         this.userService = userService;
         this.imageProcessor = imageProcessor;
+        this.cookieWriter = cookieWriter;
     }
 
     @GetMapping("/me")
@@ -88,5 +93,22 @@ public class UserController {
     @DeleteMapping("/me/profile-image")
     public ApiResponse<UserMeDto> deleteProfileImage(@LoginUser Long userId) {
         return ApiResponse.ok(userService.deleteProfileImage(userId));
+    }
+
+    /**
+     * 회원 탈퇴 (MY_01_05).
+     *
+     * 응답 본문이 없다 — 탈퇴 후에는 돌려줄 사용자 정보가 없다.
+     * 리프레시 쿠키는 httpOnly 라 프론트가 지울 수 없으므로 **여기서 지운다**
+     * (AuthController.logout 과 같은 이유·같은 메서드).
+     *
+     * 이미 탈퇴한 계정의 재요청도 200 이다 — 없는 것을 지우는 것은 오류가 아니다.
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     */
+    @DeleteMapping("/me")
+    public ApiResponse<Void> withdraw(@LoginUser Long userId, HttpServletResponse response) {
+        userService.withdraw(userId);
+        cookieWriter.clearRefreshToken(response);
+        return ApiResponse.ok();
     }
 }

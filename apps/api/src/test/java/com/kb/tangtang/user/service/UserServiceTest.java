@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -27,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,12 +47,15 @@ class UserServiceTest {
     @Mock private ProfileImageUrlResolver profileImageUrlResolver;
     @Mock private ImageStorage imageStorage;
     @Mock private ImageProcessor imageProcessor;
+    @Mock private ConsentService consentService;
+    @Mock private RefreshTokenService refreshTokenService;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userMapper, profileImageUrlResolver, imageStorage, imageProcessor);
+        service = new UserService(userMapper, profileImageUrlResolver, imageStorage, imageProcessor,
+                consentService, refreshTokenService);
     }
 
     private static UserDto user(String name) {
@@ -458,5 +463,29 @@ class UserServiceTest {
         ArgumentCaptor<String> storedKey = ArgumentCaptor.forClass(String.class);
         verify(imageStorage).store(any(), storedKey.capture());
         verify(imageStorage).delete(storedKey.getValue());
+    }
+
+    @Test
+    @DisplayName("탈퇴는 동의 철회 → 토큰 폐기 → 익명화 순서로 실행된다")
+    void 탈퇴_순서() {
+        when(userMapper.withdraw(eq(USER_ID), any(LocalDateTime.class))).thenReturn(1);
+
+        service.withdraw(USER_ID);
+
+        /*
+         * 순서가 중요하다 — 익명화가 먼저 일어나면 그 뒤 단계가 식별정보를 잃은 행을 보게 된다.
+         */
+        InOrder order = inOrder(consentService, refreshTokenService, userMapper);
+        order.verify(consentService).withdrawAll(USER_ID);
+        order.verify(refreshTokenService).revokeAll(USER_ID);
+        order.verify(userMapper).withdraw(eq(USER_ID), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 계정이 다시 호출해도 예외를 던지지 않는다 — 멱등")
+    void 탈퇴_멱등() {
+        when(userMapper.withdraw(eq(USER_ID), any(LocalDateTime.class))).thenReturn(0);
+
+        service.withdraw(USER_ID);   // 예외가 없으면 통과
     }
 }

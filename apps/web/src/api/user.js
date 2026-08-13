@@ -75,3 +75,20 @@ export function uploadMyProfileImage(file) {
 export function deleteMyProfileImage() {
     return http.delete('/users/me/profile-image');
 }
+
+/**
+ * 회원 탈퇴 (MY_01_05).
+ *
+ * 서버가 동의를 전건 철회하고(→ 계좌 연동 자동 해제) 리프레시 토큰을 폐기한 뒤
+ * 식별정보를 익명화한다. 리프레시 쿠키는 httpOnly 라 서버가 지운다.
+ *
+ * 계정 행 자체는 남지만 `provider_user_id` 가 변조되어 **같은 구글 계정으로 재가입할 수 있다.**
+ * 다만 거래내역·미션·챌린지 이력은 새 계정에 딸려오지 않는다.
+ * 이미 탈퇴한 계정의 재요청도 성공이다(멱등).
+ * (DECISIONS.md 2026-08-13 회원 탈퇴)
+ *
+ * @returns {Promise<null>} 응답 본문 없음
+ */
+export function withdrawMe() {
+    return http.delete('/users/me');
+}

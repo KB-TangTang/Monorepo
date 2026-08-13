@@ -101,4 +101,37 @@
            AND status = 'ACTIVE'
     </update>
 
+    <!--
+      회원 탈퇴. 행을 지우지 않는다 — tbl_user(id) 를 참조하는 FK 가 22개이고
+      그 중 tbl_group_member·tbl_vote·tbl_group_challenge_daily_result 는
+      **다른 사용자의** 그룹챌린지 이력과 얽혀 있다. 물리 삭제하면 남의 판결 기록이 깨진다.
+      (tbl_user.status 주석 「물리 삭제 없음」 · DECISIONS.md 2026-08-13)
+
+      provider_user_id 에 접미사를 붙여 uk_user_social 을 비운다 →
+      같은 구글 계정으로 재가입하면 findBySocialId 가 미스가 나 신규 가입 경로를 탄다.
+      VARCHAR(100) 이고 구글 sub 는 21자라 접미사를 붙여도 40자 안쪽이다.
+
+      WHERE status = 'ACTIVE' 가 멱등성을 만든다 — 두 번 호출해도 접미사가 두 번 붙지 않는다.
+      형제 갱신문(updateName·updateNickname·updateProfileImageKey)이 쓰는 조건과 같다.
+
+      profile_image_key 는 NULL 로만 만들고 저장소 파일은 지우지 않는다.
+      키를 잃으면 참조할 방법이 없고, 파일 I/O 를 트랜잭션에 넣으면 실패가 탈퇴를 롤백시킨다.
+    -->
+    <update id="withdraw">
+        UPDATE tbl_user
+           SET status            = 'WITHDRAWN',
+               withdrawn_at      = #{withdrawnAt},
+               email             = NULL,
+               nickname          = NULL,
+               social_name       = NULL,
+               name              = NULL,
+               phone             = NULL,
+               birth_date        = NULL,
+               gender            = NULL,
+               profile_image_key = NULL,
+               provider_user_id  = CONCAT(provider_user_id, '_withdrawn_', id)
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
 </mapper>

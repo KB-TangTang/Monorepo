@@ -15,13 +15,27 @@ const route = useRoute();
 const ERROR_MESSAGES = {
     invalid: '로그인 요청이 올바르지 않습니다. 다시 시도해 주세요.',
     failed: '구글 인증에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-    withdrawn: '이용할 수 없는 계정입니다.',
+    /*
+     * 탈퇴자는 provider_user_id 가 변조돼 재가입되므로 이 경로로 오지 않는다.
+     * 여기 걸리는 것은 BLOCKED 뿐이다. (DECISIONS.md 2026-08-13 회원 탈퇴)
+     */
+    withdrawn: '정지된 계정입니다. 고객센터에 문의해 주세요.',
     security: '보안을 위해 로그아웃되었습니다. 다시 로그인해 주세요.',
     expired: '로그인이 만료되었습니다. 다시 로그인해 주세요.',
     cancelled: '',
 };
 
+/*
+ * 오류가 아닌 안내. error=withdrawn(차단)과 뜻이 정반대라 키를 반드시 갈라 둔다 —
+ * 같은 이름을 쓰면 「탈퇴 완료」와 「이용 불가」가 한 키를 공유하게 된다.
+ */
+const NOTICE_MESSAGES = {
+    goodbye:
+        '탈퇴가 완료되었습니다. 구글 계정 > 보안 > ‘타사 앱 연결’ 에서 탕탕 연결을 직접 해제하실 수 있습니다.',
+};
+
 const errorMessage = computed(() => ERROR_MESSAGES[route.query.error] ?? '');
+const noticeMessage = computed(() => NOTICE_MESSAGES[route.query.notice] ?? '');
 
 /*
  * SPA 라우팅이 아니라 전체 이동이다.
@@ -64,6 +78,7 @@ function startGoogleLogin() {
         </div>
 
         <p v-if="errorMessage" class="login__error" role="alert">{{ errorMessage }}</p>
+        <p v-if="noticeMessage" class="login__notice">{{ noticeMessage }}</p>
 
         <div class="login__action">
             <GoogleSignInButton @click-login="startGoogleLogin" />
@@ -166,6 +181,18 @@ function startGoogleLogin() {
     color: var(--tt-danger);
     font-size: var(--tt-fs-caption);
     line-height: var(--tt-lh-normal);
+}
+
+/* 오류가 아니다 — danger 색을 쓰면 탈퇴가 실패한 것처럼 읽힌다 */
+.login__notice {
+    margin-top: var(--tt-space-4);
+    padding: var(--tt-space-3) var(--tt-space-4);
+    border-radius: var(--tt-radius-sm);
+    background: var(--tt-bg-subtle);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    text-align: center;
 }
 
 .login__action {
