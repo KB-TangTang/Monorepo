@@ -7,7 +7,7 @@ import http from '@/api/http';
  * 실패는 ApiError(code, message, status) 로 reject 되니 호출부는 err.code 로 분기한다.
  */
 
-/** scope: 'SIGNUP' | 'FINANCIAL' */
+/** scope: 'SIGNUP' | 'FINANCIAL' | 'CHALLENGE' */
 export function fetchConsentCatalog(scope) {
     return http.get('/consents/catalog', { params: { scope } });
 }

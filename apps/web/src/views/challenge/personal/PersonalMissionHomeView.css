@@ -212,6 +212,17 @@
     font-family: var(--tt-font-mono);
 }
 
+.personal-home__withdrawn-notice {
+    padding: var(--tt-space-3) var(--tt-space-4);
+    color: var(--tt-text-body);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    line-height: var(--tt-lh-normal);
+    background: var(--tt-accent-subtle);
+    border: 1px solid var(--tt-accent-subtle-border);
+    border-radius: var(--tt-radius-md);
+}
+
 /* ── 데모 버튼 ──────────────────────────────────── */
 .personal-home__dev-controls {
     position: fixed;

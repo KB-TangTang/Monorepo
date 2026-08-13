@@ -7,13 +7,20 @@ defineProps({
         type: Boolean,
         required: true,
     },
+    loading: {
+        type: Boolean,
+        default: false,
+    },
+    errorMessage: {
+        type: String,
+        default: '',
+    },
 });
 
 const emit = defineEmits(['update:modelValue', 'agree', 'later']);
 
 function agree() {
     emit('agree');
-    emit('update:modelValue', false);
 }
 
 function later() {
@@ -40,7 +47,7 @@ function later() {
             <h2>개인 미션 챌린지,<br />시작할까요?</h2>
 
             <p class="consent__description">
-                매일 자정, 어제의 소비를 분석해요.<br />
+                매일 소비 내역을 분석해요.<br />
                 탕탕이가 오늘의 개인 미션을 배정해 드려요.
             </p>
 
@@ -96,14 +103,20 @@ function later() {
                 <input type="checkbox" checked disabled />
 
                 <span>
-                    <strong>개인 챌린지·랭킹 참여에 동의합니다.</strong>
+                    <strong>챌린지 참여에 동의합니다.</strong>
                     <small> 미동의 시에도 자산·장부 기능은 그대로 이용할 수 있어요. </small>
                 </span>
             </label>
 
-            <BaseButton size="lg" block @click="agree"> 동의하고 챌린지 시작 </BaseButton>
+            <p v-if="errorMessage" class="consent__error">{{ errorMessage }}</p>
 
-            <button class="consent__later" type="button" @click="later">다음에 할게요</button>
+            <BaseButton size="lg" block :loading="loading" @click="agree">
+                동의하고 챌린지 시작
+            </BaseButton>
+
+            <button class="consent__later" type="button" :disabled="loading" @click="later">
+                다음에 할게요
+            </button>
         </div>
     </BaseBottomSheet>
 </template>
@@ -260,6 +273,17 @@ function later() {
     background: transparent;
     border: 0;
     cursor: pointer;
+}
+
+.consent__later:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.consent__error {
+    margin: 0 0 var(--tt-space-3);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-danger);
 }
 
 @media (max-width: 390px) {

@@ -196,3 +196,17 @@ test('buildAgreeAgainPayload: 다른 scope 항목은 건드리지 않는다', ()
         'FINANCIAL 저장이 SIGNUP 의 마케팅 동의를 끄면 안 된다',
     );
 });
+
+test('buildAgreeAgainPayload: CHALLENGE 재동의는 공통 챌린지 동의만 켠다', () => {
+    const myConsents = [
+        { type: 'MARKETING', scope: 'SIGNUP', agreed: true },
+        { type: 'CHALLENGE', scope: 'CHALLENGE', agreed: false },
+    ];
+
+    const payload = buildAgreeAgainPayload(myConsents, {
+        type: 'CHALLENGE',
+        scope: 'CHALLENGE',
+    });
+
+    assert.deepEqual(payload, [{ type: 'CHALLENGE', agreed: true }]);
+});

@@ -11,16 +11,26 @@ import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiShe
 import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdictModal.vue';
 import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
 import PersonalTutorialOverlay from '@/components/challenge/personal/PersonalTutorialOverlay.vue';
+import BaseButton from '@/components/common/BaseButton.vue';
+import StateEmpty from '@/components/common/StateEmpty.vue';
+import StateError from '@/components/common/StateError.vue';
+import StateLoading from '@/components/common/StateLoading.vue';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
+import { useConsentStore } from '@/stores/consent';
 import { formatCourtDate, calculateDataProgress, formatWon } from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
+import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
 
 const router = useRouter();
 const store = usePersonalMissionChallengeStore();
+const consentStore = useConsentStore();
 
 const isConsentOpen = ref(false);
+const isConsentSubmitting = ref(false);
+const consentError = ref('');
+const pageError = ref('');
 const isTangiSheetOpen = ref(false);
 const isVerdictOpen = ref(false);
 const showTutorial = ref(false);
@@ -47,13 +57,29 @@ function afterOverlayClosed(callback) {
     window.addEventListener('popstate', callback, { once: true });
 }
 
-onMounted(() => {
+onMounted(async () => {
     store.hydrate();
 
-    if (!store.hasAgreed) {
+    try {
+        await consentStore.loadMyConsents();
+        const challengeConsent = consentStore.myConsents.find((item) => item.type === 'CHALLENGE');
+        const consentState = resolveChallengeConsentState(challengeConsent);
+        store.setConsentState(consentState);
+
+        if (consentState !== CHALLENGE_CONSENT_STATE.FIRST) {
+            await store.loadTodayMission();
+        }
+    } catch (err) {
+        store.consentState = 'ERROR';
+        pageError.value = err.message ?? '챌린지 정보를 불러오지 못했어요.';
+    }
+
+    if (store.consentState === CHALLENGE_CONSENT_STATE.FIRST) {
         isConsentOpen.value = true;
         return;
     }
+
+    if (store.screenState === 'error' || store.screenState === 'withdrawn') return;
 
     if (!hasSeenPersonalTutorial()) {
         showTutorial.value = true;
@@ -65,10 +91,25 @@ onMounted(() => {
     }
 });
 
-function handleAgree() {
-    store.agree();
-    if (!hasSeenPersonalTutorial()) {
-        showTutorial.value = true;
+async function handleAgree() {
+    if (isConsentSubmitting.value) {
+        return;
+    }
+    isConsentSubmitting.value = true;
+    consentError.value = '';
+    try {
+        await consentStore.save('CHALLENGE', [{ type: 'CHALLENGE', agreed: true }]);
+        store.agree();
+        isConsentOpen.value = false;
+        if (!hasSeenPersonalTutorial()) {
+            afterOverlayClosed(() => {
+                showTutorial.value = true;
+            });
+        }
+    } catch (err) {
+        consentError.value = err.message ?? '챌린지 참여 동의를 저장하지 못했어요.';
+    } finally {
+        isConsentSubmitting.value = false;
     }
 }
 
@@ -102,6 +143,10 @@ function openPersonalRanking() {
     router.push({ name: 'personalRanking' });
 }
 
+function openConsentManage() {
+    router.push({ name: 'myConsents' });
+}
+
 function resetDemo() {
     store.resetDemo();
     isConsentOpen.value = true;
@@ -122,7 +167,12 @@ function setDemoFail() {
     <div class="personal-home">
         <!-- 오버레이 -->
         <PersonalTutorialOverlay v-model="showTutorial" @complete="onTutorialComplete" />
-        <PersonalMissionConsentSheet v-model="isConsentOpen" @agree="handleAgree" />
+        <PersonalMissionConsentSheet
+            v-model="isConsentOpen"
+            :loading="isConsentSubmitting"
+            :error-message="consentError"
+            @agree="handleAgree"
+        />
         <PersonalTangiSheet
             v-model="isTangiSheetOpen"
             :current-prosecutor-id="store.selectedProsecutorId"
@@ -162,10 +212,46 @@ function setDemoFail() {
             compact-title="아직 수사할 증거가<br>모이지 않았습니다"
         />
 
+        <PersonalCourtHeader
+            v-else-if="store.screenState === 'withdrawn'"
+            :court-image="courtSupreme"
+            :date="shortDate"
+            compact
+            compact-title="챌린지 참여가<br>중지되었어요"
+        />
+
         <!-- 메인 컨텐츠 -->
         <main class="personal-home__content">
+            <StateLoading v-if="store.screenState === 'loading'" />
+
+            <StateError
+                v-else-if="store.screenState === 'error'"
+                title="챌린지 정보를 불러오지 못했어요"
+                :message="pageError"
+                :retryable="false"
+            />
+
+            <StateEmpty
+                v-else-if="store.screenState === 'withdrawn'"
+                title="챌린지 참여가 중지되었어요"
+                description="다시 참여하려면 마이페이지의 동의 관리에서 챌린지 동의를 변경해주세요."
+            >
+                <template #action>
+                    <BaseButton variant="secondary" @click="openConsentManage">
+                        동의 관리로 이동
+                    </BaseButton>
+                </template>
+            </StateEmpty>
+
             <!-- 화면 01: 기본 (진행 중) -->
             <template v-if="store.screenState === 'active' || store.screenState === 'verdict'">
+                <div
+                    v-if="store.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN"
+                    class="personal-home__withdrawn-notice"
+                >
+                    챌린지 동의를 철회해 오늘 미션까지만 확인할 수 있어요. 내일부터 새 미션이
+                    배정되지 않아요.
+                </div>
                 <PersonalBriefingCard
                     :category-name="store.briefing.categoryName"
                     :alibi-condition="store.briefing.alibiCondition"
@@ -198,8 +284,21 @@ function setDemoFail() {
                 />
 
                 <div class="personal-home__verdict-info">
-                    <svg class="personal-home__gavel-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M14.5 3.5l6 6M4 20l6.5-6.5M2 22l2-2M14 4l-9.5 9.5c-.4.4-.4 1 0 1.4l4.1 4.1c.4.4 1 .4 1.4 0L19.5 9.5" />
+                    <svg
+                        class="personal-home__gavel-icon"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M14.5 3.5l6 6M4 20l6.5-6.5M2 22l2-2M14 4l-9.5 9.5c-.4.4-.4 1 0 1.4l4.1 4.1c.4.4 1 .4 1.4 0L19.5 9.5"
+                        />
                         <path d="M9.5 8.5l5 5" />
                     </svg>
                     <span>오늘 자정에 판정되고, 곧바로 내일 사건이 배정돼요</span>
@@ -233,43 +332,79 @@ function setDemoFail() {
                     <div class="personal-home__conditions-title">맞춤 사건이 열리는 조건</div>
                     <div class="personal-home__conditions-list">
                         <div class="personal-home__condition">
-                            <span class="personal-home__condition-icon personal-home__condition-icon--done">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                    stroke="var(--tt-success)" stroke-width="3" stroke-linecap="round"
-                                    stroke-linejoin="round">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--done"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-success)"
+                                    stroke-width="3"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
                                     <path d="M5 12.5l4.5 4.5L19 7" />
                                 </svg>
                             </span>
                             <span class="personal-home__condition-label">계좌 연동</span>
-                            <span class="personal-home__condition-value personal-home__condition-value--done">완료</span>
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--done"
+                                >완료</span
+                            >
                         </div>
                         <div class="personal-home__condition">
-                            <span class="personal-home__condition-icon personal-home__condition-icon--progress">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                    stroke="var(--tt-accent-deep)" stroke-width="2.2"
-                                    stroke-linecap="round" stroke-linejoin="round">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--progress"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-accent-deep)"
+                                    stroke-width="2.2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
                                     <circle cx="12" cy="12" r="8" />
                                     <path d="M12 8v4.5l3 1.8" />
                                 </svg>
                             </span>
-                            <span class="personal-home__condition-label">최근 28일 소비 데이터</span>
-                            <span class="personal-home__condition-value personal-home__condition-value--progress">
+                            <span class="personal-home__condition-label"
+                                >최근 28일 소비 데이터</span
+                            >
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--progress"
+                            >
                                 {{ store.dataRequirements.availableDays }}일째
                             </span>
                         </div>
                         <div class="personal-home__condition">
-                            <span class="personal-home__condition-icon personal-home__condition-icon--pending">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                    stroke="var(--tt-text-muted)" stroke-width="2.6"
-                                    stroke-linecap="round">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--pending"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-text-muted)"
+                                    stroke-width="2.6"
+                                    stroke-linecap="round"
+                                >
                                     <circle cx="6" cy="12" r="1" />
                                     <circle cx="12" cy="12" r="1" />
                                     <circle cx="18" cy="12" r="1" />
                                 </svg>
                             </span>
                             <span class="personal-home__condition-label">전체 소비 50건 확보</span>
-                            <span class="personal-home__condition-value personal-home__condition-value--pending">
-                                {{ store.dataRequirements.transactionCount }} / {{ store.dataRequirements.requiredTransactionCount }}
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--pending"
+                            >
+                                {{ store.dataRequirements.transactionCount }} /
+                                {{ store.dataRequirements.requiredTransactionCount }}
                             </span>
                         </div>
                     </div>
@@ -288,9 +423,16 @@ function setDemoFail() {
                     <span class="personal-home__common-badge">공통 사건 · 절대형</span>
                     <div class="personal-home__common-title">{{ store.commonMission.title }}</div>
                     <div class="personal-home__common-status">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                            stroke="var(--tt-success)" stroke-width="2.4" stroke-linecap="round"
-                            stroke-linejoin="round">
+                        <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--tt-success)"
+                            stroke-width="2.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
                             <circle cx="12" cy="12" r="8.5" />
                             <path d="M8.5 12.5l2.5 2.5 4.5-5" />
                         </svg>
@@ -308,9 +450,7 @@ function setDemoFail() {
 
         <!-- 데모 버튼 -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
-            <button type="button" class="personal-home__dev-btn" @click="resetDemo">
-                초기화
-            </button>
+            <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
             <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
                 미션 성공 팝업
             </button>
