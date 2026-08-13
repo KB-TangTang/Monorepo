@@ -75,49 +75,58 @@ class ConnectedAccountMapperTest {
     @org.junit.jupiter.api.DisplayName("가장 오래 동기화되지 않은 사용자(NULL 포함)부터 limit 만큼 돌려준다")
     void findUserIdsDueForSyncOrdersByOldestLastSyncFirst() {
         // 테스트용 사용자 생성 (transactional rollback 이므로 DB에 영구 기록 안 됨)
-        userMapper.insert(UserDto.builder()
-                .id(901L)
+        // UserMapper.insert 는 useGeneratedKeys="true" + keyProperty="id" 라서 id 는 insert SQL에
+        // 포함되지 않는다 — 빌더에 .id(...)를 미리 넣어도 무시된다. 로컬 변수에 담아 insert 후
+        // getId() 로 실제 생성된 PK를 읽어야 tbl_connected_account.fk_ca_user 를 만족한다.
+        UserDto user901 = UserDto.builder()
                 .socialProvider("TEST")
                 .providerUserId("test-user-901")
                 .email("test901@test.com")
                 .status("ACTIVE")
                 .difficultyId(1L)
-                .build());
-        userMapper.insert(UserDto.builder()
-                .id(902L)
+                .build();
+        userMapper.insert(user901);
+
+        UserDto user902 = UserDto.builder()
                 .socialProvider("TEST")
                 .providerUserId("test-user-902")
                 .email("test902@test.com")
                 .status("ACTIVE")
                 .difficultyId(1L)
-                .build());
-        userMapper.insert(UserDto.builder()
-                .id(903L)
+                .build();
+        userMapper.insert(user902);
+
+        UserDto user903 = UserDto.builder()
                 .socialProvider("TEST")
                 .providerUserId("test-user-903")
                 .email("test903@test.com")
                 .status("ACTIVE")
                 .difficultyId(1L)
-                .build());
+                .build();
+        userMapper.insert(user903);
 
+        // is_active 는 tbl_connected_account 에 NOT NULL DEFAULT 1 이지만, insert 문이 항상
+        // #{isActive} 를 명시적으로 채워 넣으므로 애플리케이션이 값을 안 주면 DEFAULT 가 아니라
+        // 명시적 NULL 이 들어가 NOT NULL 제약을 그대로 위반한다 — 반드시 명시한다.
+        // findUserIdsDueForSync 도 WHERE is_active = 1 로 걸러내므로 빠지면 결과에서도 안 잡힌다.
         connectedAccountMapper.insert(ConnectedAccount.builder()
-                .userId(901L).accountNoEncrypted("MOCK-BANK-T901")
-                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL")
+                .userId(user901.getId()).accountNoEncrypted("MOCK-BANK-T901")
+                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL").isActive(true)
                 .lastSyncAt(LocalDateTime.now().minusDays(1))
                 .build());
         connectedAccountMapper.insert(ConnectedAccount.builder()
-                .userId(902L).accountNoEncrypted("MOCK-BANK-T902")
-                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL")
+                .userId(user902.getId()).accountNoEncrypted("MOCK-BANK-T902")
+                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL").isActive(true)
                 .lastSyncAt(null)   // 한 번도 동기화 안 됨 — 가장 먼저 나와야 한다
                 .build());
         connectedAccountMapper.insert(ConnectedAccount.builder()
-                .userId(903L).accountNoEncrypted("MOCK-BANK-T903")
-                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL")
+                .userId(user903.getId()).accountNoEncrypted("MOCK-BANK-T903")
+                .accountType("DEMAND_DEPOSIT").syncStatus("NORMAL").isActive(true)
                 .lastSyncAt(LocalDateTime.now().minusDays(5))
                 .build());
 
         List<Long> due = connectedAccountMapper.findUserIdsDueForSync(2);
 
-        assertEquals(List.of(902L, 903L), due);
+        assertEquals(List.of(user902.getId(), user903.getId()), due);
     }
 }
