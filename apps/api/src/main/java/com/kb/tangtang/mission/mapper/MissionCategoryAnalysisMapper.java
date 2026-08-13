@@ -1,6 +1,7 @@
 package com.kb.tangtang.mission.mapper;
 
 import com.kb.tangtang.mission.domain.CategorySpending;
+import com.kb.tangtang.mission.domain.CategoryMissionStatus;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -25,4 +26,7 @@ public interface MissionCategoryAnalysisMapper {
                                                    @Param("startDate") LocalDate startDate,
                                                    @Param("endDate") LocalDate endDate,
                                                    @Param("limit") int limit);
+
+    CategoryMissionStatus findLatestMissionStatus(@Param("userId") long userId,
+                                                  @Param("categoryId") long categoryId);
 }

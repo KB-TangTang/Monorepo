@@ -2,18 +2,11 @@
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/solid';
 import { tangiFieldVerify } from '@/fixtures/personalChallenge';
-import { getWatchlistStatusLabel } from '@/services/personalMissionFlow';
 
 defineProps({
     items: { type: Array, required: true },
-    weekRange: { type: String, required: true },
-    currentIndex: { type: Number, default: 1 },
-    totalCount: { type: Number, default: 3 },
-    comment: { type: String, default: '' },
-    uncategorizedWarning: { type: String, default: '' },
+    analysisPeriod: { type: String, default: '' },
 });
-
-defineEmits(['organize-click']);
 
 const isOpen = ref(false);
 
@@ -23,22 +16,24 @@ function toggle() {
 
 function statusBadgeClass(status) {
     switch (status) {
-        case 'CLEARED':
+        case 'SUCCESS':
             return 'watchlist__status--cleared';
-        case 'TODAY':
+        case 'PENDING':
             return 'watchlist__status--today';
+        case 'FAIL':
+            return 'watchlist__status--failed';
         default:
             return 'watchlist__status--pending';
     }
 }
 
-function barColorClass(status) {
-    switch (status) {
-        case 'TODAY':
-            return 'watchlist__bar-fill--today';
-        default:
-            return 'watchlist__bar-fill--muted';
-    }
+function statusLabel(item) {
+    if (item.result === 'PENDING') return '오늘 수사 중';
+    if (item.result === 'UNASSIGNED') return '대기';
+
+    const date = item.assignDate ? `${item.assignDate} ` : '';
+    const labels = { SUCCESS: '인정', FAIL: '기각' };
+    return `${date}${labels[item.result] ?? '대기'}`;
 }
 </script>
 
@@ -47,9 +42,9 @@ function barColorClass(status) {
         <div class="watchlist__trigger" @click="toggle">
             <img :src="tangiFieldVerify" alt="" class="watchlist__tangi" />
             <div class="watchlist__header-text">
-                <div class="watchlist__title">이번 주 요주의 대상</div>
+                <div class="watchlist__title">이번 요주의 대상</div>
                 <div class="watchlist__meta">
-                    {{ weekRange }} · {{ totalCount }}곳 중 {{ currentIndex }}번째
+                    {{ analysisPeriod }} · 전체 소비 대비 상위 {{ items.length }}개
                 </div>
             </div>
             <ChevronDownIcon
@@ -65,7 +60,7 @@ function barColorClass(status) {
                     v-for="item in items"
                     :key="item.name"
                     class="watchlist__item"
-                    :class="{ 'watchlist__item--muted': item.status !== 'TODAY' }"
+                    :class="{ 'watchlist__item--muted': item.result === 'UNASSIGNED' }"
                 >
                     <div class="watchlist__item-header">
                         <span class="watchlist__item-name">
@@ -74,29 +69,20 @@ function barColorClass(status) {
                         </span>
                         <span
                             class="watchlist__status"
-                            :class="statusBadgeClass(item.status)"
+                            :class="statusBadgeClass(item.result)"
                         >
-                            {{ getWatchlistStatusLabel(item.status, item.clearedDate) }}
+                            {{ statusLabel(item) }}
                         </span>
                     </div>
                     <div class="watchlist__bar">
                         <div
-                            class="watchlist__bar-fill"
-                            :class="barColorClass(item.status)"
-                            :style="{ width: item.progress + '%' }"
+                            class="watchlist__bar-fill watchlist__bar-fill--today"
+                            :style="{ width: item.ratio + '%' }"
                         ></div>
                     </div>
                 </div>
             </div>
 
-            <div v-if="comment" class="watchlist__comment">{{ comment }}</div>
-
-            <div v-if="uncategorizedWarning" class="watchlist__warning">
-                <span class="watchlist__warning-text">{{ uncategorizedWarning }}</span>
-                <button type="button" class="watchlist__organize" @click="$emit('organize-click')">
-                    거래내역 정리 ›
-                </button>
-            </div>
         </div>
         </Transition>
     </div>
@@ -213,6 +199,11 @@ function barColorClass(status) {
     color: var(--tt-accent);
 }
 
+.watchlist__status--failed {
+    background: var(--tt-danger-subtle);
+    color: var(--tt-danger);
+}
+
 .watchlist__status--pending {
     background: var(--tt-bg-fill);
     color: var(--tt-text-muted);
@@ -252,29 +243,6 @@ function barColorClass(status) {
     word-break: keep-all;
 }
 
-.watchlist__warning {
-    margin-top: 9px;
-    border-top: 1px dashed var(--tt-border);
-    padding-top: 9px;
-    font-size: var(--tt-fs-overline);
-    color: var(--tt-text-muted);
-    font-weight: var(--tt-fw-semibold);
-    line-height: 1.55;
-    white-space: pre-line;
-}
-
-.watchlist__organize {
-    display: inline;
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--tt-info);
-    font-weight: var(--tt-fw-black);
-    font-size: var(--tt-fs-overline);
-    white-space: nowrap;
-    cursor: pointer;
-    font-family: var(--tt-font-sans);
-}
 
 /* ── 슬라이드 트랜지션 ── */
 .watchlist-slide-enter-active,

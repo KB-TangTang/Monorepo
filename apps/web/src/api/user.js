@@ -41,6 +41,11 @@ export function updateMyNickname(nickname) {
     return http.patch('/users/me/nickname', { nickname });
 }
 
+/** 개인 미션 난이도를 저장한다. 오늘 배정분에는 소급 적용되지 않는다. */
+export function updateMyDifficulty(difficultyName) {
+    return http.patch('/users/me/difficulty', { difficultyName });
+}
+
 /**
  * 프로필 이미지 업로드. 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 함께 쓴다.
  *

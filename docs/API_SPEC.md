@@ -466,7 +466,10 @@ assignmentReason, guideMessage }` 형태다.
 | GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
 
 응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
-`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio }` 형태다.
+`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, latestMissionAssignDate, latestMissionResult }` 형태다.
+
+- `latestMissionAssignDate`, `latestMissionResult`는 해당 카테고리에서 가장 최근에 배정된 개인 미션의 날짜와 결과다.
+- 배정 이력이 없으면 두 값은 `null`이다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
 - 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
@@ -680,3 +683,10 @@ assignmentReason, guideMessage }` 형태다.
 | 코드 | HTTP | 상황 |
 |---|---|---|
 | `NOT_FOUND` | 400 | 없는 알림 또는 남의 알림 (구분해 알려주지 않는다) |
+
+## 개인 미션 난이도 변경
+
+`PATCH /api/users/me/difficulty`
+
+요청은 `{ "difficultyName": "EASY" }` 형식이며 `EASY`, `NORMAL`, `HARD` 중 하나를 보낸다.
+응답은 갱신된 `UserMeDto`다. 변경한 값은 이미 배정된 오늘 미션에는 소급하지 않고 다음 미션 배정부터 적용한다.

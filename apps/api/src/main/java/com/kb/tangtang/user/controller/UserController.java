@@ -5,6 +5,7 @@ import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.user.dto.UserMeDto;
+import com.kb.tangtang.user.dto.UserDifficultyUpdateRequestDto;
 import com.kb.tangtang.user.dto.UserNameUpdateRequestDto;
 import com.kb.tangtang.user.dto.UserNicknameUpdateRequestDto;
 import com.kb.tangtang.user.service.UserService;
@@ -69,6 +70,14 @@ public class UserController {
     public ApiResponse<UserMeDto> updateNickname(@LoginUser Long userId,
                                                  @RequestBody UserNicknameUpdateRequestDto request) {
         return ApiResponse.ok(userService.updateNickname(userId, request.getNickname()));
+    }
+
+    /** 개인 미션 난이도 변경. 이미 배정된 오늘 미션은 바꾸지 않는다. */
+    @PatchMapping("/me/difficulty")
+    public ApiResponse<UserMeDto> updateDifficulty(
+            @LoginUser Long userId,
+            @RequestBody UserDifficultyUpdateRequestDto request) {
+        return ApiResponse.ok(userService.updateDifficulty(userId, request.getDifficultyName()));
     }
 
     /**

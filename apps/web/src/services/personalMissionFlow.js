@@ -57,6 +57,44 @@ export function formatWon(amount) {
     return `${roundedAmount.toLocaleString('ko-KR')}원`;
 }
 
+export function formatMissionAssignmentSummary(mission) {
+    if (!mission) {
+        return '배정 없음';
+    }
+
+    const difficultyName = mission.difficultyName ?? '난이도 없음';
+    const targetRate = Number(mission.targetRate);
+    const rateLabel = Number.isFinite(targetRate) ? `${targetRate}%` : '절감률 없음';
+
+    return `${difficultyName} · ${rateLabel} · 목표 ${formatWon(mission.targetValue)}`;
+}
+
+export function toWatchCategoryModel(analysis) {
+    const topCategories = analysis?.topCategories ?? [];
+
+    return {
+        period: formatAnalysisPeriod(analysis?.analysisStartDate, analysis?.analysisEndDate),
+        items: topCategories.map((category) => ({
+            categoryId: category.categoryId,
+            name: category.categoryName ?? category.parentCategoryName ?? '',
+            ratio: Math.round(Number(category.spendingRatio) || 0),
+            assignDate: formatShortDate(category.latestMissionAssignDate),
+            result: category.latestMissionResult ?? 'UNASSIGNED',
+        })),
+    };
+}
+
+function formatAnalysisPeriod(startDate, endDate) {
+    if (!startDate || !endDate) return '';
+    return `${formatShortDate(startDate)} – ${formatShortDate(endDate)}`;
+}
+
+function formatShortDate(dateValue) {
+    if (!dateValue) return '';
+    const [, month, day] = dateValue.split('-');
+    return `${Number(month)}/${Number(day)}`;
+}
+
 /* ── v4 추가 함수 ──────────────────────────────────── */
 
 /**
