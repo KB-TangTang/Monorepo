@@ -48,6 +48,19 @@
         FOR UPDATE
     </select>
 
+    <select id="findQualifiedAt" resultType="java.time.LocalDateTime">
+        SELECT relative_mission_qualified_at
+        FROM tbl_user
+        WHERE id = #{userId}
+    </select>
+
+    <update id="markQualified">
+        UPDATE tbl_user
+        SET relative_mission_qualified_at = #{qualifiedAt}
+        WHERE id = #{userId}
+          AND relative_mission_qualified_at IS NULL
+    </update>
+
     <insert id="insertSnapshots">
         INSERT INTO tbl_user_mission_analysis (
             user_id,

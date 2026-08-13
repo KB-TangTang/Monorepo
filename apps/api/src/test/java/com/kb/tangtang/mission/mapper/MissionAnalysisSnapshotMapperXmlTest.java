@@ -26,6 +26,8 @@ class MissionAnalysisSnapshotMapperXmlTest {
 
         String namespace = MissionAnalysisSnapshotMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findPendingSnapshots"));
+        assertTrue(configuration.hasStatement(namespace + ".findQualifiedAt"));
+        assertTrue(configuration.hasStatement(namespace + ".markQualified"));
         assertTrue(configuration.hasStatement(namespace + ".insertSnapshots"));
     }
 }

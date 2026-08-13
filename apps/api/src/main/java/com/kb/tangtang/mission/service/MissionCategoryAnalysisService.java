@@ -37,6 +37,15 @@ public class MissionCategoryAnalysisService {
 
     @Transactional(readOnly = true)
     public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
+        return getCategoryAnalysis(userId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
+        return getCategoryAnalysis(userId, false);
+    }
+
+    private MissionCategoryAnalysisDto getCategoryAnalysis(long userId, boolean requireInitialQualification) {
         LocalDate endDateExclusive = LocalDate.now(clock);
         LocalDate startDate = endDateExclusive.minusDays(ANALYSIS_DAYS);
         LocalDate analysisEndDate = endDateExclusive.minusDays(1);
@@ -50,7 +59,7 @@ public class MissionCategoryAnalysisService {
         boolean requirementsMet = hasEnoughHistory
                 && transactionCount >= MIN_TRANSACTION_COUNT;
 
-        if (!requirementsMet) {
+        if (requireInitialQualification && !requirementsMet) {
             return result(startDate, analysisEndDate, transactionCount, false, List.of());
         }
 

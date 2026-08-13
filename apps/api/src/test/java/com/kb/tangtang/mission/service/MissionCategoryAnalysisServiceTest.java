@@ -97,6 +97,24 @@ class MissionCategoryAnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("최초 자격 획득 사용자는 최근 28일 거래가 50건 미만이어도 분석한다")
+    void qualifiedUserAnalyzesWithFewerThanFiftyTransactions() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.firstTransactionDate = LocalDate.of(2026, 8, 1);
+        mapper.transactionCount = 12;
+        mapper.totalConsumption = new BigDecimal("300000");
+        mapper.topCategories = List.of(row(17L, "식비", "배달앱", "120000", 4));
+
+        MissionCategoryAnalysisDto result = service(mapper)
+                .getCategoryAnalysisForQualifiedUser(USER_ID);
+
+        assertTrue(result.isRelativeEligible());
+        assertEquals(12, result.getTransactionCount());
+        assertEquals("배달앱", result.getTopCategories().get(0).getCategoryName());
+        assertEquals(1, mapper.findTopCategoriesCallCount);
+    }
+
+    @Test
     @DisplayName("정확히 28일과 50건을 충족하면 상대형 분석을 실행한다")
     void analyzesWhenRequirementsAreExactlyMet() {
         FakeMapper mapper = new FakeMapper();

@@ -12,12 +12,14 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionAnalysisSnapshotServiceTest {
@@ -28,6 +30,8 @@ class MissionAnalysisSnapshotServiceTest {
     private static class FakeSnapshotMapper implements MissionAnalysisSnapshotMapper {
         List<MissionAnalysisSnapshot> pendingSnapshots = List.of();
         final List<MissionAnalysisSnapshot> insertedSnapshots = new ArrayList<>();
+        LocalDateTime qualifiedAt;
+        LocalDateTime markedQualifiedAt;
 
         @Override
         public List<MissionAnalysisSnapshot> findPendingSnapshots(long userId) {
@@ -37,6 +41,18 @@ class MissionAnalysisSnapshotServiceTest {
         @Override
         public MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(long userId) {
             return pendingSnapshots.isEmpty() ? null : pendingSnapshots.get(0);
+        }
+
+        @Override
+        public LocalDateTime findQualifiedAt(long userId) {
+            return qualifiedAt;
+        }
+
+        @Override
+        public int markQualified(long userId, LocalDateTime qualifiedAt) {
+            markedQualifiedAt = qualifiedAt;
+            this.qualifiedAt = qualifiedAt;
+            return 1;
         }
 
         @Override
@@ -54,6 +70,7 @@ class MissionAnalysisSnapshotServiceTest {
     private static class StubCategoryAnalysisService extends MissionCategoryAnalysisService {
         MissionCategoryAnalysisDto result;
         int callCount;
+        int qualifiedCallCount;
 
         StubCategoryAnalysisService() {
             super((MissionCategoryAnalysisMapper) null);
@@ -62,6 +79,12 @@ class MissionAnalysisSnapshotServiceTest {
         @Override
         public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
             callCount++;
+            return result;
+        }
+
+        @Override
+        public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
+            qualifiedCallCount++;
             return result;
         }
     }
@@ -116,6 +139,27 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(new BigDecimal("17.89"), mapper.insertedSnapshots.get(0).getSpendingRatio());
         assertEquals(4, mapper.insertedSnapshots.get(0).getTransactionCount());
         assertEquals(1, analysisService.callCount);
+        assertEquals(0, analysisService.qualifiedCallCount);
+        assertEquals(TODAY.atStartOfDay(), mapper.markedQualifiedAt);
+    }
+
+    @Test
+    @DisplayName("자격 획득 시각이 있으면 최초 50건 조건 없이 재분석한다")
+    void qualifiedUserUsesAnalysisWithoutInitialRequirement() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        mapper.qualifiedAt = LocalDateTime.of(2026, 7, 1, 10, 0);
+        StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.result = eligibleAnalysis(List.of(
+                category(1, 18L, "쇼핑", "패션", "120000", 12, "40.00")));
+
+        MissionAnalysisSnapshotDto result = service(mapper, analysisService)
+                .getOrCreateSnapshot(USER_ID);
+
+        assertTrue(result.isAvailable());
+        assertEquals(0, analysisService.callCount);
+        assertEquals(1, analysisService.qualifiedCallCount);
+        assertEquals(1, mapper.insertedSnapshots.size());
+        assertNull(mapper.markedQualifiedAt);
     }
 
     @Test
