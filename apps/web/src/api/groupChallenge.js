@@ -171,10 +171,15 @@ export async function fetchGroupChallengeDetail(groupId) {
  *
  * 목데이터 모드에서도 실제 서버로 나간다. 배치는 DB 를 건드리는 일이라 흉내낼 것이 없다.
  *
+ * @param {string} [date] 기준일 `yyyy-MM-dd`. 생략하면 서버가 오늘로 잡는다.
+ *   **조회 조건(`start_date <= 기준일`)에만 쓰인다** — 시계를 되감는 게 아니라서
+ *   상태 변경과 알림 발송은 호출한 지금 일어난다.
  * @returns {{ batch: string, baseDate: string, affected: number }} affected = 상태가 바뀐 그룹 수
  */
-export async function runGroupChallengeStatusBatch() {
-    return http.post('/dev/batches/group-challenge-status');
+export async function runGroupChallengeStatusBatch(date) {
+    return http.post('/dev/batches/group-challenge-status', null, {
+        params: date ? { date } : {},
+    });
 }
 
 /**

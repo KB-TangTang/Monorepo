@@ -8,6 +8,7 @@ import GroupActiveCard from '@/components/challenge/group/GroupActiveCard.vue';
 import GroupEndedCard from '@/components/challenge/group/GroupEndedCard.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
+import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { fetchMyGroupChallenges } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import mascotCheering from '@/assets/images/emotions/09_cheering.png';
@@ -138,6 +139,12 @@ function goToDetail(challenge) {
         <GroupJoinCodeSheet v-model="showJoinSheet" />
 
         <DevDataSourceFab />
+
+        <!--
+          DEV: 시작 배치 즉시 실행. 세 탭이 한 화면에 있어 전이 결과(시작 전 → 진행 중)를
+          바로 확인할 수 있는 자리라 홈보다 여기가 본거지다. 실행 후 세 목록을 함께 갱신한다.
+        -->
+        <DevBatchTriggerFab :offset="56" @done="loadAll" />
     </main>
 </template>
 
