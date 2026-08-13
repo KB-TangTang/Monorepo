@@ -100,6 +100,7 @@ async function handleAgree() {
     try {
         await consentStore.save('CHALLENGE', [{ type: 'CHALLENGE', agreed: true }]);
         store.agree();
+        await store.waitForTodayMission();
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {

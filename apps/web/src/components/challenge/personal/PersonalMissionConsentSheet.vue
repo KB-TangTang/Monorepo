@@ -1,8 +1,9 @@
 <script setup>
+import { ref, watch } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 
-defineProps({
+const props = defineProps({
     modelValue: {
         type: Boolean,
         required: true,
@@ -18,8 +19,21 @@ defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'agree', 'later']);
+const hasAgreed = ref(false);
+
+watch(
+    () => props.modelValue,
+    (isOpen) => {
+        if (isOpen) {
+            hasAgreed.value = false;
+        }
+    },
+);
 
 function agree() {
+    if (!hasAgreed.value || props.loading) {
+        return;
+    }
     emit('agree');
 }
 
@@ -100,7 +114,7 @@ function later() {
             </section>
 
             <label class="consent__agreement">
-                <input type="checkbox" checked disabled />
+                <input v-model="hasAgreed" type="checkbox" :disabled="loading" />
 
                 <span>
                     <strong>챌린지 참여에 동의합니다.</strong>
@@ -110,7 +124,7 @@ function later() {
 
             <p v-if="errorMessage" class="consent__error">{{ errorMessage }}</p>
 
-            <BaseButton size="lg" block :loading="loading" @click="agree">
+            <BaseButton size="lg" block :disabled="!hasAgreed" :loading="loading" @click="agree">
                 동의하고 챌린지 시작
             </BaseButton>
 

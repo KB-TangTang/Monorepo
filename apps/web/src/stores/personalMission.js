@@ -27,6 +27,12 @@ const STORAGE_KEY = 'tangtang-personal-mission-challenge';
  */
 const LEGACY_PROSECUTOR_ID = { TOUGH: 'HARD', STRICT: 'NORMAL', LENIENT: 'EASY' };
 const DEFAULT_PROSECUTOR_ID = 'NORMAL';
+const TODAY_MISSION_RETRY_COUNT = 5;
+const TODAY_MISSION_RETRY_DELAY_MS = 200;
+
+function delay(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
 
 function normalizeProsecutorId(id) {
     return LEGACY_PROSECUTOR_ID[id] ?? id ?? DEFAULT_PROSECUTOR_ID;
@@ -145,13 +151,26 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         async loadTodayMission() {
             try {
                 this.todayMission = await fetchTodayMission();
+                return true;
             } catch (error) {
                 if (error.code === 'TODAY_MISSION_NOT_FOUND') {
                     this.todayMission = null;
-                    return;
+                    return false;
                 }
                 throw error;
             }
+        },
+
+        async waitForTodayMission() {
+            for (let attempt = 0; attempt < TODAY_MISSION_RETRY_COUNT; attempt += 1) {
+                if (await this.loadTodayMission()) {
+                    return true;
+                }
+                if (attempt < TODAY_MISSION_RETRY_COUNT - 1) {
+                    await delay(TODAY_MISSION_RETRY_DELAY_MS);
+                }
+            }
+            return false;
         },
 
         selectProsecutor(prosecutorId) {
