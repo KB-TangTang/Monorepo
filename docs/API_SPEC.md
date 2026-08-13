@@ -338,6 +338,7 @@
 - 작업 상태는 `PENDING → PROCESSING → COMPLETED`(정상 처리, 개별 거래가 분류 안 됐어도 정상 종료) 또는 `PROCESSING → FAILED`(API 호출 자체가 실패)로 전이한다. **`FAILED` 작업은 이번 범위에서 자동 재시도하지 않는다** — 후속 작업. `PROCESSING` 선점과 `FAILED` 마감은 둘 다 `LlmCategorizationJobStateService`가 `REQUIRES_NEW` 독립 트랜잭션으로 커밋한다(처리 트랜잭션이 롤백돼도 `FAILED`가 살아남아야 재실행 루프에 빠지지 않고, 선점이 먼저 커밋돼 행 잠금을 놓아야 그 `FAILED` 기록이 잠금 대기 없이 즉시 반영된다).
 - `openai.api.key`는 로컬에서는 `application-local.properties`에만 둔다(팀 공용 키는 팀 채널에서 배포). 도커(`APP_ENV=docker`)에서는 `application-docker.properties`가 `${OPENAI_API_KEY}` 환경변수를 참조하며, 실제 값은 `.env` → `docker-compose.yml`을 거쳐 주입된다.
 - OpenAI 호출은 전용 `RestTemplate`(`OpenAiClientConfig.openAiRestTemplate`)을 쓰며 `openai.api.connect-timeout-ms`(기본 10초)·`openai.api.read-timeout-ms`(기본 30초) 타임아웃이 걸려 있다.
+- **토큰 최적화는 이번 범위 밖**(후속 작업, 2026-08-13 논의): 지금은 작업(job) 1건마다 `classify()`를 한 번씩 호출해, 매 호출마다 카테고리 전체 목록을 새로 실어 보낸다. 처리량이 늘어나면 한 틱에서 여러 job의 거래를 모아 한 번의 `classify()` 호출로 묶어(카테고리 목록을 한 번만 전송) 토큰을 아끼는 걸 고려한다 — 단, 지금의 "job 1건 = 호출 1번" 전제로 짜인 스케줄러·작업 단위 구조를 바꿔야 하는 작업이라 별도 설계가 필요하다.
 
 ## 마이페이지 (이슈 #57)
 
