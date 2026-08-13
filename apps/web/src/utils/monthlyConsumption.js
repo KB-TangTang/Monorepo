@@ -54,7 +54,7 @@ function summarizeParentCategories(categories) {
     return { chartCategories: [...topCategories, otherCategory], remainingCategories };
 }
 
-export function composeMonthlyConsumptionReport(summary, trend, categoryReport) {
+export function composeMonthlyConsumptionReport(summary, trend, categoryReport, aiAnalysis = null) {
     const { chartCategories: parentCategories, remainingCategories } = summarizeParentCategories(
         categoryReport.parentCategories,
     );
@@ -82,6 +82,9 @@ export function composeMonthlyConsumptionReport(summary, trend, categoryReport) 
         totalSpent: summary.totalSpent,
         monthOverMonthRate: summary.monthOverMonthRate,
         fixedExpenseCandidateCount: summary.fixedExpenseCandidateCount,
+        aiAnalysisStatus: aiAnalysis?.status ?? 'NOT_REQUESTED',
+        feedbacks: Array.isArray(aiAnalysis?.feedbacks) ? aiAnalysis.feedbacks.slice(0, 3) : [],
+        savingsAnalogy: aiAnalysis?.savingsAnalogy ?? null,
         monthlyTrend: trend.items.map((item) => ({
             yearMonth: item.yearMonth,
             month: Number(item.yearMonth.slice(5)),
@@ -98,6 +101,35 @@ export function composeMonthlyConsumptionReport(summary, trend, categoryReport) 
                     `${category.parentCategoryId ?? 'unclassified'}:${category.parentCategoryName}`,
                 ) ?? 'muted',
         })),
+    };
+}
+
+export function resolveMonthlySavingsAnalogyCard(report) {
+    if (report.savingsAnalogy) {
+        return {
+            variant: 'saving',
+            eyebrow: '이번 달의 절약 한 장면',
+            title: report.savingsAnalogy,
+            description: '이 흐름, 다음 달에도 이어가봐요.',
+        };
+    }
+
+    if (report.hasPreviousComparison && Number(report.monthOverMonthRate) > 0) {
+        return {
+            variant: 'increase',
+            eyebrow: '소비 흐름 점검',
+            title: '지난달보다 소비가 늘어났어요',
+            description: '가장 자주 쓴 항목부터 가볍게 점검해봐요.',
+        };
+    }
+
+    return {
+        variant: 'start',
+        eyebrow: '다음 달을 위한 한 걸음',
+        title: '탕이와 함께 절약해봐요',
+        description: report.hasPreviousComparison
+            ? '이번 달 소비 흐름을 살피고, 다음 목표를 정해보자.'
+            : '이번 달 소비를 기준으로 다음 달 목표를 세워보자.',
     };
 }
 

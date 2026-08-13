@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
 public class OpenAiMonthlyAnalysisClient implements MonthlyAiAnalysisProvider {
 
     private static final int MAX_FEEDBACK_COUNT = 3;
-    private static final int MAX_FEEDBACK_LENGTH = 240;
+    private static final int MAX_FEEDBACK_LENGTH = 100;
     private static final int MAX_SAVINGS_ANALOGY_ITEM_LENGTH = 80;
     private static final int MAX_SAVINGS_ANALOGY_UNIT_LENGTH = 20;
     private static final long MIN_SAVINGS_ANALOGY_QUANTITY = 3;
@@ -45,6 +45,9 @@ public class OpenAiMonthlyAnalysisClient implements MonthlyAiAnalysisProvider {
     private static final long PREFERRED_MAX_SAVINGS_ANALOGY_QUANTITY = 15;
     private static final Pattern KOREAN_ITEM = Pattern.compile("^[가-힣]+(?: [가-힣]+)*$");
     private static final Pattern KOREAN_UNIT = Pattern.compile("^[가-힣]+$");
+    private static final Pattern DIRECT_MONETARY_AMOUNT = Pattern.compile(
+            "(?:[₩￦$]\\s*\\d|(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\s*(?:KRW|원|만원|만\\s*원|천원|천\\s*원|억\\s*원?|만|천)))",
+            Pattern.CASE_INSENSITIVE);
     private static final List<SavingsAnalogyCandidate> SAVINGS_ANALOGY_CANDIDATES = List.of(
             new SavingsAnalogyCandidate("생수", 1_500, "병"),
             new SavingsAnalogyCandidate("컵라면", 2_000, "개"),
@@ -197,7 +200,16 @@ public class OpenAiMonthlyAnalysisClient implements MonthlyAiAnalysisProvider {
                 .append("Use only the supplied aggregate data. ")
                 .append("Never infer or request identity, account, card, merchant, or transaction details. ")
                 .append("feedbacks must contain one to three standalone Korean messages for the user, ")
-                .append("not titles, labels, categories, or objects. ");
+                .append("not titles, labels, categories, or objects. ")
+                .append("Use a warm, calm, practical tone that is neither stern nor overly casual. ")
+                .append("Write in friendly Korean banmal, using natural endings such as '~해봐', '~해보자', or '~좋아'. ")
+                .append("Do not use formal or polite Korean endings such as '~요', '~세요', or '~습니다'. ")
+                .append("Give concise asset-management guidance about spending behavior, not a numerical recap. ")
+                .append("Never include exact monetary amounts, total spending, category subtotals, currency symbols, or amount abbreviations in feedbacks, even when they appear in the supplied data. ")
+                .append("You may name a category only when it makes the next action clearer; never state that category's amount. ")
+                .append("If supplied data supports a positive behavior, acknowledge it naturally in one feedback; otherwise do not invent praise. ")
+                .append("Each feedback must be one or two short sentences, no more than 100 characters, and never a long paragraph. ")
+                .append("When a comparison is supplied, it is only with the immediately preceding month; never describe it as a year-over-year or annual comparison. ");
         if (isSavingsEligible(input)) {
             instructions.append("Return savingsAnalogy as one object with savingsAnalogyItem, savingsAnalogyQuantity, ")
                     .append("savingsAnalogyReferenceUnitPrice, and savingsAnalogyUnit. ")
@@ -267,7 +279,9 @@ public class OpenAiMonthlyAnalysisClient implements MonthlyAiAnalysisProvider {
                     throw unavailable();
                 }
                 String message = feedback.asText().trim();
-                if (message.isEmpty() || message.length() > MAX_FEEDBACK_LENGTH) {
+                if (message.isEmpty() || message.length() > MAX_FEEDBACK_LENGTH
+                        || message.contains("\n") || message.contains("\r")
+                        || DIRECT_MONETARY_AMOUNT.matcher(message).find()) {
                     throw unavailable();
                 }
                 feedbacks.add(message);

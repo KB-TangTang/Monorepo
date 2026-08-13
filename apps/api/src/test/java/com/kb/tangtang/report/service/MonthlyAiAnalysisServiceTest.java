@@ -48,13 +48,18 @@ class MonthlyAiAnalysisServiceTest {
     @Mock
     private MonthlyAiAnalysisStateService stateService;
 
+    @Mock
+    private MonthlyAiAnalysisSnapshotService snapshotService;
+
     private MonthlyAiAnalysisService service;
 
     @BeforeEach
     void setUp() {
         ZoneId zoneId = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(LocalDate.of(2026, 8, 12).atStartOfDay(zoneId).toInstant(), zoneId);
-        service = new MonthlyAiAnalysisService(mapper, provider, stateService, new ObjectMapper(), clock);
+        ObjectMapper objectMapper = new ObjectMapper();
+        service = new MonthlyAiAnalysisService(mapper, provider, stateService, snapshotService,
+                new MonthlyAiAnalysisResultReader(objectMapper), objectMapper, clock);
         when(mapper.findUserCreatedDate(USER_ID)).thenReturn(LocalDate.of(2026, 3, 15));
     }
 
@@ -71,6 +76,7 @@ class MonthlyAiAnalysisServiceTest {
         assertEquals(List.of("식비 지출을 점검해 보세요."), result.getFeedbacks());
         assertEquals("이번달 아낀 128,000원은 카페라떼 26잔", result.getSavingsAnalogy());
         verifyNoInteractions(provider);
+        verifyNoInteractions(snapshotService);
         verify(stateService, never()).claim(anyLong(), any(), any(), any(), any(), any());
     }
 
@@ -83,7 +89,7 @@ class MonthlyAiAnalysisServiceTest {
                 .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(1);
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
                 .yearMonth("2026-07")
                 .feedbacks(List.of("고정지출을 제외한 소비가 줄었어요."))
@@ -105,6 +111,7 @@ class MonthlyAiAnalysisServiceTest {
         assertFalse(new ObjectMapper().valueToTree(input).has("userId"));
         assertFalse(new ObjectMapper().valueToTree(input).has("merchantName"));
         assertFalse(new ObjectMapper().valueToTree(input).has("accountNumber"));
+        verify(snapshotService).savePendingSnapshot(USER_ID, "2026-07");
         verify(stateService).complete(USER_ID, "2026-07",
                 "[\"고정지출을 제외한 소비가 줄었어요.\"]",
                 "이번달 아낀 128,000원은 치킨 5마리");
@@ -115,12 +122,6 @@ class MonthlyAiAnalysisServiceTest {
     void rejectsInProgressGeneration() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "IN_PROGRESS"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
-                .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
-        when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(0);
-
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.generate(USER_ID, "2026-07"));
 
@@ -138,7 +139,7 @@ class MonthlyAiAnalysisServiceTest {
                 .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(1);
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenThrow(new AiProviderException("TOO_MANY_REQUESTS",
                 "AI 요청이 많아요.", HttpStatus.TOO_MANY_REQUESTS));
 
@@ -159,7 +160,7 @@ class MonthlyAiAnalysisServiceTest {
         when(mapper.sumNetSpending(eq(USER_ID), any(), any())).thenReturn(new BigDecimal("50000"));
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
         when(stateService.claim(eq(USER_ID), eq("2026-03"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(1);
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
                 .yearMonth("2026-03")
                 .feedbacks(List.of("이번 달 소비 흐름을 확인해 보세요."))
@@ -195,7 +196,7 @@ class MonthlyAiAnalysisServiceTest {
                 .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(1);
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
                 .yearMonth("2026-07")
                 .feedbacks(List.of("이번 달 지출을 점검해 보세요."))
@@ -206,7 +207,8 @@ class MonthlyAiAnalysisServiceTest {
         service.generate(USER_ID, "2026-07");
 
         verify(stateService).claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any());
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any());
+        verify(snapshotService).savePendingSnapshot(USER_ID, "2026-07");
         verify(provider).generate(any());
     }
 
@@ -217,7 +219,7 @@ class MonthlyAiAnalysisServiceTest {
                 .thenReturn(currentMonthSpent, previousMonthSpent);
         when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
-                eq("gpt-5-nano"), eq("monthly-report-ai-v7"), any())).thenReturn(1);
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
                 .yearMonth("2026-07")
                 .feedbacks(List.of("이번 달 소비 흐름을 확인해 보세요."))

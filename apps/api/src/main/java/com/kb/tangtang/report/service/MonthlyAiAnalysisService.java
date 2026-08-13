@@ -1,6 +1,5 @@
 package com.kb.tangtang.report.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisCategory;
@@ -36,12 +35,14 @@ public class MonthlyAiAnalysisService {
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_FAILED = "FAILED";
     private static final String PROVIDER_OPENAI = "OPENAI";
-    private static final String PROMPT_VERSION = "monthly-report-ai-v7";
+    private static final String PROMPT_VERSION = "monthly-report-ai-v10";
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
 
     private final MonthlyReportMapper monthlyReportMapper;
     private final MonthlyAiAnalysisProvider provider;
     private final MonthlyAiAnalysisStateService stateService;
+    private final MonthlyAiAnalysisSnapshotService snapshotService;
+    private final MonthlyAiAnalysisResultReader resultReader;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final String model;
@@ -50,28 +51,38 @@ public class MonthlyAiAnalysisService {
     public MonthlyAiAnalysisService(MonthlyReportMapper monthlyReportMapper,
                                     MonthlyAiAnalysisProvider provider,
                                     MonthlyAiAnalysisStateService stateService,
+                                    MonthlyAiAnalysisSnapshotService snapshotService,
+                                    MonthlyAiAnalysisResultReader resultReader,
                                     ObjectMapper objectMapper,
                                     @Value("${openai.model:gpt-5-nano}") String model) {
-        this(monthlyReportMapper, provider, stateService, objectMapper, Clock.systemDefaultZone(), model);
+        this(monthlyReportMapper, provider, stateService, snapshotService, resultReader,
+                objectMapper, Clock.systemDefaultZone(), model);
     }
 
     MonthlyAiAnalysisService(MonthlyReportMapper monthlyReportMapper,
                              MonthlyAiAnalysisProvider provider,
                              MonthlyAiAnalysisStateService stateService,
+                             MonthlyAiAnalysisSnapshotService snapshotService,
+                             MonthlyAiAnalysisResultReader resultReader,
                              ObjectMapper objectMapper,
                              Clock clock) {
-        this(monthlyReportMapper, provider, stateService, objectMapper, clock, "gpt-5-nano");
+        this(monthlyReportMapper, provider, stateService, snapshotService, resultReader,
+                objectMapper, clock, "gpt-5-nano");
     }
 
     MonthlyAiAnalysisService(MonthlyReportMapper monthlyReportMapper,
                              MonthlyAiAnalysisProvider provider,
                              MonthlyAiAnalysisStateService stateService,
+                             MonthlyAiAnalysisSnapshotService snapshotService,
+                             MonthlyAiAnalysisResultReader resultReader,
                              ObjectMapper objectMapper,
                              Clock clock,
                              String model) {
         this.monthlyReportMapper = monthlyReportMapper;
         this.provider = provider;
         this.stateService = stateService;
+        this.snapshotService = snapshotService;
+        this.resultReader = resultReader;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.model = model;
@@ -79,9 +90,26 @@ public class MonthlyAiAnalysisService {
 
     public MonthlyAiAnalysisDto generate(long userId, String rawYearMonth) {
         ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
-        MonthlyAiAnalysisSnapshot initialSnapshot = requireSnapshot(userId, period.yearMonth);
-        if (STATUS_COMPLETED.equals(initialSnapshot.getAiAnalysisStatus())) {
-            return readStoredResult(initialSnapshot, period.yearMonth.toString());
+        MonthlyAiAnalysisSnapshot initialSnapshot = monthlyReportMapper.findAiAnalysisSnapshot(
+                userId, period.yearMonth.toString());
+        if (initialSnapshot != null && STATUS_COMPLETED.equals(initialSnapshot.getAiAnalysisStatus())) {
+            return resultReader.readCompleted(initialSnapshot, period.yearMonth.toString());
+        }
+        if (initialSnapshot != null && STATUS_IN_PROGRESS.equals(initialSnapshot.getAiAnalysisStatus())) {
+            throwInProgress();
+        }
+        if (initialSnapshot == null
+                || STATUS_NOT_REQUESTED.equals(initialSnapshot.getAiAnalysisStatus())
+                || STATUS_FAILED.equals(initialSnapshot.getAiAnalysisStatus())) {
+            snapshotService.savePendingSnapshot(userId, period.yearMonth.toString());
+        }
+
+        MonthlyAiAnalysisSnapshot snapshot = requireSnapshot(userId, period.yearMonth);
+        if (STATUS_COMPLETED.equals(snapshot.getAiAnalysisStatus())) {
+            return resultReader.readCompleted(snapshot, period.yearMonth.toString());
+        }
+        if (STATUS_IN_PROGRESS.equals(snapshot.getAiAnalysisStatus())) {
+            throwInProgress();
         }
 
         MonthlyAiAnalysisInput input = buildInput(userId, period);
@@ -102,7 +130,12 @@ public class MonthlyAiAnalysisService {
                         "AI 분석 결과를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
                         HttpStatus.SERVICE_UNAVAILABLE);
             }
-            return result;
+            return MonthlyAiAnalysisDto.builder()
+                    .yearMonth(period.yearMonth.toString())
+                    .status(STATUS_COMPLETED)
+                    .feedbacks(result.getFeedbacks())
+                    .savingsAnalogy(result.getSavingsAnalogy())
+                    .build();
         } catch (AiProviderException ex) {
             stateService.fail(userId, period.yearMonth.toString(), ex.getCode());
             throw new BusinessException(ex.getCode(), ex.getMessage(), ex.getHttpStatus());
@@ -117,7 +150,7 @@ public class MonthlyAiAnalysisService {
     private MonthlyAiAnalysisDto resolveUnclaimedGeneration(long userId, YearMonth yearMonth) {
         MonthlyAiAnalysisSnapshot currentSnapshot = requireSnapshot(userId, yearMonth);
         if (STATUS_COMPLETED.equals(currentSnapshot.getAiAnalysisStatus())) {
-            return readStoredResult(currentSnapshot, yearMonth.toString());
+            return resultReader.readCompleted(currentSnapshot, yearMonth.toString());
         }
         if (STATUS_IN_PROGRESS.equals(currentSnapshot.getAiAnalysisStatus())) {
             throw new BusinessException("AI_ANALYSIS_IN_PROGRESS",
@@ -133,6 +166,11 @@ public class MonthlyAiAnalysisService {
             throw new BusinessException("NOT_FOUND", "월간 리포트 스냅샷을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
         return snapshot;
+    }
+
+    private void throwInProgress() {
+        throw new BusinessException("AI_ANALYSIS_IN_PROGRESS",
+                "해당 월의 AI 분석이 생성 중입니다.", HttpStatus.CONFLICT);
     }
 
     private MonthlyAiAnalysisInput buildInput(long userId, ReportPeriod period) {
@@ -168,34 +206,6 @@ public class MonthlyAiAnalysisService {
                 .savingsAmount(savingsAmount)
                 .categories(categories)
                 .build();
-    }
-
-    private MonthlyAiAnalysisDto readStoredResult(MonthlyAiAnalysisSnapshot snapshot, String yearMonth) {
-        try {
-            JsonNode feedbacksNode = objectMapper.readTree(snapshot.getAiComment());
-            if (!feedbacksNode.isArray() || feedbacksNode.size() < 1 || feedbacksNode.size() > 3) {
-                throw new IllegalArgumentException();
-            }
-            List<String> feedbacks = new ArrayList<>();
-            for (JsonNode feedback : feedbacksNode) {
-                if (!feedback.isTextual() || feedback.asText().trim().isEmpty()) {
-                    throw new IllegalArgumentException();
-                }
-                feedbacks.add(feedback.asText().trim());
-            }
-            if (snapshot.getCompareComment() != null && snapshot.getCompareComment().isBlank()) {
-                throw new IllegalArgumentException();
-            }
-            return MonthlyAiAnalysisDto.builder()
-                    .yearMonth(yearMonth)
-                    .feedbacks(feedbacks)
-                    .savingsAnalogy(snapshot.getCompareComment())
-                    .build();
-        } catch (Exception ex) {
-            throw new BusinessException("AI_PROVIDER_UNAVAILABLE",
-                    "저장된 AI 분석 결과를 읽지 못했어요. 다시 생성해 주세요.",
-                    HttpStatus.SERVICE_UNAVAILABLE);
-        }
     }
 
     private ReportPeriod validateReportPeriod(long userId, String rawYearMonth) {
