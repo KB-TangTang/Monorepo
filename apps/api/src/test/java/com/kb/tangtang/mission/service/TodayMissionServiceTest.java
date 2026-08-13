@@ -2,6 +2,9 @@ package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.mission.dto.TodayMissionDto;
+import com.kb.tangtang.mission.dto.MissionStreakCountDto;
+import com.kb.tangtang.mission.dto.MissionStreakDto;
+import com.kb.tangtang.mission.dto.WeeklyMissionResultDto;
 import com.kb.tangtang.mission.mapper.TodayMissionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +17,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -42,10 +46,12 @@ class TodayMissionServiceTest {
         TodayMissionDto mission = new TodayMissionDto();
         mission.setMissionId(11L);
         when(todayMissionMapper.findTodayMission(USER_ID, TODAY)).thenReturn(mission);
+        mission.setStreakDays(4L);
 
         TodayMissionDto result = service.getTodayMission(USER_ID);
 
         assertEquals(11L, result.getMissionId());
+        assertEquals(4L, result.getStreakDays());
         assertNull(result.getGuideMessage());
         verify(todayMissionMapper).findTodayMission(USER_ID, TODAY);
     }
@@ -73,5 +79,28 @@ class TodayMissionServiceTest {
                 BusinessException.class, () -> service.getTodayMission(USER_ID));
 
         assertEquals("TODAY_MISSION_NOT_FOUND", exception.getCode());
+    }
+
+    @Test
+    @DisplayName("현재 연속 성공 수와 월요일부터 일요일까지의 판정을 조회한다")
+    void getsCurrentWeekMissionStreak() {
+        MissionStreakCountDto counts = new MissionStreakCountDto();
+        counts.setStreakCount(5);
+        counts.setLongestStreakCount(9);
+        WeeklyMissionResultDto monday = new WeeklyMissionResultDto();
+        monday.setDate(LocalDate.of(2026, 8, 10));
+        monday.setResult("SUCCESS");
+        when(todayMissionMapper.findStreakCounts(USER_ID)).thenReturn(counts);
+        when(todayMissionMapper.findWeeklyResults(
+                USER_ID, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 8, 16)))
+                .thenReturn(List.of(monday));
+
+        MissionStreakDto result = service.getMissionStreak(USER_ID);
+
+        assertEquals(5, result.getStreakCount());
+        assertEquals(9, result.getLongestStreakCount());
+        assertEquals(LocalDate.of(2026, 8, 10), result.getWeekStartDate());
+        assertEquals(LocalDate.of(2026, 8, 16), result.getWeekEndDate());
+        assertEquals("SUCCESS", result.getWeeklyResults().get(0).getResult());
     }
 }

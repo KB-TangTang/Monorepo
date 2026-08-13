@@ -4,7 +4,39 @@ import {
     formatMissionAssignmentSummary,
     toWatchCategoryModel,
     toTodayMissionBriefing,
+    toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('이번 주 판정을 월요일부터 일요일 순서로 변환한다', () => {
+    const model = toWeeklyVerdictModel(
+        {
+            streakCount: 5,
+            longestStreakCount: 9,
+            weekStartDate: '2026-08-10',
+            weeklyResults: [
+                { date: '2026-08-10', result: 'SUCCESS' },
+                { date: '2026-08-11', result: 'FAIL' },
+                { date: '2026-08-13', result: 'PENDING' },
+            ],
+        },
+        new Date('2026-08-13T12:00:00'),
+    );
+
+    assert.equal(model.streakDays, 5);
+    assert.equal(model.longestStreakDays, 9);
+    assert.deepEqual(
+        model.days.map(({ dow, status }) => ({ dow, status })),
+        [
+            { dow: '월', status: 'success' },
+            { dow: '화', status: 'failed' },
+            { dow: '수', status: 'pending' },
+            { dow: '목', status: 'today' },
+            { dow: '금', status: 'pending' },
+            { dow: '토', status: 'pending' },
+            { dow: '일', status: 'pending' },
+        ],
+    );
+});
 
 test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', () => {
     const briefing = toTodayMissionBriefing({
@@ -17,6 +49,7 @@ test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', (
         currentAmount: '1200.00',
         difficultyName: 'NORMAL',
         assignDate: '2026-08-13',
+        streakDays: 4,
         assignmentReason: '최근 카페 지출이 늘었어요.',
     });
 
@@ -27,7 +60,7 @@ test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', (
         alibiCondition: '오늘 5,501원 이하',
         currentAmount: 1200,
         limitAmount: 5500.6,
-        streakDays: 0,
+        streakDays: 4,
         difficultyName: 'NORMAL',
         assignDate: '2026-08-13',
         assignmentReason: '최근 카페 지출이 늘었어요.',

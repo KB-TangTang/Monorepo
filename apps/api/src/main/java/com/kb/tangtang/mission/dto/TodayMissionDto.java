@@ -27,4 +27,5 @@ public class TodayMissionDto {
     private String result;
     private String assignmentReason;
     private String guideMessage;
+    private long streakDays;
 }

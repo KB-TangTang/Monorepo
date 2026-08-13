@@ -23,6 +23,7 @@ import {
     formatWon,
     formatMissionAssignmentSummary,
     toWatchCategoryModel,
+    toWeeklyVerdictModel,
 } from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
@@ -54,6 +55,7 @@ const shortDate = computed(() => {
 
 const dataProgress = computed(() => calculateDataProgress(store.dataRequirements));
 const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
+const weeklyVerdictModel = computed(() => toWeeklyVerdictModel(store.missionStreak));
 
 /*
  * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
@@ -78,7 +80,11 @@ onMounted(async () => {
         store.setConsentState(consentState);
 
         if (consentState !== CHALLENGE_CONSENT_STATE.FIRST) {
-            await Promise.all([store.loadTodayMission(), store.loadCategoryAnalysis()]);
+            await Promise.all([
+                store.loadTodayMission(),
+                store.loadCategoryAnalysis(),
+                store.loadMissionStreak(),
+            ]);
         }
     } catch (err) {
         store.consentState = 'ERROR';
@@ -112,6 +118,7 @@ async function handleAgree() {
         await consentStore.save('CHALLENGE', [{ type: 'CHALLENGE', agreed: true }]);
         store.agree();
         await store.waitForTodayMission();
+        await Promise.all([store.loadCategoryAnalysis(), store.loadMissionStreak()]);
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {
@@ -309,7 +316,6 @@ async function reassignTodayMission() {
                     :alibi-condition="store.todayBriefing.alibiCondition"
                     :current-amount="store.todayBriefing.currentAmount"
                     :limit-amount="store.todayBriefing.limitAmount"
-                    :streak-days="store.todayBriefing.streakDays"
                     :prosecutor-name="store.selectedProsecutor?.name"
                     :prosecutor-image="store.selectedProsecutor?.image"
                     @prosecutor-click="openTangiSheet"
@@ -321,8 +327,8 @@ async function reassignTodayMission() {
                 />
 
                 <PersonalScoreCard
-                    :week-days="store.weeklyVerdict.days"
-                    :streak-days="store.weeklyVerdict.streakDays"
+                    :week-days="weeklyVerdictModel.days"
+                    :streak-days="weeklyVerdictModel.streakDays"
                     :prosecutor-image="store.selectedProsecutor?.image"
                     :score="store.monthlyScore.score"
                     :percentile="store.monthlyScore.percentile"

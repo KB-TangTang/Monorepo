@@ -32,14 +32,32 @@
                      AND today_transaction.is_excluded_from_summary = 0
                ), 0) AS current_amount,
                assignment.result,
-               assignment.assignment_reason
+               assignment.assignment_reason,
+               COALESCE(streak.streak_count, 0) AS streak_days
         FROM tbl_user_mission_info assignment
         JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
         JOIN tbl_category category ON category.id = mission.category_id
         JOIN tbl_category parent_category ON parent_category.id = category.parent_id
         LEFT JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
+        LEFT JOIN tbl_streak_count streak ON streak.user_id = assignment.user_id
         WHERE assignment.user_id = #{userId}
           AND assignment.assign_date = #{assignDate}
+    </select>
+
+    <select id="findStreakCounts" resultType="com.kb.tangtang.mission.dto.MissionStreakCountDto">
+        SELECT streak_count,
+               longest_streak_count
+        FROM tbl_streak_count
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="findWeeklyResults" resultType="com.kb.tangtang.mission.dto.WeeklyMissionResultDto">
+        SELECT assign_date AS date,
+               result
+        FROM tbl_user_mission_info
+        WHERE user_id = #{userId}
+          AND assign_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY assign_date
     </select>
 
 </mapper>
