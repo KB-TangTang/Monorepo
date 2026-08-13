@@ -41,6 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.argThat;
@@ -151,7 +153,7 @@ class FinancialSyncServiceImplTest {
                         .accountNoMasked("110-***-120045").currency("KRW")
                         .balance(new BigDecimal("1244200")).availableAmount(new BigDecimal("1244200"))
                         .build()));
-        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+        when(client.getBankTransactions(eq("1"), eq(101L), isNull())).thenReturn(List.of(
                 BankTransactionSyncDto.builder()
                         .transactionId(9001L).transactedAt("2026-08-10T09:05:01+09:00")
                         .transTypeCode("01").amount(new BigDecimal("50000"))
@@ -250,11 +252,11 @@ class FinancialSyncServiceImplTest {
                         .cardTypeCode("01").currency("KRW").build(),
                 CardSyncDto.builder().cardId(2L).cardNoMasked("5210-****-****-7714")
                         .cardTypeCode("02").currency("KRW").build()));
-        when(client.getCardApprovals(eq("1"), eq(1L))).thenReturn(List.of(
+        when(client.getCardApprovals(eq("1"), eq(1L), isNull())).thenReturn(List.of(
                 CardApprovalSyncDto.builder().approvalId(1L).approvalNo("APV-CREDIT-1")
                         .approvedAt("2026-08-10T12:00:00+09:00").approvedAmount(new BigDecimal("30000"))
                         .rawJson(null).build()));
-        when(client.getCardApprovals(eq("1"), eq(2L))).thenReturn(List.of(
+        when(client.getCardApprovals(eq("1"), eq(2L), isNull())).thenReturn(List.of(
                 CardApprovalSyncDto.builder().approvalId(2L).approvalNo("APV-CHECK-1")
                         .approvedAt("2026-08-10T13:00:00+09:00").approvedAmount(new BigDecimal("15000"))
                         .rawJson("{\"correlationId\":\"N2-CHK-0617\"}").build()));
@@ -277,7 +279,7 @@ class FinancialSyncServiceImplTest {
     @Test
     @DisplayName("은행 거래의 raw_json 에 있는 correlationId 를 채운다 — 체크카드 연결의 전제다")
     void bankTransactionCarriesCorrelationId() {
-        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+        when(client.getBankTransactions(eq("1"), eq(101L), isNull())).thenReturn(List.of(
                 BankTransactionSyncDto.builder()
                         .transactionId(9002L).transactedAt("2026-08-10T13:00:02+09:00")
                         .transTypeCode("02").amount(new BigDecimal("15000"))
@@ -358,7 +360,7 @@ class FinancialSyncServiceImplTest {
     @Test
     @DisplayName("은행 입금(01)은 IN/INCOME, 출금(02)은 OUT/CONSUMPTION 으로 저장한다")
     void bankTransTypeCodeDrivesDirectionAndClassification() {
-        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+        when(client.getBankTransactions(eq("1"), eq(101L), isNull())).thenReturn(List.of(
                 BankTransactionSyncDto.builder()
                         .transactionId(9001L).transactedAt("2026-08-10T09:05:01+09:00")
                         .transTypeCode("01").amount(new BigDecimal("2500000")).description("급여")
@@ -384,7 +386,7 @@ class FinancialSyncServiceImplTest {
     @Test
     @DisplayName("모르는 거래유형 코드는 지어내지 않는다 — direction 은 비우고 TRANSFER 로 둔다")
     void unknownBankTransTypeCodeFallsBackToTransfer() {
-        when(client.getBankTransactions(eq("1"), eq(101L))).thenReturn(List.of(
+        when(client.getBankTransactions(eq("1"), eq(101L), isNull())).thenReturn(List.of(
                 BankTransactionSyncDto.builder()
                         .transactionId(9003L).transactedAt("2026-08-10T09:05:01+09:00")
                         .transTypeCode("99").amount(new BigDecimal("1000")).description("정체불명")
@@ -475,7 +477,7 @@ class FinancialSyncServiceImplTest {
         when(client.getCards("1")).thenReturn(List.of(
                 CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
                         .cardTypeCode("01").currency("KRW").build()));
-        when(client.getCardApprovals(eq("1"), eq(1L))).thenReturn(List.of(
+        when(client.getCardApprovals(eq("1"), eq(1L), isNull())).thenReturn(List.of(
                 CardApprovalSyncDto.builder().approvalId(1L).approvalNo("N2-C-0814")
                         .approvedAt("2026-08-14T18:10:00+09:00").approvalTypeCode("01")
                         .merchantName("이마트 역삼점").approvedAmount(new BigDecimal("100000"))
@@ -605,5 +607,53 @@ class FinancialSyncServiceImplTest {
         service.sync(1L);
 
         verify(transactionCategorizationService).categorizeRuleBased(eq(1L), eq(List.of(99L)));
+    }
+
+    @Test
+    @DisplayName("이미 동기화한 계좌는 마지막 동기화 달부터 이번 달까지만 월별로 받아온다")
+    void reSyncedAccountFetchesOnlyMonthsSinceLastSync() {
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().id(77L).userId(1L)
+                        .accountNoEncrypted("MOCK-BANK-101")
+                        .lastSyncAt(LocalDateTime.of(2026, 6, 20, 10, 0))
+                        .build()));
+        when(client.getBankTransactions(eq("1"), eq(101L), anyString())).thenReturn(List.of());
+
+        service.sync(1L);
+
+        /* clock 이 2026-08-12 로 고정돼 있다 — 6월부터 8월까지 3번 호출돼야 한다. */
+        verify(client).getBankTransactions("1", 101L, "2026-06");
+        verify(client).getBankTransactions("1", 101L, "2026-07");
+        verify(client).getBankTransactions("1", 101L, "2026-08");
+        verify(client, never()).getBankTransactions(eq("1"), eq(101L), isNull());
+    }
+
+    @Test
+    @DisplayName("처음 연결한 계좌는 지금처럼 yearMonth 없이 전체 이력을 받아온다")
+    void newAccountStillFetchesFullHistory() {
+        /* setUp() 이 findActiveByUser 를 스텁하지 않으므로 기본값(빈 리스트) — "아는 계좌 없음". */
+        service.sync(1L);
+
+        verify(client).getBankTransactions("1", 101L, null);
+    }
+
+    @Test
+    @DisplayName("이미 동기화한 카드는 마지막 동기화 달부터 이번 달까지만 월별로 받아온다")
+    void reSyncedCardFetchesOnlyMonthsSinceLastSync() {
+        when(client.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
+                        .cardTypeCode("01").currency("KRW").build()));
+        when(client.getCardApprovals(eq("1"), eq(1L), anyString())).thenReturn(List.of());
+        when(client.getCardBills(anyString(), anyLong())).thenReturn(List.of());
+        when(cardMapper.update(any())).thenReturn(0);
+        when(cardMapper.findByUser(1L)).thenReturn(List.of(
+                Card.builder().id(100L).userId(1L).cardNoMasked("9490-****-****-2201")
+                        .lastSyncAt(LocalDateTime.of(2026, 8, 1, 0, 0))
+                        .build()));
+
+        service.sync(1L);
+
+        verify(client).getCardApprovals("1", 1L, "2026-08");
+        verify(client, never()).getCardApprovals(eq("1"), eq(1L), isNull());
     }
 }

@@ -50,6 +50,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -191,6 +192,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     public FinancialSyncResultDto sync(long userId) {
         LocalDateTime startedAt = LocalDateTime.now(clock);
         String scenarioKey = scenarioKeyProvider.resolve(userId);
+        MonthlyFetchCursor monthlyCursor = buildMonthlyFetchCursor(userId);
 
         /*
          * 지금 처리 중인 소스를 담아 두는 커서. 실패 이력에 소스명을 남겨야 하는데 예외 자체에는
@@ -200,7 +202,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         SourceCursor cursor = new SourceCursor();
         SyncBundle bundle;
         try {
-            bundle = collectAll(scenarioKey, cursor);
+            bundle = collectAll(scenarioKey, cursor, monthlyCursor);
         } catch (BusinessException e) {
             recordFailure(userId, cursor.value, e.getMessage(), startedAt);
             throw e;
@@ -259,15 +261,72 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     /* ── 수집 (트랜잭션 밖) ─────────────────────────────── */
 
+    /**
+     * BANK/CARD 만 대상이다(이슈 #199 1차 범위). lastSyncAt 이 null 인 행(한 번도 동기화 안 됨)은
+     * 맵에 넣지 않는다 — "모른다" 취급돼 전체 이력을 받게 하기 위함.
+     */
+    private MonthlyFetchCursor buildMonthlyFetchCursor(long userId) {
+        Map<String, LocalDateTime> accounts = new HashMap<>();
+        for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
+            if (account.getLastSyncAt() != null) {
+                accounts.put(account.getAccountNoEncrypted(), account.getLastSyncAt());
+            }
+        }
+        Map<String, LocalDateTime> cards = new HashMap<>();
+        for (Card card : cardMapper.findByUser(userId)) {
+            if (card.getLastSyncAt() != null) {
+                cards.put(card.getCardNoMasked(), card.getLastSyncAt());
+            }
+        }
+        return new MonthlyFetchCursor(accounts, cards);
+    }
+
+    /** lastSyncAt 이 속한 달부터 오늘(clock 기준)이 속한 달까지, 오름차순으로. */
+    private List<YearMonth> monthsSince(LocalDateTime lastSyncAt) {
+        YearMonth start = YearMonth.from(lastSyncAt);
+        YearMonth end = YearMonth.from(LocalDate.now(clock));
+        List<YearMonth> months = new ArrayList<>();
+        for (YearMonth m = start; !m.isAfter(end); m = m.plusMonths(1)) {
+            months.add(m);
+        }
+        return months;
+    }
+
+    private List<BankTransactionSyncDto> fetchBankTransactions(String scenarioKey, long accountId,
+                                                                MonthlyFetchCursor cursor) {
+        LocalDateTime lastSyncAt = cursor.accountLastSyncAt(accountId);
+        if (lastSyncAt == null) {
+            return client.getBankTransactions(scenarioKey, accountId, null);
+        }
+        List<BankTransactionSyncDto> merged = new ArrayList<>();
+        for (YearMonth month : monthsSince(lastSyncAt)) {
+            merged.addAll(client.getBankTransactions(scenarioKey, accountId, month.toString()));
+        }
+        return merged;
+    }
+
+    private List<CardApprovalSyncDto> fetchCardApprovals(String scenarioKey, long cardId, String cardNoMasked,
+                                                          MonthlyFetchCursor cursor) {
+        LocalDateTime lastSyncAt = cursor.cardLastSyncAt(cardNoMasked);
+        if (lastSyncAt == null) {
+            return client.getCardApprovals(scenarioKey, cardId, null);
+        }
+        List<CardApprovalSyncDto> merged = new ArrayList<>();
+        for (YearMonth month : monthsSince(lastSyncAt)) {
+            merged.addAll(client.getCardApprovals(scenarioKey, cardId, month.toString()));
+        }
+        return merged;
+    }
+
     /** 전부 트랜잭션 밖. 하나라도 실패하면 즉시 BusinessException 이 올라간다(fail-fast). */
-    private SyncBundle collectAll(String scenarioKey, SourceCursor cursor) {
+    private SyncBundle collectAll(String scenarioKey, SourceCursor cursor, MonthlyFetchCursor monthlyCursor) {
         SyncBundle bundle = new SyncBundle();
 
         cursor.value = "BANK";
         for (BankAccountSyncDto account : client.getBankAccounts(scenarioKey)) {
             bundle.bankAccounts.add(account);
             bundle.bankTransactions.put(account.getAccountId(),
-                    client.getBankTransactions(scenarioKey, account.getAccountId()));
+                    fetchBankTransactions(scenarioKey, account.getAccountId(), monthlyCursor));
         }
 
         cursor.value = "DEPOSIT";
@@ -302,7 +361,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         cursor.value = "CARD";
         for (CardSyncDto card : client.getCards(scenarioKey)) {
             bundle.cards.add(card);
-            bundle.cardApprovals.put(card.getCardId(), client.getCardApprovals(scenarioKey, card.getCardId()));
+            bundle.cardApprovals.put(card.getCardId(),
+                    fetchCardApprovals(scenarioKey, card.getCardId(), card.getCardNoMasked(), monthlyCursor));
             bundle.cardBills.put(card.getCardId(), client.getCardBills(scenarioKey, card.getCardId()));
         }
 
@@ -858,6 +918,31 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /** collectAll 이 지금 어느 소스를 처리 중인지. 호출마다 새로 만들어 넘긴다(싱글턴 빈이라 필드 금지). */
     private static final class SourceCursor {
         private String value;
+    }
+
+    /**
+     * BANK/CARD 증분 수집 커서(이슈 #199). 계좌/카드별 마지막 동기화 시각을 안다 —
+     * 이미 아는 계좌/카드는 마지막 동기화 달부터만, 처음 보는 계좌/카드는 전체 이력을 받게 하는
+     * 근거다. DB 조회는 sync() 시작 시 한 번만 하고 collectAll() 안에서는 이 맵만 읽는다 —
+     * collectAll() 이 "DB 안 읽는 순수 외부호출" 이라는 설계(클래스 Javadoc)를 유지하기 위함.
+     */
+    private static final class MonthlyFetchCursor {
+        private final Map<String, LocalDateTime> accountLastSyncByKey;
+        private final Map<String, LocalDateTime> cardLastSyncByMaskedNo;
+
+        MonthlyFetchCursor(Map<String, LocalDateTime> accountLastSyncByKey,
+                           Map<String, LocalDateTime> cardLastSyncByMaskedNo) {
+            this.accountLastSyncByKey = accountLastSyncByKey;
+            this.cardLastSyncByMaskedNo = cardLastSyncByMaskedNo;
+        }
+
+        LocalDateTime accountLastSyncAt(long mockAccountId) {
+            return accountLastSyncByKey.get("MOCK-BANK-" + mockAccountId);
+        }
+
+        LocalDateTime cardLastSyncAt(String cardNoMasked) {
+            return cardLastSyncByMaskedNo.get(cardNoMasked);
+        }
     }
 
     /** 목서버 rawJson 문자열에서 correlationId/originalApprovalNo 만 뽑는다. 나머지 키는 무시한다. */
