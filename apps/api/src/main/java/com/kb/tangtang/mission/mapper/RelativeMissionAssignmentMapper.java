@@ -24,4 +24,6 @@ public interface RelativeMissionAssignmentMapper {
                                                     @Param("startDate") LocalDate startDate,
                                                     @Param("endDate") LocalDate endDate);
     int insertAssignment(RelativeMissionAssignment assignment);
+    int deleteAssignment(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
+    int resetAssignedSnapshots(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
 }

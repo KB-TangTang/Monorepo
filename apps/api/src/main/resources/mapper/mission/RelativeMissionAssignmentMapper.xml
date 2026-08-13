@@ -84,4 +84,15 @@
             (#{userId}, #{missionId}, #{difficultyId}, #{assignDate}, #{targetRate}, #{targetValue}, #{baseAmount},
              #{assignmentReason})
     </insert>
+
+    <delete id="deleteAssignment">
+        DELETE FROM tbl_user_mission_info
+        WHERE user_id = #{userId} AND assign_date = #{assignDate}
+    </delete>
+
+    <update id="resetAssignedSnapshots">
+        UPDATE tbl_user_mission_analysis
+        SET assigned_date = NULL
+        WHERE user_id = #{userId} AND assigned_date = #{assignDate}
+    </update>
 </mapper>

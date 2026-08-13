@@ -35,6 +35,8 @@ const isTangiSheetOpen = ref(false);
 const isVerdictOpen = ref(false);
 const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
+const isReassigning = ref(false);
+const devActionMessage = ref('');
 
 const courtDate = computed(() => formatCourtDate());
 const shortDate = computed(() => {
@@ -161,6 +163,20 @@ function setDemoSuccess() {
 function setDemoFail() {
     store.setDemoVerdict(MOCK_VERDICT_FAIL);
     isVerdictOpen.value = true;
+}
+
+async function reassignTodayMission() {
+    if (isReassigning.value) return;
+    isReassigning.value = true;
+    devActionMessage.value = '';
+    try {
+        await store.reassignTodayMission();
+        devActionMessage.value = '오늘 미션을 다시 배정했어요.';
+    } catch (err) {
+        devActionMessage.value = err.message ?? '오늘 미션 재배정에 실패했어요.';
+    } finally {
+        isReassigning.value = false;
+    }
 }
 </script>
 
@@ -453,6 +469,15 @@ function setDemoFail() {
 
         <!-- 데모 버튼 -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
+            <span v-if="devActionMessage" class="personal-home__dev-message">{{ devActionMessage }}</span>
+            <button
+                type="button"
+                class="personal-home__dev-btn"
+                :disabled="isReassigning"
+                @click="reassignTodayMission"
+            >
+                {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
+            </button>
             <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
             <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
                 미션 성공 팝업

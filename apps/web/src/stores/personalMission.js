@@ -15,7 +15,7 @@ import {
     hasEnoughPersonalMissionData,
     toTodayMissionBriefing,
 } from '@/services/personalMissionFlow';
-import { fetchTodayMission } from '@/api/personalMission';
+import { fetchTodayMission, reassignTodayMission as requestTodayMissionReassignment } from '@/api/personalMission';
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
@@ -171,6 +171,11 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
                 }
             }
             return false;
+        },
+
+        async reassignTodayMission() {
+            this.todayMission = await requestTodayMissionReassignment();
+            return this.todayMission;
         },
 
         selectProsecutor(prosecutorId) {
