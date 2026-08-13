@@ -1,6 +1,7 @@
 package com.kb.tangtang.transaction.client.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Category;
 import com.kb.tangtang.transaction.domain.Transaction;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -92,5 +95,58 @@ class OpenAiClassificationClientTest {
                 List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build()));
 
         mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("모델이 거부(refusal)하면 빈 결과가 아니라 예외를 던진다")
+    void throwsWhenModelRefuses() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"refusal\":\"I can't help with that.\"},"
+                                + "\"finish_reason\":\"stop\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        /* 그냥 두면 content 가 비어 "0건 분류" 로 읽혀 작업이 COMPLETED 로 마감된다 — 실패로 올려야 한다. */
+        BusinessException e = assertThrows(BusinessException.class, () -> client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build())));
+
+        assertEquals("EXTERNAL_API_ERROR", e.getCode());
+        assertTrue(e.getMessage().contains("거부"));
+    }
+
+    @Test
+    @DisplayName("finish_reason 이 stop 이 아니면(응답 잘림) 예외를 던진다")
+    void throwsWhenResponseTruncated() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"{\\\"results\\\":[]}\"},"
+                                + "\"finish_reason\":\"length\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        BusinessException e = assertThrows(BusinessException.class, () -> client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build())));
+
+        assertEquals("EXTERNAL_API_ERROR", e.getCode());
+        assertTrue(e.getMessage().contains("length"));
+    }
+
+    @Test
+    @DisplayName("finish_reason 이 stop 이면 정상 파싱한다")
+    void parsesNormallyWhenFinishReasonIsStop() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"{\\\"results\\\":"
+                                + "[{\\\"transactionId\\\":1,\\\"categoryId\\\":5}]}\",\"refusal\":null},"
+                                + "\"finish_reason\":\"stop\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        List<CategoryAssignmentDto> result = client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build()));
+
+        assertEquals(1, result.size());
+        assertEquals(5L, result.get(0).getCategoryId());
     }
 }

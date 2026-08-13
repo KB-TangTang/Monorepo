@@ -34,6 +34,7 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
     private final TransactionMapper transactionMapper;
     private final CategoryMapper categoryMapper;
     private final LlmClassificationClient client;
+    private final LlmCategorizationFailureService failureService;
     private final Clock clock;
 
     @Autowired
@@ -41,8 +42,10 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
                                                    LlmCategorizationJobItemMapper jobItemMapper,
                                                    TransactionMapper transactionMapper,
                                                    CategoryMapper categoryMapper,
-                                                   LlmClassificationClient client) {
-        this(jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, Clock.systemDefaultZone());
+                                                   LlmClassificationClient client,
+                                                   LlmCategorizationFailureService failureService) {
+        this(jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, failureService,
+                Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -51,12 +54,14 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
                                            TransactionMapper transactionMapper,
                                            CategoryMapper categoryMapper,
                                            LlmClassificationClient client,
+                                           LlmCategorizationFailureService failureService,
                                            Clock clock) {
         this.jobMapper = jobMapper;
         this.jobItemMapper = jobItemMapper;
         this.transactionMapper = transactionMapper;
         this.categoryMapper = categoryMapper;
         this.client = client;
+        this.failureService = failureService;
         this.clock = clock;
     }
 
@@ -71,14 +76,33 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
 
         try {
             List<Long> transactionIds = jobItemMapper.findTransactionIdsByJobId(jobId);
+            if (transactionIds.isEmpty()) {
+                /*
+                 * 분류할 거래가 하나도 없는 작업이다(등록 시점 경합으로 아이템이 비어 있을 수 있다).
+                 * findByIds 에 빈 목록을 넘기면 `WHERE id IN ()` 이 되어 SQL 이 깨지고,
+                 * LLM 호출도 빈 배치로 돈만 나간다. 여기서 바로 정상 종료한다.
+                 */
+                jobMapper.markFinished(jobId, LlmJobStatus.COMPLETED, LocalDateTime.now(clock));
+                return;
+            }
+
             List<Transaction> transactions = transactionMapper.findByIds(transactionIds);
             List<Category> categories = categoryMapper.findAll();
             Set<Long> validCategoryIds = categories.stream().map(Category::getId).collect(Collectors.toSet());
+            Set<Long> jobTransactionIds = Set.copyOf(transactionIds);
 
             List<CategoryAssignmentDto> assignments = client.classify(transactions, categories);
 
             for (CategoryAssignmentDto assignment : assignments) {
                 if (assignment.getCategoryId() == null) {
+                    continue;
+                }
+                if (!jobTransactionIds.contains(assignment.getTransactionId())) {
+                    /*
+                     * LLM 이 이 작업에 속하지 않은 거래 id 를 돌려줬다 — 반영하지 않는다.
+                     * updateCategory 에는 사용자 범위 조건이 없어서, 그대로 쓰면 남의 거래를 덮어쓴다.
+                     * 가맹점명·적요는 외부에서 들어온 자유 텍스트라 프롬프트 주입 통로이기도 하다.
+                     */
                     continue;
                 }
                 if (!validCategoryIds.contains(assignment.getCategoryId())) {
@@ -91,7 +115,13 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
 
             jobMapper.markFinished(jobId, LlmJobStatus.COMPLETED, LocalDateTime.now(clock));
         } catch (RuntimeException e) {
-            jobMapper.markFinished(jobId, LlmJobStatus.FAILED, LocalDateTime.now(clock));
+            /*
+             * FAILED 마감은 반드시 별도 빈의 REQUIRES_NEW 트랜잭션으로 한다 —
+             * 아래 rethrow 가 이 메서드의 트랜잭션을 롤백시키므로, 같은 트랜잭션에서 마감하면
+             * PROCESSING·FAILED 가 통째로 되돌아가 작업이 PENDING 으로 부활한다.
+             * (LlmCategorizationFailureService 주석 참고)
+             */
+            failureService.markFailed(jobId, LocalDateTime.now(clock));
             throw e;
         }
     }

@@ -8,6 +8,7 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Category;
 import com.kb.tangtang.transaction.domain.Transaction;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -45,7 +46,7 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
     private final String model;
 
     @Autowired
-    public OpenAiClassificationClient(RestTemplate restTemplate,
+    public OpenAiClassificationClient(@Qualifier("openAiRestTemplate") RestTemplate restTemplate,
                                       ObjectMapper objectMapper,
                                       @Value("${openai.api.key}") String apiKey,
                                       @Value("${openai.api.base-url}") String baseUrl,
@@ -147,9 +148,39 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
     }
 
     private List<CategoryAssignmentDto> parseResults(String responseBody) {
+        JsonNode root;
         try {
-            JsonNode root = objectMapper.readTree(responseBody);
-            String content = root.path("choices").path(0).path("message").path("content").asText();
+            root = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            throw new BusinessException("EXTERNAL_API_ERROR", "OpenAI 응답 파싱 실패: " + e.getMessage());
+        }
+
+        JsonNode choice = root.path("choices").path(0);
+
+        /*
+         * Structured Outputs 는 content 대신 refusal 을 돌려줄 수 있다(모델이 요청을 거부한 경우).
+         * 그냥 두면 content 가 비어 "분류 결과 0건" 으로 읽혀 작업이 COMPLETED 로 마감된다 —
+         * 실제로는 아무것도 분류되지 않았는데 성공으로 기록되므로 반드시 실패로 올린다.
+         */
+        JsonNode refusal = choice.path("message").path("refusal");
+        if (!refusal.isMissingNode() && !refusal.isNull()) {
+            throw new BusinessException("EXTERNAL_API_ERROR",
+                    "OpenAI 가 분류 요청을 거부했다: " + refusal.asText());
+        }
+
+        /*
+         * finish_reason 이 stop 이 아니면 응답이 온전하지 않다(length = 토큰 한도로 잘림 등).
+         * 잘린 JSON 은 파싱이 되더라도 일부 거래가 통째로 빠진 결과라 성공으로 볼 수 없다.
+         */
+        JsonNode finishReason = choice.path("finish_reason");
+        if (!finishReason.isMissingNode() && !finishReason.isNull()
+                && !"stop".equals(finishReason.asText())) {
+            throw new BusinessException("EXTERNAL_API_ERROR",
+                    "OpenAI 응답이 정상 종료되지 않았다(finish_reason=" + finishReason.asText() + ")");
+        }
+
+        try {
+            String content = choice.path("message").path("content").asText();
             JsonNode parsed = objectMapper.readTree(content);
 
             List<CategoryAssignmentDto> results = new ArrayList<>();

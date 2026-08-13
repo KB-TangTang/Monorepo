@@ -33,6 +33,7 @@ class LlmCategorizationProcessingServiceImplTest {
     private TransactionMapper transactionMapper;
     private CategoryMapper categoryMapper;
     private LlmClassificationClient client;
+    private LlmCategorizationFailureService failureService;
     private LlmCategorizationProcessingServiceImpl service;
 
     @BeforeEach
@@ -42,10 +43,11 @@ class LlmCategorizationProcessingServiceImplTest {
         transactionMapper = mock(TransactionMapper.class);
         categoryMapper = mock(CategoryMapper.class);
         client = mock(LlmClassificationClient.class);
+        failureService = mock(LlmCategorizationFailureService.class);
         Clock clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
         service = new LlmCategorizationProcessingServiceImpl(
-                jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, clock);
+                jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, failureService, clock);
 
         when(jobMapper.markProcessing(eq(1L), any())).thenReturn(1);
         when(categoryMapper.findAll()).thenReturn(List.of(
@@ -100,7 +102,40 @@ class LlmCategorizationProcessingServiceImplTest {
     }
 
     @Test
-    @DisplayName("classify 호출 자체가 예외를 던지면 markFinished(FAILED) 로 마감하고 예외를 다시 던진다")
+    @DisplayName("LLM 이 이 작업에 속하지 않은 transactionId 를 돌려주면 그 건은 반영하지 않는다")
+    void ignoresForeignTransactionId() {
+        when(jobItemMapper.findTransactionIdsByJobId(1L)).thenReturn(List.of(10L));
+        when(transactionMapper.findByIds(List.of(10L))).thenReturn(List.of(
+                Transaction.builder().id(10L).merchantName("스타벅스").build()));
+        /* 77L 은 다른 사용자·다른 작업의 거래다 — updateCategory 에는 사용자 범위 조건이 없으므로
+           여기서 막지 않으면 남의 거래 카테고리를 덮어쓴다. */
+        when(client.classify(any(), any())).thenReturn(List.of(
+                CategoryAssignmentDto.builder().transactionId(77L).categoryId(5L).build(),
+                CategoryAssignmentDto.builder().transactionId(10L).categoryId(5L).build()));
+
+        service.processJob(1L);
+
+        verify(transactionMapper, never()).updateCategory(eq(77L), any(), any());
+        verify(transactionMapper).updateCategory(10L, 5L, "LLM");
+        verify(jobMapper).markFinished(eq(1L), eq("COMPLETED"), any());
+    }
+
+    @Test
+    @DisplayName("작업에 속한 거래가 하나도 없으면 LLM 을 부르지 않고 바로 COMPLETED 로 마감한다")
+    void completesImmediatelyWhenJobHasNoTransactions() {
+        when(jobItemMapper.findTransactionIdsByJobId(1L)).thenReturn(List.of());
+
+        service.processJob(1L);
+
+        /* findByIds 에 빈 목록을 넘기면 `WHERE id IN ()` 으로 SQL 이 깨진다. 애초에 부르지 않는다. */
+        verify(transactionMapper, never()).findByIds(any());
+        verify(client, never()).classify(any(), any());
+        verify(jobMapper).markFinished(eq(1L), eq("COMPLETED"), any());
+        verify(failureService, never()).markFailed(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("classify 호출 자체가 예외를 던지면 별도 트랜잭션 빈으로 FAILED 마감 후 예외를 다시 던진다")
     void marksFailedWhenClientThrows() {
         when(jobItemMapper.findTransactionIdsByJobId(1L)).thenReturn(List.of(10L));
         when(transactionMapper.findByIds(List.of(10L))).thenReturn(List.of(
@@ -109,6 +144,13 @@ class LlmCategorizationProcessingServiceImplTest {
 
         assertThrows(RuntimeException.class, () -> service.processJob(1L));
 
-        verify(jobMapper).markFinished(eq(1L), eq("FAILED"), any());
+        /*
+         * FAILED 마감은 REQUIRES_NEW 를 가진 별도 빈이 해야 한다 — 같은 트랜잭션의 jobMapper 로
+         * 직접 마감하면 아래 rethrow 가 그 마감까지 롤백시켜 작업이 PENDING 으로 부활한다.
+         * (독립 트랜잭션 커밋 여부 자체는 실제 DB 가 필요해 여기서 검증하지 않는다 —
+         *  애너테이션 검증은 LlmCategorizationFailureServiceTest 가 담당한다.)
+         */
+        verify(failureService).markFailed(eq(1L), any());
+        verify(jobMapper, never()).markFinished(anyLong(), eq("FAILED"), any());
     }
 }
