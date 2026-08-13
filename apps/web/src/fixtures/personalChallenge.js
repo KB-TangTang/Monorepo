@@ -31,7 +31,7 @@ export const MOCK_PROSECUTORS = [
         image: tangiMagnify,
         badgeBg: 'var(--tt-danger-subtle)',
         badgeColor: 'var(--tt-danger-deep)',
-        recommended: true,
+        recommended: false,
     },
     {
         id: 'NORMAL',
@@ -43,7 +43,7 @@ export const MOCK_PROSECUTORS = [
         image: tangiDirect,
         badgeBg: 'var(--tt-info-subtle)',
         badgeColor: 'var(--tt-info)',
-        recommended: false,
+        recommended: true,
     },
     {
         id: 'EASY',
@@ -82,7 +82,6 @@ export const MOCK_WATCHLIST_META = {
     currentIndex: 2,
     totalCount: 3,
     comment: '"이번 주는 배달앱·카페/간식·택시를 지켜보겠습니다."',
-    uncategorizedWarning: '분류되지 않은 거래가 많아 수사가 어렵습니다.\n정리하면 더 정확한 사건이 배정돼요.',
 };
 
 /* ── 이번 주 판정 (스트릭) ────────────────────────────── */

@@ -1,6 +1,7 @@
 package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.mission.domain.CategorySpending;
+import com.kb.tangtang.mission.domain.CategoryMissionStatus;
 import com.kb.tangtang.mission.dto.MissionCategoryAnalysisDto;
 import com.kb.tangtang.mission.dto.MissionCategoryRankDto;
 import com.kb.tangtang.mission.mapper.MissionCategoryAnalysisMapper;
@@ -69,7 +70,8 @@ public class MissionCategoryAnalysisService {
         BigDecimal totalConsumption = zeroIfNull(
                 missionCategoryAnalysisMapper.sumCategorizedConsumption(
                         userId, startDate, endDateExclusive));
-        List<MissionCategoryRankDto> topCategories = createTopCategories(spendingRows, totalConsumption);
+        List<MissionCategoryRankDto> topCategories = createTopCategories(
+                userId, spendingRows, totalConsumption);
 
         return result(startDate, analysisEndDate, transactionCount, true, topCategories);
     }
@@ -88,11 +90,14 @@ public class MissionCategoryAnalysisService {
                 .build();
     }
 
-    private List<MissionCategoryRankDto> createTopCategories(List<CategorySpending> spendingRows,
+    private List<MissionCategoryRankDto> createTopCategories(long userId,
+                                                              List<CategorySpending> spendingRows,
                                                               BigDecimal totalConsumption) {
         List<MissionCategoryRankDto> topCategories = new ArrayList<>();
         for (int index = 0; index < spendingRows.size(); index++) {
             CategorySpending row = spendingRows.get(index);
+            CategoryMissionStatus missionStatus = missionCategoryAnalysisMapper.findLatestMissionStatus(
+                    userId, row.getCategoryId());
             topCategories.add(MissionCategoryRankDto.builder()
                     .rank(index + 1)
                     .categoryId(row.getCategoryId())
@@ -101,6 +106,8 @@ public class MissionCategoryAnalysisService {
                     .totalAmount(row.getTotalAmount())
                     .transactionCount(row.getTransactionCount())
                     .spendingRatio(calculateSpendingRatio(row.getTotalAmount(), totalConsumption))
+                    .latestMissionAssignDate(missionStatus == null ? null : missionStatus.getAssignDate())
+                    .latestMissionResult(missionStatus == null ? null : missionStatus.getResult())
                     .build());
         }
         return topCategories;

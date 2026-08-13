@@ -102,6 +102,19 @@ public class UserService {
         return meOf(userId);
     }
 
+    @Transactional
+    public UserMeDto updateDifficulty(long userId, String rawDifficultyName) {
+        String difficultyName = rawDifficultyName == null ? "" : rawDifficultyName.trim().toUpperCase();
+        Long difficultyId = userMapper.findDifficultyIdByName(difficultyName);
+        if (difficultyId == null) {
+            throw new BusinessException("INVALID_MISSION_DIFFICULTY", "선택할 수 없는 미션 난이도입니다.");
+        }
+        if (userMapper.updateDifficulty(userId, difficultyId) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
     /**
      * 프로필 이미지 업로드 (온보딩 AU_03_01 · 마이페이지 MY_01_03 공용).
      *

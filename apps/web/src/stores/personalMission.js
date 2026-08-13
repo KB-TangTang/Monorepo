@@ -3,7 +3,6 @@ import {
     MOCK_DATA_REQUIREMENTS,
     MOCK_PROSECUTORS,
     MOCK_TODAY_BRIEFING,
-    MOCK_VERDICT_SUCCESS,
     MOCK_WEEKLY_WATCHLIST,
     MOCK_WATCHLIST_META,
     MOCK_WEEKLY_VERDICT,
@@ -15,8 +14,13 @@ import {
     hasEnoughPersonalMissionData,
     toTodayMissionBriefing,
 } from '@/services/personalMissionFlow';
-import { fetchTodayMission, reassignTodayMission as requestTodayMissionReassignment } from '@/api/personalMission';
+import {
+    fetchMissionCategoryAnalysis,
+    fetchTodayMission,
+    reassignTodayMission as requestTodayMissionReassignment,
+} from '@/api/personalMission';
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
+import { updateMyDifficulty } from '@/api/user';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
@@ -29,6 +33,7 @@ const LEGACY_PROSECUTOR_ID = { TOUGH: 'HARD', STRICT: 'NORMAL', LENIENT: 'EASY' 
 const DEFAULT_PROSECUTOR_ID = 'NORMAL';
 const TODAY_MISSION_RETRY_COUNT = 5;
 const TODAY_MISSION_RETRY_DELAY_MS = 200;
+const DIFFICULTY_IDS = { EASY: 1, NORMAL: 2, HARD: 3 };
 
 function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -51,7 +56,9 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         hasAgreed: false,
         consentState: null,
         todayMission: null,
+        categoryAnalysis: null,
         selectedProsecutorId: DEFAULT_PROSECUTOR_ID,
+        selectedDifficultyId: DEFAULT_PROSECUTOR_ID,
         pendingVerdict: null,
         courtMode: 'supreme',
         isHydrated: false,
@@ -161,6 +168,10 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             }
         },
 
+        async loadCategoryAnalysis() {
+            this.categoryAnalysis = await fetchMissionCategoryAnalysis();
+        },
+
         async waitForTodayMission() {
             for (let attempt = 0; attempt < TODAY_MISSION_RETRY_COUNT; attempt += 1) {
                 if (await this.loadTodayMission()) {
@@ -181,6 +192,34 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         selectProsecutor(prosecutorId) {
             this.selectedProsecutorId = prosecutorId;
             this.save();
+        },
+
+        async saveProsecutorDifficulty(prosecutorId) {
+            const user = await updateMyDifficulty(prosecutorId);
+            if (Number(user?.difficultyId) !== DIFFICULTY_IDS[prosecutorId]) {
+                throw new Error(
+                    '담당 검사 난이도가 서버에 저장되지 않았어요. 서버를 다시 실행한 뒤 시도해 주세요.',
+                );
+            }
+            this.selectedProsecutorId = prosecutorId;
+            this.selectedDifficultyId = prosecutorId;
+            this.save();
+            return user;
+        },
+
+        selectDifficulty(difficultyId) {
+            this.selectedDifficultyId = difficultyId;
+        },
+
+        async saveDifficulty() {
+            const difficultyName = this.selectedDifficultyId;
+            const user = await updateMyDifficulty(difficultyName);
+            if (Number(user?.difficultyId) !== DIFFICULTY_IDS[difficultyName]) {
+                throw new Error(
+                    '선택한 난이도가 서버에 저장되지 않았어요. 서버를 다시 실행한 뒤 시도해주세요.',
+                );
+            }
+            return user;
         },
 
         acknowledgeVerdict() {

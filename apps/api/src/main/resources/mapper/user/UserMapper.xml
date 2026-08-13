@@ -61,6 +61,19 @@
            AND status = 'ACTIVE'
     </update>
 
+    <select id="findDifficultyIdByName" resultType="java.lang.Long">
+        SELECT id
+          FROM tbl_mission_difficulty
+         WHERE difficulty_name = #{difficultyName}
+    </select>
+
+    <update id="updateDifficulty">
+        UPDATE tbl_user
+           SET difficulty_id = #{difficultyId}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
     <!--
       튜토리얼 완료 시각. 완료(시각)와 「다시 보기」(NULL)를 한 문장으로 처리한다.
 

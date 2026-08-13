@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import { MOCK_PROSECUTORS } from '@/fixtures/personalChallenge';
 
@@ -12,9 +12,16 @@ const emit = defineEmits(['update:modelValue', 'select', 'confirm']);
 
 const selectedId = ref(props.currentProsecutorId);
 
-const selectedProsecutor = computed(() =>
-    MOCK_PROSECUTORS.find((p) => p.id === selectedId.value),
+watch(
+    () => [props.modelValue, props.currentProsecutorId],
+    ([isOpen, currentProsecutorId]) => {
+        if (isOpen) {
+            selectedId.value = currentProsecutorId;
+        }
+    },
 );
+
+const selectedProsecutor = computed(() => MOCK_PROSECUTORS.find((p) => p.id === selectedId.value));
 
 function select(id) {
     selectedId.value = id;
@@ -50,17 +57,9 @@ function confirm() {
                     }"
                     @click="select(p.id)"
                 >
-                    <span
-                        v-if="p.recommended"
-                        class="tangi-sheet__recommend"
-                    >
-                        탕이 추천
-                    </span>
+                    <span v-if="p.recommended" class="tangi-sheet__recommend"> 탕이 추천 </span>
                     <div class="tangi-sheet__card-inner">
-                        <div
-                            class="tangi-sheet__avatar"
-                            :style="{ background: p.badgeBg }"
-                        >
+                        <div class="tangi-sheet__avatar" :style="{ background: p.badgeBg }">
                             <img :src="p.image" :alt="p.name" />
                         </div>
                         <div class="tangi-sheet__info">
@@ -77,10 +76,7 @@ function confirm() {
                                 {{ p.quote }}
                                 <template v-if="p.description"> · {{ p.description }}</template>
                             </div>
-                            <div
-                                class="tangi-sheet__reduction"
-                                :style="{ color: p.badgeColor }"
-                            >
+                            <div class="tangi-sheet__reduction" :style="{ color: p.badgeColor }">
                                 목표 절감률 {{ p.targetReductionRange }}
                             </div>
                         </div>
@@ -109,8 +105,8 @@ function confirm() {
             <div class="tangi-sheet__info-box">
                 <span class="tangi-sheet__info-icon">i</span>
                 <span class="tangi-sheet__info-text">
-                    담당 탕이는 카테고리와 상관없이 <b>모든 사건에 적용</b>돼요.
-                    내일 배정분부터 반영됩니다.
+                    담당 탕이는 카테고리와 상관없이 <b>모든 사건에 적용</b>돼요. 내일 배정분부터
+                    반영됩니다.
                 </span>
             </div>
         </div>
@@ -159,11 +155,26 @@ function confirm() {
     text-align: left;
     font-family: var(--tt-font-sans);
     width: 100%;
+    outline: none;
+    transition:
+        transform 100ms ease,
+        background-color 100ms ease,
+        box-shadow 100ms ease;
+}
+
+.tangi-sheet__card:focus,
+.tangi-sheet__card:focus-visible {
+    outline: none;
+}
+
+.tangi-sheet__card:active {
+    background: var(--tt-bg-subtle);
+    box-shadow: none;
+    transform: translateY(1px) scale(0.99);
 }
 
 .tangi-sheet__card--selected {
-    border: 1.8px solid var(--tt-text);
-    box-shadow: 0 10px 24px -12px rgba(35, 40, 66, 0.3);
+    border-color: var(--tt-border);
 }
 
 .tangi-sheet__recommend {

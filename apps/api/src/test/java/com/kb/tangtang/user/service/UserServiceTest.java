@@ -102,6 +102,34 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("난이도 이름을 DB ID로 찾아 저장하고 갱신된 사용자 정보를 돌려준다")
+    void updateDifficulty() {
+        when(userMapper.findDifficultyIdByName("HARD")).thenReturn(3L);
+        when(userMapper.updateDifficulty(USER_ID, 3L)).thenReturn(1);
+        UserDto updatedUser = user("장재한");
+        updatedUser.setDifficultyId(3L);
+        when(userMapper.findById(USER_ID)).thenReturn(updatedUser);
+
+        UserMeDto result = service.updateDifficulty(USER_ID, " hard ");
+
+        assertEquals(3L, result.getDifficultyId());
+        verify(userMapper).updateDifficulty(USER_ID, 3L);
+    }
+
+    @Test
+    @DisplayName("DB에 없는 난이도는 저장하지 않는다")
+    void updateDifficultyRejectsUnknownName() {
+        when(userMapper.findDifficultyIdByName("EXTREME")).thenReturn(null);
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> service.updateDifficulty(USER_ID, "EXTREME"));
+
+        assertEquals("INVALID_MISSION_DIFFICULTY", ex.getCode());
+        verify(userMapper, never()).updateDifficulty(anyLong(), anyLong());
+    }
+
+    @Test
     @DisplayName("실명을 저장하고 갱신된 사용자 정보를 돌려준다")
     void updateName() {
         when(userMapper.updateName(USER_ID, "장재한")).thenReturn(1);

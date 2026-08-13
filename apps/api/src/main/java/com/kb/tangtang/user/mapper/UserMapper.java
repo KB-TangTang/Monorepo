@@ -31,6 +31,10 @@ public interface UserMapper {
      */
     int updateNickname(@Param("id") Long id, @Param("nickname") String nickname);
 
+    Long findDifficultyIdByName(@Param("difficultyName") String difficultyName);
+
+    int updateDifficulty(@Param("id") Long id, @Param("difficultyId") Long difficultyId);
+
     /**
      * 프로필 이미지 키 갱신. **삭제도 이 메서드로 한다** — null 을 넣으면 미설정으로 돌아간다.
      * 설정과 해제를 한 메서드로 두는 이유는 updateTutorialSeenAt 과 같다.

@@ -16,7 +16,14 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 import { useConsentStore } from '@/stores/consent';
-import { formatCourtDate, calculateDataProgress, formatWon } from '@/services/personalMissionFlow';
+import { useAuthStore } from '@/stores/auth';
+import {
+    formatCourtDate,
+    calculateDataProgress,
+    formatWon,
+    formatMissionAssignmentSummary,
+    toWatchCategoryModel,
+} from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
@@ -26,6 +33,7 @@ import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/service
 const router = useRouter();
 const store = usePersonalMissionChallengeStore();
 const consentStore = useConsentStore();
+const authStore = useAuthStore();
 
 const isConsentOpen = ref(false);
 const isConsentSubmitting = ref(false);
@@ -45,6 +53,7 @@ const shortDate = computed(() => {
 });
 
 const dataProgress = computed(() => calculateDataProgress(store.dataRequirements));
+const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
 
 /*
  * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
@@ -69,7 +78,7 @@ onMounted(async () => {
         store.setConsentState(consentState);
 
         if (consentState !== CHALLENGE_CONSENT_STATE.FIRST) {
-            await store.loadTodayMission();
+            await Promise.all([store.loadTodayMission(), store.loadCategoryAnalysis()]);
         }
     } catch (err) {
         store.consentState = 'ERROR';
@@ -129,8 +138,14 @@ function openTangiSheet() {
     isTangiSheetOpen.value = true;
 }
 
-function handleProsecutorConfirm(prosecutorId) {
-    store.selectProsecutor(prosecutorId);
+async function handleProsecutorConfirm(prosecutorId) {
+    try {
+        const user = await store.saveProsecutorDifficulty(prosecutorId);
+        authStore.mergeUser(user);
+        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 오늘 미션 재배정을 누르면 새 난이도가 적용됩니다.`;
+    } catch (err) {
+        devActionMessage.value = err.message ?? '담당 검사 난이도를 저장하지 못했어요.';
+    }
 }
 
 function handleVerdictAcknowledge() {
@@ -180,8 +195,9 @@ async function reassignTodayMission() {
     isReassigning.value = true;
     devActionMessage.value = '';
     try {
-        await store.reassignTodayMission();
-        devActionMessage.value = '오늘 미션을 다시 배정했어요.';
+        const previousMission = store.todayMission;
+        const reassignedMission = await store.reassignTodayMission();
+        devActionMessage.value = `${formatMissionAssignmentSummary(previousMission)} → ${formatMissionAssignmentSummary(reassignedMission)}`;
     } catch (err) {
         devActionMessage.value = err.message ?? '오늘 미션 재배정에 실패했어요.';
     } finally {
@@ -261,7 +277,10 @@ async function reassignTodayMission() {
                 :retryable="false"
             />
 
-            <section v-else-if="store.screenState === 'withdrawn'" class="personal-home__withdrawn-state">
+            <section
+                v-else-if="store.screenState === 'withdrawn'"
+                class="personal-home__withdrawn-state"
+            >
                 <img
                     :src="withdrawnTangi"
                     alt="챌린지 참여 중지를 아쉬워하는 탕이"
@@ -297,12 +316,8 @@ async function reassignTodayMission() {
                 />
 
                 <PersonalWatchlistCard
-                    :items="store.watchlist"
-                    :week-range="store.watchlistMeta.weekRange"
-                    :current-index="store.watchlistMeta.currentIndex"
-                    :total-count="store.watchlistMeta.totalCount"
-                    :comment="store.watchlistMeta.comment"
-                    :uncategorized-warning="store.watchlistMeta.uncategorizedWarning"
+                    :items="watchCategoryModel.items"
+                    :analysis-period="watchCategoryModel.period"
                 />
 
                 <PersonalScoreCard
@@ -483,7 +498,9 @@ async function reassignTodayMission() {
 
         <!-- 데모 버튼 -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
-            <span v-if="devActionMessage" class="personal-home__dev-message">{{ devActionMessage }}</span>
+            <span v-if="devActionMessage" class="personal-home__dev-message">{{
+                devActionMessage
+            }}</span>
             <button
                 type="button"
                 class="personal-home__dev-btn"

@@ -157,7 +157,7 @@ onMounted(initialize);
         <ChallengeReportContent
             v-else
             :report="report"
-            @change-difficulty="emit('change-difficulty')"
+            @change-difficulty="router.push({ name: 'personalMissionChallengeDifficulty' })"
             @open-group-history="emit('open-group-history')"
         />
 
