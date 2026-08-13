@@ -50,14 +50,11 @@ public class MissionCategoryAnalysisService {
         LocalDate startDate = endDateExclusive.minusDays(ANALYSIS_DAYS);
         LocalDate analysisEndDate = endDateExclusive.minusDays(1);
 
-        LocalDate firstTransactionDate = missionCategoryAnalysisMapper.findFirstTransactionDate(userId);
+        int allTransactionCount = missionCategoryAnalysisMapper.countAllConsumptionTransactions(userId);
         int transactionCount = missionCategoryAnalysisMapper.countConsumptionTransactions(
                 userId, startDate, endDateExclusive);
 
-        boolean hasEnoughHistory = firstTransactionDate != null
-                && !firstTransactionDate.isAfter(startDate);
-        boolean requirementsMet = hasEnoughHistory
-                && transactionCount >= MIN_TRANSACTION_COUNT;
+        boolean requirementsMet = allTransactionCount >= MIN_TRANSACTION_COUNT;
 
         if (requireInitialQualification && !requirementsMet) {
             return result(startDate, analysisEndDate, transactionCount, false, List.of());

@@ -18,7 +18,6 @@ public interface RelativeMissionAssignmentMapper {
     MissionDifficulty findDifficulty(@Param("difficultyId") long difficultyId);
     List<MissionPoolItem> findRelativeMissions(@Param("categoryId") long categoryId,
                                                @Param("excludedMissionId") Long excludedMissionId);
-    List<MissionPoolItem> findNoSpendMissions(@Param("categoryId") long categoryId);
     Long findLastMissionId(@Param("userId") long userId, @Param("categoryId") long categoryId);
     CategorySpendingStats findCategorySpendingStats(@Param("userId") long userId,
                                                     @Param("categoryId") long categoryId,

@@ -22,7 +22,7 @@ class MissionCategoryAnalysisServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 11);
 
     private static class FakeMapper implements MissionCategoryAnalysisMapper {
-        LocalDate firstTransactionDate;
+        int allTransactionCount;
         int transactionCount;
         BigDecimal totalConsumption = BigDecimal.ZERO;
         List<CategorySpending> topCategories = List.of();
@@ -30,8 +30,8 @@ class MissionCategoryAnalysisServiceTest {
         int findTopCategoriesCallCount;
 
         @Override
-        public LocalDate findFirstTransactionDate(long userId) {
-            return firstTransactionDate;
+        public int countAllConsumptionTransactions(long userId) {
+            return allTransactionCount;
         }
 
         @Override
@@ -66,10 +66,10 @@ class MissionCategoryAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("거래 데이터가 28일 미만이면 상위 카테고리 집계를 생략한다")
-    void skipsAnalysisWhenHistoryIsInsufficient() {
+    @DisplayName("최근 거래가 많아도 누적 유효 소비가 50건 미만이면 분석을 생략한다")
+    void skipsAnalysisWhenCumulativeTransactionsAreInsufficient() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 7, 15);
+        mapper.allTransactionCount = 49;
         mapper.transactionCount = 70;
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
@@ -84,7 +84,7 @@ class MissionCategoryAnalysisServiceTest {
     @DisplayName("최근 28일 소비 거래가 50건 미만이면 상위 카테고리 집계를 생략한다")
     void skipsAnalysisWhenTransactionCountIsInsufficient() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 7, 1);
+        mapper.allTransactionCount = 49;
         mapper.transactionCount = 49;
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
@@ -100,7 +100,6 @@ class MissionCategoryAnalysisServiceTest {
     @DisplayName("최초 자격 획득 사용자는 최근 28일 거래가 50건 미만이어도 분석한다")
     void qualifiedUserAnalyzesWithFewerThanFiftyTransactions() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 8, 1);
         mapper.transactionCount = 12;
         mapper.totalConsumption = new BigDecimal("300000");
         mapper.topCategories = List.of(row(17L, "식비", "배달앱", "120000", 4));
@@ -115,10 +114,10 @@ class MissionCategoryAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("정확히 28일과 50건을 충족하면 상대형 분석을 실행한다")
-    void analyzesWhenRequirementsAreExactlyMet() {
+    @DisplayName("누적 유효 소비 거래가 정확히 50건이면 상대형 분석을 실행한다")
+    void analyzesWhenCumulativeTransactionRequirementIsExactlyMet() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 7, 14);
+        mapper.allTransactionCount = 50;
         mapper.transactionCount = 50;
         mapper.totalConsumption = new BigDecimal("500000");
         mapper.topCategories = List.of(row(17L, "식비", "배달앱", "150000", 10));
@@ -134,10 +133,25 @@ class MissionCategoryAnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("누적 유효 소비 거래가 50건이면 상대형 분석을 실행한다")
+    void analyzesWithFiftyCumulativeTransactions() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.allTransactionCount = 50;
+        mapper.transactionCount = 50;
+        mapper.totalConsumption = new BigDecimal("500000");
+        mapper.topCategories = List.of(row(18L, "식비", "카페/간식", "150000", 10));
+
+        MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
+
+        assertTrue(result.isRelativeEligible());
+        assertEquals(1, mapper.findTopCategoriesCallCount);
+    }
+
+    @Test
     @DisplayName("조회 순서대로 순위를 붙이고 전체 소비 대비 비중을 계산한다")
     void createsRankAndSpendingRatio() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 6, 1);
+        mapper.allTransactionCount = 80;
         mapper.transactionCount = 80;
         mapper.totalConsumption = new BigDecimal("500000");
         mapper.topCategories = List.of(
@@ -160,7 +174,7 @@ class MissionCategoryAnalysisServiceTest {
     @DisplayName("15개 미션 대상에 양수 소비가 없으면 상대형 불가로 반환한다")
     void returnsIneligibleWhenNoMissionCategorySpendingExists() {
         FakeMapper mapper = new FakeMapper();
-        mapper.firstTransactionDate = LocalDate.of(2026, 6, 1);
+        mapper.allTransactionCount = 60;
         mapper.transactionCount = 60;
         mapper.topCategories = List.of();
 

@@ -25,15 +25,6 @@
         ORDER BY user.id
     </select>
 
-    <select id="findNoSpendMissions" resultType="com.kb.tangtang.mission.domain.MissionPoolItem">
-        SELECT id, mission_title, mission_content
-        FROM tbl_mission_pool
-        WHERE category_id = #{categoryId}
-          AND mission_type = 'ABSOLUTE'
-          AND limit_price = 0
-        ORDER BY id
-    </select>
-
     <select id="lockActiveUserDifficulty" resultType="java.lang.Long">
         SELECT difficulty_id FROM tbl_user
         WHERE id = #{userId} AND status = 'ACTIVE'
@@ -69,19 +60,7 @@
     </select>
 
     <select id="findCategorySpendingStats" resultType="com.kb.tangtang.mission.domain.CategorySpendingStats">
-        SELECT ROUND(AVG(daily.net_amount), 2) AS base_amount,
-               (
-                   SELECT MIN(purchase.amount)
-                   FROM tbl_transaction purchase
-                   WHERE purchase.user_id = #{userId}
-                     AND purchase.category_id = #{categoryId}
-                     AND purchase.tr_date BETWEEN #{startDate} AND #{endDate}
-                     AND purchase.classification = 'CONSUMPTION'
-                     AND purchase.direction = 'OUT'
-                     AND purchase.is_excluded_from_summary = 0
-                     AND purchase.is_refund = 0
-                     AND purchase.amount &gt; 0
-               ) AS minimum_purchase_amount
+        SELECT ROUND(AVG(daily.net_amount), 2) AS base_amount
         FROM (
             SELECT tr_date,
                    SUM(CASE WHEN is_refund = 1 THEN -COALESCE(refunded_amount, amount) ELSE amount END) AS net_amount

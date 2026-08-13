@@ -11,20 +11,20 @@
         AND t.is_excluded_from_summary = 0
     </sql>
 
-    <select id="findFirstTransactionDate" resultType="java.time.LocalDate">
-        SELECT MIN(tr_date)
-        FROM tbl_transaction
-        WHERE user_id = #{userId}
-          AND classification = 'CONSUMPTION'
-          AND is_excluded_from_summary = 0
-          AND is_refund = 0
-    </select>
-
     <select id="countConsumptionTransactions" resultType="int">
         SELECT COUNT(*)
         FROM tbl_transaction t
         WHERE <include refid="summaryConsumptionCondition"/>
           AND t.is_refund = 0
+    </select>
+
+    <select id="countAllConsumptionTransactions" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_transaction
+        WHERE user_id = #{userId}
+          AND classification = 'CONSUMPTION'
+          AND is_excluded_from_summary = 0
+          AND is_refund = 0
     </select>
 
     <!-- 소비 비중의 분모는 미션 대상 15개가 아니라 최근 28일 전체 분류 소비다. -->
