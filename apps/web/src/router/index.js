@@ -125,6 +125,12 @@ const routes = [
         component: () => import('@/views/my/ConsentManageView.vue'),
         meta: { title: '동의 관리' },
     },
+    {
+        path: '/my/withdraw',
+        name: 'myWithdraw',
+        component: () => import('@/views/my/WithdrawView.vue'),
+        meta: { title: '회원 탈퇴' },
+    },
     // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
     {
         path: '/group-challenges',
