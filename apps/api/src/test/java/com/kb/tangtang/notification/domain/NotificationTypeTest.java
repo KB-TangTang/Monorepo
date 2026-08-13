@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NotificationTypeTest {
 
     @Test
-    @DisplayName("참고화면의 알림 6종이 모두 정의돼 있다")
-    void hasAllSixTypes() {
-        assertEquals(6, NotificationType.values().length);
+    @DisplayName("알림 8종이 모두 정의돼 있다 — 참고화면 6종 + 그룹챌린지 시작·미성립 2종(#152)")
+    void hasAllTypes() {
+        assertEquals(8, NotificationType.values().length);
     }
 
     @Test

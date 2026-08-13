@@ -7,6 +7,8 @@
 
 const VISUALS = {
     ACCOUNT_RECONNECT: { icon: 'refresh', tone: 'muted' },
+    GROUP_CHALLENGE_STARTED: { icon: 'gavel', tone: 'accent' },
+    GROUP_CHALLENGE_CANCELED: { icon: 'gavel', tone: 'muted' },
     GROUP_JUDGMENT: { icon: 'gavel', tone: 'dark' },
     GROUP_TRIAL_OPENED: { icon: 'gavel', tone: 'dark' },
     MISSION_DEADLINE: { icon: 'clock', tone: 'accent' },

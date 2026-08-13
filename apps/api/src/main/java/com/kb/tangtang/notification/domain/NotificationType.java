@@ -20,6 +20,16 @@ public enum NotificationType {
     ACCOUNT_RECONNECT("계좌 재연동이 필요해요", "{bankName} · 인증이 만료됐어요"),
 
     /*
+     * 그룹 챌린지 상태 전이 배치가 발행한다 (이슈 #152).
+     *
+     * 기존 GROUP_TRIAL_OPENED 로 대신하지 않은 이유는 제목이 NotificationService 에서
+     * type.getDefaultTitle() 로 고정돼 발행자가 바꿀 수 없어서다 — 재활용하면 챌린지가
+     * 시작됐을 뿐인데 알림함에 "재판이 열렸어요" 가 뜬다.
+     */
+    GROUP_CHALLENGE_STARTED("챌린지가 시작됐어요", "{groupName} · 오늘부터 {days}일간"),
+    GROUP_CHALLENGE_CANCELED("챌린지가 성립되지 않았어요", "{groupName} · 참여자가 모자라 종료됐어요"),
+
+    /*
      * 아래 5종은 문구가 아직 정해지지 않았다. {content} 는 "발행자가 넘긴 문구를 그대로 쓴다" 는 뜻이다.
      * 담당자가 기능을 붙일 때 이 자리에 실제 템플릿을 써 넣으면 문구가 이 파일로 모인다.
      *   예) GROUP_JUDGMENT("판결이 확정됐어요", "{trialName} · 내 사건 {verdict}")
