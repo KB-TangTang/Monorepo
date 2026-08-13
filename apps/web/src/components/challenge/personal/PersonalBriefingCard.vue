@@ -10,7 +10,6 @@ const props = defineProps({
     alibiCondition: { type: String, required: true },
     currentAmount: { type: Number, default: null },
     limitAmount: { type: Number, required: true },
-    streakDays: { type: Number, default: 0 },
     prosecutorName: { type: String, default: '' },
     prosecutorImage: { type: String, default: '' },
 });
@@ -31,9 +30,6 @@ const hasSpendingProgress = computed(() => props.currentAmount !== null);
 
         <div class="briefing-card__badges">
             <span class="briefing-card__badge briefing-card__badge--danger">수사 브리핑</span>
-            <span v-if="streakDays > 0" class="briefing-card__badge briefing-card__badge--streak">
-                🔥 연속 {{ streakDays }}일
-            </span>
         </div>
 
         <div v-if="missionTitle" class="briefing-card__mission">
@@ -168,12 +164,6 @@ const hasSpendingProgress = computed(() => props.currentAmount !== null);
 .briefing-card__badge--danger {
     background: var(--tt-danger-subtle);
     color: var(--tt-danger-deep);
-}
-
-.briefing-card__badge--streak {
-    background: var(--tt-accent-subtle);
-    color: var(--tt-accent-deep);
-    font-family: var(--tt-font-mono);
 }
 
 .briefing-card__details {

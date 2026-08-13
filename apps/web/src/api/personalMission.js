@@ -4,6 +4,10 @@ export function fetchTodayMission() {
     return http.get('/missions/today');
 }
 
+export function fetchMissionStreak() {
+    return http.get('/missions/streak');
+}
+
 export function fetchMissionCategoryAnalysis() {
     return http.get('/missions/categoryAnalysis');
 }

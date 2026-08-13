@@ -14,30 +14,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RelativeMissionAssignmentScheduler {
 
     private final RelativeMissionAssignmentBatchService batchService;
+    private final MissionEvaluationBatchService evaluationBatchService;
     private final ZoneId zoneId;
     private final AtomicBoolean startupRecoveryCompleted = new AtomicBoolean(false);
 
     public RelativeMissionAssignmentScheduler(
             RelativeMissionAssignmentBatchService batchService,
+            MissionEvaluationBatchService evaluationBatchService,
             @Value("${mission.assignment.zone}") String zoneId) {
         this.batchService = batchService;
+        this.evaluationBatchService = evaluationBatchService;
         this.zoneId = ZoneId.of(zoneId);
     }
 
     @Scheduled(cron = "${mission.assignment.cron}", zone = "${mission.assignment.zone}")
     public void assignDailyMissions() {
-        batchService.assignDailyMissions(LocalDate.now(zoneId));
+        runDailyMissionBatch(LocalDate.now(zoneId));
     }
 
     @Scheduled(cron = "${mission.assignment.recovery-cron}", zone = "${mission.assignment.zone}")
     public void recoverMissingDailyMissions() {
-        batchService.assignDailyMissions(LocalDate.now(zoneId));
+        runDailyMissionBatch(LocalDate.now(zoneId));
     }
 
     @EventListener(ContextRefreshedEvent.class)
     public void recoverMissingDailyMissionsOnStartup() {
         if (startupRecoveryCompleted.compareAndSet(false, true)) {
-            batchService.assignDailyMissions(LocalDate.now(zoneId));
+            runDailyMissionBatch(LocalDate.now(zoneId));
         }
+    }
+
+    private void runDailyMissionBatch(LocalDate today) {
+        evaluationBatchService.evaluateDailyMissions(today.minusDays(1), today.atStartOfDay());
+        batchService.assignDailyMissions(today);
     }
 }

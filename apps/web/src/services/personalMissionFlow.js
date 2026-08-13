@@ -44,7 +44,7 @@ export function toTodayMissionBriefing(mission) {
             : (mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? ''),
         currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
         limitAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
-        streakDays: 0,
+        streakDays: Number.isFinite(Number(mission.streakDays)) ? Number(mission.streakDays) : 0,
         difficultyName: mission.difficultyName ?? '',
         assignDate: mission.assignDate ?? '',
         assignmentReason: mission.assignmentReason ?? '',
@@ -82,6 +82,50 @@ export function toWatchCategoryModel(analysis) {
             result: category.latestMissionResult ?? 'UNASSIGNED',
         })),
     };
+}
+
+export function toWeeklyVerdictModel(streak, today = new Date()) {
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    const resultsByDate = new Map(
+        (streak?.weeklyResults ?? []).map((item) => [item.date, item.result]),
+    );
+    const todayKey = formatLocalDateKey(today);
+    const weekStart = streak?.weekStartDate
+        ? new Date(`${streak.weekStartDate}T00:00:00`)
+        : startOfCurrentWeek(today);
+
+    return {
+        streakDays: Number(streak?.streakCount) || 0,
+        longestStreakDays: Number(streak?.longestStreakCount) || 0,
+        days: dayNames.map((dow, index) => {
+            const date = new Date(weekStart);
+            date.setDate(weekStart.getDate() + index);
+            const dateKey = formatLocalDateKey(date);
+            const result = resultsByDate.get(dateKey);
+
+            let status = 'pending';
+            if (dateKey === todayKey && result === 'PENDING') status = 'today';
+            else if (result === 'SUCCESS') status = 'success';
+            else if (result === 'FAIL') status = 'failed';
+
+            return { dow, date: dateKey, status };
+        }),
+    };
+}
+
+function startOfCurrentWeek(date) {
+    const monday = new Date(date);
+    const daysFromMonday = (monday.getDay() + 6) % 7;
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - daysFromMonday);
+    return monday;
+}
+
+function formatLocalDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function formatAnalysisPeriod(startDate, endDate) {

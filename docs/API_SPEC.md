@@ -494,7 +494,10 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
 
 응답은 `{ missionId, missionTitle, missionContent, missionType, categoryId, parentCategoryName,
 categoryName, assignDate, difficultyName, targetRate, baseAmount, targetValue, result,
-assignmentReason, guideMessage }` 형태다.
+assignmentReason, guideMessage, streakDays }` 형태다.
+
+- `streakDays`는 전날 미션 판정 배치가 `tbl_streak_count`에 저장한 현재 연속 성공 일수다.
+- 전날 미션이 성공하면 1 증가하고 실패하면 0으로 초기화한다. 오늘 진행 중인 미션은 포함하지 않는다.
 
 ```json
 {
@@ -514,7 +517,8 @@ assignmentReason, guideMessage }` 형태다.
     "targetValue": 18000,
     "result": "PENDING",
     "assignmentReason": null,
-    "guideMessage": null
+    "guideMessage": null,
+    "streakDays": 4
   }
 }
 ```
@@ -524,6 +528,20 @@ assignmentReason, guideMessage }` 형태다.
 - `LOW_SPENDING_NO_SPEND` 배정은 카테고리명과 배정 사유를 조합해 `guideMessage`를 생성한다.
 - 일반 배정의 `guideMessage`는 `null`이다.
 - 오늘 배정된 미션이 없으면 `TODAY_MISSION_NOT_FOUND`를 반환한다.
+
+### 개인 미션 연속 성공 및 이번 주 판정 조회 (이슈 #186)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/missions/streak` | Bearer | 현재·최장 연속 성공 일수와 이번 주 미션 결과 |
+
+응답은 `{ streakCount, longestStreakCount, weekStartDate, weekEndDate, weeklyResults }` 형태다.
+`weeklyResults[]` 항목은 `{ date, result }`이며, 조회 주간은 월요일부터 일요일까지다.
+
+- `streakCount`는 현재 이어지고 있는 연속 성공 일수다.
+- `longestStreakCount`는 사용자의 역대 최장 연속 성공 일수다.
+- 전날 `PENDING` 미션을 자정 배치에서 먼저 판정한 뒤 성공이면 증가하고, 실패면 0으로 초기화한다.
+- 주간 결과의 `SUCCESS`, `FAIL`, `PENDING`을 화면에서 각각 인정, 기각, 오늘 수사 중으로 표시한다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 

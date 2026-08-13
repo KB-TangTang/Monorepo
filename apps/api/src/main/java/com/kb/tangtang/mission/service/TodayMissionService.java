@@ -2,6 +2,8 @@ package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.mission.dto.TodayMissionDto;
+import com.kb.tangtang.mission.dto.MissionStreakCountDto;
+import com.kb.tangtang.mission.dto.MissionStreakDto;
 import com.kb.tangtang.mission.mapper.TodayMissionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -10,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.DayOfWeek;
+import java.time.temporal.TemporalAdjusters;
 
 @Service
 public class TodayMissionService {
@@ -41,6 +45,22 @@ public class TodayMissionService {
             mission.setGuideMessage(buildNoSpendGuideMessage(mission.getCategoryName()));
         }
         return mission;
+    }
+
+    @Transactional(readOnly = true)
+    public MissionStreakDto getMissionStreak(long userId) {
+        LocalDate today = LocalDate.now(clock.withZone(SEOUL_ZONE));
+        LocalDate weekStartDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate weekEndDate = weekStartDate.plusDays(6);
+        MissionStreakCountDto counts = todayMissionMapper.findStreakCounts(userId);
+
+        MissionStreakDto streak = new MissionStreakDto();
+        streak.setStreakCount(counts == null ? 0 : counts.getStreakCount());
+        streak.setLongestStreakCount(counts == null ? 0 : counts.getLongestStreakCount());
+        streak.setWeekStartDate(weekStartDate);
+        streak.setWeekEndDate(weekEndDate);
+        streak.setWeeklyResults(todayMissionMapper.findWeeklyResults(userId, weekStartDate, weekEndDate));
+        return streak;
     }
 
     private String buildNoSpendGuideMessage(String categoryName) {

@@ -16,6 +16,7 @@ import {
 } from '@/services/personalMissionFlow';
 import {
     fetchMissionCategoryAnalysis,
+    fetchMissionStreak,
     fetchTodayMission,
     reassignTodayMission as requestTodayMissionReassignment,
 } from '@/api/personalMission';
@@ -57,6 +58,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         consentState: null,
         todayMission: null,
         categoryAnalysis: null,
+        missionStreak: null,
         selectedProsecutorId: DEFAULT_PROSECUTOR_ID,
         selectedDifficultyId: DEFAULT_PROSECUTOR_ID,
         pendingVerdict: null,
@@ -170,6 +172,10 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         async loadCategoryAnalysis() {
             this.categoryAnalysis = await fetchMissionCategoryAnalysis();
+        },
+
+        async loadMissionStreak() {
+            this.missionStreak = await fetchMissionStreak();
         },
 
         async waitForTodayMission() {
