@@ -118,6 +118,44 @@ class MonthlyAiAnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("스냅샷 행이 없을 때만 온디맨드 생성이 스냅샷 저장과 AI 호출을 함께 수행한다")
+    void generatesWhenSnapshotIsMissing() {
+        MonthlyAiAnalysisSnapshot pendingSnapshot = new MonthlyAiAnalysisSnapshot(
+                1L, null, null, "NOT_REQUESTED");
+        when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
+                .thenReturn(null, null, pendingSnapshot);
+        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
+                .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
+        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
+                eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
+        when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
+                .yearMonth("2026-07")
+                .feedbacks(List.of("새로 생성한 분석"))
+                .savingsAnalogy("이번달 아낀 128,000원은 치킨 5마리")
+                .build());
+        when(stateService.complete(eq(USER_ID), eq("2026-07"), any(), any())).thenReturn(1);
+
+        MonthlyAiAnalysisDto result = service.generateIfSnapshotMissing(USER_ID, "2026-07");
+
+        assertEquals("COMPLETED", result.getStatus());
+        verify(snapshotService).savePendingSnapshot(USER_ID, "2026-07");
+        verify(provider).generate(any());
+    }
+
+    @Test
+    @DisplayName("스냅샷 행이 이미 있으면 온디맨드 생성은 시작하지 않는다")
+    void skipsOnDemandGenerationWhenSnapshotExists() {
+        when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
+                .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
+
+        MonthlyAiAnalysisDto result = service.generateIfSnapshotMissing(USER_ID, "2026-07");
+
+        assertNull(result);
+        verifyNoInteractions(snapshotService, provider, stateService);
+    }
+
+    @Test
     @DisplayName("다른 요청이 생성 중이면 409로 막고 외부 AI를 호출하지 않는다")
     void rejectsInProgressGeneration() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
