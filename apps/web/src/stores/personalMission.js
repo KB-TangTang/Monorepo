@@ -11,7 +11,10 @@ import {
     MOCK_COMMON_MISSION,
 } from '@/fixtures/personalChallenge';
 import { MOCK_PERSONAL_MISSION_PROFILE } from '@/fixtures/personalMission';
-import { hasEnoughPersonalMissionData } from '@/services/personalMissionFlow';
+import {
+    hasEnoughPersonalMissionData,
+    toTodayMissionBriefing,
+} from '@/services/personalMissionFlow';
 import { fetchTodayMission } from '@/api/personalMission';
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
 
@@ -96,6 +99,10 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             if (!this.hasEnoughData) return 'insufficient';
             if (this.hasPendingVerdict) return 'verdict';
             return 'active';
+        },
+
+        todayBriefing(state) {
+            return toTodayMissionBriefing(state.todayMission) ?? state.briefing;
         },
     },
 

@@ -191,7 +191,7 @@ function setDemoFail() {
             :date="courtDate"
             :prosecutor-image="store.selectedProsecutor?.image"
             :prosecutor-name="store.selectedProsecutor?.name"
-            :quote="'&quot;오늘은 ' + store.briefing.categoryName + '을\n지켜보겠습니다&quot;'"
+            :quote="'&quot;오늘은 ' + store.todayBriefing.categoryName + '을\n지켜보겠습니다&quot;'"
         />
 
         <!-- 헤더: 축소 모드 (no-account) -->
@@ -253,11 +253,13 @@ function setDemoFail() {
                     배정되지 않아요.
                 </div>
                 <PersonalBriefingCard
-                    :category-name="store.briefing.categoryName"
-                    :alibi-condition="store.briefing.alibiCondition"
-                    :current-amount="store.briefing.currentAmount"
-                    :limit-amount="store.briefing.limitAmount"
-                    :streak-days="store.briefing.streakDays"
+                    :mission-title="store.todayBriefing.missionTitle"
+                    :mission-content="store.todayBriefing.missionContent"
+                    :category-name="store.todayBriefing.categoryName"
+                    :alibi-condition="store.todayBriefing.alibiCondition"
+                    :current-amount="store.todayBriefing.currentAmount"
+                    :limit-amount="store.todayBriefing.limitAmount"
+                    :streak-days="store.todayBriefing.streakDays"
                     :prosecutor-name="store.selectedProsecutor?.name"
                     :prosecutor-image="store.selectedProsecutor?.image"
                     @prosecutor-click="openTangiSheet"

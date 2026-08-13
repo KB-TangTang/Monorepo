@@ -26,6 +26,28 @@ export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     return Math.min(Math.round((currentAmount / targetAmount) * 100), 100);
 }
 
+export function toTodayMissionBriefing(mission) {
+    if (!mission) {
+        return null;
+    }
+
+    const targetAmount = Number(mission.targetValue ?? 0);
+
+    return {
+        missionTitle: mission.missionTitle ?? '',
+        missionContent: mission.missionContent ?? '',
+        categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
+        alibiCondition:
+            mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? '',
+        currentAmount: null,
+        limitAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
+        streakDays: 0,
+        difficultyName: mission.difficultyName ?? '',
+        assignDate: mission.assignDate ?? '',
+        assignmentReason: mission.assignmentReason ?? '',
+    };
+}
+
 export function formatWon(amount) {
     return `${Number(amount).toLocaleString('ko-KR')}원`;
 }

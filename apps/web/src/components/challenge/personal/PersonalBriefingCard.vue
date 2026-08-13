@@ -4,9 +4,11 @@ import { tangiSceneWatch } from '@/fixtures/personalChallenge';
 import { formatWon, calculatePersonalMissionProgress } from '@/services/personalMissionFlow';
 
 const props = defineProps({
+    missionTitle: { type: String, default: '' },
+    missionContent: { type: String, default: '' },
     categoryName: { type: String, required: true },
     alibiCondition: { type: String, required: true },
-    currentAmount: { type: Number, required: true },
+    currentAmount: { type: Number, default: null },
     limitAmount: { type: Number, required: true },
     streakDays: { type: Number, default: 0 },
     prosecutorName: { type: String, default: '' },
@@ -20,6 +22,7 @@ const progress = computed(() =>
 );
 
 const remaining = computed(() => props.limitAmount - props.currentAmount);
+const hasSpendingProgress = computed(() => props.currentAmount !== null);
 </script>
 
 <template>
@@ -31,6 +34,11 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
             <span v-if="streakDays > 0" class="briefing-card__badge briefing-card__badge--streak">
                 🔥 연속 {{ streakDays }}일
             </span>
+        </div>
+
+        <div v-if="missionTitle" class="briefing-card__mission">
+            <strong>{{ missionTitle }}</strong>
+            <span v-if="missionContent">{{ missionContent }}</span>
         </div>
 
         <div class="briefing-card__details">
@@ -55,13 +63,7 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
                         <img :src="prosecutorImage" :alt="prosecutorName" />
                     </span>
                     <span class="briefing-card__prosecutor-name">{{ prosecutorName }}</span>
-                    <svg
-                        width="7"
-                        height="11"
-                        viewBox="0 0 7 11"
-                        fill="none"
-                        aria-hidden="true"
-                    >
+                    <svg width="7" height="11" viewBox="0 0 7 11" fill="none" aria-hidden="true">
                         <path
                             d="M1.5 1.5l4 4-4 4"
                             stroke="currentColor"
@@ -74,7 +76,7 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
             </div>
         </div>
 
-        <div class="briefing-card__gauge-section">
+        <div v-if="hasSpendingProgress" class="briefing-card__gauge-section">
             <div class="briefing-card__gauge-wrap">
                 <img
                     :src="tangiSceneWatch"
@@ -83,10 +85,7 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
                     :style="{ left: progress + '%' }"
                 />
                 <div class="briefing-card__gauge-track">
-                    <div
-                        class="briefing-card__gauge-fill"
-                        :style="{ width: progress + '%' }"
-                    ></div>
+                    <div class="briefing-card__gauge-fill" :style="{ width: progress + '%' }"></div>
                     <div class="briefing-card__gauge-marker"></div>
                 </div>
                 <div class="briefing-card__gauge-labels">
@@ -99,6 +98,9 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
                     </span>
                 </div>
             </div>
+        </div>
+        <div v-else class="briefing-card__target-only">
+            오늘 목표 <strong>{{ formatWon(limitAmount) }}</strong>
         </div>
     </div>
 </template>
@@ -136,6 +138,23 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
     display: flex;
     align-items: center;
     gap: var(--tt-space-2);
+}
+
+.briefing-card__mission {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-1);
+    margin-top: var(--tt-space-3);
+}
+
+.briefing-card__mission strong {
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text);
+}
+
+.briefing-card__mission span {
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
 }
 
 .briefing-card__badge {
@@ -225,6 +244,18 @@ const remaining = computed(() => props.limitAmount - props.currentAmount);
     margin-top: var(--tt-space-3);
     border-top: 1px dashed var(--tt-border-divider);
     padding-top: 14px;
+}
+
+.briefing-card__target-only {
+    margin-top: var(--tt-space-3);
+    padding-top: var(--tt-space-3);
+    border-top: 1px dashed var(--tt-border-divider);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.briefing-card__target-only strong {
+    color: var(--tt-accent-deep);
 }
 
 .briefing-card__gauge-wrap {
