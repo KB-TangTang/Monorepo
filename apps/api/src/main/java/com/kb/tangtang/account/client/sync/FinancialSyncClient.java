@@ -25,6 +25,7 @@ import java.util.List;
 public interface FinancialSyncClient {
     List<BankAccountSyncDto> getBankAccounts(String scenarioKey);
     List<BankTransactionSyncDto> getBankTransactions(String scenarioKey, long accountId);
+    List<BankTransactionSyncDto> getBankTransactions(String scenarioKey, long accountId, String yearMonth);
     List<DepositSyncDto> getDeposits(String scenarioKey);
     List<DepositTransactionSyncDto> getDepositTransactions(String scenarioKey, long depositAccountId);
     StockAssetSyncDto getStockAsset(String scenarioKey);
@@ -35,5 +36,6 @@ public interface FinancialSyncClient {
     List<PayMoneyTransactionSyncDto> getPayMoneyTransactions(String scenarioKey, long payMoneyId);
     List<CardSyncDto> getCards(String scenarioKey);
     List<CardApprovalSyncDto> getCardApprovals(String scenarioKey, long cardId);
+    List<CardApprovalSyncDto> getCardApprovals(String scenarioKey, long cardId, String yearMonth);
     List<CardBillSyncDto> getCardBills(String scenarioKey, long cardId);
 }

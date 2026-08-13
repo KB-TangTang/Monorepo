@@ -158,4 +158,52 @@ class MockFinancialSyncClientTest {
 
         server.verify();
     }
+
+    @Test
+    @DisplayName("yearMonth 를 주면 은행 거래 조회 URL 에 쿼리 파라미터로 붙는다")
+    void getBankTransactionsAddsYearMonthQueryParam() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo(BASE_URL + "/api/v1/accounts/1/transactions?yearMonth=2026-08"))
+                .andRespond(withSuccess("""
+                        {"code":"SUCCESS","message":"ok","data":{"transactions":[]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+        client.getBankTransactions("1", 1L, "2026-08");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("yearMonth 를 생략하면(null) 쿼리 파라미터가 붙지 않는다 — 기존 전체 이력 동작 유지")
+    void getBankTransactionsOmitsYearMonthWhenNull() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo(BASE_URL + "/api/v1/accounts/1/transactions"))
+                .andRespond(withSuccess("""
+                        {"code":"SUCCESS","message":"ok","data":{"transactions":[]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+        client.getBankTransactions("1", 1L, null);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("yearMonth 를 주면 카드 승인 조회 URL 에도 쿼리 파라미터로 붙는다")
+    void getCardApprovalsAddsYearMonthQueryParam() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo(BASE_URL + "/api/v1/cards/1/approvals?yearMonth=2026-08"))
+                .andRespond(withSuccess("""
+                        {"code":"SUCCESS","message":"ok","data":{"approvals":[]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+        client.getCardApprovals("1", 1L, "2026-08");
+
+        server.verify();
+    }
 }

@@ -65,7 +65,12 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
 
     @Override
     public List<BankTransactionSyncDto> getBankTransactions(String scenarioKey, long accountId) {
-        Map<String, Object> data = get("/api/v1/accounts/" + accountId + "/transactions", scenarioKey);
+        return getBankTransactions(scenarioKey, accountId, null);
+    }
+
+    @Override
+    public List<BankTransactionSyncDto> getBankTransactions(String scenarioKey, long accountId, String yearMonth) {
+        Map<String, Object> data = get("/api/v1/accounts/" + accountId + "/transactions", scenarioKey, yearMonth);
         List<BankTransactionSyncDto> result = new ArrayList<>();
         for (Object item : asList(data.get("transactions"))) {
             Map<?, ?> row = (Map<?, ?>) item;
@@ -290,7 +295,12 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
 
     @Override
     public List<CardApprovalSyncDto> getCardApprovals(String scenarioKey, long cardId) {
-        Map<String, Object> data = get("/api/v1/cards/" + cardId + "/approvals", scenarioKey);
+        return getCardApprovals(scenarioKey, cardId, null);
+    }
+
+    @Override
+    public List<CardApprovalSyncDto> getCardApprovals(String scenarioKey, long cardId, String yearMonth) {
+        Map<String, Object> data = get("/api/v1/cards/" + cardId + "/approvals", scenarioKey, yearMonth);
         List<CardApprovalSyncDto> result = new ArrayList<>();
         for (Object item : asList(data.get("approvals"))) {
             Map<?, ?> row = (Map<?, ?>) item;
@@ -336,7 +346,20 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> get(String path, String scenarioKey) {
-        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path(path).toUriString();
+        return get(path, scenarioKey, null);
+    }
+
+    /**
+     * yearMonth 가 있으면 쿼리 파라미터로 붙인다 — BANK/CARD 증분 수집 전용(이슈 #199).
+     * 나머지는 기존 get(path, scenarioKey)와 동일한 envelope 해석 로직이다.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> get(String path, String scenarioKey, String yearMonth) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl).path(path);
+        if (yearMonth != null && !yearMonth.isBlank()) {
+            builder.queryParam("yearMonth", yearMonth);
+        }
+        String url = builder.toUriString();
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Scenario-Key", scenarioKey);
 
