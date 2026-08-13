@@ -9,11 +9,11 @@ import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vu
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
-import { fetchMyGroupChallenges } from '@/api/groupChallenge';
+import { fetchMyGroupChallenges, runGroupChallengeStatusBatch } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
 import { MOCK_TODO_ITEMS } from '@/fixtures/groupChallenge';
-import { ArrowPathIcon } from '@heroicons/vue/24/outline';
+import { ArrowPathIcon, BoltIcon } from '@heroicons/vue/24/outline';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
@@ -116,6 +116,26 @@ function cycleDevState() {
     } else if (devStateIndex.value === 2) {
         doneIds.value = [];
         devStateIndex.value = 0;
+    }
+}
+
+/* ── DEV 시작 배치 트리거 (이슈 #152) ───────
+ * 상태 전이는 매일 00:01 배치가 한다. 시연 때 자정을 기다릴 수 없어 버튼으로 뺐다.
+ * 「시작하기」 버튼이 아니다 — 배치를 그대로 돌리므로 조건을 만족한 그룹만 바뀐다.
+ * 오늘 시작 + 2명 이상 → ACTIVE / 오늘 시작 + 1명 → CLOSED / 시작일이 미래 → 그대로. */
+const devBatchRunning = ref(false);
+
+async function runStatusBatch() {
+    if (devBatchRunning.value) return;
+    devBatchRunning.value = true;
+    try {
+        const result = await runGroupChallengeStatusBatch();
+        flash(result.affected > 0 ? `${result.affected}건 전이됨` : '전이 대상 없음');
+        await loadActiveChallenges();
+    } catch (err) {
+        flash(err.message ?? '배치 실행에 실패했어요');
+    } finally {
+        devBatchRunning.value = false;
     }
 }
 
@@ -296,6 +316,18 @@ function livesColor(challenge) {
             <ArrowPathIcon class="gc-dev-fab__icon" />
             {{ devStateLabel }}
         </button>
+
+        <!-- DEV: 시작 상태 전이 배치 즉시 실행 (자정을 기다리지 않기 위한 문) -->
+        <button
+            v-if="isDev"
+            type="button"
+            class="gc-dev-fab gc-dev-fab--batch"
+            :disabled="devBatchRunning"
+            @click="runStatusBatch"
+        >
+            <BoltIcon class="gc-dev-fab__icon" />
+            {{ devBatchRunning ? '실행 중…' : '챌린지 시작 배치' }}
+        </button>
     </div>
 </template>
 
@@ -325,6 +357,16 @@ function livesColor(challenge) {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+/* TO-DO 상태 전환 버튼 위에 한 칸 더 쌓는다 (tabbar +16 / +56 / +96) */
+.gc-dev-fab--batch {
+    bottom: calc(var(--tt-tabbar-height) + 96px);
+}
+
+.gc-dev-fab--batch:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .gc-dev-fab__icon {
