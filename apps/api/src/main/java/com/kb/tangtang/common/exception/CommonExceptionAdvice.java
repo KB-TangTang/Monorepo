@@ -22,7 +22,7 @@ public class CommonExceptionAdvice {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException ex) {
         log.warn("BusinessException [{}] {}", ex.getCode(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(ex.getHttpStatus())
                 .body(ApiResponse.error(ex.getCode(), ex.getMessage()));
     }
 

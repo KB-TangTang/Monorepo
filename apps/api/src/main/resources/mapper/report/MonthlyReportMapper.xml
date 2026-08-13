@@ -68,4 +68,56 @@
           AND is_excluded = 0
     </select>
 
+    <select id="findAiAnalysisSnapshot"
+            resultType="com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot">
+        SELECT id,
+               ai_comment,
+               compare_comment,
+               ai_analysis_status
+        FROM tbl_asset_snapshot
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+    </select>
+
+    <update id="claimAiAnalysisGeneration">
+        UPDATE tbl_asset_snapshot
+        SET ai_analysis_status = 'IN_PROGRESS',
+            ai_analysis_provider = #{provider},
+            ai_analysis_model = #{model},
+            ai_analysis_prompt_version = #{promptVersion},
+            ai_analysis_input_hash = #{inputHash},
+            ai_analysis_attempt_count = ai_analysis_attempt_count + 1,
+            ai_analysis_requested_at = CURRENT_TIMESTAMP,
+            ai_analysis_completed_at = NULL,
+            ai_analysis_failed_at = NULL,
+            ai_analysis_failure_code = NULL
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status IN ('NOT_REQUESTED', 'FAILED')
+    </update>
+
+    <update id="completeAiAnalysis">
+        UPDATE tbl_asset_snapshot
+        SET ai_comment = CAST(#{feedbacksJson} AS JSON),
+            compare_comment = #{savingsAnalogy},
+            ai_analysis_status = 'COMPLETED',
+            ai_analysis_completed_at = CURRENT_TIMESTAMP,
+            ai_analysis_failed_at = NULL,
+            ai_analysis_failure_code = NULL
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status = 'IN_PROGRESS'
+    </update>
+
+    <update id="failAiAnalysis">
+        UPDATE tbl_asset_snapshot
+        SET ai_analysis_status = 'FAILED',
+            ai_analysis_failed_at = CURRENT_TIMESTAMP,
+            ai_analysis_completed_at = NULL,
+            ai_analysis_failure_code = #{failureCode}
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status = 'IN_PROGRESS'
+    </update>
+
 </mapper>
