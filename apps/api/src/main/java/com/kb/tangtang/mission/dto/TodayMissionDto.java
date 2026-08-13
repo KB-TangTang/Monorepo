@@ -23,6 +23,7 @@ public class TodayMissionDto {
     private BigDecimal targetRate;
     private BigDecimal baseAmount;
     private BigDecimal targetValue;
+    private BigDecimal currentAmount;
     private String result;
     private String assignmentReason;
     private String guideMessage;

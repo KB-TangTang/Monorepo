@@ -32,14 +32,17 @@ export function toTodayMissionBriefing(mission) {
     }
 
     const targetAmount = Number(mission.targetValue ?? 0);
+    const currentAmount = Number(mission.currentAmount ?? 0);
+    const isRelativeMission = mission.missionType === 'RELATIVE';
 
     return {
         missionTitle: mission.missionTitle ?? '',
         missionContent: mission.missionContent ?? '',
         categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
-        alibiCondition:
-            mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? '',
-        currentAmount: null,
+        alibiCondition: isRelativeMission
+            ? `오늘 ${formatWon(targetAmount)} 이하`
+            : (mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? ''),
+        currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
         limitAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
         streakDays: 0,
         difficultyName: mission.difficultyName ?? '',
@@ -49,7 +52,9 @@ export function toTodayMissionBriefing(mission) {
 }
 
 export function formatWon(amount) {
-    return `${Number(amount).toLocaleString('ko-KR')}원`;
+    const numericAmount = Number(amount);
+    const roundedAmount = Number.isFinite(numericAmount) ? Math.round(numericAmount) : 0;
+    return `${roundedAmount.toLocaleString('ko-KR')}원`;
 }
 
 /* ── v4 추가 함수 ──────────────────────────────────── */

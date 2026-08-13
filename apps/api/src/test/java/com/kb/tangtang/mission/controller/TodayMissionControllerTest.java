@@ -46,7 +46,8 @@ class TodayMissionControllerTest {
                 .andExpect(jsonPath("$.data.missionId").value(11))
                 .andExpect(jsonPath("$.data.missionType").value("RELATIVE"))
                 .andExpect(jsonPath("$.data.assignDate").value("2026-08-12"))
-                .andExpect(jsonPath("$.data.targetValue").value(18000));
+                .andExpect(jsonPath("$.data.targetValue").value(18000))
+                .andExpect(jsonPath("$.data.currentAmount").value(3200));
     }
 
     private HandlerMethodArgumentResolver loginUserResolver() {
@@ -77,6 +78,7 @@ class TodayMissionControllerTest {
             mission.setMissionType("RELATIVE");
             mission.setAssignDate(LocalDate.of(2026, 8, 12));
             mission.setTargetValue(new BigDecimal("18000.00"));
+            mission.setCurrentAmount(new BigDecimal("3200.00"));
             return mission;
         }
     }
