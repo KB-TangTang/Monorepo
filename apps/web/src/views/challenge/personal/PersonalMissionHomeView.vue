@@ -240,6 +240,13 @@ async function reassignTodayMission() {
             compact-title="아직 수사할 증거가<br>모이지 않았습니다"
         />
 
+        <!-- 철회 후 오늘 미션 없음: 법원·날짜·알림 헤더는 기본 크기로 유지 -->
+        <PersonalCourtHeader
+            v-else-if="store.screenState === 'withdrawn'"
+            :court-image="courtSupreme"
+            :date="courtDate"
+        />
+
         <!-- 메인 컨텐츠 -->
         <main
             class="personal-home__content"

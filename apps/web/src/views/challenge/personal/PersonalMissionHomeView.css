@@ -14,7 +14,7 @@
 }
 
 .personal-home__content--withdrawn {
-    min-height: calc(100vh - var(--tt-tabbar-height));
+    min-height: calc(100vh - 210px - var(--tt-tabbar-height));
     justify-content: center;
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-12));
 }
