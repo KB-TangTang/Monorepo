@@ -1,6 +1,7 @@
 package com.kb.tangtang.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kb.tangtang.common.auth.AuthCookieWriter;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.exception.CommonExceptionAdvice;
 import com.kb.tangtang.common.storage.ImageProcessor;
@@ -18,10 +19,12 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -34,6 +37,7 @@ class UserControllerTest {
     private static final long USER_ID = 7L;
 
     @Mock private UserService userService;
+    @Mock private AuthCookieWriter cookieWriter;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -58,7 +62,8 @@ class UserControllerTest {
             }
         };
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService, new ImageProcessor()))
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(new UserController(userService, new ImageProcessor(), cookieWriter))
                 .setCustomArgumentResolvers(loginUser)
                 .setControllerAdvice(new CommonExceptionAdvice())
                 .build();
@@ -187,5 +192,21 @@ class UserControllerTest {
                         .delete("/api/users/me/profile-image"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/users/me 는 탈퇴를 호출하고 리프레시 쿠키를 지운다")
+    void 탈퇴() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/users/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(userService).withdraw(USER_ID);
+        /*
+         * 리프레시 쿠키는 httpOnly 라 프론트가 지울 수 없다.
+         * 여기서 안 지우면 탈퇴 후에도 브라우저가 stale 쿠키를 계속 보낸다.
+         */
+        verify(cookieWriter).clearRefreshToken(any(HttpServletResponse.class));
     }
 }
