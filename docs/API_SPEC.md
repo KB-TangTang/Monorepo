@@ -10,160 +10,6 @@
 인증이 필요한 요청은 `Authorization: Bearer <accessToken>` 헤더를 보낸다.
 리프레시 토큰은 httpOnly 쿠키(`refresh_token`, `Path=/api/auth`)로만 오간다.
 
-## 월간 소비 리포트
-
-모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.
-`yearMonth`는 `YYYY-MM` 형식이고 현재월·미래월·가입 이전 월은 상세 조회할 수 없다.
-
-| Method | Endpoint | 응답 책임 |
-|---|---|---|
-| GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
-| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
-| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
-| GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
-| POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 월간 집계 스냅샷을 저장한 뒤 AI 소비 피드백·절약 비유를 수동 생성·재시도하거나 저장된 성공 결과를 재사용 |
-| GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유만 조회 |
-
-월 선택기 응답은 다음 형태다.
-
-```json
-{
-  "months": [
-    {
-      "value": "2026-08",
-      "year": 2026,
-      "month": 8,
-      "available": true,
-      "hasReport": false,
-      "status": "ONBOARDING"
-    }
-  ]
-}
-```
-
-`status`는 `ONBOARDING`, `FIRST_REPORT`, `READY`, `CURRENT` 중 하나다. 가입월이 아직
-진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
-가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
-(`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
-`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
-선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
-
-집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
-일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
-기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
-
-최근 6개월 추이는 가입월 이전 슬롯을 `{amount:null, hasData:false}`로 표시한다.
-가입 이후 완료월에 소비가 없으면 `{amount:0, hasData:true}`로 표시하여 실제 0원 월과 구분한다.
-
-증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
-증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
-`hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
-
-프론트 화면 상태는 월 목록의 `status`와 요약 응답의 `hasPreviousComparison`으로 결정한다.
-`ONBOARDING`은 온보딩 화면, `FIRST_REPORT`는 전월 비교가 없는 첫 리포트,
-`READY`는 일반 리포트로 표시한다. 상세 집계 응답에는 별도 상태 필드를 추가하지 않고,
-`hasPreviousComparison=false`인 응답을 `FIRST_REPORT` 화면 모델로 조합한다.
-
-카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
-선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
-`parentCategoryName`을 포함한다. 대분류가 직접 지정된 거래는 해당 대분류 자체를 명세 항목으로
-반환한다. 카테고리 없는 소비는 두 목록 모두 ID `null`, 이름 `"미분류"`로 반환한다. 환불 반영 후
-각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
-이 API의 범위가 아니다.
-
-AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에 아래 구조를 저장한다.
-이는 #154의 카테고리 응답과 같은 월간 집계 스냅샷이다. 스냅샷이 없거나 AI 상태가
-`NOT_REQUESTED`·`FAILED`인 경우에만 최신 집계를 저장한다. `COMPLETED` 또는 `IN_PROGRESS`인 행은
-`category_summary_json`을 포함한 스냅샷을 갱신하지 않는다.
-
-```json
-{
-  "yearMonth": "2026-07",
-  "totalSpent": 3802832,
-  "parentCategories": [
-    {
-      "categoryId": 1,
-      "categoryName": "식비",
-      "amount": 671083,
-      "ratio": 17.65
-    }
-  ],
-  "categories": [
-    {
-      "parentCategoryId": 1,
-      "parentCategoryName": "식비",
-      "categoryId": 13,
-      "categoryName": "음식점/외식",
-      "amount": 174649,
-      "ratio": 4.59,
-      "previousMonthAmount": 136374,
-      "changeRate": 28.07
-    }
-  ]
-}
-```
-
-### `POST /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
-
-월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성한다. 요청 본문은 없으며 `yearMonth`는 필수 쿼리 파라미터다. 스냅샷이 없거나 상태가 `NOT_REQUESTED`·`FAILED`이면 `user_id`, `year_month`, `total_asset`, `total_debt`, `net_worth`, `category_summary_json`을 최신 값으로 저장한 뒤 생성·재시도한다. `total_asset`은 활성 연결계좌 잔액을 기준으로 하되 증권계좌는 보유 종목 평가금액을 사용해 중복 집계를 막고, `total_debt`은 대출 잔액 합계, `net_worth`는 그 차이다. `COMPLETED`면 저장된 스냅샷과 성공 결과를 그대로 반환하며, `IN_PROGRESS`면 스냅샷을 바꾸지 않고 중복 생성을 막는다.
-
-- 인증: Bearer JWT
-- 요청 본문: 없음
-- `yearMonth`: `YYYY-MM` 형식, 필수
-- 외부 전송 범위: 월별·카테고리별 집계 및 서버가 계산한 절감액만 허용한다. 사용자 식별 정보, 계좌·카드 정보, 거래 원문은 전송하지 않는다.
-- `feedbacks`: 1~3개의 문자열만 반환한다. 각 배열 원소는 제목이나 분류 객체가 아닌 사용자에게 보여 줄 피드백 문장 하나다.
-- `savingsAnalogy`: 절감액이 양수이고 전월 비교가 가능한 경우에만 문자열로 반환한다. AI는 반드시 `이번달 아낀 {절감액}원은 {실물자산} {수량}{실물자산의 단위}` 형식으로 생성한다. 예: `이번달 아낀 128,000원은 카페라떼 26잔`.
-- 첫 리포트이거나 절감액이 0원이면 `savingsAnalogy`는 `null`이다.
-- `status`: 성공 응답은 `COMPLETED`다. 상태와 결과는 `tbl_asset_snapshot`에 함께 저장하지만, 기존 #156의 AI 입력 집계·비식별화·외부 호출 규칙은 변경하지 않는다.
-
-```json
-{
-  "success": true,
-  "data": {
-    "yearMonth": "2026-07",
-    "status": "COMPLETED",
-    "feedbacks": [
-      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
-      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
-    ],
-    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
-  }
-}
-```
-
-주요 실패는 잘못된 월(`400 INVALID_REQUEST`), 조회 불가 월(`404 NOT_FOUND`), 이미 생성 중인 월(`409 AI_ANALYSIS_IN_PROGRESS`), 호출 제한(`429 TOO_MANY_REQUESTS`), 외부 AI 일시 장애(`503 AI_PROVIDER_UNAVAILABLE`)로 구분한다.
-
-### `GET /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
-
-저장된 AI 분석 상태와 결과만 조회한다. 이 경로는 외부 AI 제공자·AI 생성 서비스·POST 생성 경로를 호출하지 않으며, 스냅샷 행을 새로 만들거나 갱신하지 않는다.
-
-- 인증: Bearer JWT
-- 요청 본문: 없음
-- `yearMonth`: `YYYY-MM` 형식, 필수
-- `COMPLETED`: `feedbacks`는 저장된 문자열 1~3개, `savingsAnalogy`는 저장된 문자열 또는 `null`
-- `NOT_REQUESTED`, `IN_PROGRESS`, `FAILED`: `feedbacks`는 빈 배열, `savingsAnalogy`는 `null`
-- 스냅샷 행이 없어도 정상 상태인 `NOT_REQUESTED`와 빈 결과를 `200 OK`로 반환한다.
-- `ai_analysis_failure_code`, 제공자·모델·프롬프트 버전·입력 해시·원문 AI 응답은 노출하지 않는다.
-
-```json
-{
-  "success": true,
-  "data": {
-    "yearMonth": "2026-07",
-    "status": "COMPLETED",
-    "feedbacks": [
-      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
-      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
-    ],
-    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
-  }
-}
-```
-
-저장된 `COMPLETED` JSON이 훼손돼 결과를 안전하게 조립할 수 없는 경우에만
-`503 AI_ANALYSIS_RESULT_UNAVAILABLE`을 반환한다. 이는 월간 총소비·추이·카테고리 조회 실패와
-분리된 부가 데이터 오류이며, 화면은 핵심 리포트를 계속 표시한다.
-
 ## 공통
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -774,3 +620,163 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 
 요청은 `{ "difficultyName": "EASY" }` 형식이며 `EASY`, `NORMAL`, `HARD` 중 하나를 보낸다.
 응답은 갱신된 `UserMeDto`다. 변경한 값은 이미 배정된 오늘 미션에는 소급하지 않고 다음 미션 배정부터 적용한다.
+
+## 월간 소비 리포트
+
+모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.
+`yearMonth`는 `YYYY-MM` 형식이고 현재월·미래월·가입 이전 월은 상세 조회할 수 없다.
+
+| Method | Endpoint | 응답 책임 |
+|---|---|---|
+| GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
+| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
+| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
+| GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
+| POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 매월 1일 00:15 KST 배치가 자동 생성하는 결과의 수동 재처리·재시도 또는 저장된 성공 결과 재사용 |
+| GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유 조회. 스냅샷 행이 없으면 온디맨드 생성 후 결과 반환 |
+
+월 선택기 응답은 다음 형태다.
+
+```json
+{
+  "months": [
+    {
+      "value": "2026-08",
+      "year": 2026,
+      "month": 8,
+      "available": true,
+      "hasReport": false,
+      "status": "ONBOARDING"
+    }
+  ]
+}
+```
+
+`status`는 `ONBOARDING`, `FIRST_REPORT`, `READY`, `CURRENT` 중 하나다. 가입월이 아직
+진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
+가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
+(`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
+`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
+선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
+
+집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
+일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
+기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
+
+최근 6개월 추이는 가입월 이전 슬롯을 `{amount:null, hasData:false}`로 표시한다.
+가입 이후 완료월에 소비가 없으면 `{amount:0, hasData:true}`로 표시하여 실제 0원 월과 구분한다.
+
+증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
+증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
+`hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
+
+프론트 화면 상태는 월 목록의 `status`와 요약 응답의 `hasPreviousComparison`으로 결정한다.
+`ONBOARDING`은 온보딩 화면, `FIRST_REPORT`는 전월 비교가 없는 첫 리포트,
+`READY`는 일반 리포트로 표시한다. 상세 집계 응답에는 별도 상태 필드를 추가하지 않고,
+`hasPreviousComparison=false`인 응답을 `FIRST_REPORT` 화면 모델로 조합한다.
+
+카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
+선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
+`parentCategoryName`을 포함한다. 대분류가 직접 지정된 거래는 해당 대분류 자체를 명세 항목으로
+반환한다. 카테고리 없는 소비는 두 목록 모두 ID `null`, 이름 `"미분류"`로 반환한다. 환불 반영 후
+각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
+이 API의 범위가 아니다.
+
+월간 리포트 배치는 매월 1일 **00:15 KST**에 정확히 이전 달만 대상으로 실행한다. `ACTIVE`이면서
+대상 월의 다음 달 1일보다 전에 가입한 사용자만 처리하며, 서버 기동 시 과거 월을 일괄 보정하지 않는다.
+같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에는 아래 #154 카테고리 응답 구조를 저장한다.
+스냅샷이 없거나 AI 상태가 `NOT_REQUESTED`·`FAILED`인 경우에만 최신 집계를 저장한다. `COMPLETED` 또는
+`IN_PROGRESS` 행은 `category_summary_json`을 포함한 스냅샷을 갱신하지 않는다.
+
+일시 장애(`TOO_MANY_REQUESTS`, `AI_PROVIDER_UNAVAILABLE`)로 `FAILED`가 된 행은 총 3회 시도 안에서만
+자동 재시도한다. 1~3일 **00:40 KST** 복구 실행은 마지막 실패 후 20분이 지난 행만 다시 처리한다.
+`IN_PROGRESS`는 자동 복구하지 않아 외부 AI의 중복 호출을 피한다. AI 생성 실패는 해당 사용자의 상태만
+`FAILED`로 남기며, 월간 집계·추이·카테고리 조회는 계속 가능하다.
+
+```json
+{
+  "yearMonth": "2026-07",
+  "totalSpent": 3802832,
+  "parentCategories": [
+    {
+      "categoryId": 1,
+      "categoryName": "식비",
+      "amount": 671083,
+      "ratio": 17.65
+    }
+  ],
+  "categories": [
+    {
+      "parentCategoryId": 1,
+      "parentCategoryName": "식비",
+      "categoryId": 13,
+      "categoryName": "음식점/외식",
+      "amount": 174649,
+      "ratio": 4.59,
+      "previousMonthAmount": 136374,
+      "changeRate": 28.07
+    }
+  ]
+}
+```
+
+### `POST /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
+
+이 공개 경로는 월초 자동 배치를 기다릴 수 없을 때의 수동 재처리용이다. 월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성하며, 요청 본문은 없고 `yearMonth`는 필수 쿼리 파라미터다. 스냅샷이 없거나 상태가 `NOT_REQUESTED`·`FAILED`이면 `user_id`, `year_month`, `total_asset`, `total_debt`, `net_worth`, `category_summary_json`을 최신 값으로 저장한 뒤 생성·재시도한다. `total_asset`은 활성 연결계좌 잔액을 기준으로 하되 증권계좌는 보유 종목 평가금액을 사용해 중복 집계를 막고, `total_debt`은 대출 잔액 합계, `net_worth`는 그 차이다. `COMPLETED`면 저장된 스냅샷과 성공 결과를 그대로 반환하며, `IN_PROGRESS`면 스냅샷을 바꾸지 않고 중복 생성을 막는다.
+
+- 인증: Bearer JWT
+- 요청 본문: 없음
+- `yearMonth`: `YYYY-MM` 형식, 필수
+- 외부 전송 범위: 월별·카테고리별 집계 및 서버가 계산한 절감액만 허용한다. 사용자 식별 정보, 계좌·카드 정보, 거래 원문은 전송하지 않는다.
+- `feedbacks`: 1~3개의 문자열만 반환한다. 각 배열 원소는 제목이나 분류 객체가 아닌 사용자에게 보여 줄 피드백 문장 하나다.
+- `savingsAnalogy`: 절감액이 양수이고 전월 비교가 가능한 경우에만 문자열로 반환한다. AI는 반드시 `이번달 아낀 {절감액}원은 {실물자산} {수량}{실물자산의 단위}` 형식으로 생성한다. 예: `이번달 아낀 128,000원은 카페라떼 26잔`.
+- 첫 리포트이거나 절감액이 0원이면 `savingsAnalogy`는 `null`이다.
+- `status`: 성공 응답은 `COMPLETED`다. 상태와 결과는 `tbl_asset_snapshot`에 함께 저장하지만, 기존 #156의 AI 입력 집계·비식별화·외부 호출 규칙은 변경하지 않는다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "yearMonth": "2026-07",
+    "status": "COMPLETED",
+    "feedbacks": [
+      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
+      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
+    ],
+    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
+  }
+}
+```
+
+주요 실패는 잘못된 월(`400 INVALID_REQUEST`), 조회 불가 월(`404 NOT_FOUND`), 이미 생성 중인 월(`409 AI_ANALYSIS_IN_PROGRESS`), 호출 제한(`429 TOO_MANY_REQUESTS`), 외부 AI 일시 장애(`503 AI_PROVIDER_UNAVAILABLE`)로 구분한다.
+
+### `GET /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
+
+스냅샷 행이 이미 있으면 저장된 AI 분석 상태와 결과만 조회한다. 다만 월초 배치가 누락돼 해당 사용자·월의 스냅샷 행이 전혀 없으면, 이 조회는 최신 스냅샷을 저장하고 AI 분석을 생성한 뒤 그 결과를 반환한다. 기존 행이 `NOT_REQUESTED`이면 상태만 반환하므로 화면은 이어서 `POST` 생성 경로를 호출한다. `FAILED`·`IN_PROGRESS`·`COMPLETED` 기존 행은 이 조회로 상태를 바꾸지 않는다.
+
+- 인증: Bearer JWT
+- 요청 본문: 없음
+- `yearMonth`: `YYYY-MM` 형식, 필수
+- `COMPLETED`: `feedbacks`는 저장된 문자열 1~3개, `savingsAnalogy`는 저장된 문자열 또는 `null`
+- `NOT_REQUESTED`, `IN_PROGRESS`, `FAILED`: `feedbacks`는 빈 배열, `savingsAnalogy`는 `null`
+- 스냅샷 행이 없으면 온디맨드 생성 결과(`COMPLETED`) 또는 생성 실패 응답을 반환한다.
+- `ai_analysis_failure_code`, 제공자·모델·프롬프트 버전·입력 해시·원문 AI 응답은 노출하지 않는다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "yearMonth": "2026-07",
+    "status": "COMPLETED",
+    "feedbacks": [
+      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
+      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
+    ],
+    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
+  }
+}
+```
+
+저장된 `COMPLETED` JSON이 훼손돼 결과를 안전하게 조립할 수 없는 경우에만
+`503 AI_ANALYSIS_RESULT_UNAVAILABLE`을 반환한다. 이는 월간 총소비·추이·카테고리 조회 실패와
+분리된 부가 데이터 오류이며, 화면은 핵심 리포트를 계속 표시한다.
