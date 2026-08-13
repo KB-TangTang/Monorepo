@@ -111,4 +111,17 @@
           AND user_id = #{userId}
     </update>
 
+    <!--
+      배치 스케줄러 대상 사용자 선정(이슈 #199). MySQL 은 ASC 정렬에서 NULL 을 맨 앞에 두므로
+      한 번도 동기화 안 된 사용자가 자연히 최우선이 된다.
+    -->
+    <select id="findUserIdsDueForSync" resultType="java.lang.Long">
+        SELECT user_id
+        FROM tbl_connected_account
+        WHERE is_active = 1
+        GROUP BY user_id
+        ORDER BY MIN(last_sync_at) ASC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

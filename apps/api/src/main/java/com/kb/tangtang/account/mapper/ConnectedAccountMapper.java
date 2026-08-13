@@ -55,4 +55,10 @@ public interface ConnectedAccountMapper {
                      @Param("userId") long userId,
                      @Param("balance") java.math.BigDecimal balance,
                      @Param("lastSyncAt") LocalDateTime lastSyncAt);
+
+    /**
+     * 배치 스케줄러 대상 사용자 선정(이슈 #199). is_active 계좌가 있는 사용자만, 가장 오래
+     * 동기화 안 된 사용자부터 최대 limit 명. 별도 잠금·작업 테이블 없이 라운드로빈 효과를 낸다.
+     */
+    List<Long> findUserIdsDueForSync(@Param("limit") int limit);
 }
