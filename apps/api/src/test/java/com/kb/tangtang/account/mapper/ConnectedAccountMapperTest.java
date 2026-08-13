@@ -6,15 +6,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/** 진짜 DB 를 쓰므로 테스트 메서드마다 스프링 테스트의 트랜잭션 롤백에 기댄다 — TransactionMapperTest 참고. */
 @Disabled("실 DB 연결 필요 — 로컬 수동 검증용")
 @SpringJUnitConfig
 @ContextConfiguration(classes = com.kb.tangtang.config.RootConfig.class)
+@Transactional
 class ConnectedAccountMapperTest {
 
     @Autowired

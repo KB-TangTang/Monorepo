@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,9 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 진짜 DB 를 쓰므로 테스트 메서드마다 스프링 테스트의 트랜잭션 롤백에 기댄다(@Transactional 은
+ * 여기서 프로덕션과 달리 "테스트 종료 시 자동 롤백"을 의미한다) — 정리 코드 없이 재실행해도
+ * codef_tr_key UNIQUE 위반이 안 나게 하기 위함이다.
+ */
 @Disabled("실 DB 연결 필요 — 로컬 수동 검증용")
 @SpringJUnitConfig
 @ContextConfiguration(classes = com.kb.tangtang.config.RootConfig.class)
+@Transactional
 class TransactionMapperTest {
 
     @Autowired
@@ -92,9 +99,12 @@ class TransactionMapperTest {
                 .sourceType("BANK")
                 .build();
         transactionMapper.insert(alreadyClassified);
-        alreadyClassified.setCategoryId(1L);
-        alreadyClassified.setCategorySource("RULE_KEYWORD");
-        transactionMapper.update(alreadyClassified);
+        /*
+         * update() 는 재동기화용이라 category_id/category_source 를 의도적으로 SET 절에서 뺀다
+         * (이슈 #147에서 고친, 재동기화가 카테고리를 지우던 버그). 카테고리 반영은 반드시
+         * updateCategory() 로만 한다 — update() 를 쓰면 이 테스트가 아무것도 검증하지 못한다.
+         */
+        transactionMapper.updateCategory(alreadyClassified.getId(), 1L, "RULE_KEYWORD");
 
         Transaction stillUnclassified = Transaction.builder()
                 .userId(1L)
