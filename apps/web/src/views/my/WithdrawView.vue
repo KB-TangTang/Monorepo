@@ -112,15 +112,15 @@ async function confirmWithdraw() {
 }
 
 .withdraw__title {
-    font-size: 18px;
-    font-weight: 700;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
 }
 
 .withdraw__lead {
     margin: var(--tt-space-6) 0 var(--tt-space-4);
-    font-size: 20px;
-    font-weight: 700;
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
 }
 
@@ -133,8 +133,8 @@ async function confirmWithdraw() {
 }
 
 .withdraw__subtitle {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--tt-fs-label);
+    font-weight: var(--tt-fw-semibold);
     color: var(--tt-text);
     margin-bottom: var(--tt-space-2);
 }
@@ -143,13 +143,13 @@ async function confirmWithdraw() {
     margin: 0;
     padding-left: var(--tt-space-5);
     color: var(--tt-text-muted);
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     line-height: 1.7;
 }
 
 .withdraw__warning {
     color: var(--tt-danger);
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     line-height: 1.7;
     margin-bottom: var(--tt-space-6);
 }
@@ -158,7 +158,7 @@ async function confirmWithdraw() {
     display: flex;
     align-items: center;
     gap: var(--tt-space-2);
-    font-size: 14px;
+    font-size: var(--tt-fs-body);
     color: var(--tt-text);
     margin-bottom: var(--tt-space-4);
     cursor: pointer;
@@ -166,7 +166,7 @@ async function confirmWithdraw() {
 
 .withdraw__error {
     color: var(--tt-danger);
-    font-size: 13px;
+    font-size: var(--tt-fs-caption);
     margin-bottom: var(--tt-space-3);
 }
 
