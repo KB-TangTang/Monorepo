@@ -572,6 +572,21 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("카테고리화 단계에서 터져도 실패 이력을 남긴다 — 저장은 이미 커밋됐어도 흔적 없이 500 만 뜨면 안 된다")
+    void categorizationFailureIsRecordedInHistory() {
+        when(transactionCategorizationService.categorizeRuleBased(anyLong(), any()))
+                .thenThrow(new IllegalStateException("알 수 없는 tbl_merchant_category_map.source: WEIRD"));
+
+        assertThrows(IllegalStateException.class, () -> service.sync(1L));
+
+        verify(syncHistoryMapper).insert(argThat(h ->
+                "FAILED".equals(h.getStatus())
+                        && "CATEGORIZATION".equals(h.getFailedSource())
+                        && h.getFailReason() != null
+                        && h.getFailReason().contains("tbl_merchant_category_map")));
+    }
+
+    @Test
     @DisplayName("재동기화(update 경로)에서도 재조회로 채운 id 가 규칙 카테고리화 호출에 그대로 전달된다")
     void resyncPathBackfillsIdBeforeCallingRuleCategorization() {
         /* codefTrKeyIsScopedByInternalId 와 같은 방식으로 계좌 PK 를 77 로 고정한다

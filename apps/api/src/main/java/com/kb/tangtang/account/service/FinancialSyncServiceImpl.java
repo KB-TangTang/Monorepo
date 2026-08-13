@@ -84,6 +84,9 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      */
     private static final String SAVE_PHASE = "SAVE";
 
+    /** 저장은 성공했지만 그 뒤 규칙 카테고리화 단계에서 실패했다는 표시. failed_source 에 들어간다. */
+    private static final String CATEGORIZATION_PHASE = "CATEGORIZATION";
+
     /** tbl_financial_sync_history.fail_reason 은 VARCHAR(500) 이다. DB 예외 메시지는 이보다 길 수 있다. */
     private static final int FAIL_REASON_MAX = 500;
 

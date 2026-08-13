@@ -948,6 +948,7 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '대중교통', '버스카드'
     UNION ALL SELECT '택시/모빌리티', '카카오모빌리티'
     UNION ALL SELECT '택시/모빌리티', '카카오택시'
+    UNION ALL SELECT '택시/모빌리티', '카카오T'
     UNION ALL SELECT '택시/모빌리티', '우티'
     UNION ALL SELECT '택시/모빌리티', '쏘카'
     UNION ALL SELECT '택시/모빌리티', '그린카'
