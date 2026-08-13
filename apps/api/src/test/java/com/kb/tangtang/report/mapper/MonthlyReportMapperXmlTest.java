@@ -31,6 +31,9 @@ class MonthlyReportMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findMonthlySpending"));
         assertTrue(configuration.hasStatement(namespace + ".findMonthlyCategorySpending"));
         assertTrue(configuration.hasStatement(namespace + ".countActiveFixedExpenseCandidates"));
+        assertTrue(configuration.hasStatement(namespace + ".sumActiveTotalAssets"));
+        assertTrue(configuration.hasStatement(namespace + ".sumLoanBalances"));
+        assertTrue(configuration.hasStatement(namespace + ".upsertPendingAiAnalysisSnapshot"));
         assertTrue(configuration.hasStatement(namespace + ".findAiAnalysisSnapshot"));
         assertTrue(configuration.hasStatement(namespace + ".claimAiAnalysisGeneration"));
         assertTrue(configuration.hasStatement(namespace + ".completeAiAnalysis"));
@@ -47,6 +50,12 @@ class MonthlyReportMapperXmlTest {
         assertTrue(xml.contains("AS parent_category_id"));
         assertTrue(xml.contains("AS parent_category_name"));
         assertTrue(xml.contains("ai_analysis_status IN ('NOT_REQUESTED', 'FAILED')"));
+        assertTrue(xml.contains("tbl_connected_account"));
+        assertTrue(xml.contains("tbl_investment_holding"));
+        assertTrue(xml.contains("tbl_loan"));
+        assertTrue(xml.contains("CAST(#{categorySummaryJson} AS JSON)"));
+        assertTrue(xml.contains("ON DUPLICATE KEY UPDATE"));
+        assertTrue(xml.contains("WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED')"));
         assertTrue(xml.contains("CAST(#{feedbacksJson} AS JSON)"));
         assertTrue(xml.contains("WHERE user_id = #{userId}"));
         assertTrue(xml.contains("AND `year_month` = #{yearMonth}"));

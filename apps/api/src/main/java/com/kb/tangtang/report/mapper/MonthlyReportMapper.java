@@ -30,6 +30,17 @@ public interface MonthlyReportMapper {
 
     int countActiveFixedExpenseCandidates(@Param("userId") long userId);
 
+    BigDecimal sumActiveTotalAssets(@Param("userId") long userId);
+
+    BigDecimal sumLoanBalances(@Param("userId") long userId);
+
+    int upsertPendingAiAnalysisSnapshot(@Param("userId") long userId,
+                                        @Param("yearMonth") String yearMonth,
+                                        @Param("totalAsset") BigDecimal totalAsset,
+                                        @Param("totalDebt") BigDecimal totalDebt,
+                                        @Param("netWorth") BigDecimal netWorth,
+                                        @Param("categorySummaryJson") String categorySummaryJson);
+
     MonthlyAiAnalysisSnapshot findAiAnalysisSnapshot(@Param("userId") long userId,
                                                       @Param("yearMonth") String yearMonth);
 

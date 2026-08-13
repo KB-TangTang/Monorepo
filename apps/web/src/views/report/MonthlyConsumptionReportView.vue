@@ -14,6 +14,7 @@ import MonthlyCategoryReport from '@/components/report/monthly-consumption/Month
 import MonthlyReportOnboarding from '@/components/report/monthly-consumption/MonthlyReportOnboarding.vue';
 import MonthlyReportMonthPicker from '@/components/report/monthly-consumption/MonthlyReportMonthPicker.vue';
 import MonthlySavingsCompleteTicket from '@/components/report/monthly-consumption/MonthlySavingsCompleteTicket.vue';
+import MonthlySavingsAnalogyCard from '@/components/report/monthly-consumption/MonthlySavingsAnalogyCard.vue';
 import TempMonthlyReportSourceToggle from '@/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue';
 import MonthlyVerdictSummary from '@/components/report/monthly-consumption/MonthlyVerdictSummary.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
@@ -22,7 +23,6 @@ import BaseCard from '@/components/common/BaseCard.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
-import savingTangi from '@/assets/images/emotions/42_thumbs_up.png';
 import { useAuthStore } from '@/stores/auth';
 import {
     buildMonthlyTrendSlots,
@@ -215,14 +215,15 @@ onMounted(async () => {
             <p class="monthly-report__period">{{ formatPeriod(report.period) }}</p>
             <MonthlyVerdictSummary :report="report" :show-comparison="!isFirstReport" />
 
-            <section
-                v-if="report.comment"
-                class="monthly-report__message"
-                aria-labelledby="message-title"
-            >
-                <h2 id="message-title">탕이의 한마디</h2>
-                <p>{{ report.comment }}</p>
+            <section class="monthly-report__message" aria-labelledby="message-title">
+                <h2 id="message-title">탕이의 소비 피드백</h2>
+                <ul v-if="report.feedbacks?.length" aria-label="AI 소비 피드백">
+                    <li v-for="feedback in report.feedbacks" :key="feedback">{{ feedback }}</li>
+                </ul>
+                <p v-else>탕이가 서류를 검토중이에요!</p>
             </section>
+
+            <MonthlySavingsAnalogyCard :report="report" />
 
             <section class="monthly-report__trend" aria-labelledby="trend-title">
                 <h2 id="trend-title">최근 6개월</h2>
@@ -318,12 +319,6 @@ onMounted(async () => {
             </BaseCard>
 
             <MonthlyCategoryReport :report="report" :show-comparison="!isFirstReport" />
-
-            <aside v-if="isFirstReport" class="monthly-report__start-saving">
-                <h2>탕이와 함께<br />절약해봐요</h2>
-                <p>이번 달 소비를 첫 기준으로 삼아<br />다음 달부터 변화를 알려드릴게요.</p>
-                <img :src="savingTangi" alt="엄지를 들어 응원하는 탕이" />
-            </aside>
         </template>
 
         <MonthlyReportMonthPicker
@@ -426,6 +421,24 @@ onMounted(async () => {
 .monthly-report__message p::before {
     position: absolute;
     left: var(--tt-space-5);
+    content: '•';
+    color: var(--tt-border-strong);
+}
+.monthly-report__message ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-3);
+    padding: var(--tt-space-5);
+}
+.monthly-report__message li {
+    position: relative;
+    padding-left: var(--tt-space-4);
+    font-size: var(--tt-fs-body);
+    line-height: var(--tt-lh-normal);
+}
+.monthly-report__message li::before {
+    position: absolute;
+    left: 0;
     content: '•';
     color: var(--tt-border-strong);
 }

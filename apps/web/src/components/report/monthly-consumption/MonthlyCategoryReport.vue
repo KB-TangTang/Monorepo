@@ -122,11 +122,6 @@ const chartStyle = computed(() => {
                 <span>합계</span><strong>{{ formatWon(report.totalSpent) }}</strong>
             </footer>
         </div>
-        <aside v-if="showComparison && report.savingsStatement" class="category-report__sentence">
-            이번 달 아낀 <strong>{{ formatWon(report.savingsStatement.amount) }}</strong
-            >은<br />
-            <b>{{ report.savingsStatement.category }}라떼 {{ report.savingsStatement.count }}잔</b>
-        </aside>
     </section>
 </template>
 
@@ -337,20 +332,6 @@ const chartStyle = computed(() => {
 }
 .category-report__receipt footer strong {
     font-family: var(--tt-font-mono);
-}
-.category-report__sentence {
-    padding: var(--tt-space-5);
-    font-size: var(--tt-fs-section);
-    color: var(--tt-accent-strong);
-    background: var(--tt-accent-subtle);
-    border: 1px solid color-mix(in srgb, var(--tt-accent) 50%, var(--tt-bg));
-    border-radius: var(--tt-radius-xl);
-}
-.category-report__sentence b {
-    display: inline-block;
-    margin-top: var(--tt-space-1);
-    font-size: var(--tt-fs-section);
-    color: var(--tt-text);
 }
 @media (max-width: 360px) {
     .category-report__chart-row {
