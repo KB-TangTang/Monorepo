@@ -18,11 +18,12 @@ public interface RelativeMissionAssignmentMapper {
     MissionDifficulty findDifficulty(@Param("difficultyId") long difficultyId);
     List<MissionPoolItem> findRelativeMissions(@Param("categoryId") long categoryId,
                                                @Param("excludedMissionId") Long excludedMissionId);
-    List<MissionPoolItem> findNoSpendMissions(@Param("categoryId") long categoryId);
     Long findLastMissionId(@Param("userId") long userId, @Param("categoryId") long categoryId);
     CategorySpendingStats findCategorySpendingStats(@Param("userId") long userId,
                                                     @Param("categoryId") long categoryId,
                                                     @Param("startDate") LocalDate startDate,
                                                     @Param("endDate") LocalDate endDate);
     int insertAssignment(RelativeMissionAssignment assignment);
+    int deleteAssignment(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
+    int resetAssignedSnapshots(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
 }

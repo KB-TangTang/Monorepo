@@ -12,6 +12,10 @@ export function reset() {
 }
 
 const http = {
+    get: (...args) => {
+        calls.push({ method: 'get', args });
+        return Promise.resolve({});
+    },
     post: (...args) => {
         calls.push({ method: 'post', args });
         return Promise.resolve({});

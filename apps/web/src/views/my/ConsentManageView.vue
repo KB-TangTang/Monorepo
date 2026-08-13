@@ -30,6 +30,7 @@ import {
  * 그래서 이 항목만 확인 시트에 별도 경고 문구를 둔다.
  */
 const FINANCIAL_DATA = 'FINANCIAL_DATA';
+const CHALLENGE = 'CHALLENGE';
 
 const store = useConsentStore();
 const { myConsents } = storeToRefs(store);
@@ -173,15 +174,26 @@ function closeSheet() {
         >
             <div class="consent-manage__sheet">
                 <p v-if="target?.agreed" class="consent-manage__sheet-text">
-                    {{ target?.label }} 동의를 철회하면 추가 수집과 동기화가 즉시 중단돼요.
+                    <template v-if="target?.type === CHALLENGE">
+                        챌린지 참여 동의를 철회하면 다음 개인 미션 자동 배정이 중단돼요. 이미 배정된
+                        미션과 상대형 미션 자격은 유지돼요.
+                    </template>
+                    <template v-else>
+                        {{ target?.label }} 동의를 철회하면 추가 수집과 동기화가 즉시 중단돼요.
+                    </template>
                     <strong v-if="target?.type === FINANCIAL_DATA">
                         연결된 계좌가 모두 해제되고, CODEF 제3자 제공 동의도 함께 철회돼요. 이
                         동의는 필수 항목이라 다시 동의하기 전까지 서비스를 이용할 수 없어요.
                     </strong>
                 </p>
                 <p v-else class="consent-manage__sheet-text">
-                    {{ target?.label }} 동의를 다시 켜면 오늘부터 수집과 동기화가 재개돼요. 약관
-                    전문은 동의 화면에서 확인할 수 있어요.
+                    <template v-if="target?.type === CHALLENGE">
+                        챌린지 참여에 다시 동의하면 오늘 개인 미션이 없을 때 자동으로 배정돼요.
+                    </template>
+                    <template v-else>
+                        {{ target?.label }} 동의를 다시 켜면 오늘부터 수집과 동기화가 재개돼요. 약관
+                        전문은 동의 화면에서 확인할 수 있어요.
+                    </template>
                 </p>
                 <p v-if="actionError" class="consent-manage__sheet-error">{{ actionError }}</p>
                 <BaseButton

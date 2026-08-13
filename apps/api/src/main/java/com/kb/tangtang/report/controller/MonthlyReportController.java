@@ -3,11 +3,14 @@ package com.kb.tangtang.report.controller;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.report.dto.MonthlyCategoryReportDto;
+import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.dto.MonthlyReportMonthsDto;
 import com.kb.tangtang.report.dto.MonthlySpendingTrendDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
 import com.kb.tangtang.report.service.MonthlyReportService;
+import com.kb.tangtang.report.service.MonthlyAiAnalysisService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,9 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class MonthlyReportController {
 
     private final MonthlyReportService monthlyReportService;
+    private final MonthlyAiAnalysisService monthlyAiAnalysisService;
 
-    public MonthlyReportController(MonthlyReportService monthlyReportService) {
+    public MonthlyReportController(MonthlyReportService monthlyReportService,
+                                   MonthlyAiAnalysisService monthlyAiAnalysisService) {
         this.monthlyReportService = monthlyReportService;
+        this.monthlyAiAnalysisService = monthlyAiAnalysisService;
     }
 
     @GetMapping("/spending-trend")
@@ -46,5 +52,12 @@ public class MonthlyReportController {
     @GetMapping("/months")
     public ApiResponse<MonthlyReportMonthsDto> getAvailableMonths(@LoginUser Long userId) {
         return ApiResponse.ok(monthlyReportService.getAvailableMonths(userId));
+    }
+
+    @PostMapping("/ai-analysis")
+    public ApiResponse<MonthlyAiAnalysisDto> generateAiAnalysis(
+            @LoginUser Long userId,
+            @RequestParam String yearMonth) {
+        return ApiResponse.ok(monthlyAiAnalysisService.generate(userId, yearMonth));
     }
 }

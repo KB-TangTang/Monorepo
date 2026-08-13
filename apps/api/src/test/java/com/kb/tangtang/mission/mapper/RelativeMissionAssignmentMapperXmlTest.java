@@ -20,7 +20,6 @@ class RelativeMissionAssignmentMapperXmlTest {
         String namespace = RelativeMissionAssignmentMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findUnassignedChallengeConsentedUserIds"));
         assertTrue(configuration.hasStatement(namespace + ".findCategorySpendingStats"));
-        assertTrue(configuration.hasStatement(namespace + ".findNoSpendMissions"));
         assertTrue(configuration.hasStatement(namespace + ".insertAssignment"));
     }
 }

@@ -21,6 +21,7 @@
 | GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
+| POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 월간 AI 소비 피드백·절약 비유를 수동 생성하거나 저장된 성공 결과를 재사용 |
 
 월 선택기 응답은 다음 형태다.
 
@@ -69,6 +70,34 @@
 각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
 이 API의 범위가 아니다.
 
+### `POST /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
+
+월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성한다. 요청 본문은 없으며 `yearMonth`는 필수 쿼리 파라미터다. 성공한 월은 저장된 결과를 그대로 반환해 외부 AI를 다시 호출하지 않는다. 실패한 월은 같은 API 호출로 재시도할 수 있고, 이미 생성 중이면 중복 생성을 막는다.
+
+- 인증: Bearer JWT
+- 요청 본문: 없음
+- `yearMonth`: `YYYY-MM` 형식, 필수
+- 외부 전송 범위: 월별·카테고리별 집계 및 서버가 계산한 절감액만 허용한다. 사용자 식별 정보, 계좌·카드 정보, 거래 원문은 전송하지 않는다.
+- `feedbacks`: 1~3개의 문자열만 반환한다. 각 배열 원소는 제목이나 분류 객체가 아닌 사용자에게 보여 줄 피드백 문장 하나다.
+- `savingsAnalogy`: 절감액이 양수이고 전월 비교가 가능한 경우에만 문자열로 반환한다. AI는 반드시 `이번달 아낀 {절감액}원은 {실물자산} {수량}{실물자산의 단위}` 형식으로 생성한다. 예: `이번달 아낀 128,000원은 카페라떼 26잔`.
+- 첫 리포트이거나 절감액이 0원이면 `savingsAnalogy`는 `null`이다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "yearMonth": "2026-07",
+    "feedbacks": [
+      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
+      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
+    ],
+    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
+  }
+}
+```
+
+주요 실패는 잘못된 월(`400 INVALID_REQUEST`), 조회 불가 월(`404 NOT_FOUND`), 이미 생성 중인 월(`409 AI_ANALYSIS_IN_PROGRESS`), 호출 제한(`429 TOO_MANY_REQUESTS`), 외부 AI 일시 장애(`503 AI_PROVIDER_UNAVAILABLE`)로 구분한다.
+
 ## 공통
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -88,6 +117,7 @@
 | PATCH | `/api/users/me/nickname` | Bearer | 요청 `{ nickname }` → 갱신된 사용자정보 |
 | POST | `/api/users/me/profile-image` | Bearer | 요청 multipart (파트명 `file`) → 갱신된 사용자정보 |
 | DELETE | `/api/users/me/profile-image` | Bearer | 갱신된 사용자정보 (기본 아바타로 되돌리기) |
+| DELETE | `/api/users/me` | Bearer | 회원 탈퇴. `{"success":true,"data":null}` + 리프레시 쿠키 만료 |
 
 **사용자정보** = `{ id, nickname, socialName, profileImageUrl, displayName, name, email, socialProvider, tutorialSeenAt, groupTutorialSeenAt }`
 
@@ -101,6 +131,12 @@
   조립하지 않으므로 로컬 저장소 → S3 전환에 프론트 수정이 없다.
 - `POST /api/users/me/profile-image` 는 업로드된 이미지를 **256x256 정사각 JPEG 로 다시 구워
   저장**한다(가운데 크롭). 원본은 보관하지 않는다.
+- `DELETE /api/users/me` (회원 탈퇴, `MY_01_05`)는 **물리 삭제하지 않는다.** 동의를 전건 철회하고
+  (→ 연동 계좌 자동 해제) 리프레시 토큰을 전부 폐기한 뒤 식별정보를 `NULL` 로 익명화한다.
+  `provider_user_id` 에 `_withdrawn_{id}` 접미사가 붙어 유니크 키가 비므로 **같은 소셜 계정으로
+  재가입할 수 있다** — 재가입자는 신규 가입자와 같은 온보딩을 다시 거치며 과거 데이터는 딸려오지 않는다.
+  이미 탈퇴한 계정의 재요청도 200 이다(멱등). 액세스 토큰은 만료(15분)까지 유효하다.
+  (`DECISIONS.md` 2026-08-13)
 - `name` 은 **실명(본인확인용)** 이고 `nickname` 은 표시명이다. 서로 다른 컬럼·다른 엔드포인트다.
 - `PATCH /api/users/me/name` 은 **간편인증 화면이 인증 요청 직전에** 부른다. 같은 화면에서 받는
   생년월일·통신사·휴대폰은 여기로 오지 않는다 — 저장하지 않는 값이기 때문이다.

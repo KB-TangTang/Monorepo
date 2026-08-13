@@ -45,13 +45,18 @@ public class UserService {
     private final ProfileImageUrlResolver profileImageUrlResolver;
     private final ImageStorage imageStorage;
     private final ImageProcessor imageProcessor;
+    private final ConsentService consentService;
+    private final RefreshTokenService refreshTokenService;
 
     public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
-                       ImageStorage imageStorage, ImageProcessor imageProcessor) {
+                       ImageStorage imageStorage, ImageProcessor imageProcessor,
+                       ConsentService consentService, RefreshTokenService refreshTokenService) {
         this.userMapper = userMapper;
         this.profileImageUrlResolver = profileImageUrlResolver;
         this.imageStorage = imageStorage;
         this.imageProcessor = imageProcessor;
+        this.consentService = consentService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional(readOnly = true)
@@ -146,6 +151,31 @@ public class UserService {
             imageStorage.delete(oldKey);
         }
         return meOf(userId);
+    }
+
+    /**
+     * 회원 탈퇴 (MY_01_05).
+     *
+     * 물리 삭제하지 않는다 — tbl_user(id) 를 참조하는 FK 가 22개이고 그 중
+     * tbl_group_member·tbl_vote 등은 **다른 사용자의** 그룹챌린지 이력이다.
+     * 식별정보만 즉시 지우고 행은 남긴다. (DECISIONS.md 2026-08-13)
+     *
+     * ⚠ 순서가 중요하다. ③이 식별정보를 지우므로 ①·②보다 뒤여야 한다.
+     *   ① 동의 전건 철회 — ConsentWithdrawnListener 가 같은 트랜잭션에서 계좌 연동을 끊는다
+     *   ② 리프레시 토큰 전건 폐기
+     *   ③ 상태 변경 + 익명화 + provider_user_id 접미사(→ 재가입 가능)
+     *
+     * 0행이어도 예외를 던지지 않는다 — 이미 탈퇴한 계정의 재요청은 오류가 아니다(멱등).
+     *
+     * 액세스 토큰은 서명만 검증하므로 만료(jwt.access-token-validity=900, 최대 15분)까지는
+     * 살아 있다. 리프레시 토큰이 폐기돼 그 뒤로 세션이 이어지지 않는 것으로 갈음한다 —
+     * 매 요청 DB 조회를 추가하는 비용이 15분의 잔여 창보다 크다.
+     */
+    @Transactional
+    public void withdraw(long userId) {
+        consentService.withdrawAll(userId);
+        refreshTokenService.revokeAll(userId);
+        userMapper.withdraw(userId, LocalDateTime.now());
     }
 
     /**

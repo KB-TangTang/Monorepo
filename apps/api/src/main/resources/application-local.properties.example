@@ -23,6 +23,16 @@ jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
 google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
 google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
 
+# === OpenAI monthly report analysis (issue #156) ===
+# Put the institutional key in application-local.properties; never commit that file.
+openai.api-key=CHANGE_ME_OPENAI_API_KEY
+openai.model=gpt-5-nano
+#openai.responses-url=https://api.openai.com/v1/responses
+openai.max-output-tokens=2048
+openai.reasoning-effort=low
+openai.connect-timeout-millis=3000
+openai.read-timeout-millis=15000
+
 # ── 계좌 연동 (이슈 #12) ────────────────────────────────
 # 평소에는 목서버로 돈다. 실 CODEF 를 붙일 때만 아래를 채운다.
 #

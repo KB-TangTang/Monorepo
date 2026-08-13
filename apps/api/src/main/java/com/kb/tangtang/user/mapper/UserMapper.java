@@ -52,4 +52,13 @@ public interface UserMapper {
     int updateTutorialSeenAt(@Param("id") Long id,
                              @Param("target") String target,
                              @Param("seenAt") java.time.LocalDateTime seenAt);
+
+    /**
+     * 회원 탈퇴. 상태 변경 · 식별정보 익명화 · 유니크 키 비우기를 한 문장으로 한다.
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     *
+     * @return 갱신된 행 수. 0 이면 이미 탈퇴했거나 ACTIVE 가 아니다(멱등).
+     */
+    int withdraw(@Param("id") Long id,
+                 @Param("withdrawnAt") java.time.LocalDateTime withdrawnAt);
 }

@@ -11,7 +11,7 @@ import java.util.List;
 @Mapper
 public interface MissionCategoryAnalysisMapper {
 
-    LocalDate findFirstTransactionDate(@Param("userId") long userId);
+    int countAllConsumptionTransactions(@Param("userId") long userId);
 
     int countConsumptionTransactions(@Param("userId") long userId,
                                      @Param("startDate") LocalDate startDate,

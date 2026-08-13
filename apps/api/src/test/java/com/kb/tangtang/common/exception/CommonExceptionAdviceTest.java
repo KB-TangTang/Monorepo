@@ -2,6 +2,7 @@ package com.kb.tangtang.common.exception;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -39,6 +40,13 @@ class CommonExceptionAdviceTest {
         }
 
         /* 그 밖의 멀티파트 파싱 실패 — 예: file 파트 누락 */
+        @GetMapping("/api/dummy/ai-in-progress")
+        @ResponseBody
+        String aiAnalysisInProgress() {
+            throw new BusinessException("AI_ANALYSIS_IN_PROGRESS", "AI analysis is already in progress.",
+                    HttpStatus.CONFLICT);
+        }
+
         @GetMapping("/api/dummy/multipart-broken")
         @ResponseBody
         String multipartBroken() {
@@ -69,6 +77,14 @@ class CommonExceptionAdviceTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"))
                 .andExpect(jsonPath("$.message").value("5MB 이하 이미지만 올릴 수 있어요."));
+    }
+
+    @Test
+    void businessExceptionUsesItsAssignedHttpStatus() throws Exception {
+        mockMvc.perform(get("/api/dummy/ai-in-progress"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("AI_ANALYSIS_IN_PROGRESS"));
     }
 
     @Test
