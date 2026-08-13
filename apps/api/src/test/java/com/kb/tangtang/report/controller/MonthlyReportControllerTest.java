@@ -62,12 +62,12 @@ class MonthlyReportControllerTest {
         public MonthlyReportMonthsDto getAvailableMonths(long userId) {
             return MonthlyReportMonthsDto.builder()
                     .months(List.of(MonthlyReportMonthDto.builder()
-                            .value("2026-07")
+                            .value("2026-08")
                             .year(2026)
-                            .month(7)
+                            .month(8)
                             .available(true)
-                            .hasReport(true)
-                            .status("report")
+                            .hasReport(false)
+                            .status("ONBOARDING")
                             .build()))
                     .build();
         }
@@ -98,7 +98,9 @@ class MonthlyReportControllerTest {
         mockMvc().perform(get("/api/reports/monthly/months"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.months[0].value").value("2026-07"))
-                .andExpect(jsonPath("$.data.months[0].available").value(true));
+                .andExpect(jsonPath("$.data.months[0].value").value("2026-08"))
+                .andExpect(jsonPath("$.data.months[0].available").value(true))
+                .andExpect(jsonPath("$.data.months[0].hasReport").value(false))
+                .andExpect(jsonPath("$.data.months[0].status").value("ONBOARDING"));
     }
 }

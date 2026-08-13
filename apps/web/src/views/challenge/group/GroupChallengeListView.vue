@@ -1,27 +1,63 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import GroupListSegment from '@/components/challenge/group/GroupListSegment.vue';
 import GroupPreStartCard from '@/components/challenge/group/GroupPreStartCard.vue';
 import GroupActiveCard from '@/components/challenge/group/GroupActiveCard.vue';
 import GroupEndedCard from '@/components/challenge/group/GroupEndedCard.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
-import {
-    MOCK_PRE_START_CHALLENGES,
-    MOCK_ACTIVE_LIST_CHALLENGES,
-    MOCK_ENDED_CHALLENGES,
-} from '@/fixtures/groupChallenge';
+import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
+import { fetchMyGroupChallenges } from '@/api/groupChallenge';
+import { dataSource } from '@/services/devDataSource';
 import mascotCheering from '@/assets/images/emotions/09_cheering.png';
 
+const route = useRoute();
 const router = useRouter();
-const activeTab = ref('active');
 const showJoinSheet = ref(false);
 
-/* ── 목데이터 (추후 API 교체) ──────────── */
-const preStartList = ref(MOCK_PRE_START_CHALLENGES);
-const activeList = ref(MOCK_ACTIVE_LIST_CHALLENGES);
-const endedList = ref(MOCK_ENDED_CHALLENGES);
+const preStartList = ref([]);
+const activeList = ref([]);
+const endedList = ref([]);
+const loadError = ref('');
+
+/*
+ * 「종료됨」 탭은 JUDGING·CLOSED 두 상태를 함께 본다.
+ * 판정이 끝나기를 기다리는 챌린지도 사용자에게는 이미 끝난 것이라서다.
+ */
+const STATUS_BY_TAB = {
+    'pre-start': ['RECRUITING'],
+    active: ['ACTIVE'],
+    ended: ['JUDGING', 'CLOSED'],
+};
+
+/* 참여·생성 직후처럼 특정 탭을 열어야 하는 이동이 있다. 그때 ?tab= 으로 넘긴다. */
+const activeTab = ref(
+    Object.hasOwn(STATUS_BY_TAB, route.query.tab) ? route.query.tab : 'active',
+);
+
+const LIST_BY_TAB = {
+    'pre-start': preStartList,
+    active: activeList,
+    ended: endedList,
+};
+
+async function loadAll() {
+    loadError.value = '';
+    try {
+        const results = await Promise.all(
+            Object.values(STATUS_BY_TAB).map((statuses) => fetchMyGroupChallenges(statuses)),
+        );
+        Object.keys(STATUS_BY_TAB).forEach((tab, i) => {
+            LIST_BY_TAB[tab].value = results[i];
+        });
+    } catch (e) {
+        loadError.value = e.message ?? '목록을 불러오지 못했습니다.';
+    }
+}
+
+onMounted(loadAll);
+watch(dataSource, loadAll);
 
 const tabCounts = computed(() => ({
     'pre-start': preStartList.value.length,
@@ -54,6 +90,8 @@ function goToDetail(challenge) {
 
         <!-- ===== 본문 (스크롤 영역) ===== -->
         <section class="gcl-body">
+            <p v-if="loadError" class="gcl-error">{{ loadError }}</p>
+
             <!-- 시작 전 -->
             <template v-if="activeTab === 'pre-start'">
                 <GroupPreStartCard
@@ -98,6 +136,8 @@ function goToDetail(challenge) {
 
         <!-- ===== 참여코드 입장 바텀시트 ===== -->
         <GroupJoinCodeSheet v-model="showJoinSheet" />
+
+        <DevDataSourceFab />
     </main>
 </template>
 
@@ -132,6 +172,18 @@ function goToDetail(challenge) {
 
 .gcl-body > * {
     cursor: pointer;
+}
+
+.gcl-error {
+    padding: 10px 14px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
+    text-align: center;
+    line-height: 1.5;
+    cursor: default;
 }
 
 /* ── 참여코드 CTA 배너 ────────── */

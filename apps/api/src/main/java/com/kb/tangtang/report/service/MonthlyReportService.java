@@ -35,6 +35,10 @@ public class MonthlyReportService {
     private static final int TREND_MONTH_COUNT = 6;
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
+    private static final String STATUS_ONBOARDING = "ONBOARDING";
+    private static final String STATUS_FIRST_REPORT = "FIRST_REPORT";
+    private static final String STATUS_READY = "READY";
+    private static final String STATUS_CURRENT = "CURRENT";
 
     private final MonthlyReportMapper monthlyReportMapper;
     private final Clock clock;
@@ -187,12 +191,17 @@ public class MonthlyReportService {
         List<MonthlyReportMonthDto> months = new ArrayList<>();
         for (YearMonth month = currentMonth; !month.isBefore(joinedMonth); month = month.minusMonths(1)) {
             boolean completed = month.isBefore(currentMonth);
-            String status = completed ? "report" : month.equals(joinedMonth) ? "onboarding" : "current";
+            String status;
+            if (!completed) {
+                status = month.equals(joinedMonth) ? STATUS_ONBOARDING : STATUS_CURRENT;
+            } else {
+                status = month.equals(joinedMonth) ? STATUS_FIRST_REPORT : STATUS_READY;
+            }
             months.add(MonthlyReportMonthDto.builder()
                     .value(month.toString())
                     .year(month.getYear())
                     .month(month.getMonthValue())
-                    .available(completed)
+                    .available(!STATUS_CURRENT.equals(status))
                     .hasReport(completed)
                     .status(status)
                     .build());

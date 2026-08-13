@@ -2,13 +2,24 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vue';
-import { validateInviteCode, joinGroup } from '@/api/groupChallenge';
+import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
+import { previewInviteCode, joinGroup } from '@/api/groupChallenge';
 
 const route = useRoute();
 const router = useRouter();
 
 const group = ref(null);
 const isLoading = ref(false);
+const joinError = ref('');
+const loadError = ref('');
+
+/* 서버가 내려주는 참여 불가 사유. 코드 그대로 보여주면 사용자가 못 읽는다. */
+const BLOCK_MESSAGE = {
+    ALREADY_JOINED: '이미 참여 중인 그룹이에요.',
+    EXPIRED: '모집이 마감된 그룹이에요. 초대는 시작일 23:59까지만 가능해요.',
+    FULL: '자리가 가득 찼어요. 한 그룹에는 최대 6명까지 들어갈 수 있어요.',
+    CLOSED: '이미 판결이 끝난 그룹이에요.',
+};
 
 const evalTypeLabel = computed(() => {
     if (!group.value) return '';
@@ -35,25 +46,32 @@ onMounted(async () => {
         return;
     }
     try {
-        const result = await validateInviteCode(code);
-        if (!result.valid || !result.group) {
-            router.replace({ name: 'groupChallenge' });
+        /* 참여 불가 사유는 바텀시트가 이미 걸러 낸다. 여기까지 왔는데 막혀 있다면
+         * 그 사이에 상태가 바뀐 것이다 — 조용히 되돌리면 사용자도 개발자도 원인을 알 수 없어
+         * 사유를 화면에 남긴다. */
+        const result = await previewInviteCode(code);
+        if (!result.joinable || !result.group) {
+            loadError.value = BLOCK_MESSAGE[result.reason] ?? '지금은 이 그룹에 참여할 수 없어요.';
             return;
         }
         group.value = result.group;
-    } catch {
-        router.replace({ name: 'groupChallenge' });
+    } catch (e) {
+        loadError.value = e.message ?? '초대 코드를 확인하지 못했습니다.';
     }
 });
 
 async function handleJoin() {
     if (!group.value || isLoading.value) return;
     isLoading.value = true;
+    joinError.value = '';
     try {
         await joinGroup(group.value.id);
-        router.replace({ name: 'groupChallenge' });
-    } catch {
-        alert('그룹 참여에 실패했습니다.');
+        /* 상세 화면(재판 현황)은 아직 서버가 없다. 목록으로 보내되 「시작 전」 탭을 열어야
+         * 방금 들어간 그룹이 보인다 — 기본 탭인 「진행 중」으로 떨어지면 빈 화면이라
+         * 참여가 실패한 것처럼 보인다. 상세 API 가 붙으면 그리로 바꾼다. */
+        router.replace({ name: 'groupChallengeList', query: { tab: 'pre-start' } });
+    } catch (e) {
+        joinError.value = e.message ?? '그룹 참여에 실패했습니다.';
     } finally {
         isLoading.value = false;
     }
@@ -106,6 +124,16 @@ function goBack() {
             <div class="gjv-warning">
                 참여하면 그룹 멤버에게 이름과 소비 상태가 보여요.
             </div>
+
+            <p v-if="joinError" class="gjv-error">{{ joinError }}</p>
+        </div>
+
+        <!-- 그룹 정보를 못 가져온 경우 — 빈 화면 대신 사유를 보여준다 -->
+        <div v-else-if="loadError" class="gjv-body">
+            <p class="gjv-error">{{ loadError }}</p>
+            <button type="button" class="gjv-link-btn" @click="goBack">
+                다른 코드 입력
+            </button>
         </div>
 
         <div v-if="group" class="gjv-bottom">
@@ -121,6 +149,8 @@ function goBack() {
                 다른 코드 입력
             </button>
         </div>
+
+        <DevDataSourceFab />
     </div>
 </template>
 
@@ -230,6 +260,18 @@ function goBack() {
 .gjv-warning {
     font-size: 11.5px;
     color: var(--tt-text-hint);
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* ── 참여 실패 안내 ────────────────────── */
+.gjv-error {
+    padding: 10px 14px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
     text-align: center;
     line-height: 1.5;
 }

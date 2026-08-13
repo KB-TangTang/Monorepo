@@ -22,6 +22,30 @@
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 
+월 선택기 응답은 다음 형태다.
+
+```json
+{
+  "months": [
+    {
+      "value": "2026-08",
+      "year": 2026,
+      "month": 8,
+      "available": true,
+      "hasReport": false,
+      "status": "ONBOARDING"
+    }
+  ]
+}
+```
+
+`status`는 `ONBOARDING`, `FIRST_REPORT`, `READY`, `CURRENT` 중 하나다. 가입월이 아직
+진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
+가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
+(`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
+`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
+선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
+
 집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
 일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
 기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
@@ -32,6 +56,11 @@
 증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
 증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
 `hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
+
+프론트 화면 상태는 월 목록의 `status`와 요약 응답의 `hasPreviousComparison`으로 결정한다.
+`ONBOARDING`은 온보딩 화면, `FIRST_REPORT`는 전월 비교가 없는 첫 리포트,
+`READY`는 일반 리포트로 표시한다. 상세 집계 응답에는 별도 상태 필드를 추가하지 않고,
+`hasPreviousComparison=false`인 응답을 `FIRST_REPORT` 화면 모델로 조합한다.
 
 카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
 선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
@@ -441,6 +470,82 @@ assignmentReason, guideMessage }` 형태다.
   `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
 - 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.
 - 절대형 미션 우선 배정은 후속 이슈 범위이며, 절대형 배정일에는 이 배치를 호출하지 않아야 한다.
+
+## 그룹 챌린지 — 생성·초대·참여·조회 (이슈 #151)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/group-challenges` | Bearer | `{ groupId, inviteCode }` |
+| GET | `/api/group-challenges?status=` | Bearer | `ChallengeGroup[]` |
+| GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroup` |
+| GET | `/api/group-challenges/invite-codes/{inviteCode}` | Bearer | `{ challenge, joinable, reason }` |
+| POST | `/api/group-challenges/{groupId}/members` | Bearer | `ChallengeGroup` |
+
+생성 요청 본문은 `{ groupName, categoryId, limitAmount, evalType, startDate, endDate, memo }` 다.
+**정원(`maxMembers`)은 받지 않는다** — 생성 화면에 입력 UI 가 없어 서버가 6 으로 고정한다.
+프론트의 자유 규칙 입력값은 ERD 컬럼명에 맞춰 `memo` 로 보낸다.
+
+`ChallengeGroup` 은 목록·상세·미리보기가 **모두 같은 한 가지 모양**이다.
+`tbl_challenge_group` 전 컬럼(`memo` 포함) + 로그인 사용자 본인의
+`tbl_group_member` 값(`livesCount`, `finalOutcome`, `finalRank`, `finalChargeAmount`)
++ 파생값(`totalDays`, `currentDay`, `daysUntilStart`, `maxLives`, `memberCount`,
+`owner`, `member`, `joinable`) + `members[{userId, nickname, owner}]`.
+
+> 목록/상세를 다른 모양으로 나누지 않았다. 차이가 `memo` 하나뿐인데 나누면 미리보기 응답이
+> `data.challenge.challenge.groupName` 처럼 두 겹으로 접혀 프론트가 매번 풀어야 한다.
+
+- `status` 는 콤마 또는 반복으로 여러 개를 넘긴다. 화면의 「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 본다.
+  값을 안 주면 전체다. 열거값에 없는 값은 빈 목록이 아니라 400 이다.
+- **목숨은 참여 시점에 계산해 저장한다.** `lives_count` 가 NOT NULL 인데 기본값이 없어서다.
+  DAILY = 기간 일수, PERIOD = 1. 늦게 참여해도 목숨은 같다 — 의도된 정책이다.
+- **초대 코드는 5자리 대문자·숫자다.** 참여 코드 입력 UI 가 5칸이라 거기에 맞췄다.
+  혼동되는 글자(`0 O 1 I L`)는 알파벳에서 뺐다.
+- **초대 코드에는 만료 컬럼이 없다.** `start_date` 에서 파생한다 — 시작일 당일 23:59 까지 모집하고
+  그 다음 날부터 만료다. 코드는 대소문자를 가리지 않으며 저장은 항상 대문자다.
+- **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.
+- 방장도 `tbl_group_member` 에 들어간다. 정원·목숨·랭킹이 전부 이 테이블을 세기 때문이다.
+- 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
+- `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
+  절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
+- 상태 전이(`RECRUITING` → `ACTIVE`)와 시작 알림은 이 API 가 하지 않는다 — 별도 배치(이슈 #152).
+  그래서 시작일이 지나도 `status` 가 한동안 `RECRUITING` 일 수 있고, 참여 가능 판정은
+  status 가 아니라 **날짜**를 기준으로 한다.
+
+### 초대 코드 미리보기가 200 인 이유
+
+코드 자체가 없으면 `GROUP_INVITE_CODE_NOT_FOUND` 로 끝내지만, **코드는 유효한데 참여만 못 하는**
+경우는 200 + `joinable:false` + `reason` 으로 내려간다. 참여 확인 화면(GC_01_06)이 그룹 정보를
+먼저 보여준 다음 사유를 안내해야 하기 때문이다.
+
+| `reason` | 뜻 |
+|---|---|
+| `ALREADY_JOINED` | 이미 참여 중 (다른 사유보다 먼저 판정한다 — 그룹으로 보내야 하므로) |
+| `CLOSED` | 상태가 `JUDGING` 또는 `CLOSED` |
+| `EXPIRED` | 시작일이 지났다 |
+| `FULL` | 정원(6명) 초과 |
+
+같은 상황에서 **참여 API** 는 200 이 아니라 400 이다 — 아래 코드로 매핑된다.
+
+### 그룹 챌린지 에러 코드
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NAME_REQUIRED` | 400 | 이름이 비었거나 공백뿐 |
+| `GROUP_NAME_TOO_LONG` | 400 | 이름 100자 초과 |
+| `GROUP_LIMIT_AMOUNT_INVALID` | 400 | 제한 금액이 없거나 음수 (0원은 정상) |
+| `GROUP_EVAL_TYPE_INVALID` | 400 | `DAILY`/`PERIOD` 가 아님 |
+| `GROUP_PERIOD_INVALID` | 400 | 기간 누락 · 종료일이 시작일보다 앞 · 7일 초과 |
+| `GROUP_START_DATE_INVALID` | 400 | 시작일이 과거 |
+| `GROUP_MEMO_TOO_LONG` | 400 | 메모 300자 초과 |
+| `GROUP_STATUS_INVALID` | 400 | 알 수 없는 `status` 필터 |
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
+| `GROUP_INVITE_CODE_NOT_FOUND` | 400 | 없는 초대 코드 |
+| `GROUP_INVITE_CODE_EXPIRED` | 400 | 모집 마감 후 참여 시도 |
+| `GROUP_CLOSED` | 400 | 종료된 챌린지에 참여 시도 |
+| `GROUP_FULL` | 400 | 정원 초과 |
+| `GROUP_ALREADY_JOINED` | 400 | 이미 참여 중인데 다시 참여 시도 |
+| `GROUP_INVITE_CODE_EXHAUSTED` | 400 | 초대 코드 채번 재시도 실패 (사실상 발생하지 않는다) |
 
 ## 알림 (이슈 #58)
 

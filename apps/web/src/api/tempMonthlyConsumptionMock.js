@@ -1,11 +1,14 @@
-// TEMP(#154): 백엔드 안정화 후 이 파일과 화면의 TEMP 연결 코드를 함께 삭제한다.
+// TEMP(#154): 월간 리포트 백엔드 전체 개발 완료 후 이 파일과 화면의 TEMP 연결 코드를 함께 삭제한다.
 import { AVAILABLE_MONTHS, REPORTS } from '@/fixtures/monthlyConsumption';
+import { MONTHLY_REPORT_STATUS } from '@/utils/monthlyConsumption';
 
 export async function fetchTempMonthlyConsumptionMonths() {
     return AVAILABLE_MONTHS.map((month) => ({
         ...month,
-        available: month.status === 'onboarding' || month.hasReport,
-        status: month.status ?? (month.hasReport ? 'report' : 'unavailable'),
+        available: month.status === MONTHLY_REPORT_STATUS.ONBOARDING || month.hasReport,
+        status:
+            month.status ??
+            (month.hasReport ? MONTHLY_REPORT_STATUS.READY : MONTHLY_REPORT_STATUS.CURRENT),
     }));
 }
 

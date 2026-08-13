@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.GroupMemberMapper">
+
+    <!--
+      lives_count 는 NOT NULL 이고 기본값이 없다. 평가 주기가 목숨 개수를 결정하므로
+      서비스가 계산해 넣는다 (DAILY=기간 일수, PERIOD=1).
+      final_* 3개는 종료 후 확정 배치가 채운다 — INSERT 시점에는 NULL 이다.
+    -->
+    <insert id="insertMember" parameterType="com.kb.tangtang.challenge.domain.GroupMember">
+        INSERT INTO tbl_group_member (group_id, user_id, lives_count)
+        VALUES (#{groupId}, #{userId}, #{livesCount})
+    </insert>
+
+    <!--
+      닉네임은 표시용이라 조인해서 함께 읽는다. tbl_user.nickname 은 NULL 허용이다.
+      정렬을 고정해야 프론트의 참여자 목록 순서가 요청마다 바뀌지 않는다.
+    -->
+    <select id="findByGroupIds" resultType="com.kb.tangtang.challenge.domain.GroupMember">
+        SELECT m.group_id, m.user_id, m.lives_count,
+               m.final_outcome, m.final_rank, m.final_charge_amount,
+               u.nickname
+        FROM tbl_group_member m
+        JOIN tbl_user u ON u.id = m.user_id
+        WHERE m.group_id IN
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
+        ORDER BY m.group_id, m.user_id
+    </select>
+</mapper>
