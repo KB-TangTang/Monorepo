@@ -11,6 +11,7 @@ import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,7 +35,7 @@ class LlmCategorizationProcessingServiceImplTest {
     private TransactionMapper transactionMapper;
     private CategoryMapper categoryMapper;
     private LlmClassificationClient client;
-    private LlmCategorizationFailureService failureService;
+    private LlmCategorizationJobStateService jobStateService;
     private LlmCategorizationProcessingServiceImpl service;
 
     @BeforeEach
@@ -43,19 +45,19 @@ class LlmCategorizationProcessingServiceImplTest {
         transactionMapper = mock(TransactionMapper.class);
         categoryMapper = mock(CategoryMapper.class);
         client = mock(LlmClassificationClient.class);
-        failureService = mock(LlmCategorizationFailureService.class);
+        jobStateService = mock(LlmCategorizationJobStateService.class);
         Clock clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
         service = new LlmCategorizationProcessingServiceImpl(
-                jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, failureService, clock);
+                jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, jobStateService, clock);
 
-        when(jobMapper.markProcessing(eq(1L), any())).thenReturn(1);
+        when(jobStateService.claimProcessing(eq(1L), any())).thenReturn(1);
         when(categoryMapper.findAll()).thenReturn(List.of(
                 Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build()));
     }
 
     @Test
-    @DisplayName("정상 처리: markProcessing → classify → updateCategory → markFinished(COMPLETED)")
+    @DisplayName("정상 처리: 선점 → classify → updateCategory → markFinished(COMPLETED)")
     void processesJobSuccessfully() {
         when(jobItemMapper.findTransactionIdsByJobId(1L)).thenReturn(List.of(10L, 11L));
         when(transactionMapper.findByIds(List.of(10L, 11L))).thenReturn(List.of(
@@ -68,22 +70,56 @@ class LlmCategorizationProcessingServiceImplTest {
 
         service.processJob(1L);
 
-        verify(jobMapper).markProcessing(eq(1L), any());
+        verify(jobStateService).claimProcessing(eq(1L), any());
         verify(transactionMapper).updateCategory(10L, 5L, "LLM");
         verify(transactionMapper, never()).updateCategory(eq(11L), any(), any());
         verify(jobMapper).markFinished(eq(1L), eq("COMPLETED"), any());
     }
 
+    /**
+     * PROCESSING 선점은 반드시 별도 빈(REQUIRES_NEW)이 하고, 그것이 커밋된 뒤에야 나머지 작업이
+     * 시작돼야 한다. processJob 이 자기 트랜잭션에서 jobMapper.markProcessing 을 직접 부르면
+     * 작업이 끝날 때까지 그 행의 잠금을 쥐고 있어, 실패 시 markFailed(별도 커넥션)가 자기 잠금을
+     * 기다리다 innodb_lock_wait_timeout 에 걸린다.
+     *
+     * 실제 잠금 대기는 진짜 MySQL 커넥션 두 개가 있어야 재현되므로 이 스위트의 범위 밖이다
+     * (계획 문서 Global Constraints: 실제 DB 연결이 필요한 테스트는 만들지 않는다).
+     * 여기서는 "선점은 별도 빈이 먼저, 그 다음에 나머지 작업" 이라는 순서·경로만 못 박는다.
+     */
     @Test
-    @DisplayName("이미 다른 tick 이 이 작업을 가져갔으면(markProcessing 0행) 아무것도 하지 않는다")
+    @DisplayName("선점은 별도 트랜잭션 빈이 먼저 수행하고, 매퍼를 직접 호출하지 않는다")
+    void claimsViaSeparateBeanBeforeAnyWork() {
+        when(jobItemMapper.findTransactionIdsByJobId(1L)).thenReturn(List.of(10L));
+        when(transactionMapper.findByIds(List.of(10L))).thenReturn(List.of(
+                Transaction.builder().id(10L).merchantName("스타벅스").build()));
+        when(client.classify(any(), any())).thenReturn(List.of(
+                CategoryAssignmentDto.builder().transactionId(10L).categoryId(5L).build()));
+
+        service.processJob(1L);
+
+        /* 같은 트랜잭션에서 행 잠금을 잡는 경로가 남아 있으면 안 된다. */
+        verify(jobMapper, never()).markProcessing(anyLong(), any());
+
+        InOrder order = inOrder(jobStateService, jobItemMapper, client, jobMapper);
+        order.verify(jobStateService).claimProcessing(eq(1L), any());
+        order.verify(jobItemMapper).findTransactionIdsByJobId(1L);
+        order.verify(client).classify(any(), any());
+        order.verify(jobMapper).markFinished(eq(1L), eq("COMPLETED"), any());
+    }
+
+    @Test
+    @DisplayName("이미 다른 tick 이 이 작업을 가져갔으면(선점 0행) 아무것도 하지 않는다")
     void skipsWhenAlreadyClaimedByAnotherTick() {
-        when(jobMapper.markProcessing(eq(2L), any())).thenReturn(0);
+        when(jobStateService.claimProcessing(eq(2L), any())).thenReturn(0);
 
         service.processJob(2L);
 
         verify(jobItemMapper, never()).findTransactionIdsByJobId(anyLong());
+        verify(transactionMapper, never()).findByIds(any());
+        verify(categoryMapper, never()).findAll();
         verify(client, never()).classify(any(), any());
         verify(jobMapper, never()).markFinished(anyLong(), any(), any());
+        verify(jobStateService, never()).markFailed(anyLong(), any());
     }
 
     @Test
@@ -131,7 +167,7 @@ class LlmCategorizationProcessingServiceImplTest {
         verify(transactionMapper, never()).findByIds(any());
         verify(client, never()).classify(any(), any());
         verify(jobMapper).markFinished(eq(1L), eq("COMPLETED"), any());
-        verify(failureService, never()).markFailed(anyLong(), any());
+        verify(jobStateService, never()).markFailed(anyLong(), any());
     }
 
     @Test
@@ -147,10 +183,14 @@ class LlmCategorizationProcessingServiceImplTest {
         /*
          * FAILED 마감은 REQUIRES_NEW 를 가진 별도 빈이 해야 한다 — 같은 트랜잭션의 jobMapper 로
          * 직접 마감하면 아래 rethrow 가 그 마감까지 롤백시켜 작업이 PENDING 으로 부활한다.
-         * (독립 트랜잭션 커밋 여부 자체는 실제 DB 가 필요해 여기서 검증하지 않는다 —
-         *  애너테이션 검증은 LlmCategorizationFailureServiceTest 가 담당한다.)
+         * 그리고 그 별도 빈이 잠금 대기 없이 쓰려면 선점이 먼저 커밋돼 있어야 한다 — 선점 역시
+         * 같은 빈의 REQUIRES_NEW 를 거친다(순서는 claimsViaSeparateBeanBeforeAnyWork 가 검증).
+         * (독립 트랜잭션 커밋 여부·실제 잠금 대기는 실제 DB 가 필요해 여기서 검증하지 않는다 —
+         *  애너테이션 검증은 LlmCategorizationJobStateServiceTest 가 담당한다.)
          */
-        verify(failureService).markFailed(eq(1L), any());
+        InOrder order = inOrder(jobStateService);
+        order.verify(jobStateService).claimProcessing(eq(1L), any());
+        order.verify(jobStateService).markFailed(eq(1L), any());
         verify(jobMapper, never()).markFinished(anyLong(), eq("FAILED"), any());
     }
 }

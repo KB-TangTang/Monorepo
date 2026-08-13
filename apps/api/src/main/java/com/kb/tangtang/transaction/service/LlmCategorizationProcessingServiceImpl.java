@@ -25,6 +25,11 @@ import java.util.stream.Collectors;
  *
  * 카테고리 반영은 반드시 TransactionMapper.updateCategory 하나로만 한다 — 재동기화용 update() 를
  * 쓰면 안 된다(그 경로가 카테고리를 지우는 버그였고 이미 고쳤다. 이슈 #147 계획 문서 참고).
+ *
+ * 트랜잭션 구성: PROCESSING 선점과 FAILED 마감은 LlmCategorizationJobStateService 의
+ * REQUIRES_NEW 독립 트랜잭션이 담당하고, 그 사이의 실제 작업(거래·카테고리 조회 → 분류 →
+ * 카테고리 반영 → COMPLETED 마감)만 이 메서드의 @Transactional 안에서 돈다.
+ * 이유는 LlmCategorizationJobStateService 주석 참고.
  */
 @Service
 public class LlmCategorizationProcessingServiceImpl implements LlmCategorizationProcessingService {
@@ -34,7 +39,7 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
     private final TransactionMapper transactionMapper;
     private final CategoryMapper categoryMapper;
     private final LlmClassificationClient client;
-    private final LlmCategorizationFailureService failureService;
+    private final LlmCategorizationJobStateService jobStateService;
     private final Clock clock;
 
     @Autowired
@@ -43,8 +48,8 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
                                                    TransactionMapper transactionMapper,
                                                    CategoryMapper categoryMapper,
                                                    LlmClassificationClient client,
-                                                   LlmCategorizationFailureService failureService) {
-        this(jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, failureService,
+                                                   LlmCategorizationJobStateService jobStateService) {
+        this(jobMapper, jobItemMapper, transactionMapper, categoryMapper, client, jobStateService,
                 Clock.systemDefaultZone());
     }
 
@@ -54,21 +59,31 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
                                            TransactionMapper transactionMapper,
                                            CategoryMapper categoryMapper,
                                            LlmClassificationClient client,
-                                           LlmCategorizationFailureService failureService,
+                                           LlmCategorizationJobStateService jobStateService,
                                            Clock clock) {
         this.jobMapper = jobMapper;
         this.jobItemMapper = jobItemMapper;
         this.transactionMapper = transactionMapper;
         this.categoryMapper = categoryMapper;
         this.client = client;
-        this.failureService = failureService;
+        this.jobStateService = jobStateService;
         this.clock = clock;
     }
 
     @Override
     @Transactional
     public void processJob(long jobId) {
-        int claimed = jobMapper.markProcessing(jobId, LocalDateTime.now(clock));
+        /*
+         * PROCESSING 선점은 반드시 별도 빈의 REQUIRES_NEW 트랜잭션으로 먼저 커밋한다 —
+         * 이 메서드의 트랜잭션 안에서 UPDATE 하면 작업이 끝날 때까지 그 행의 InnoDB 잠금을 쥐고 있어,
+         * 아래 catch 의 markFailed(역시 REQUIRES_NEW = 다른 커넥션)가 자기 자신이 쥔 잠금을 기다리다
+         * innodb_lock_wait_timeout(기본 50초)에 걸린다.
+         * (LlmCategorizationJobStateService 주석 참고)
+         *
+         * REQUIRES_NEW 라 스프링이 여기서 바깥 트랜잭션을 잠시 중단(suspend)한다. 바깥은 아직
+         * 아무 SQL 도 실행하지 않아 잠금이 없으므로 중단해도 잃을 것이 없다.
+         */
+        int claimed = jobStateService.claimProcessing(jobId, LocalDateTime.now(clock));
         if (claimed == 0) {
             /* 이미 다른 실행 주체가 이 작업을 가져갔다. 중복 처리하지 않는다. */
             return;
@@ -116,12 +131,13 @@ public class LlmCategorizationProcessingServiceImpl implements LlmCategorization
             jobMapper.markFinished(jobId, LlmJobStatus.COMPLETED, LocalDateTime.now(clock));
         } catch (RuntimeException e) {
             /*
-             * FAILED 마감은 반드시 별도 빈의 REQUIRES_NEW 트랜잭션으로 한다 —
+             * FAILED 마감도 별도 빈의 REQUIRES_NEW 트랜잭션으로 한다 —
              * 아래 rethrow 가 이 메서드의 트랜잭션을 롤백시키므로, 같은 트랜잭션에서 마감하면
-             * PROCESSING·FAILED 가 통째로 되돌아가 작업이 PENDING 으로 부활한다.
-             * (LlmCategorizationFailureService 주석 참고)
+             * FAILED 가 통째로 되돌아가 작업이 PENDING 으로 부활한다.
+             * 위에서 선점을 이미 커밋해 잠금을 놓았으므로 여기서 잠금 대기 없이 바로 기록된다.
+             * (LlmCategorizationJobStateService 주석 참고)
              */
-            failureService.markFailed(jobId, LocalDateTime.now(clock));
+            jobStateService.markFailed(jobId, LocalDateTime.now(clock));
             throw e;
         }
     }
