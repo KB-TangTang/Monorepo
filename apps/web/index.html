@@ -1,10 +1,31 @@
 <!doctype html>
-<html lang="">
+<html lang="ko">
     <head>
         <meta charset="UTF-8" />
         <link rel="icon" href="/favicon.ico" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+          viewport-fit=cover 가 없으면 env(safe-area-inset-*) 가 전부 0 으로 계산된다.
+          탭바·바텀시트 등 16곳이 이 값에 기대고 있어, 빼면 설치형(standalone)에서
+          하단 5탭이 아이폰 홈 인디케이터에 깔린다.
+        -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>탕탕 · 지갑재판소</title>
+
+        <!-- ── 설치형 웹앱(PWA) ── 이슈 #185. Web Push 는 범위 밖이다(2026-08-13 결정) -->
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#FFFFFF" />
+        <meta name="description" content="새는 돈을 법정에 세우는 자산관리 서비스" />
+        <!-- iOS 는 manifest 의 아이콘을 쓰지 않는다. 이 링크가 홈 화면 아이콘이 된다 -->
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+        <!-- 홈 화면 아이콘 아래 표시될 이름. 없으면 <title> 전체가 들어가 잘린다 -->
+        <meta name="apple-mobile-web-app-title" content="탕탕" />
+        <!--
+          status-bar-style 은 default 로 둔다. black-translucent 는 콘텐츠가 상태바 밑까지
+          올라와 전 화면의 상단 여백을 다시 잡아야 한다 — 마감 앞두고 감당할 범위가 아니다.
+        -->
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
 
         <!-- 본문 폰트 Pretendard — tokens.css 의 --tt-font-sans 가 참조한다 -->
         <link
