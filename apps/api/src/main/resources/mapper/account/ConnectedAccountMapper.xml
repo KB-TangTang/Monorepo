@@ -61,11 +61,13 @@
     <update id="reactivate" parameterType="com.kb.tangtang.account.domain.ConnectedAccount">
         UPDATE tbl_connected_account
         SET codef_connected_id = #{codefConnectedId},
+            bank_code          = #{bankCode},
             bank_name          = #{bankName},
             account_name       = #{accountName},
             account_no_masked  = #{accountNoMasked},
             account_type       = #{accountType},
             deposit_type_code  = #{depositTypeCode},
+            provider           = #{provider},
             balance            = #{balance},
             sync_status        = #{syncStatus},
             last_sync_at       = #{lastSyncAt},

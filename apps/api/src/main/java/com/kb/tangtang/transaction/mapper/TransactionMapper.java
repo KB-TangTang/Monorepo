@@ -35,8 +35,11 @@ public interface TransactionMapper {
     Long findIdByCodefTrKey(@Param("codefTrKey") String codefTrKey);
 
     /**
-     * 규칙 기반 카테고리화 대상 조회. classification='CONSUMPTION', 사용자 지정(USER) 아님,
+     * 규칙 기반 카테고리화 대상 조회. classification='CONSUMPTION', category_source 가 아직 NULL
+     * (USER 는 물론 RULE_MCC·RULE_KEYWORD·LLM 으로도 아직 분류 안 된 거래만),
      * linked_transaction_id 가 있는 BANK(체크카드 승인과 중복) 제외까지 SQL 에서 미리 거른다.
+     * 이미 분류된 거래를 재선택하면 재동기화마다 ruleCategorizedCount 가 실제로 새로 분류한 게
+     * 없는데도 부풀려진다(이슈 #147 리뷰에서 발견).
      */
     List<Transaction> findEligibleForRuleCategorization(@Param("userId") long userId,
                                                          @Param("ids") List<Long> ids);

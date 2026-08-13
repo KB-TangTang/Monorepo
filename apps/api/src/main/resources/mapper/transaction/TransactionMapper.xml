@@ -93,7 +93,7 @@
            AND id IN
            <foreach item="txId" collection="ids" open="(" separator="," close=")">#{txId}</foreach>
            AND classification = 'CONSUMPTION'
-           AND (category_source IS NULL OR category_source &lt;&gt; 'USER')
+           AND category_source IS NULL
            AND NOT (source_type = 'BANK' AND linked_transaction_id IS NOT NULL)
     </select>
 

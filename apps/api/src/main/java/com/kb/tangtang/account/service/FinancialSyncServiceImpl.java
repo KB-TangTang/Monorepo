@@ -37,6 +37,8 @@ import com.kb.tangtang.transaction.domain.Transaction;
 import com.kb.tangtang.transaction.dto.RuleCategorizationResultDto;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
 import com.kb.tangtang.transaction.service.TransactionCategorizationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
@@ -74,6 +76,8 @@ import java.util.Map;
  */
 @Service
 public class FinancialSyncServiceImpl implements FinancialSyncService {
+
+    private static final Logger log = LoggerFactory.getLogger(FinancialSyncServiceImpl.class);
 
     private static final List<String> SOURCE_ORDER =
             List.of("BANK", "DEPOSIT", "SECURITIES", "LOAN", "PAY_MONEY", "CARD");
@@ -221,8 +225,18 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          * 담아야 해서 이벤트로는 불가능하다. 5단계(LLM 작업 등록)는 응답을 기다릴 이유가 없어 이벤트로
          * 분리한다.
          */
-        RuleCategorizationResultDto categorization =
-                transactionCategorizationService.categorizeRuleBased(userId, upsertedTransactionIds);
+        RuleCategorizationResultDto categorization;
+        try {
+            categorization = transactionCategorizationService.categorizeRuleBased(userId, upsertedTransactionIds);
+        } catch (RuntimeException e) {
+            /*
+             * 저장은 이미 커밋된 뒤라(writeAll 이 COMPLETED 이력을 남기고 트랜잭션을 닫았다) 여기서
+             * 터지면 이력엔 COMPLETED, 응답은 500 — 실패 흔적이 없는 채로 둘이 어긋난다. 이 단계도
+             * 실패 이력을 남긴다(collectAll/saveAll 과 같은 패턴).
+             */
+            recordFailure(userId, CATEGORIZATION_PHASE, e.getMessage(), startedAt);
+            throw e;
+        }
 
         String llmCategorizationStatus = "NOT_REQUIRED";
         if (!categorization.getLlmEligibleTransactionIds().isEmpty()) {
@@ -378,8 +392,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         saveLoans(userId, bundle, upserted);
         savePayMoney(userId, bundle, now, upserted);
 
-        /* 반환값은 연결된 쌍의 수가 아니라 갱신된 행 수(쌍당 2)다 — 다중 테이블 UPDATE 라서. */
-        transactionMapper.linkByCorrelation(userId);
+        /* 반환값은 연결된 쌍의 수가 아니라 갱신된 행 수(쌍당 2)다 — 다중 테이블 UPDATE 라서.
+           로그를 남기는 이유: correlationId 추출이 조용히 깨져도(RawJsonFields.parse 참고) 이 값이
+           0 으로 떨어지는 것 말고는 아무 신호가 없다 — sync() 는 여전히 COMPLETED 를 반환한다. */
+        int linkedRows = transactionMapper.linkByCorrelation(userId);
+        log.info("correlation 연결 완료 userId={} linkedRows={}", userId, linkedRows);
 
         syncHistoryMapper.insert(FinancialSyncHistory.builder()
                 .userId(userId)
@@ -864,7 +881,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                         node.hasNonNull("originalApprovalNo")
                                 ? node.get("originalApprovalNo").asText() : null);
             } catch (Exception e) {
-                /* raw_json 파싱 실패는 동기화 전체를 막을 이유가 아니다 — 연결 정보 없이 저장한다. */
+                /*
+                 * raw_json 파싱 실패는 동기화 전체를 막을 이유가 아니다 — 연결 정보 없이 저장한다.
+                 * 다만 조용히 넘어가면 이 catch 가 "정상적인 형식 오류"와 "추출 로직 자체의 버그"를
+                 * 구분 못 해 후자를 영원히 숨긴다 — 최소한 로그는 남긴다.
+                 */
+                log.warn("raw_json correlationId 추출 실패, 연결 정보 없이 저장한다: {}", e.getMessage());
                 return new RawJsonFields(null, null);
             }
         }
