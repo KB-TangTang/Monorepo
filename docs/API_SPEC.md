@@ -611,16 +611,23 @@ assignmentReason, guideMessage }` 형태다.
 | POST | `/api/dev/batches/{name}?date=` | Bearer | `{ batch, baseDate, affected }` |
 
 자정을 기다리지 않고 배치를 돌리기 위한 시연·검증용이다.
-`dev.batch-trigger.enabled=true` 일 때만 열린다. **기본값은 `false` 이며 운영에서는 켜지 않는다** —
-켜면 로그인한 사용자 누구나 배치를 돌릴 수 있다.
+
+**로컬에서만 동작한다.** 판단 기준은 `app.env` 이며, 로컬은 `APP_ENV` 가 없어 기본값 `local`,
+도커는 compose 가 `docker` 를 주입한다. `/api/dev/missions/**`(이슈 #165)와 같은 규칙·같은 에러 코드다.
+별도 on/off 프로퍼티는 두지 않는다 — **배포 환경에서 쓸 계획이 없는 도구**라 스위치를 달면
+로컬에서 쓸 때마다 설정을 고쳐야 하고, 켜진 채 배포될 위험만 새로 생긴다.
 
 - `name` 은 현재 `group-challenge-status` 하나다. 배치가 늘어나면 여기에 추가된다.
 - `date` 는 `yyyy-MM-dd`. 생략하면 오늘이다. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다.
 - `affected` 는 실제로 상태가 바뀐 그룹 수다.
 
+프론트에서는 개발 서버(`import.meta.env.DEV`)에서만 그룹 챌린지 홈 우하단에
+**「챌린지 시작 배치」** 버튼이 뜬다. 누르면 `date` 없이(=오늘) 호출하고 결과 건수를 토스트로 알린다.
+프로덕션 빌드에는 버튼이 포함되지 않는다.
+
 | 코드 | HTTP | 상황 |
 |---|---|---|
-| `DEV_BATCH_TRIGGER_DISABLED` | 400 | `dev.batch-trigger.enabled` 가 꺼져 있다 |
+| `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
 
 ## 알림 (이슈 #58)
