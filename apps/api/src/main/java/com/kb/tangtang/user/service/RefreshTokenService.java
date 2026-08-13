@@ -92,6 +92,18 @@ public class RefreshTokenService {
         }
     }
 
+    /**
+     * 해당 사용자의 리프레시 토큰을 전부 폐기한다 (회원 탈퇴).
+     *
+     * ⚠ RefreshTokenSecurityService.revokeAllForUser 와 하는 일은 같지만 **재사용하지 않는다.**
+     * 그쪽은 REQUIRES_NEW 라 바깥이 롤백돼도 폐기가 살아남는 **탈취 감지 전용** 동작이다.
+     * 탈퇴는 반대로 실패하면 토큰도 함께 되살아나야 하므로 호출자의 트랜잭션에 참여한다.
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     */
+    public void revokeAll(Long userId) {
+        refreshTokenMapper.revokeAllByUserId(userId);
+    }
+
     /** SHA-256 hex 64자. CHAR(64) 컬럼과 길이가 맞는다. */
     public static String sha256Hex(String raw) {
         try {
