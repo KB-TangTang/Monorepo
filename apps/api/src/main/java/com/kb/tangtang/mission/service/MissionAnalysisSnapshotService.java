@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -43,10 +44,16 @@ public class MissionAnalysisSnapshotService {
             return toDto(pendingSnapshots);
         }
 
-        MissionCategoryAnalysisDto analysis =
-                missionCategoryAnalysisService.getCategoryAnalysis(userId);
+        boolean alreadyQualified = missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null;
+        MissionCategoryAnalysisDto analysis = alreadyQualified
+                ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId)
+                : missionCategoryAnalysisService.getCategoryAnalysis(userId);
         if (!analysis.isRelativeEligible() || analysis.getTopCategories().isEmpty()) {
             return MissionAnalysisSnapshotDto.empty();
+        }
+
+        if (!alreadyQualified) {
+            missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock));
         }
 
         LocalDate cycleStartDate = LocalDate.now(clock);

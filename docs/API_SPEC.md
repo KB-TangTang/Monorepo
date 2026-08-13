@@ -404,7 +404,10 @@ assignmentReason, guideMessage }` 형태다.
 `topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio }` 형태다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
-- 거래 데이터가 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때만 상위 카테고리를 집계한다.
+- 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
+- 최초 자격 획득 시 `tbl_user.relative_mission_qualified_at`을 기록한다. 이 값은 챌린지 동의를 철회해도 유지한다.
+- 자격 획득 후에는 최근 28일 거래가 50건 미만이어도 현재 존재하는 소비로 상위 카테고리를 다시 집계한다.
+- 자격 획득 후라도 최근 28일에 상대형 미션 대상 카테고리의 양수 소비가 전혀 없으면 스냅샷을 만들 수 없다.
 - 미션 대상은 `tbl_mission_pool`에 `RELATIVE` 행이 존재하는 소분류다. 현재 정책은 15개다.
 - 환불은 거래 건수에서 제외하고 순소비금액에서 차감한다.
 - 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
@@ -418,8 +421,8 @@ assignmentReason, guideMessage }` 형태다.
 
 - 정규 배정 대상은 `CHALLENGE` 동의가 활성 상태이고 오늘 미션이 없는 활성 사용자다.
 - 최초 동의 또는 철회 후 재동의 시에는 해당 사용자만 당일 즉시 배정한다.
-- 서버 시작 시 한 번, 이후 30분마다 같은 조건으로 누락 배정을 복구한다.
-- 복구 주기는 `mission.assignment.recovery-cron`으로 변경할 수 있다.
+- 서버 시작 시 한 번, 매일 00:30에 같은 조건으로 당일 누락 배정을 한 번 복구한다.
+- 복구 시각은 `mission.assignment.recovery-cron`으로 변경할 수 있다.
 - 동의를 철회하면 기존 미션 기록은 유지하고 이후 정규·복구 배정 대상에서 제외한다.
 - 사용자 한 명의 실패가 나머지 사용자 배정을 중단하지 않으며, 다음 복구 주기에 다시 대상이 된다.
 
