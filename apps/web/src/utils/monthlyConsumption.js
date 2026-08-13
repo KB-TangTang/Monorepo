@@ -110,7 +110,7 @@ export function resolveMonthlySavingsAnalogyCard(report) {
             variant: 'saving',
             eyebrow: '이번 달의 절약 한 장면',
             title: report.savingsAnalogy,
-            description: '이 흐름, 다음 달에도 이어가보자.',
+            description: '이 흐름, 다음 달에도 이어가봐요.',
         };
     }
 
