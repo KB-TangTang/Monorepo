@@ -65,6 +65,11 @@ class OpenAiMonthlyAnalysisClientTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"savingsAnalogyReferenceUnitPrice\":{\"type\":\"integer\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"savingsAnalogyUnit\":{\"type\":\"string\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Do not use a fixed or default item")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Never include exact monetary amounts")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("If supplied data supports a positive behavior")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("one or two short sentences")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Write in friendly Korean banmal")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("never describe it as a year-over-year or annual comparison")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("피자 | 30000 | 판")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Never use products whose price differs widely by brand, model, or option")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("prefer 5 through 15 whenever possible")))
@@ -130,6 +135,8 @@ class OpenAiMonthlyAnalysisClientTest {
         assertInvalidAnalysisOutput(List.of(""));
         assertInvalidAnalysisOutput(List.of());
         assertInvalidAnalysisOutput(List.of("하나", "둘", "셋", "넷"));
+        assertInvalidAnalysisOutput(List.of("Direct 50,000 KRW."));
+        assertInvalidAnalysisOutput(List.of("a".repeat(101)));
     }
 
     @Test

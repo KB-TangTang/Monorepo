@@ -21,6 +21,10 @@ export async function fetchTempMonthlyConsumptionReport(period) {
     const [currentYear, currentMonth] = period.split('-').map(Number);
     return {
         ...source,
+        feedbacks: source.comment ? [source.comment] : [],
+        savingsAnalogy: source.savingsStatement
+            ? `이번달 아낀 ${source.savingsStatement.amount.toLocaleString('ko-KR')}원은 ${source.savingsStatement.category} ${source.savingsStatement.count}잔`
+            : null,
         fixedExpenseCandidateCount: source.fixedExpenseCandidates?.length ?? 0,
         parentCategories: source.categories?.map((category) => ({ ...category })),
         categories: source.categories?.map((category) => ({

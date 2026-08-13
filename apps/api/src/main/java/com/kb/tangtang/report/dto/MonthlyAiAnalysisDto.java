@@ -10,6 +10,7 @@ import java.util.List;
 public class MonthlyAiAnalysisDto {
 
     private String yearMonth;
+    private String status;
     private List<String> feedbacks;
     private String savingsAnalogy;
 }

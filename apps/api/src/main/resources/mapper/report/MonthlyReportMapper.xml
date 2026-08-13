@@ -68,6 +68,68 @@
           AND is_excluded = 0
     </select>
 
+    <select id="sumActiveTotalAssets" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN account_type = 'SECURITIES' THEN COALESCE(
+                    (SELECT SUM(ih.market_value)
+                     FROM tbl_investment_holding ih
+                     WHERE ih.account_id = tbl_connected_account.id),
+                    balance
+                )
+                ELSE balance
+            END
+        ), 0)
+        FROM tbl_connected_account
+        WHERE user_id = #{userId}
+          AND is_active = 1
+    </select>
+
+    <select id="sumLoanBalances" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(balance), 0)
+        FROM tbl_loan
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="upsertPendingAiAnalysisSnapshot">
+        INSERT INTO tbl_asset_snapshot (
+            user_id,
+            `year_month`,
+            net_worth,
+            total_asset,
+            total_debt,
+            category_summary_json,
+            ai_comment,
+            compare_comment
+        ) VALUES (
+            #{userId},
+            #{yearMonth},
+            #{netWorth},
+            #{totalAsset},
+            #{totalDebt},
+            CAST(#{categorySummaryJson} AS JSON),
+            NULL,
+            NULL
+        )
+        ON DUPLICATE KEY UPDATE
+            net_worth = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(net_worth)
+                ELSE net_worth
+            END,
+            total_asset = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_asset)
+                ELSE total_asset
+            END,
+            total_debt = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_debt)
+                ELSE total_debt
+            END,
+            category_summary_json = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(category_summary_json)
+                ELSE category_summary_json
+            END
+    </insert>
+
     <select id="findAiAnalysisSnapshot"
             resultType="com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot">
         SELECT id,

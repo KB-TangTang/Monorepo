@@ -6,6 +6,7 @@ import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import com.kb.tangtang.report.service.MonthlyAiAnalysisService;
+import com.kb.tangtang.report.service.MonthlyAiAnalysisQueryService;
 import com.kb.tangtang.report.service.MonthlyReportService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,8 @@ class MonthlyReportControllerTest {
 
     private static final long USER_ID = 7L;
     private final MonthlyAiAnalysisService aiAnalysisService = org.mockito.Mockito.mock(MonthlyAiAnalysisService.class);
+    private final MonthlyAiAnalysisQueryService aiAnalysisQueryService =
+            org.mockito.Mockito.mock(MonthlyAiAnalysisQueryService.class);
 
     private HandlerMethodArgumentResolver loginUserResolver() {
         return new HandlerMethodArgumentResolver() {
@@ -78,7 +81,8 @@ class MonthlyReportControllerTest {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new MonthlyReportController(new StubService(), aiAnalysisService))
+        return MockMvcBuilders.standaloneSetup(
+                        new MonthlyReportController(new StubService(), aiAnalysisService, aiAnalysisQueryService))
                 .setCustomArgumentResolvers(loginUserResolver())
                 .build();
     }
@@ -113,6 +117,7 @@ class MonthlyReportControllerTest {
         org.mockito.Mockito.when(aiAnalysisService.generate(USER_ID, "2026-07"))
                 .thenReturn(MonthlyAiAnalysisDto.builder()
                         .yearMonth("2026-07")
+                        .status("COMPLETED")
                         .feedbacks(List.of("Review food-delivery spending once this month."))
                         .savingsAnalogy("이번달 아낀 128,000원은 치킨 5마리")
                         .build());
@@ -122,7 +127,28 @@ class MonthlyReportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.yearMonth").value("2026-07"))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.feedbacks[0]").value("Review food-delivery spending once this month."))
                 .andExpect(jsonPath("$.data.savingsAnalogy").value("이번달 아낀 128,000원은 치킨 5마리"));
+    }
+
+    @Test
+    void returnsStoredMonthlyAiAnalysis() throws Exception {
+        org.mockito.Mockito.when(aiAnalysisQueryService.get(USER_ID, "2026-07"))
+                .thenReturn(MonthlyAiAnalysisDto.builder()
+                        .yearMonth("2026-07")
+                        .status("NOT_REQUESTED")
+                        .feedbacks(List.of())
+                        .savingsAnalogy(null)
+                        .build());
+
+        mockMvc().perform(get("/api/reports/monthly/ai-analysis")
+                        .param("yearMonth", "2026-07"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.yearMonth").value("2026-07"))
+                .andExpect(jsonPath("$.data.status").value("NOT_REQUESTED"))
+                .andExpect(jsonPath("$.data.feedbacks").isEmpty())
+                .andExpect(jsonPath("$.data.savingsAnalogy").doesNotExist());
     }
 }

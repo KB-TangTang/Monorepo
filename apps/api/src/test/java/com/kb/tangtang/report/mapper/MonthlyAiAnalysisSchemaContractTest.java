@@ -20,6 +20,10 @@ class MonthlyAiAnalysisSchemaContractTest {
 
         assertTrue(schema.contains("CREATE TABLE tbl_asset_snapshot"));
         assertTrue(schema.contains("UNIQUE KEY uk_as_user_month (user_id, `year_month`)"));
+        assertTrue(schema.contains("net_worth"));
+        assertTrue(schema.contains("total_asset"));
+        assertTrue(schema.contains("total_debt"));
+        assertTrue(schema.contains("category_summary_json JSON"));
         assertTrue(migration.contains("ALTER TABLE tbl_asset_snapshot"));
         assertTrue(migration.contains("MODIFY COLUMN ai_comment JSON NULL"));
         assertTrue(migration.contains("MODIFY COLUMN compare_comment TEXT NULL"));

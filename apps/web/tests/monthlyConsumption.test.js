@@ -10,6 +10,7 @@ import {
     MONTHLY_REPORT_STATUS,
     resolveSelectedReportPeriod,
     resolveFixedExpenseStatus,
+    resolveMonthlySavingsAnalogyCard,
     resolveReportState,
     splitMonthlyCategories,
 } from '../src/utils/monthlyConsumption.js';
@@ -310,4 +311,57 @@ test('5~7월 소비 흐름은 3월 데이터부터 일관되게 누적된다', (
             report.totalSpent,
         );
     });
+});
+
+test('AI 조회 결과는 소비 리포트에 선택적으로 결합하고 피드백은 최대 세 개만 유지한다', () => {
+    const report = composeMonthlyConsumptionReport(
+        {
+            yearMonth: '2026-07',
+            totalSpent: 100000,
+            hasPreviousComparison: false,
+            monthOverMonthRate: null,
+            fixedExpenseCandidateCount: 0,
+        },
+        { items: [] },
+        { parentCategories: [], categories: [] },
+        {
+            status: 'COMPLETED',
+            feedbacks: ['첫 번째', '두 번째', '세 번째', '네 번째'],
+            savingsAnalogy: '이번달 아낀 10,000원은 커피 2잔',
+        },
+    );
+
+    assert.equal(report.aiAnalysisStatus, 'COMPLETED');
+    assert.deepEqual(report.feedbacks, ['첫 번째', '두 번째', '세 번째']);
+    assert.equal(report.savingsAnalogy, '이번달 아낀 10,000원은 커피 2잔');
+});
+
+test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순서로 표시한다', () => {
+    assert.deepEqual(resolveMonthlySavingsAnalogyCard({ savingsAnalogy: '이번달 아낀 소비는 쌀 3포대' }), {
+        variant: 'saving',
+        eyebrow: '이번 달의 절약 한 장면',
+        title: '이번달 아낀 소비는 쌀 3포대',
+        description: '이 흐름, 다음 달에도 이어가보자.',
+    });
+    assert.deepEqual(
+        resolveMonthlySavingsAnalogyCard({
+            savingsAnalogy: null,
+            hasPreviousComparison: true,
+            monthOverMonthRate: 12.5,
+        }),
+        {
+            variant: 'increase',
+            eyebrow: '소비 흐름 점검',
+            title: '지난달보다 소비가 늘어났어요',
+            description: '가장 자주 쓴 항목부터 가볍게 점검해봐.',
+        },
+    );
+    assert.equal(
+        resolveMonthlySavingsAnalogyCard({
+            savingsAnalogy: null,
+            hasPreviousComparison: false,
+            monthOverMonthRate: null,
+        }).variant,
+        'start',
+    );
 });

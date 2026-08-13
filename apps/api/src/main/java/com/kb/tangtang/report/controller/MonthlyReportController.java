@@ -9,6 +9,7 @@ import com.kb.tangtang.report.dto.MonthlySpendingTrendDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
 import com.kb.tangtang.report.service.MonthlyReportService;
 import com.kb.tangtang.report.service.MonthlyAiAnalysisService;
+import com.kb.tangtang.report.service.MonthlyAiAnalysisQueryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,11 +22,14 @@ public class MonthlyReportController {
 
     private final MonthlyReportService monthlyReportService;
     private final MonthlyAiAnalysisService monthlyAiAnalysisService;
+    private final MonthlyAiAnalysisQueryService monthlyAiAnalysisQueryService;
 
     public MonthlyReportController(MonthlyReportService monthlyReportService,
-                                   MonthlyAiAnalysisService monthlyAiAnalysisService) {
+                                   MonthlyAiAnalysisService monthlyAiAnalysisService,
+                                   MonthlyAiAnalysisQueryService monthlyAiAnalysisQueryService) {
         this.monthlyReportService = monthlyReportService;
         this.monthlyAiAnalysisService = monthlyAiAnalysisService;
+        this.monthlyAiAnalysisQueryService = monthlyAiAnalysisQueryService;
     }
 
     @GetMapping("/spending-trend")
@@ -59,5 +63,12 @@ public class MonthlyReportController {
             @LoginUser Long userId,
             @RequestParam String yearMonth) {
         return ApiResponse.ok(monthlyAiAnalysisService.generate(userId, yearMonth));
+    }
+
+    @GetMapping("/ai-analysis")
+    public ApiResponse<MonthlyAiAnalysisDto> getAiAnalysis(
+            @LoginUser Long userId,
+            @RequestParam String yearMonth) {
+        return ApiResponse.ok(monthlyAiAnalysisQueryService.get(userId, yearMonth));
     }
 }
