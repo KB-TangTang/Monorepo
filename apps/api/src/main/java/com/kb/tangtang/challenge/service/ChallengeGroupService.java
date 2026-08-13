@@ -34,14 +34,15 @@ import java.util.stream.Collectors;
  *   <li>정원은 6명 고정이다. 생성 화면에 입력 UI 가 없어 요청으로 받지 않는다.</li>
  *   <li>목숨은 <b>참여 시점에 계산해 INSERT</b> 한다. {@code lives_count} 가 NOT NULL 인데
  *       기본값이 없어서다. 뒤늦게 참여해도 목숨은 같다 — 의도된 정책이다.</li>
- *   <li>초대 코드에는 만료 컬럼이 없다. {@code start_date} 에서 파생한다 —
- *       <b>시작일 당일 23:59 까지 모집</b>, 그 다음 날부터 만료.</li>
+ *   <li>초대 코드에는 만료 컬럼이 없다. <b>시작일 당일 23:59 까지 모집</b>하며, 만료 판정은
+ *       상태 전이 배치가 바꿔 놓는 {@code status} 로 한다.</li>
  *   <li>제한 금액 0원은 유효하다. 무지출 챌린지 컨셉이 그 값을 쓴다.</li>
  * </ul>
  *
- * <p>상태 전이(RECRUITING → ACTIVE)와 시작 알림은 이 서비스가 하지 않는다. 별도 배치(이슈 #152).
- * 그래서 시작일이 지났어도 status 는 한동안 RECRUITING 일 수 있고, 참여 가능 판정은
- * status 가 아니라 <b>날짜</b>를 기준으로 한다.
+ * <p>상태 전이(RECRUITING → ACTIVE/CLOSED)와 시작 알림은 이 서비스가 하지 않는다.
+ * {@link ChallengeGroupStatusBatchService} 가 담당한다(이슈 #152).
+ * 참여 가능 판정은 그 배치가 남긴 <b>status</b> 를 기준으로 한다 — 근거는
+ * {@code joinBlockReason} 주석에 있다.
  */
 @Service
 @Log4j2
@@ -291,8 +292,18 @@ public class ChallengeGroupService {
     /**
      * 참여를 막는 사유. 참여할 수 있으면 NULL.
      *
-     * 순서에 의미가 있다. 이미 참여 중이면 종료·만료 여부와 무관하게 그룹으로 보내야 하므로
+     * <p>순서에 의미가 있다. 이미 참여 중이면 종료·만료 여부와 무관하게 그룹으로 보내야 하므로
      * ALREADY_JOINED 를 먼저 본다.
+     *
+     * <p><b>판정 기준은 status 하나다</b> (2026-08-13, 이슈 #152 에서 결정).
+     * 예전에는 {@code start_date} 와 오늘을 비교해 EXPIRED 를 판정했는데, #152 배치가 status 를
+     * RECRUITING → ACTIVE 로 바꾸기 시작하면서 근거가 둘이 됐다. 배치가 지연되거나 수동
+     * 트리거로 돌면 두 판정이 어긋나 "화면엔 진행 중인데 참여가 되는" 상태가 생긴다.
+     * status 를 진실의 원천으로 두면 참여 가능 여부와 화면에 보이는 상태가 항상 같다.
+     *
+     * <p>대가로 <b>배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있다.</b> 배치는 00:01 에 돌고
+     * 참여 마감은 그 직전 23:59 라 정상 운영에서는 1분 차이다. 늦게 들어온 사람도 목숨은
+     * 같게 받으므로(create 주석 참고) 형평성 문제도 생기지 않는다.
      */
     private String joinBlockReason(ChallengeGroup group, List<GroupMember> members, long userId) {
         if (isMember(members, userId)) {
@@ -302,8 +313,7 @@ public class ChallengeGroupService {
         if (status == ChallengeGroupStatus.JUDGING || status == ChallengeGroupStatus.CLOSED) {
             return "CLOSED";
         }
-        // 만료 컬럼이 없어 날짜로 판정한다. 시작일 당일까지는 모집한다.
-        if (LocalDate.now(clock).isAfter(group.getStartDate())) {
+        if (status == ChallengeGroupStatus.ACTIVE) {
             return "EXPIRED";
         }
         if (members.size() >= group.getMaxMembers()) {

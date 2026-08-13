@@ -38,6 +38,8 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findByInviteCode"));
         assertTrue(configuration.hasStatement(namespace + ".findMyGroups"));
         assertTrue(configuration.hasStatement(namespace + ".countByInviteCode"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
+        assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
     }
 
     @Test

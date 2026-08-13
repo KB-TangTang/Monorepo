@@ -71,4 +71,28 @@
     <select id="countByInviteCode" resultType="int">
         SELECT COUNT(*) FROM tbl_challenge_group WHERE invite_code = #{inviteCode}
     </select>
+
+    <!--
+      상태 전이 배치(이슈 #152). idx_cg_status_start (status, start_date) 를 탄다.
+      정렬을 id 로 두는 이유는 배치 로그를 두 번 돌렸을 때 순서가 같아야 비교하기 쉬워서다.
+    -->
+    <select id="findGroupsToStart" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        WHERE g.status = #{status}
+          AND g.start_date &lt;= #{today}
+        ORDER BY g.id
+    </select>
+
+    <!--
+      조건부 상태 변경. WHERE 의 status 비교가 곧 멱등성 장치다 —
+      이미 전이된 그룹은 0 행이 바뀌고, 호출부가 그걸 보고 알림을 건너뛴다.
+      updated_at 은 ON UPDATE CURRENT_TIMESTAMP 라 따로 쓰지 않는다.
+    -->
+    <update id="updateStatusIfCurrent">
+        UPDATE tbl_challenge_group
+        SET status = #{toStatus}
+        WHERE id = #{groupId}
+          AND status = #{fromStatus}
+    </update>
 </mapper>
