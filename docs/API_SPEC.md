@@ -329,6 +329,8 @@
 
 - 주기: `llm.categorization.poll.fixed-delay-ms`(기본 1분). 한 번에 최대 `llm.categorization.poll.max-jobs-per-tick`(기본 20)개 작업을 처리한다.
 - 분류 결과는 `category_source='LLM'`으로 `tbl_transaction.category_id`에 반영된다. 사용자 지정(`USER`) 카테고리는 기존 DB 가드로 보호된다.
+- 프롬프트에 보내는 카테고리 목록은 `id`·`name`과 함께 `parentId`도 포함한다 — `parentId`가 없으면 대분류, 있으면 그 대분류에 속한 소분류라는 것을 LLM이 구분할 수 있게 한다. LLM은 확신이 서는 가장 구체적인(소분류) 레벨을 고르고, 소분류까지 확신이 안 서면 대분류만 골라도 된다.
+- LLM은 각 판정마다 `confidence`(0.0~1.0)도 함께 반환해야 하며(Structured Outputs 스키마에 필수 필드로 강제), `confidence`가 `llm.categorization.confidence-threshold`(기본 0.8) 미만이거나 아예 없으면 `categoryId`가 있어도 분류 불가(null)로 취급한다(fail-closed).
 - LLM이 제공된 카테고리 목록에 없는 id를 응답하면 그 거래는 반영하지 않고 건너뛴다(환각 방지).
 - LLM이 **그 작업에 속하지 않은 `transactionId`**를 응답해도 반영하지 않고 건너뛴다. `updateCategory`에는 사용자 범위 조건이 없어, 이 검증이 없으면 남의 거래 카테고리를 덮어쓸 수 있다(가맹점명·적요는 외부 유입 자유 텍스트라 프롬프트 주입 통로이기도 하다).
 - 작업에 속한 거래가 하나도 없으면 LLM을 호출하지 않고 즉시 `COMPLETED`로 마감한다.

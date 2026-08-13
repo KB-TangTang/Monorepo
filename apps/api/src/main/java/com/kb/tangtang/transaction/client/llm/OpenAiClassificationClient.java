@@ -36,26 +36,34 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
 
     private static final String SYSTEM_PROMPT =
             "당신은 한국 개인 금융 거래를 표준 소비 카테고리로 분류하는 어시스턴트입니다. "
+            + "카테고리 목록에서 parentId 가 없는 항목은 대분류, parentId 가 있는 항목은 그 대분류에 속한 "
+            + "소분류입니다. 확신이 서는 가장 구체적인 소분류를 선택하고, 소분류까지는 확신이 서지 않으면 "
+            + "대분류만 선택하세요. "
             + "반드시 사용자가 제공한 카테고리 목록의 id 중 하나만 선택하세요. "
-            + "목록에 없는 id를 만들어내지 마세요. 확신이 서지 않으면 categoryId를 null로 두세요.";
+            + "목록에 없는 id를 만들어내지 마세요. 확신이 서지 않으면 categoryId를 null로 두세요. "
+            + "각 판정마다 0.0에서 1.0 사이의 confidence(확신도)도 반드시 함께 반환하세요. "
+            + "확신이 없을수록 confidence를 낮게, categoryId가 null이면 confidence도 낮게 주세요.";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String baseUrl;
     private final String model;
+    private final double confidenceThreshold;
 
     @Autowired
     public OpenAiClassificationClient(@Qualifier("openAiRestTemplate") RestTemplate restTemplate,
                                       ObjectMapper objectMapper,
                                       @Value("${openai.api.key}") String apiKey,
                                       @Value("${openai.api.base-url}") String baseUrl,
-                                      @Value("${openai.api.model}") String model) {
+                                      @Value("${openai.api.model}") String model,
+                                      @Value("${llm.categorization.confidence-threshold}") double confidenceThreshold) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.model = model;
+        this.confidenceThreshold = confidenceThreshold;
     }
 
     @Override
@@ -102,6 +110,7 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
             ObjectNode node = categoryArray.addObject();
             node.put("id", category.getId());
             node.put("name", category.getCategoryName());
+            node.put("parentId", category.getParentId());
         }
 
         ArrayNode transactionArray = payload.putArray("transactions");
@@ -137,10 +146,11 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
         ObjectNode item = resultsProperty.putObject("items");
         item.put("type", "object");
         item.put("additionalProperties", false);
-        item.putArray("required").add("transactionId").add("categoryId");
+        item.putArray("required").add("transactionId").add("categoryId").add("confidence");
 
         ObjectNode itemProperties = item.putObject("properties");
         itemProperties.putObject("transactionId").put("type", "integer");
+        itemProperties.putObject("confidence").put("type", "number");
         ObjectNode categoryIdProperty = itemProperties.putObject("categoryId");
         categoryIdProperty.putArray("type").add("integer").add("null");
 
@@ -188,6 +198,16 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
                 Long transactionId = item.path("transactionId").asLong();
                 Long categoryId = item.path("categoryId").isNull() || item.path("categoryId").isMissingNode()
                         ? null : item.path("categoryId").asLong();
+                /*
+                 * confidence 가 없거나(누락·null) 임계값 미만이면 categoryId 가 와도 분류 불가로
+                 * 취급한다 — 필드가 없는 비정상 응답은 안전하게(fail-closed) 0.0 으로 간주한다.
+                 */
+                JsonNode confidenceNode = item.path("confidence");
+                double confidence = confidenceNode.isMissingNode() || confidenceNode.isNull()
+                        ? 0.0 : confidenceNode.asDouble();
+                if (confidence < confidenceThreshold) {
+                    categoryId = null;
+                }
                 results.add(CategoryAssignmentDto.builder()
                         .transactionId(transactionId)
                         .categoryId(categoryId)
