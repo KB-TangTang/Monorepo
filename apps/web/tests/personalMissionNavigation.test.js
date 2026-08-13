@@ -22,6 +22,8 @@ test('개발 모드에서 철회 후 오늘 미션이 없는 화면을 재현할
     ]);
 
     assert.match(viewSource, /철회·미션 없음 화면/);
+    assert.match(viewSource, /13_sobbing\.png/);
+    assert.doesNotMatch(viewSource, /screenState === 'withdrawn'[\s\S]{0,180}:court-image/);
     assert.match(storeSource, /consentState = CHALLENGE_CONSENT_STATE\.WITHDRAWN/);
     assert.match(storeSource, /todayMission = null/);
 });

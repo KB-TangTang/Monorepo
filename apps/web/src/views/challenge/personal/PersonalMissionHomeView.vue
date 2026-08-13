@@ -12,7 +12,6 @@ import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdic
 import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
 import PersonalTutorialOverlay from '@/components/challenge/personal/PersonalTutorialOverlay.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
-import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
@@ -21,6 +20,7 @@ import { formatCourtDate, calculateDataProgress, formatWon } from '@/services/pe
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
+import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
 
 const router = useRouter();
@@ -240,16 +240,11 @@ async function reassignTodayMission() {
             compact-title="아직 수사할 증거가<br>모이지 않았습니다"
         />
 
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'withdrawn'"
-            :court-image="courtSupreme"
-            :date="shortDate"
-            compact
-            compact-title="챌린지 참여가<br>중지되었어요"
-        />
-
         <!-- 메인 컨텐츠 -->
-        <main class="personal-home__content">
+        <main
+            class="personal-home__content"
+            :class="{ 'personal-home__content--withdrawn': store.screenState === 'withdrawn' }"
+        >
             <StateLoading v-if="store.screenState === 'loading'" />
 
             <StateError
@@ -259,17 +254,18 @@ async function reassignTodayMission() {
                 :retryable="false"
             />
 
-            <StateEmpty
-                v-else-if="store.screenState === 'withdrawn'"
-                title="챌린지 참여가 중지되었어요"
-                description="다시 참여하려면 마이페이지의 동의 관리에서 챌린지 동의를 변경해주세요."
-            >
-                <template #action>
-                    <BaseButton variant="secondary" @click="openConsentManage">
-                        동의 관리로 이동
-                    </BaseButton>
-                </template>
-            </StateEmpty>
+            <section v-else-if="store.screenState === 'withdrawn'" class="personal-home__withdrawn-state">
+                <img
+                    :src="withdrawnTangi"
+                    alt="챌린지 참여 중지를 아쉬워하는 탕이"
+                    class="personal-home__withdrawn-tangi"
+                />
+                <h2>챌린지 참여가 중지되었어요</h2>
+                <p>다시 참여하려면 마이페이지의 동의 관리에서 챌린지 동의를 변경해주세요.</p>
+                <BaseButton variant="secondary" @click="openConsentManage">
+                    동의 관리로 이동
+                </BaseButton>
+            </section>
 
             <!-- 화면 01: 기본 (진행 중) -->
             <template v-if="store.screenState === 'active' || store.screenState === 'verdict'">

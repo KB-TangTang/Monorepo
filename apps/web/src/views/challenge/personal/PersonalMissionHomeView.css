@@ -13,6 +13,42 @@
         calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
 }
 
+.personal-home__content--withdrawn {
+    min-height: calc(100vh - var(--tt-tabbar-height));
+    justify-content: center;
+    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-12));
+}
+
+.personal-home__withdrawn-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.personal-home__withdrawn-tangi {
+    width: 144px;
+    height: 144px;
+    margin-bottom: var(--tt-space-4);
+    object-fit: contain;
+}
+
+.personal-home__withdrawn-state h2 {
+    margin: 0;
+    color: var(--tt-text);
+    font-size: var(--tt-fs-title);
+    font-weight: var(--tt-fw-black);
+}
+
+.personal-home__withdrawn-state p {
+    max-width: 320px;
+    margin: var(--tt-space-3) 0 var(--tt-space-5);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    word-break: keep-all;
+}
+
 /* ── 판정 안내 텍스트 ──────────────────────────────── */
 .personal-home__verdict-info {
     display: flex;
