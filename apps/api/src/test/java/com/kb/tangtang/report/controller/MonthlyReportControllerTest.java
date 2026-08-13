@@ -2,8 +2,10 @@ package com.kb.tangtang.report.controller;
 
 import com.kb.tangtang.report.dto.MonthlyReportMonthDto;
 import com.kb.tangtang.report.dto.MonthlyReportMonthsDto;
+import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
+import com.kb.tangtang.report.service.MonthlyAiAnalysisService;
 import com.kb.tangtang.report.service.MonthlyReportService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,12 +21,14 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class MonthlyReportControllerTest {
 
     private static final long USER_ID = 7L;
+    private final MonthlyAiAnalysisService aiAnalysisService = org.mockito.Mockito.mock(MonthlyAiAnalysisService.class);
 
     private HandlerMethodArgumentResolver loginUserResolver() {
         return new HandlerMethodArgumentResolver() {
@@ -74,7 +78,7 @@ class MonthlyReportControllerTest {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new MonthlyReportController(new StubService()))
+        return MockMvcBuilders.standaloneSetup(new MonthlyReportController(new StubService(), aiAnalysisService))
                 .setCustomArgumentResolvers(loginUserResolver())
                 .build();
     }
@@ -102,5 +106,23 @@ class MonthlyReportControllerTest {
                 .andExpect(jsonPath("$.data.months[0].available").value(true))
                 .andExpect(jsonPath("$.data.months[0].hasReport").value(false))
                 .andExpect(jsonPath("$.data.months[0].status").value("ONBOARDING"));
+    }
+
+    @Test
+    void generatesMonthlyAiAnalysis() throws Exception {
+        org.mockito.Mockito.when(aiAnalysisService.generate(USER_ID, "2026-07"))
+                .thenReturn(MonthlyAiAnalysisDto.builder()
+                        .yearMonth("2026-07")
+                        .feedbacks(List.of("Review food-delivery spending once this month."))
+                        .savingsAnalogy("이번달 아낀 128,000원은 치킨 5마리")
+                        .build());
+
+        mockMvc().perform(post("/api/reports/monthly/ai-analysis")
+                        .param("yearMonth", "2026-07"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.yearMonth").value("2026-07"))
+                .andExpect(jsonPath("$.data.feedbacks[0]").value("Review food-delivery spending once this month."))
+                .andExpect(jsonPath("$.data.savingsAnalogy").value("이번달 아낀 128,000원은 치킨 5마리"));
     }
 }
