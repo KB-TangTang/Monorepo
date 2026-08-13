@@ -22,8 +22,8 @@ import java.util.Map;
  * 이어지는데, 각 단계가 자정이나 수 시간 뒤에 도는 배치에 걸려 있어 <b>기다려서는 검증할 수
  * 없다.</b> 이 엔드포인트로 기준일을 넣어 원하는 단계를 즉시 돌린다.
  *
- * <p><b>운영에서는 {@code dev.batch-trigger.enabled=false} 다(기본값).</b> 켜면 로그인한
- * 사용자 누구나 배치를 돌릴 수 있다. 인증은 필요하다 — 인터셉터가 {@code /api/**} 에 걸려 있다.
+ * <p><b>로컬에서만 동작한다</b> — {@link DevEnvironmentGuard} 가 {@code app.env} 로 막는다.
+ * 인증도 필요하다. 인터셉터가 {@code /api/**} 에 걸려 있다.
  *
  * <p>배치가 늘어나면({@code #168} 평가·기소, {@code #170} 변론 마감, {@code #172} 개표)
  * {@code switch} 에 이름을 추가한다. 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라
@@ -34,12 +34,12 @@ import java.util.Map;
 @Log4j2
 public class DevBatchTriggerController {
 
-    private final DevBatchProperties properties;
+    private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
 
-    public DevBatchTriggerController(DevBatchProperties properties,
+    public DevBatchTriggerController(DevEnvironmentGuard guard,
                                      ChallengeGroupStatusBatchService challengeGroupStatusBatchService) {
-        this.properties = properties;
+        this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
     }
 
@@ -57,11 +57,7 @@ public class DevBatchTriggerController {
             @RequestParam(name = "date", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
-        if (!properties.isEnabled()) {
-            throw new BusinessException("DEV_BATCH_TRIGGER_DISABLED",
-                    "배치 수동 실행이 꺼져 있어요. application-local.properties 에 "
-                            + "dev.batch-trigger.enabled=true 를 넣고 다시 띄워 주세요.");
-        }
+        guard.ensureLocal();
 
         LocalDate baseDate = date == null ? LocalDate.now() : date;
         log.warn("DEV 배치 수동 실행 name={} baseDate={} userId={}", name, baseDate, userId);

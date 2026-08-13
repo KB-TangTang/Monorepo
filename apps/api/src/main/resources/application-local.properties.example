@@ -65,9 +65,5 @@ openai.read-timeout-millis=15000
 #challenge.group.status-transition.cron=0 * * * * *
 #challenge.group.status-transition.zone=Asia/Seoul
 
-# ── DEV 배치 수동 트리거(선택) ────────────────────────────
-# 켜면 POST /api/dev/batches/{name} 로 배치를 즉시 돌릴 수 있다.
-#   POST /api/dev/batches/group-challenge-status
-#   POST /api/dev/batches/group-challenge-status?date=2026-08-20   (기준일 지정)
-# 로그인 토큰은 필요하다. **운영 환경에는 절대 켜지 않는다.**
-#dev.batch-trigger.enabled=true
+# 배치를 자정까지 기다리지 않고 돌리려면 그룹 챌린지 홈의 DEV 버튼을 누른다
+# (POST /api/dev/batches/group-challenge-status). 로컬에서는 별도 설정 없이 켜져 있다.
