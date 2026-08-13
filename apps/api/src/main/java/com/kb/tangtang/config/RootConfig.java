@@ -137,15 +137,16 @@ public class RootConfig {
      *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
      *   하트비트가 막으려던 바로 그 상황이다.
      *
-     * poolSize 는 @Scheduled 작업 수(현재 3개: SseHeartbeat.ping · NotificationDlqRetryScheduler.retryDue ·
-     * LlmCategorizationScheduler.pollAndProcess)보다 넉넉해야 한다. 작업 수와 딱 맞추면 여유가 사라져
-     * 한 작업이 길어질 때 다른 작업이 밀린다 — LLM 폴링은 한 tick 에 최대 20건의 외부 HTTP 호출을
-     * 순차로 수행하므로 실제로 오래 점유한다.
+     * poolSize 는 @Scheduled 작업 수(현재 4개: SseHeartbeat.ping · NotificationDlqRetryScheduler.retryDue ·
+     * LlmCategorizationScheduler.pollAndProcess · FinancialSyncBatchScheduler.runBatch)보다 넉넉해야
+     * 한다. 작업 수와 딱 맞추면 여유가 사라져 한 작업이 길어질 때 다른 작업이 밀린다 — LLM 폴링과
+     * 금융 동기화 배치 둘 다 한 tick 에 여러 건의 외부 HTTP 호출을 순차로 수행하므로 실제로 오래
+     * 점유한다(이슈 #199).
      */
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(5);
+        scheduler.setPoolSize(6);
         scheduler.setThreadNamePrefix("tt-sched-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);
