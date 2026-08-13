@@ -570,4 +570,25 @@ class FinancialSyncServiceImplTest {
 
         verify(eventPublisher, never()).publishEvent(any(LlmCategorizationRequestedEvent.class));
     }
+
+    @Test
+    @DisplayName("재동기화(update 경로)에서도 재조회로 채운 id 가 규칙 카테고리화 호출에 그대로 전달된다")
+    void resyncPathBackfillsIdBeforeCallingRuleCategorization() {
+        /* codefTrKeyIsScopedByInternalId 와 같은 방식으로 계좌 PK 를 77 로 고정한다
+           (codefTrKey 는 "BANK-{내부 계좌 PK}-{목서버 거래ID}"). */
+        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
+            ConnectedAccount saved = inv.getArgument(0);
+            saved.setId(77L);
+            return 1;
+        });
+        /* update 가 1행을 돌려주는 재동기화 경로. 이때는 useGeneratedKeys 가 없어 id 가 비어 있으므로
+           findIdByCodefTrKey 로 재조회해 채워야 한다 — 그 채워진 id 가 실제로 카테고리화 호출까지
+           전달되는지가 이 테스트의 핵심이다. */
+        when(transactionMapper.update(any())).thenReturn(1);
+        when(transactionMapper.findIdByCodefTrKey("BANK-77-9001")).thenReturn(99L);
+
+        service.sync(1L);
+
+        verify(transactionCategorizationService).categorizeRuleBased(eq(1L), eq(List.of(99L)));
+    }
 }
