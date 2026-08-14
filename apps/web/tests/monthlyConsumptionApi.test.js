@@ -24,6 +24,7 @@ function setMonthlyReportResponses(aiAnalysis) {
             hasPreviousComparison: true,
             monthOverMonthRate: -28.87,
             fixedExpenseCandidateCount: 0,
+            confirmedFixedExpenseCount: 1,
         },
         { items: [] },
         { parentCategories: [], categories: [] },
@@ -54,6 +55,7 @@ test('NOT_REQUESTED 분석은 리포트 진입 시 한 번 생성하고 결과�
         ],
     });
     assert.equal(report.aiAnalysisStatus, 'COMPLETED');
+    assert.equal(report.confirmedFixedExpenseCount, 1);
     assert.deepEqual(report.feedbacks, ['새 분석 결과']);
     assert.equal(report.savingsAnalogy, '이번달 아낀 10,000원은 커피 2잔');
 });

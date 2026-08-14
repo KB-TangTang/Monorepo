@@ -8,13 +8,14 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import FixedExpensePageHeader from '@/components/fixed-expense/FixedExpensePageHeader.vue';
 import FixedExpenseReceiptPanel from '@/components/fixed-expense/FixedExpenseReceiptPanel.vue';
 import FixedExpenseSummaryCard from '@/components/fixed-expense/FixedExpenseSummaryCard.vue';
+import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
 import { formatPaymentDate, formatWon, resolveFixedExpenseState } from '@/utils/fixedExpense';
 
 const route = useRoute();
 const router = useRouter();
 const store = useFixedExpenseStore();
-const { selectedExpense, loading, error } = storeToRefs(store);
+const { selectedExpense, loading, error, source } = storeToRefs(store);
 const state = computed(() =>
     resolveFixedExpenseState({
         loading: loading.value,
@@ -28,6 +29,14 @@ const recentPaymentHistory = computed(
 
 function goBack() {
     router.back();
+}
+
+async function switchSource(nextSource) {
+    if (nextSource === source.value) {
+        return;
+    }
+    store.setSource(nextSource);
+    await store.loadExpense(route.params.expenseId);
 }
 
 onMounted(() => store.loadExpense(route.params.expenseId));
@@ -81,6 +90,8 @@ onMounted(() => store.loadExpense(route.params.expenseId));
                 인상됐어요. 요금제를 점검해볼까요?
             </p>
         </template>
+
+        <TempFixedExpenseSourceToggle :source="source" :loading="loading" @toggle="switchSource" />
     </article>
 </template>
 

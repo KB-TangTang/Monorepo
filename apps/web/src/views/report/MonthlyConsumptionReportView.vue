@@ -26,6 +26,7 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import { useAuthStore } from '@/stores/auth';
 import {
     buildMonthlyTrendSlots,
+    canOpenFixedExpenseSavings,
     fetchMonthlyConsumptionState,
     formatPeriod,
     formatWon,
@@ -53,6 +54,12 @@ const displayName = computed(() => resolveDisplayName(auth.user) || '고객');
 const isFirstReport = computed(() => state.value === 'first-report');
 const fixedExpenseStatus = computed(() =>
     resolveFixedExpenseStatus(report.value?.fixedExpenseCandidateCount),
+);
+const canOpenSavingsStatement = computed(() =>
+    canOpenFixedExpenseSavings(
+        report.value?.fixedExpenseCandidateCount,
+        report.value?.confirmedFixedExpenseCount,
+    ),
 );
 const availableTrendAmounts = computed(
     () =>
@@ -300,7 +307,9 @@ onMounted(async () => {
                 </BaseCard>
             </section>
 
-            <MonthlySavingsCompleteTicket v-if="fixedExpenseStatus === 'clear'" />
+            <MonthlySavingsCompleteTicket
+                v-if="fixedExpenseStatus === 'clear' && !canOpenSavingsStatement"
+            />
             <BaseCard v-else class="monthly-report__savings" padding="none">
                 <div class="monthly-report__savings-content">
                     <div class="monthly-report__savings-title-row">
@@ -311,7 +320,7 @@ onMounted(async () => {
                         고정 지출로 의심되는 내역이
                         {{ report.fixedExpenseCandidateCount }}건 있어요
                     </p>
-                    <p v-else>절약 리포트를 확인해보세요</p>
+                    <p v-else>확정된 고정지출의 절약 가능액을 확인해보세요</p>
                 </div>
                 <BaseButton class="monthly-report__savings-button" @click="openSavingsStatement">
                     확인하기

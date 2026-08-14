@@ -107,6 +107,8 @@ public class MonthlyReportService {
                         : null)
                 .fixedExpenseCandidateCount(
                         monthlyReportMapper.countActiveFixedExpenseCandidates(userId))
+                .confirmedFixedExpenseCount(
+                        monthlyReportMapper.countActiveConfirmedFixedExpenses(userId))
                 .build();
     }
 

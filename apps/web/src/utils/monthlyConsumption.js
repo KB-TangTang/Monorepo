@@ -82,6 +82,7 @@ export function composeMonthlyConsumptionReport(summary, trend, categoryReport, 
         totalSpent: summary.totalSpent,
         monthOverMonthRate: summary.monthOverMonthRate,
         fixedExpenseCandidateCount: summary.fixedExpenseCandidateCount,
+        confirmedFixedExpenseCount: summary.confirmedFixedExpenseCount,
         aiAnalysisStatus: aiAnalysis?.status ?? 'NOT_REQUESTED',
         feedbacks: Array.isArray(aiAnalysis?.feedbacks) ? aiAnalysis.feedbacks.slice(0, 3) : [],
         savingsAnalogy: aiAnalysis?.savingsAnalogy ?? null,
@@ -216,6 +217,10 @@ export function resolveFixedExpenseStatus(candidates) {
         return 'clear';
     }
     return 'unknown';
+}
+
+export function canOpenFixedExpenseSavings(candidateCount, confirmedCount) {
+    return Number(candidateCount) > 0 || Number(confirmedCount) > 0;
 }
 
 export function buildMonthlyTrendSlots(period, monthlyTrend = []) {

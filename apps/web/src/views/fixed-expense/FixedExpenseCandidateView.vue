@@ -10,13 +10,14 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import FixedExpenseCandidateEvidence from '@/components/fixed-expense/FixedExpenseCandidateEvidence.vue';
 import FixedExpensePageHeader from '@/components/fixed-expense/FixedExpensePageHeader.vue';
+import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
 import { formatBillingCycle, formatWon, resolveFixedExpenseState } from '@/utils/fixedExpense';
 
 const route = useRoute();
 const router = useRouter();
 const store = useFixedExpenseStore();
-const { selectedCandidate, loading, error, actionLoading } = storeToRefs(store);
+const { selectedCandidate, loading, error, actionLoading, source } = storeToRefs(store);
 const state = computed(() =>
     resolveFixedExpenseState({
         loading: loading.value,
@@ -30,6 +31,14 @@ async function decide(decision) {
     if (succeeded) {
         router.replace('/asset/fixed-expenses');
     }
+}
+
+async function switchSource(nextSource) {
+    if (nextSource === source.value) {
+        return;
+    }
+    store.setSource(nextSource);
+    await store.loadCandidate(route.params.candidateId);
 }
 
 onMounted(() => store.loadCandidate(route.params.candidateId));
@@ -107,6 +116,13 @@ onMounted(() => store.loadCandidate(route.params.candidateId));
                 </BaseButton>
             </div>
         </template>
+
+        <TempFixedExpenseSourceToggle
+            :source="source"
+            :loading="loading || actionLoading"
+            elevated
+            @toggle="switchSource"
+        />
     </article>
 </template>
 

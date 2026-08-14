@@ -91,6 +91,7 @@ export const REPORTS = {
         ],
         savingsStatement: { amount: 86000, category: '카페', count: 17 },
         fixedExpenseCandidates: [],
+        confirmedFixedExpenseCount: 2,
     },
     '2026-07': {
         period: '2026-07',

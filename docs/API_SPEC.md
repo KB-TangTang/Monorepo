@@ -56,11 +56,13 @@
 | Method | Endpoint | 응답 책임 |
 |---|---|---|
 | GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
-| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
+| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보·확정 개수 |
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 | POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 월간 집계 스냅샷을 저장한 뒤 AI 소비 피드백·절약 비유를 수동 생성·재시도하거나 저장된 성공 결과를 재사용 |
 | GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유만 조회 |
+
+`fixedExpenseCandidateCount`는 `ACTIVE`·미제외·미확정 항목 수이고, `confirmedFixedExpenseCount`는 `ACTIVE`·미제외·확정 항목 수다. 후보가 없어도 확정 항목이 있으면 절약 감정서로 이동할 수 있다.
 
 월 선택기 응답은 다음 형태다.
 
@@ -846,11 +848,13 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 | Method | Endpoint | 응답 책임 |
 |---|---|---|
 | GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
-| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보 개수 |
+| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보·확정 개수 |
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 | POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 매월 1일 00:15 KST 배치가 자동 생성하는 결과의 수동 재처리·재시도 또는 저장된 성공 결과 재사용 |
 | GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유 조회. 스냅샷 행이 없으면 온디맨드 생성 후 결과 반환 |
+
+`fixedExpenseCandidateCount`는 `ACTIVE`·미제외·미확정 항목 수이고, `confirmedFixedExpenseCount`는 `ACTIVE`·미제외·확정 항목 수다. 후보가 없어도 확정 항목이 있으면 절약 감정서로 이동할 수 있다.
 
 월 선택기 응답은 다음 형태다.
 

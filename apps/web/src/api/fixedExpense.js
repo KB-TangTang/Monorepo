@@ -1,58 +1,29 @@
-import { FIXED_EXPENSE_FIXTURE } from '@/fixtures/fixedExpense';
-import { applyCandidateDecision } from '@/utils/fixedExpense';
+import http, { ApiError } from '@/api/http';
 
-function clone(value) {
-    return JSON.parse(JSON.stringify(value));
-}
-
-function createMockState() {
-    return clone(FIXED_EXPENSE_FIXTURE);
-}
-
-let mockState = createMockState();
-
-function findById(items, id, message) {
-    const item = items.find((entry) => entry.id === id);
-    if (!item) {
-        const error = new Error(message);
-        error.code = 'NOT_FOUND';
-        throw error;
-    }
-    return item;
+function unavailable(message) {
+    throw new ApiError('API_NOT_AVAILABLE', message, 0);
 }
 
 export async function fetchFixedExpenseSavings() {
-    return clone(mockState.savings);
+    return http.get('/fixedExpenses/savingReport');
 }
 
 export async function fetchFixedExpenseOverview() {
-    return clone({
-        summary: mockState.overview,
-        confirmed: mockState.confirmed,
-        candidates: mockState.candidates,
-    });
+    return unavailable('고정지출 관리 조회 API는 후속 이슈에서 연동됩니다.');
 }
 
-export async function fetchFixedExpenseDetail(expenseId) {
-    return clone(findById(mockState.confirmed, expenseId, '고정지출 정보를 찾을 수 없습니다.'));
+export async function fetchFixedExpenseDetail() {
+    return unavailable('고정지출 상세 조회 API는 후속 이슈에서 연동됩니다.');
 }
 
 export async function fetchFixedExpenseCandidate(candidateId) {
-    return clone(findById(mockState.candidates, candidateId, '탐지 후보 정보를 찾을 수 없습니다.'));
+    return http.get(`/fixedExpenses/candidates/${candidateId}`);
 }
 
-export async function confirmFixedExpenseCandidate(candidateId) {
-    const { state, result } = applyCandidateDecision(mockState, candidateId, 'confirm');
-    mockState = state;
-    return clone(result);
+export async function confirmFixedExpenseCandidate() {
+    return unavailable('고정지출 후보 확정 API는 후속 이슈에서 연동됩니다.');
 }
 
-export async function dismissFixedExpenseCandidate(candidateId) {
-    const { state, result } = applyCandidateDecision(mockState, candidateId, 'dismiss');
-    mockState = state;
-    return clone(result);
-}
-
-export function resetFixedExpenseMock() {
-    mockState = createMockState();
+export async function dismissFixedExpenseCandidate() {
+    return unavailable('고정지출 후보 제외 API는 후속 이슈에서 연동됩니다.');
 }

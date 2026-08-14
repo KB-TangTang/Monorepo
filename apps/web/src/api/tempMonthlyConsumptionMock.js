@@ -26,6 +26,7 @@ export async function fetchTempMonthlyConsumptionReport(period) {
             ? `이번달 아낀 ${source.savingsStatement.amount.toLocaleString('ko-KR')}원은 ${source.savingsStatement.category} ${source.savingsStatement.count}잔`
             : null,
         fixedExpenseCandidateCount: source.fixedExpenseCandidates?.length ?? 0,
+        confirmedFixedExpenseCount: source.confirmedFixedExpenseCount ?? 0,
         parentCategories: source.categories?.map((category) => ({ ...category })),
         categories: source.categories?.map((category) => ({
             ...category,

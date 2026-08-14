@@ -9,12 +9,13 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import FixedExpenseItemCard from '@/components/fixed-expense/FixedExpenseItemCard.vue';
 import FixedExpensePageHeader from '@/components/fixed-expense/FixedExpensePageHeader.vue';
 import FixedExpenseSummaryCard from '@/components/fixed-expense/FixedExpenseSummaryCard.vue';
+import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
 import { resolveFixedExpenseState } from '@/utils/fixedExpense';
 
 const router = useRouter();
 const store = useFixedExpenseStore();
-const { summary, confirmed, candidates, loading, error } = storeToRefs(store);
+const { summary, confirmed, candidates, loading, error, source } = storeToRefs(store);
 const state = computed(() =>
     resolveFixedExpenseState({ loading: loading.value, error: error.value, data: summary.value }),
 );
@@ -29,6 +30,14 @@ function openCandidate(candidateId) {
 
 function goBack() {
     router.back();
+}
+
+async function switchSource(nextSource) {
+    if (nextSource === source.value) {
+        return;
+    }
+    store.setSource(nextSource);
+    await store.loadOverview();
 }
 
 onMounted(() => store.loadOverview());
@@ -84,6 +93,8 @@ onMounted(() => store.loadOverview());
                 <StateEmpty v-else title="확인할 탐지 후보가 없어요" />
             </section>
         </template>
+
+        <TempFixedExpenseSourceToggle :source="source" :loading="loading" @toggle="switchSource" />
     </article>
 </template>
 

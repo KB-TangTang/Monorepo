@@ -15,4 +15,5 @@ public class MonthlySummaryDto {
     private boolean hasPreviousComparison;
     private BigDecimal monthOverMonthRate;
     private int fixedExpenseCandidateCount;
+    private int confirmedFixedExpenseCount;
 }

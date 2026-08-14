@@ -55,13 +55,14 @@ class MonthlyReportServiceTest {
     }
 
     @Test
-    @DisplayName("월 총소비와 전월 대비 감소율 및 고정지출 후보 개수를 계산한다")
+    @DisplayName("월 총소비와 전월 대비 감소율 및 고정지출 후보·확정 개수를 계산한다")
     void returnsMonthlySummary() {
         when(mapper.sumNetSpending(eq(USER_ID), eq(LocalDate.of(2026, 7, 1)),
                 eq(LocalDate.of(2026, 8, 1)))).thenReturn(new BigDecimal("1284000"));
         when(mapper.sumNetSpending(eq(USER_ID), eq(LocalDate.of(2026, 6, 1)),
                 eq(LocalDate.of(2026, 7, 1)))).thenReturn(new BigDecimal("1396000"));
         when(mapper.countActiveFixedExpenseCandidates(USER_ID)).thenReturn(2);
+        when(mapper.countActiveConfirmedFixedExpenses(USER_ID)).thenReturn(3);
 
         MonthlySummaryDto result = service.getSummary(USER_ID, "2026-07");
 
@@ -69,6 +70,7 @@ class MonthlyReportServiceTest {
         assertEquals(new BigDecimal("1396000"), result.getPreviousMonthSpent());
         assertEquals(new BigDecimal("-8.02"), result.getMonthOverMonthRate());
         assertEquals(2, result.getFixedExpenseCandidateCount());
+        assertEquals(3, result.getConfirmedFixedExpenseCount());
         assertTrue(result.isHasPreviousComparison());
     }
 
