@@ -29,7 +29,7 @@ import java.util.List;
  * <p>연동은 <b>기관 선택 → 인증 → 조회 진행 → 계좌 선택 → 연결 저장</b> 5단계로 진행되며,
  * 아래 순서가 그 흐름 그대로다. 프론트 {@code apps/web/src/api/account.js} 의 함수 13종과 1:1 이다.
  */
-@Api(tags = "05. 계좌 연동 — CODEF 기관 인증 · 계좌 연결")
+@Api(tags = "05. 계좌 연동 - CODEF 기관 인증 · 계좌 연결")
 public interface AccountLinkControllerDocs {
 
     /* ── 1단계: 기관 선택 ───────────────────────────────── */

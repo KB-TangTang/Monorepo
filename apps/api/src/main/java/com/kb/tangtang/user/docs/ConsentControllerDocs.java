@@ -11,7 +11,7 @@ import io.swagger.annotations.ApiParam;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code ConsentController} 의 Swagger 문서. */
-@Api(tags = "03. 동의 — 약관 · 금융데이터 동의")
+@Api(tags = "03. 동의 - 약관 · 금융데이터 동의")
 public interface ConsentControllerDocs {
 
     @ApiOperation(
@@ -36,7 +36,7 @@ public interface ConsentControllerDocs {
 
     @ApiOperation(
             value = "동의 철회",
-            notes = "철회를 먼저 실행한 뒤 플래그를 읽는다 — 순서를 바꾸면 철회 전 값이 나가 "
+            notes = "철회를 먼저 실행한 뒤 플래그를 읽는다. 순서를 바꾸면 철회 전 값이 나가 "
                     + "화면이 「아직 동의돼 있음」 으로 잘못 판단한다.")
     ApiResponse<ConsentResultDto> withdraw(@ApiIgnore Long userId,
                                            @ApiParam(value = "철회할 동의 유형", required = true) String type);

@@ -13,7 +13,7 @@ import springfox.documentation.annotations.ApiIgnore;
 import java.util.List;
 
 /** {@code ChallengeGroupController} 의 Swagger 문서. */
-@Api(tags = "06. 그룹 챌린지(지방법원) — 생성 · 초대 · 참여 · 조회")
+@Api(tags = "06. 그룹 챌린지(지방법원) - 생성 · 초대 · 참여 · 조회")
 public interface ChallengeGroupControllerDocs {
 
     @ApiOperation(value = "그룹 챌린지 생성",
@@ -25,7 +25,7 @@ public interface ChallengeGroupControllerDocs {
 
     @ApiOperation(value = "내가 참여 중인 그룹 목록",
             notes = "`status` 는 **반복 파라미터 또는 콤마 구분** 둘 다 된다.\n\n"
-                    + "「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 보낸다 — 개표 중인 그룹도 종료로 묶어 보여주기 때문이다.\n"
+                    + "「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 보낸다. 개표 중인 그룹도 종료로 묶어 보여주기 때문이다.\n"
                     + "생략하면 전체를 반환한다.")
     ApiResponse<List<ChallengeGroupDto>> findMyGroups(
             @ApiIgnore Long userId,
@@ -38,7 +38,7 @@ public interface ChallengeGroupControllerDocs {
 
     @ApiOperation(value = "초대 코드 미리보기",
             notes = "참여 확인 화면이 「어떤 그룹인지」 먼저 보여주기 위해 쓴다.\n\n"
-                    + "**참여할 수 없는 상태도 200 이다.** 사유는 `reason` 으로 내려간다 — "
+                    + "**참여할 수 없는 상태도 200 이다.** 사유는 `reason` 으로 내려간다. "
                     + "그룹 정보를 보여준 뒤 안내해야 하므로 오류로 만들지 않았다.")
     ApiResponse<InviteCodePreviewDto> previewInviteCode(@ApiIgnore Long userId,
                                                         @ApiParam(value = "초대 코드", required = true) String inviteCode);

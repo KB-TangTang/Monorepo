@@ -10,7 +10,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code NotificationController} 의 Swagger 문서. */
-@Api(tags = "09. 알림 — 목록 · 읽음 처리 · SSE 실시간 스트림")
+@Api(tags = "09. 알림 - 목록 · 읽음 처리 · SSE 실시간 스트림")
 public interface NotificationControllerDocs {
 
     @ApiOperation(value = "알림 목록 조회",
@@ -24,7 +24,7 @@ public interface NotificationControllerDocs {
     ApiResponse<UnreadCountDto> unreadCount(@ApiIgnore Long userId);
 
     @ApiOperation(value = "알림 1건 읽음 처리",
-            notes = "처리 후 **갱신된 안 읽은 개수**를 돌려준다 — 배지를 즉시 고칠 수 있게 하기 위함이다.")
+            notes = "처리 후 **갱신된 안 읽은 개수**를 돌려준다. 배지를 즉시 고칠 수 있게 하기 위함이다.")
     ApiResponse<UnreadCountDto> read(@ApiIgnore Long userId,
                                      @ApiParam(value = "알림 ID", required = true) long id);
 
@@ -33,7 +33,7 @@ public interface NotificationControllerDocs {
 
     @ApiOperation(value = "실시간 알림 SSE 스트림",
             notes = "**스트림이라 `ApiResponse` 로 감싸지 않는다.** `text/event-stream` 을 그대로 반환한다.\n\n"
-                    + "Swagger 의 Try it out 으로는 확인할 수 없다 — 연결이 끊기지 않아 응답이 끝나지 않는다.\n\n"
+                    + "Swagger 의 Try it out 으로는 확인할 수 없다. 연결이 끊기지 않아 응답이 끝나지 않는다.\n\n"
                     + "연결 직후 `connected` 이벤트를 한 번 보낸다. 프록시 버퍼링을 깨고 프론트가 "
                     + "「연결됨」 을 판정할 근거를 주기 위함이며, 이걸 못 받으면 프론트가 폴링으로 강등한다.")
     SseEmitter stream(@ApiIgnore Long userId);

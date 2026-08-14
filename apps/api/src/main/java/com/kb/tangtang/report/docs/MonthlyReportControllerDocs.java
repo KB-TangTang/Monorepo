@@ -16,7 +16,7 @@ import springfox.documentation.annotations.ApiIgnore;
  *
  * <p>모든 엔드포인트가 {@code yearMonth} 를 {@code YYYY-MM} 형식으로 받는다.
  */
-@Api(tags = "10. 월간 리포트(판결문) — 소비 추이 · 요약 · AI 분석")
+@Api(tags = "10. 월간 리포트(판결문) - 소비 추이 · 요약 · AI 분석")
 public interface MonthlyReportControllerDocs {
 
     @ApiOperation(value = "월별 소비 추이", notes = "해당 월을 포함한 최근 6개월 추이를 내려준다.")
@@ -47,7 +47,7 @@ public interface MonthlyReportControllerDocs {
             @ApiParam(value = "조회 연월 (YYYY-MM)", required = true, example = "2026-08") String yearMonth);
 
     @ApiOperation(value = "AI 소비 분석 조회",
-            notes = "**저장된 결과만 읽는다. 없으면 생성하지 않는다** — LLM 을 호출하지 않으므로 빠르다.")
+            notes = "**저장된 결과만 읽는다. 없으면 생성하지 않는다.** LLM 을 호출하지 않으므로 빠르다.")
     ApiResponse<MonthlyAiAnalysisDto> getAiAnalysis(
             @ApiIgnore Long userId,
             @ApiParam(value = "조회 연월 (YYYY-MM)", required = true, example = "2026-08") String yearMonth);

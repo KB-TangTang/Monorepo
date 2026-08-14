@@ -10,9 +10,9 @@ import springfox.documentation.annotations.ApiIgnore;
  * {@code TutorialController} 의 Swagger 문서.
  *
  * <p>경로는 챌린지 도메인인데 클래스가 user 패키지에 있는 이유는 완료 시각이 {@code tbl_user}
- * 에 살기 때문이다 — 자기 테이블은 자기 모듈이 쓴다.
+ * 에 살기 때문이다. 자기 테이블은 자기 모듈이 쓴다.
  */
-@Api(tags = "04. 튜토리얼 — 완료 처리 · 다시 보기")
+@Api(tags = "04. 튜토리얼 - 완료 처리 · 다시 보기")
 public interface TutorialControllerDocs {
 
     @ApiOperation(value = "메인 챌린지 튜토리얼 완료",
@@ -20,7 +20,7 @@ public interface TutorialControllerDocs {
     ApiResponse<UserMeDto> completeMain(@ApiIgnore Long userId);
 
     @ApiOperation(value = "메인 챌린지 튜토리얼 다시 보기",
-            notes = "완료 시각을 지운다. 다음 진입에서 튜토리얼이 다시 뜬다 — 마이페이지의 「다시 보기」다.")
+            notes = "완료 시각을 지운다. 다음 진입에서 튜토리얼이 다시 뜬다. 마이페이지의 「다시 보기」다.")
     ApiResponse<UserMeDto> resetMain(@ApiIgnore Long userId);
 
     @ApiOperation(value = "그룹 챌린지 튜토리얼 완료")

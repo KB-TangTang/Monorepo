@@ -32,7 +32,7 @@ import java.util.List;
  *
  * <p>인증 인터셉터는 {@code /api/**} 에만 걸려 있어({@code ServletConfig#addInterceptors})
  * {@code /swagger-ui.html} · {@code /v2/api-docs} 는 별도 whitelist 없이 열린다.
- * 바꿔 말하면 <b>문서가 인증 없이 공개</b>된다 — 시연 단계라 그대로 두지만 운영 노출 시 재검토한다.
+ * 바꿔 말하면 <b>문서가 인증 없이 공개</b>된다. 시연 단계라 그대로 두지만 운영 노출 시 재검토한다.
  *
  * @see <a href="file:../../../../../../../../.claude/context/DECISIONS.md">DECISIONS.md 2026-08-13 (4)</a>
  */
@@ -93,7 +93,7 @@ public class SwaggerConfig {
 
     /**
      * JWT 는 Authorization 헤더로 받는다(JwtAuthInterceptor).
-     * Authorize 창에는 `Bearer ` 접두사까지 포함해 넣어야 한다 — 인터셉터가 접두사를 직접 잘라낸다.
+     * Authorize 창에는 `Bearer ` 접두사까지 포함해 넣어야 한다. 인터셉터가 접두사를 직접 잘라낸다.
      */
     private ApiKey bearerAuth() {
         return new ApiKey("Authorization", "Authorization", "header");
