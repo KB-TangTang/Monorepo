@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,8 +27,19 @@ class MissionAnalysisSnapshotMapperXmlTest {
 
         String namespace = MissionAnalysisSnapshotMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findPendingSnapshots"));
+        assertTrue(configuration.hasStatement(namespace + ".findLatestCycleSnapshots"));
         assertTrue(configuration.hasStatement(namespace + ".findQualifiedAt"));
         assertTrue(configuration.hasStatement(namespace + ".markQualified"));
         assertTrue(configuration.hasStatement(namespace + ".insertSnapshots"));
+
+        String rotationSql = configuration
+                .getMappedStatement(namespace + ".findLatestCycleSnapshots")
+                .getBoundSql(Map.of("userId", 1L))
+                .getSql();
+        assertTrue(rotationSql.contains("'WAITING'"));
+        assertTrue(rotationSql.contains("AS rotation_result"));
+        assertTrue(rotationSql.contains("AS mission_round"));
+        assertTrue(rotationSql.contains("FROM tbl_user_mission_info category_assignment"));
+        assertTrue(rotationSql.contains("WHEN analysis.assigned_date IS NULL THEN 1"));
     }
 }

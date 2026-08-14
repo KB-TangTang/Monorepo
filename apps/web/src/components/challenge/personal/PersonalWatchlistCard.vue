@@ -2,6 +2,10 @@
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/solid';
 import { tangiFieldVerify } from '@/fixtures/personalChallenge';
+import {
+    formatWatchlistMissionRound,
+    formatWatchlistRotationStatus,
+} from '@/services/personalMissionFlow';
 
 defineProps({
     items: { type: Array, required: true },
@@ -26,15 +30,6 @@ function statusBadgeClass(status) {
             return 'watchlist__status--pending';
     }
 }
-
-function statusLabel(item) {
-    if (item.result === 'PENDING') return '오늘 수사 중';
-    if (item.result === 'UNASSIGNED') return '대기';
-
-    const date = item.assignDate ? `${item.assignDate} ` : '';
-    const labels = { SUCCESS: '인정', FAIL: '기각' };
-    return `${date}${labels[item.result] ?? '대기'}`;
-}
 </script>
 
 <template>
@@ -42,7 +37,7 @@ function statusLabel(item) {
         <div class="watchlist__trigger" @click="toggle">
             <img :src="tangiFieldVerify" alt="" class="watchlist__tangi" />
             <div class="watchlist__header-text">
-                <div class="watchlist__title">이번 요주의 대상</div>
+                <div class="watchlist__title">새로 선정된 요주의 대상</div>
                 <div class="watchlist__meta">
                     {{ analysisPeriod }} · 전체 소비 대비 상위 {{ items.length }}개
                 </div>
@@ -54,36 +49,40 @@ function statusLabel(item) {
         </div>
 
         <Transition name="watchlist-slide">
-        <div v-if="isOpen" class="watchlist__body">
-            <div class="watchlist__items">
-                <div
-                    v-for="item in items"
-                    :key="item.name"
-                    class="watchlist__item"
-                    :class="{ 'watchlist__item--muted': item.result === 'UNASSIGNED' }"
-                >
-                    <div class="watchlist__item-header">
-                        <span class="watchlist__item-name">
-                            {{ item.name }}
-                            <b class="watchlist__item-ratio">{{ item.ratio }}%</b>
-                        </span>
-                        <span
-                            class="watchlist__status"
-                            :class="statusBadgeClass(item.result)"
-                        >
-                            {{ statusLabel(item) }}
-                        </span>
-                    </div>
-                    <div class="watchlist__bar">
-                        <div
-                            class="watchlist__bar-fill watchlist__bar-fill--today"
-                            :style="{ width: item.ratio + '%' }"
-                        ></div>
+            <div v-if="isOpen" class="watchlist__body">
+                <div class="watchlist__items">
+                    <div
+                        v-for="item in items"
+                        :key="item.name"
+                        class="watchlist__item"
+                        :class="{ 'watchlist__item--muted': item.rotationResult === 'WAITING' }"
+                    >
+                        <div class="watchlist__item-header">
+                            <span class="watchlist__item-name">
+                                {{ item.name }}
+                                <b class="watchlist__item-ratio">{{ item.ratio }}%</b>
+                            </span>
+                            <span class="watchlist__status-group">
+                                <span class="watchlist__status watchlist__status--round">
+                                    {{ formatWatchlistMissionRound(item) }}
+                                </span>
+                                <span
+                                    class="watchlist__status"
+                                    :class="statusBadgeClass(item.rotationResult)"
+                                >
+                                    {{ formatWatchlistRotationStatus(item) }}
+                                </span>
+                            </span>
+                        </div>
+                        <div class="watchlist__bar">
+                            <div
+                                class="watchlist__bar-fill"
+                                :style="{ width: item.ratio + '%' }"
+                            ></div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-        </div>
         </Transition>
     </div>
 </template>
@@ -189,6 +188,18 @@ function statusLabel(item) {
     white-space: nowrap;
 }
 
+.watchlist__status-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.watchlist__status--round {
+    background: var(--tt-bg-fill);
+    color: var(--tt-text-body);
+}
+
 .watchlist__status--cleared {
     background: var(--tt-success-subtle);
     color: var(--tt-success);
@@ -223,8 +234,16 @@ function statusLabel(item) {
     transition: width 0.4s ease;
 }
 
-.watchlist__bar-fill--today {
-    background: var(--tt-accent);
+.watchlist__item:nth-child(3n + 1) .watchlist__bar-fill {
+    background: var(--tt-primary);
+}
+
+.watchlist__item:nth-child(3n + 2) .watchlist__bar-fill {
+    background: var(--tt-success);
+}
+
+.watchlist__item:nth-child(3n) .watchlist__bar-fill {
+    background: var(--tt-danger);
 }
 
 .watchlist__bar-fill--muted {
@@ -242,7 +261,6 @@ function statusLabel(item) {
     line-height: 1.5;
     word-break: keep-all;
 }
-
 
 /* ── 슬라이드 트랜지션 ── */
 .watchlist-slide-enter-active,

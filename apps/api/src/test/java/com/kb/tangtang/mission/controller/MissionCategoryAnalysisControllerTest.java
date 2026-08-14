@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.mission.dto.MissionCategoryAnalysisDto;
 import com.kb.tangtang.mission.dto.MissionCategoryRankDto;
-import com.kb.tangtang.mission.mapper.MissionCategoryAnalysisMapper;
-import com.kb.tangtang.mission.service.MissionCategoryAnalysisService;
+import com.kb.tangtang.mission.service.MissionAnalysisSnapshotService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
@@ -45,13 +44,13 @@ class MissionCategoryAnalysisControllerTest {
         };
     }
 
-    private static class StubService extends MissionCategoryAnalysisService {
+    private static class StubService extends MissionAnalysisSnapshotService {
         StubService() {
-            super((MissionCategoryAnalysisMapper) null);
+            super(null, null);
         }
 
         @Override
-        public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
+        public MissionCategoryAnalysisDto getCurrentRotationAnalysis(long userId) {
             return MissionCategoryAnalysisDto.builder()
                     .analysisStartDate(LocalDate.of(2026, 7, 14))
                     .analysisEndDate(LocalDate.of(2026, 8, 10))
@@ -65,6 +64,9 @@ class MissionCategoryAnalysisControllerTest {
                             .totalAmount(new BigDecimal("150000"))
                             .transactionCount(10)
                             .spendingRatio(new BigDecimal("30.00"))
+                            .rotationAssignDate(LocalDate.of(2026, 8, 10))
+                            .rotationResult("SUCCESS")
+                            .missionRound(3)
                             .build()))
                     .build();
         }
@@ -91,6 +93,9 @@ class MissionCategoryAnalysisControllerTest {
                 .andExpect(jsonPath("$.data.relativeEligible").value(true))
                 .andExpect(jsonPath("$.data.topCategories[0].categoryId").value(17))
                 .andExpect(jsonPath("$.data.topCategories[0].categoryName").value("배달앱"))
-                .andExpect(jsonPath("$.data.topCategories[0].spendingRatio").value(30.00));
+                .andExpect(jsonPath("$.data.topCategories[0].spendingRatio").value(30.00))
+                .andExpect(jsonPath("$.data.topCategories[0].rotationAssignDate").value("2026-08-10"))
+                .andExpect(jsonPath("$.data.topCategories[0].rotationResult").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.topCategories[0].missionRound").value(3));
     }
 }
