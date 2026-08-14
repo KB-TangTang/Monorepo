@@ -3,6 +3,7 @@ package com.kb.tangtang.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.auth.JwtAuthInterceptor;
 import com.kb.tangtang.common.auth.LoginUserArgumentResolver;
+import com.kb.tangtang.common.docs.SwaggerAccessInterceptor;
 import com.kb.tangtang.common.storage.ImageStorageProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -49,6 +50,10 @@ public class ServletConfig implements WebMvcConfigurer {
     @Autowired
     private LoginUserArgumentResolver loginUserArgumentResolver;
 
+    /** 배포 환경에서 Swagger 문서를 Basic 인증으로 가린다. 로컬은 그대로 통과한다. */
+    @Autowired
+    private SwaggerAccessInterceptor swaggerAccessInterceptor;
+
     /*
      * 서블릿 컨텍스트에는 PropertySourcesPlaceholderConfigurer 가 없어 @Value 가 풀리지 않는다.
      * 값을 루트 컨텍스트의 빈에서 받아온다 — 위 두 빈과 같은 경로다.
@@ -81,6 +86,21 @@ public class ServletConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 // 로그인 자체 경로와 헬스체크는 인증 없이 열어둔다
                 .excludePathPatterns("/api/health", "/api/auth/**");
+
+        /*
+         * Swagger 문서는 /api/** 밖이라 위 인터셉터가 닿지 않는다. 배포 서버가 공인 IP 로
+         * 떠 있어 그대로 두면 API 구조 전체가 무인증으로 공개된다 (2026-08-14 실측 200).
+         * 아래 경로는 springfox 가 문서를 그리는 데 필요한 전부다 — 하나라도 빠지면
+         * 인증을 통과한 뒤에도 화면이 비거나 "Failed to load API definition" 이 뜬다.
+         */
+        registry.addInterceptor(swaggerAccessInterceptor)
+                .addPathPatterns(
+                        "/swagger-ui.html",
+                        "/v2/api-docs",
+                        "/swagger-resources",
+                        "/swagger-resources/**",
+                        "/configuration/**",
+                        "/webjars/**");
     }
 
     @Override

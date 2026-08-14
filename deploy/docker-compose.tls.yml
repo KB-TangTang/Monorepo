@@ -1,0 +1,46 @@
+# TLS 종단 오버레이 (이슈 #225)
+#
+# 기본 docker-compose.yml 위에 겹쳐 쓴다. 단독으로는 동작하지 않는다.
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.tls.yml up -d
+#
+# 적용 절차 전체는 deploy/README.md 를 따른다. **먼저 인증서를 발급받아야 한다** —
+# 인증서 파일이 없으면 nginx 가 기동하지 못하고 서비스 전체가 내려간다.
+
+# ⚠ 이 파일에서 api 의 ports 를 덮어쓰려 하지 말 것.
+#   compose 는 여러 파일의 ports 를 **덮어쓰지 않고 이어붙인다.** `ports: []` 를 써도
+#   상위 파일의 "8080:8080" 이 그대로 남아 포트가 닫히지 않는다.
+#   외부 직결을 닫는 것은 .env 의 **API_BIND=127.0.0.1** 이 담당한다 (docker-compose.yml 참고).
+
+services:
+
+  nginx:
+    image: nginx:1.27-alpine
+    environment:
+      # 인증서를 발급받은 도메인. .env 의 API_DOMAIN 을 그대로 받는다.
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      # 이 경로에 둔 *.template 을 nginx 가 envsubst 로 치환해 conf.d 로 내보낸다
+      - ./deploy/nginx/templates:/etc/nginx/templates:ro
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # 인증서 자동 갱신. 12시간마다 깨어나 만료 30일 전이면 갱신한다.
+  # 갱신 후에는 nginx 가 새 파일을 읽도록 따로 reload 해야 한다(README 의 cron 참고).
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done'
+    restart: unless-stopped
+
+volumes:
+  certbot_webroot:
+  certbot_certs:

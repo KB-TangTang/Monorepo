@@ -1,0 +1,81 @@
+# 탕탕 API TLS 리버스프록시 (이슈 #225)
+#
+# 이 파일은 nginx 공식 이미지가 기동할 때 envsubst 로 ${API_DOMAIN} 을 치환해
+# /etc/nginx/conf.d/tangtang.conf 로 내보낸다. **직접 수정한 conf 를 마운트하지 말 것** —
+# 도메인이 바뀔 때 고칠 곳이 두 군데가 된다.
+#
+# ⚠ nginx 자체 변수($host · $remote_addr 등)는 환경변수로 존재하지 않으므로 치환되지 않는다.
+#   단, HOST 같은 이름의 환경변수를 컨테이너에 주면 그때는 치환돼 버린다. 주지 말 것.
+
+# ── 80: ACME 갱신 경로만 남기고 전부 HTTPS 로 보낸다 ──────────────────
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    # Let's Encrypt 갱신(webroot 방식). 이 구간은 리다이렉트하면 안 된다 —
+    # 인증기관이 http 로 확인하러 오는데 https 로 튕기면 갱신이 실패한다.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── 443: 실제 서비스 ────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${API_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
+
+    # TLS 1.2 미만은 받지 않는다. 1.0/1.1 은 이미 주요 브라우저가 폐기했다.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # 프로필 이미지 업로드. WebConfig 의 MAX_REQUEST_SIZE(20MB)와 같은 값이어야 한다 —
+    # 여기가 작으면 서버에 닿기도 전에 413 이 난다.
+    client_max_body_size 20m;
+
+    # ── 보안 헤더 ──────────────────────────────────────────────
+    # HSTS 는 **인증서가 정상 발급된 뒤에** 켠다. 발급 전에 켜고 https 가 깨지면
+    # 브라우저가 max-age 동안 http 접속조차 거부해 복구가 어려워진다.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # 서버 버전 노출 제거
+    server_tokens off;
+
+    # ── SSE(알림 스트림) ────────────────────────────────────────
+    # 일반 프록시 설정으로 두면 nginx 가 응답을 모았다가 한 번에 보내서
+    # 실시간 알림이 도착하지 않는다. 이 경로만 버퍼링을 끄고 타임아웃을 늘린다.
+    location /api/notifications/stream {
+        proxy_pass http://api:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+        # 스트림은 오래 열려 있는 것이 정상이다. 기본값(60s)이면 1분마다 끊긴다.
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://api:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
