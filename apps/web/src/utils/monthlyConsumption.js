@@ -164,6 +164,23 @@ export function resolveSelectedReportPeriod(months, requestedPeriod, referenceDa
     return requestedMonth?.value ?? availableMonths[0]?.value ?? '';
 }
 
+export function isLatestAvailableCompletedReport(
+    months,
+    selectedPeriod,
+    referenceDate = new Date(),
+) {
+    const latestCompletedMonth = months
+        .filter(
+            (month) =>
+                month.hasReport &&
+                month.status !== MONTHLY_REPORT_STATUS.ONBOARDING &&
+                isAvailableReportMonth(month, referenceDate),
+        )
+        .sort((first, second) => second.value.localeCompare(first.value))[0];
+
+    return latestCompletedMonth?.value === selectedPeriod;
+}
+
 export async function fetchMonthlyConsumptionState(month, reportFetcher) {
     if (month.status === MONTHLY_REPORT_STATUS.ONBOARDING) {
         return { period: month.value, status: MONTHLY_REPORT_STATUS.ONBOARDING };

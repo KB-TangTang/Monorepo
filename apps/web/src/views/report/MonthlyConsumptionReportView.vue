@@ -13,7 +13,6 @@ import {
 import MonthlyCategoryReport from '@/components/report/monthly-consumption/MonthlyCategoryReport.vue';
 import MonthlyReportOnboarding from '@/components/report/monthly-consumption/MonthlyReportOnboarding.vue';
 import MonthlyReportMonthPicker from '@/components/report/monthly-consumption/MonthlyReportMonthPicker.vue';
-import MonthlySavingsCompleteTicket from '@/components/report/monthly-consumption/MonthlySavingsCompleteTicket.vue';
 import MonthlySavingsAnalogyCard from '@/components/report/monthly-consumption/MonthlySavingsAnalogyCard.vue';
 import TempMonthlyReportSourceToggle from '@/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue';
 import MonthlyVerdictSummary from '@/components/report/monthly-consumption/MonthlyVerdictSummary.vue';
@@ -26,10 +25,10 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import { useAuthStore } from '@/stores/auth';
 import {
     buildMonthlyTrendSlots,
-    canOpenFixedExpenseSavings,
     fetchMonthlyConsumptionState,
     formatPeriod,
     formatWon,
+    isLatestAvailableCompletedReport,
     resolveSelectedReportPeriod,
     resolveReportState,
     resolveFixedExpenseStatus,
@@ -55,11 +54,8 @@ const isFirstReport = computed(() => state.value === 'first-report');
 const fixedExpenseStatus = computed(() =>
     resolveFixedExpenseStatus(report.value?.fixedExpenseCandidateCount),
 );
-const canOpenSavingsStatement = computed(() =>
-    canOpenFixedExpenseSavings(
-        report.value?.fixedExpenseCandidateCount,
-        report.value?.confirmedFixedExpenseCount,
-    ),
+const shouldShowFixedExpenseCard = computed(() =>
+    isLatestAvailableCompletedReport(months.value, selectedPeriod.value),
 );
 const availableTrendAmounts = computed(
     () =>
@@ -144,8 +140,8 @@ function selectPeriod(period) {
     loadReport();
 }
 
-function openSavingsStatement() {
-    router.push({ name: 'fixedExpenseSavings' });
+function openFixedExpenseManagement() {
+    router.push({ name: 'fixedExpenseManagement' });
 }
 
 function openMonthlyReport() {
@@ -187,12 +183,6 @@ onMounted(async () => {
 <template>
     <article class="monthly-report">
         <header class="monthly-report__header">
-            <button
-                type="button"
-                class="monthly-report__back"
-                aria-label="뒤로 가기"
-                @click="router.back()"
-            ></button>
             <h1>월간 판결문</h1>
             <button
                 type="button"
@@ -307,22 +297,26 @@ onMounted(async () => {
                 </BaseCard>
             </section>
 
-            <MonthlySavingsCompleteTicket
-                v-if="fixedExpenseStatus === 'clear' && !canOpenSavingsStatement"
-            />
-            <BaseCard v-else class="monthly-report__savings" padding="none">
+            <BaseCard
+                v-if="shouldShowFixedExpenseCard"
+                class="monthly-report__savings"
+                padding="none"
+            >
                 <div class="monthly-report__savings-content">
                     <div class="monthly-report__savings-title-row">
-                        <h2>절약 감정서</h2>
+                        <h2>고정 지출</h2>
                         <span aria-hidden="true"></span>
                     </div>
                     <p v-if="fixedExpenseStatus === 'detected'">
                         고정 지출로 의심되는 내역이
                         {{ report.fixedExpenseCandidateCount }}건 있어요
                     </p>
-                    <p v-else>확정된 고정지출의 절약 가능액을 확인해보세요</p>
+                    <p v-else>반복 결제를 확인하고 고정 지출을 관리해 보세요</p>
                 </div>
-                <BaseButton class="monthly-report__savings-button" @click="openSavingsStatement">
+                <BaseButton
+                    class="monthly-report__savings-button"
+                    @click="openFixedExpenseManagement"
+                >
                     확인하기
                 </BaseButton>
             </BaseCard>
@@ -361,29 +355,10 @@ onMounted(async () => {
 }
 .monthly-report__header {
     display: grid;
-    grid-template-columns: 44px 1fr auto;
+    grid-template-columns: 1fr auto;
     align-items: center;
     justify-content: space-between;
     gap: var(--tt-space-4);
-}
-.monthly-report__back {
-    display: grid;
-    width: 44px;
-    height: 44px;
-    margin-left: calc(var(--tt-space-2) * -1);
-    padding: 0;
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    place-items: center;
-}
-.monthly-report__back::before {
-    width: 14px;
-    height: 14px;
-    content: '';
-    border-bottom: 2.5px solid var(--tt-text);
-    border-left: 2.5px solid var(--tt-text);
-    transform: rotate(45deg);
 }
 .monthly-report__header h1 {
     font-size: var(--tt-fs-title);

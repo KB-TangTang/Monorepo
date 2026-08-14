@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.MerchantKeywordRuleMapper">
+
+    <!--
+      haystack LIKE '%keyword_normalized%' — keyword_normalized 는 DB 값(신뢰 가능, 사용자 입력이 아님)이라
+      CONCAT 안에서 그대로 써도 안전하다. haystack 은 #{} 로 바인딩된다.
+      더 구체적인(긴) 키워드가 우선하도록 길이 내림차순 정렬 후 1건만 가져온다
+      (예: "쿠팡이츠"가 "쿠팡"보다 먼저 매칭).
+    -->
+    <select id="findBestMatch" resultType="com.kb.tangtang.transaction.domain.MerchantKeywordRule">
+        SELECT id, keyword, keyword_normalized, category_id
+          FROM tbl_merchant_keyword_rule
+         WHERE #{haystack} LIKE CONCAT('%', keyword_normalized, '%')
+         ORDER BY CHAR_LENGTH(keyword_normalized) DESC
+         LIMIT 1
+    </select>
+
+</mapper>

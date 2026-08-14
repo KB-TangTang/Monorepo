@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.account.mapper.CardBillMapper">
+
+    <sql id="columns">
+        id, card_id, billing_month, due_date, bill_status_code, bill_status_name,
+        total_amount, paid_amount, raw_json
+    </sql>
+
+    <select id="findByCard" resultType="com.kb.tangtang.account.domain.CardBill">
+        SELECT <include refid="columns"/>
+        FROM tbl_card_bill
+        WHERE card_id = #{cardId}
+        ORDER BY billing_month
+    </select>
+
+    <update id="update" parameterType="com.kb.tangtang.account.domain.CardBill">
+        UPDATE tbl_card_bill
+        SET due_date         = #{dueDate},
+            bill_status_code = #{billStatusCode},
+            bill_status_name = #{billStatusName},
+            total_amount     = #{totalAmount},
+            paid_amount      = #{paidAmount},
+            raw_json         = #{rawJson}
+        WHERE card_id = #{cardId}
+          AND billing_month = #{billingMonth}
+    </update>
+
+    <insert id="insert" parameterType="com.kb.tangtang.account.domain.CardBill"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_card_bill
+            (card_id, billing_month, due_date, bill_status_code, bill_status_name,
+             total_amount, paid_amount, raw_json)
+        VALUES
+            (#{cardId}, #{billingMonth}, #{dueDate}, #{billStatusCode}, #{billStatusName},
+             #{totalAmount}, #{paidAmount}, #{rawJson})
+    </insert>
+
+</mapper>

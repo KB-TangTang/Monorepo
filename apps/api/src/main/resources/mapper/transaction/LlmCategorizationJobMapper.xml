@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.LlmCategorizationJobMapper">
+
+    <insert id="insert" parameterType="com.kb.tangtang.transaction.domain.LlmCategorizationJob"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_llm_categorization_job (user_id, status, transaction_count)
+        VALUES (#{userId}, #{status}, #{transactionCount})
+    </insert>
+
+    <select id="findPending" resultType="com.kb.tangtang.transaction.domain.LlmCategorizationJob">
+        SELECT id, user_id, status, transaction_count, started_at, finished_at
+          FROM tbl_llm_categorization_job
+         WHERE status = 'PENDING'
+         ORDER BY created_at ASC
+         LIMIT #{limit}
+    </select>
+
+    <update id="markProcessing">
+        UPDATE tbl_llm_categorization_job
+           SET status = 'PROCESSING',
+               started_at = #{startedAt}
+         WHERE id = #{id}
+           AND status = 'PENDING'
+    </update>
+
+    <!--
+      항목이 하나도 안 붙은 빈 작업 삭제(이슈 #199 최종 리뷰). 배치가 이미 등록된 거래만 다시
+      묶어 보낼 때 작업 행만 남아 PENDING 이 무한히 쌓이는 걸 막는다.
+    -->
+    <delete id="delete">
+        DELETE FROM tbl_llm_categorization_job
+         WHERE id = #{id}
+    </delete>
+
+    <update id="markFinished">
+        UPDATE tbl_llm_categorization_job
+           SET status = #{status},
+               finished_at = #{finishedAt}
+         WHERE id = #{id}
+    </update>
+
+</mapper>
