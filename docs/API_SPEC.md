@@ -567,6 +567,53 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
 > ⚠ `TOKEN_EXPIRED` 는 인증 절의 액세스 토큰 만료와 **이름만 같다.** 이쪽은 HTTP 400 이라
 > 프론트 `http.js` 의 자동 재발급(401 트리거)을 유발하지 않는다.
 
+## 금융 데이터 동기화 (이슈 #147)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/financial-syncs` | Bearer | `{ status, syncedSources, syncedAt, collectedTransactionCount, ruleCategorizedCount, llmPendingTransactionCount, llmCategorizationStatus }` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "COMPLETED",
+    "syncedSources": ["BANK", "DEPOSIT", "SECURITIES", "LOAN", "PAY_MONEY", "CARD"],
+    "syncedAt": "2026-08-13T10:00:00+09:00",
+    "collectedTransactionCount": 42,
+    "ruleCategorizedCount": 30,
+    "llmPendingTransactionCount": 12,
+    "llmCategorizationStatus": "PENDING"
+  }
+}
+```
+
+- `collectedTransactionCount`·`ruleCategorizedCount`·`llmPendingTransactionCount` 는 전부 **이번 호출 한 번에서 upsert 된 거래 기준**이다(사용자의 누적 미분류 거래 수가 아니다).
+- 저장이 끝난 뒤 규칙 1~4단계(사용자 가맹점 매핑 → 공용 가맹점 매핑 → MCC/업종명 → 키워드)로 **동기** 카테고리화한다. `ruleCategorizedCount` 는 이 응답 안에서 확정된 값이다.
+- 규칙으로도 분류하지 못한 소비 거래는 이 응답 이후 **비동기**로 LLM 분류 작업(`tbl_llm_categorization_job`, 사용자별 transaction_date 오름차순 최대 20건 배치)에 등록된다. 실제 LLM 호출은 이번 범위에 포함되지 않는다 — 작업 등록까지만 한다.
+- `llmCategorizationStatus`: `PENDING`(LLM 대상 거래가 있음) · `NOT_REQUIRED`(전부 규칙으로 분류됐거나 대상 자체가 없음).
+- 사용자가 직접 지정한 카테고리(`category_source='USER'`)는 재동기화로 자동 분류가 절대 덮어쓰지 않는다(DB 레벨 가드).
+- 환불 거래(`is_refund=1`)는 일반 거래와 동일하게 규칙 1~4단계를 적용하되, 전부 미스하면 LLM 대상에서는 제외한다. 원거래 카테고리를 그대로 물려받는(계승) 처리는 **후속 작업**이다.
+- `tbl_merchant_category_map`(공용 캐시)에 대한 write-back(3·4단계 판정 결과를 다시 채워 넣는 것)은 이번 범위가 아니다 — 비어 있으면 2단계는 항상 미스로 3단계로 넘어간다.
+- 정기 동기화 스케줄러, 연결된 전체 사용자 대상 자동 동기화, 증분 동기화 조회 범위 변경도 이번 범위 밖이다.
+
+### LLM 분류 작업 처리 (후속 구현)
+
+`tbl_llm_categorization_job`에 `PENDING`으로 등록된 작업은 별도 API 호출 없이 서버 내부 스케줄러(`LlmCategorizationScheduler`)가 주기적으로 집어 OpenAI Chat Completions API로 실제 분류를 수행한다.
+
+- 주기: `llm.categorization.poll.fixed-delay-ms`(기본 1분). 한 번에 최대 `llm.categorization.poll.max-jobs-per-tick`(기본 20)개 작업을 처리한다.
+- 분류 결과는 `category_source='LLM'`으로 `tbl_transaction.category_id`에 반영된다. 사용자 지정(`USER`) 카테고리는 기존 DB 가드로 보호된다.
+- 프롬프트에 보내는 카테고리 목록은 `id`·`name`과 함께 `parentId`도 포함한다 — `parentId`가 없으면 대분류, 있으면 그 대분류에 속한 소분류라는 것을 LLM이 구분할 수 있게 한다. LLM은 확신이 서는 가장 구체적인(소분류) 레벨을 고르고, 소분류까지 확신이 안 서면 대분류만 골라도 된다.
+- LLM은 각 판정마다 `confidence`(0.0~1.0)도 함께 반환해야 하며(Structured Outputs 스키마에 필수 필드로 강제), `confidence`가 `llm.categorization.confidence-threshold`(기본 0.8) 미만이거나 아예 없으면 `categoryId`가 있어도 분류 불가(null)로 취급한다(fail-closed).
+- LLM이 제공된 카테고리 목록에 없는 id를 응답하면 그 거래는 반영하지 않고 건너뛴다(환각 방지).
+- LLM이 **그 작업에 속하지 않은 `transactionId`**를 응답해도 반영하지 않고 건너뛴다. `updateCategory`에는 사용자 범위 조건이 없어, 이 검증이 없으면 남의 거래 카테고리를 덮어쓸 수 있다(가맹점명·적요는 외부 유입 자유 텍스트라 프롬프트 주입 통로이기도 하다).
+- 작업에 속한 거래가 하나도 없으면 LLM을 호출하지 않고 즉시 `COMPLETED`로 마감한다.
+- OpenAI가 `refusal`을 돌려주거나 `finish_reason`이 `stop`이 아니면(응답 잘림) 실패로 처리한다 — "0건 분류"가 정상 완료로 기록되는 것을 막는다.
+- 작업 상태는 `PENDING → PROCESSING → COMPLETED`(정상 처리, 개별 거래가 분류 안 됐어도 정상 종료) 또는 `PROCESSING → FAILED`(API 호출 자체가 실패)로 전이한다. **`FAILED` 작업은 이번 범위에서 자동 재시도하지 않는다** — 후속 작업. `PROCESSING` 선점과 `FAILED` 마감은 둘 다 `LlmCategorizationJobStateService`가 `REQUIRES_NEW` 독립 트랜잭션으로 커밋한다(처리 트랜잭션이 롤백돼도 `FAILED`가 살아남아야 재실행 루프에 빠지지 않고, 선점이 먼저 커밋돼 행 잠금을 놓아야 그 `FAILED` 기록이 잠금 대기 없이 즉시 반영된다).
+- `openai.api.key`는 로컬에서는 `application-local.properties`에만 둔다(팀 공용 키는 팀 채널에서 배포). 도커(`APP_ENV=docker`)에서는 `application-docker.properties`가 `${OPENAI_API_KEY}` 환경변수를 참조하며, 실제 값은 `.env` → `docker-compose.yml`을 거쳐 주입된다.
+- OpenAI 호출은 전용 `RestTemplate`(`OpenAiClientConfig.openAiRestTemplate`)을 쓰며 `openai.api.connect-timeout-ms`(기본 10초)·`openai.api.read-timeout-ms`(기본 30초) 타임아웃이 걸려 있다.
+- **토큰 최적화는 이번 범위 밖**(후속 작업, 2026-08-13 논의): 지금은 작업(job) 1건마다 `classify()`를 한 번씩 호출해, 매 호출마다 카테고리 전체 목록을 새로 실어 보낸다. 처리량이 늘어나면 한 틱에서 여러 job의 거래를 모아 한 번의 `classify()` 호출로 묶어(카테고리 목록을 한 번만 전송) 토큰을 아끼는 걸 고려한다 — 단, 지금의 "job 1건 = 호출 1번" 전제로 짜인 스케줄러·작업 단위 구조를 바꿔야 하는 작업이라 별도 설계가 필요하다.
+
 ## 마이페이지 (이슈 #57)
 
 전용 엔드포인트를 새로 만들지 않았다. 아래 기존 API 를 조합해 그린다.

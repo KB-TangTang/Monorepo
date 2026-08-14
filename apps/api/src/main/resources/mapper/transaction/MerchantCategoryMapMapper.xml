@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.MerchantCategoryMapMapper">
+
+    <select id="findByMerchantNameNormalized" resultType="com.kb.tangtang.transaction.domain.MerchantCategoryMap">
+        SELECT id, merchant_name_normalized, category_id, source
+          FROM tbl_merchant_category_map
+         WHERE merchant_name_normalized = #{merchantNameNormalized}
+         LIMIT 1
+    </select>
+
+</mapper>

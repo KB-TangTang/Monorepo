@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.transaction.mapper.UserCategoryMapMapper">
+
+    <select id="findByUserAndMerchant" resultType="com.kb.tangtang.transaction.domain.UserCategoryMap">
+        SELECT id, user_id, merchant_name_normalized, category_id
+          FROM tbl_user_category_map
+         WHERE user_id = #{userId}
+           AND merchant_name_normalized = #{merchantNameNormalized}
+         LIMIT 1
+    </select>
+
+</mapper>

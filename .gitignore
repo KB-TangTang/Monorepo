@@ -1,3 +1,6 @@
+# ---- Git worktrees (SDD 작업 격리) ----
+.worktrees/
+
 # ---- Gradle / Java ----
 .gradle/
 build/

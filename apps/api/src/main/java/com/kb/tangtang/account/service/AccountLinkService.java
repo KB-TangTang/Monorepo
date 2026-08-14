@@ -19,12 +19,14 @@ import com.kb.tangtang.user.service.ConsentService;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -59,6 +61,12 @@ public class AccountLinkService {
     private final AccountNumberPolicy accountNumbers;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    /**
+     * 자동 동기화 배치의 실행 간격(밀리초). FinancialSyncBatchScheduler 의 fixedDelay 와 같은 값을
+     * 읽는다 — 다음 자동 동기화 시각 안내를 여기서 따로 하드코딩하면(예전 "매일 18시") 배치 주기를
+     * 바꾸는 순간 안내만 거짓말이 된다(이슈 #199 최종 리뷰).
+     */
+    private final long batchFixedDelayMs;
     /*
      * 제3자 제공(THIRD_PARTY) 동의 검사용.
      * ⚠ 화면 순서만으로는 못 막는다 — 계좌 연동 진입점이 셋이고 우회가 가능하다.
@@ -80,9 +88,10 @@ public class AccountLinkService {
                               InstitutionCatalog catalog,
                               AccountNumberPolicy accountNumbers,
                               ApplicationEventPublisher events,
-                              ConsentService consentService) {
+                              ConsentService consentService,
+                              @Value("${financial.sync.batch.fixed-delay-ms}") long batchFixedDelayMs) {
         this(client, mapper, progressStore, catalog, accountNumbers, events, consentService,
-                Clock.systemDefaultZone());
+                batchFixedDelayMs, Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -93,6 +102,7 @@ public class AccountLinkService {
                        AccountNumberPolicy accountNumbers,
                        ApplicationEventPublisher events,
                        ConsentService consentService,
+                       long batchFixedDelayMs,
                        Clock clock) {
         this.client = client;
         this.mapper = mapper;
@@ -101,6 +111,7 @@ public class AccountLinkService {
         this.accountNumbers = accountNumbers;
         this.events = events;
         this.consentService = consentService;
+        this.batchFixedDelayMs = batchFixedDelayMs;
         this.clock = clock;
     }
 
@@ -420,12 +431,13 @@ public class AccountLinkService {
                         .build())
                 .toList();
 
-        /* 자동 동기화는 매일 18시 배치다. 오늘 시각이 지났으면 내일로 안내한다. */
-        LocalDateTime now = LocalDateTime.now(clock);
-        LocalDateTime nextSync = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
-        if (!now.isBefore(nextSync)) {
-            nextSync = nextSync.plusDays(1);
-        }
+        /*
+         * 자동 동기화는 FinancialSyncBatchScheduler 가 fixedDelay 간격(financial.sync.batch.fixed-delay-ms,
+         * 현재 30분)으로 돌린다. 예전에는 여기서 "매일 18시" 를 하드코딩했는데 그런 배치는 존재한 적이
+         * 없어 안내가 통째로 거짓이었다(이슈 #199 최종 리뷰). 정확한 다음 틱 시각은 이전 실행의 종료
+         * 시점에 달려 있어 알 수 없으므로, 지금부터 한 주기 뒤를 상한으로 안내한다.
+         */
+        LocalDateTime nextSync = LocalDateTime.now(clock).plus(Duration.ofMillis(batchFixedDelayMs));
 
         return ConnectedAccountListDto.builder()
                 .accounts(accounts)
