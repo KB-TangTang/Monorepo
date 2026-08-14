@@ -33,6 +33,10 @@ async function decide(decision) {
     }
 }
 
+function goBack() {
+    router.back();
+}
+
 async function switchSource(nextSource) {
     if (nextSource === source.value) {
         return;
@@ -46,7 +50,11 @@ onMounted(() => store.loadCandidate(route.params.candidateId));
 
 <template>
     <article class="candidate-view">
-        <FixedExpensePageHeader title="이 지출, 고정지출인가요?" />
+        <FixedExpensePageHeader
+            title="이 지출, 고정지출인가요?"
+            back-label="이전 화면으로 이동"
+            @back="goBack"
+        />
         <p class="candidate-view__lead">
             반복 패턴을 탐지했어요. 맞으면 지정, 아니면 해제해 주세요
         </p>

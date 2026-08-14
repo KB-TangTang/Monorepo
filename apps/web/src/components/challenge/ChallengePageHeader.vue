@@ -2,6 +2,7 @@
 defineProps({
     title: { type: String, required: true },
     backLabel: { type: String, default: '이전 화면으로 돌아가기' },
+    showBack: { type: Boolean, default: true },
 });
 
 defineEmits(['back']);
@@ -10,7 +11,7 @@ defineEmits(['back']);
 <template>
     <header class="challenge-page-header">
         <div class="challenge-page-header__title-row">
-            <button type="button" :aria-label="backLabel" @click="$emit('back')">
+            <button v-if="showBack" type="button" :aria-label="backLabel" @click="$emit('back')">
                 <svg
                     viewBox="0 0 24 24"
                     fill="none"

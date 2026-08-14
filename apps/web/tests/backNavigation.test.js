@@ -70,3 +70,29 @@ test('뒤로가기가 필요한 화면은 목적지를 고정하지 않는다 �
         );
     }
 });
+
+test('탐지 후보 상세는 방문 이력을 한 단계씩 되돌린다', () => {
+    const src = source('src/views/fixed-expense/FixedExpenseCandidateView.vue');
+
+    assert.ok(
+        src.includes('back-label="이전 화면으로 이동"'),
+        '탐지 후보 상세에 FixedExpensePageHeader 뒤로가기 버튼이 없다',
+    );
+    assert.ok(src.includes('@back="goBack"'), '탐지 후보 상세의 헤더 뒤로가기 연결이 없다');
+    assert.match(
+        src,
+        /function goBack\(\) \{\s*router\.back\(\);\s*\}/,
+        '탐지 후보 상세은 router.back()으로 이전 화면을 되돌려야 한다',
+    );
+});
+
+test('월간 소비 리포트와 챌린지 리포트에는 좌상단 뒤로가기를 표시하지 않는다', () => {
+    const monthlyReport = source('src/views/report/MonthlyConsumptionReportView.vue');
+    const challengeReport = source('src/views/challenge/report/ChallengeReportView.vue');
+    const challengeHeader = source('src/components/challenge/ChallengePageHeader.vue');
+
+    assert.ok(!monthlyReport.includes('monthly-report__back'));
+    assert.ok(!monthlyReport.includes('@click="router.back()"'));
+    assert.ok(challengeReport.includes(':show-back="false"'));
+    assert.ok(challengeHeader.includes('v-if="showBack"'));
+});
