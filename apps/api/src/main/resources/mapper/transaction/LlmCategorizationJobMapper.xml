@@ -25,6 +25,15 @@
            AND status = 'PENDING'
     </update>
 
+    <!--
+      항목이 하나도 안 붙은 빈 작업 삭제(이슈 #199 최종 리뷰). 배치가 이미 등록된 거래만 다시
+      묶어 보낼 때 작업 행만 남아 PENDING 이 무한히 쌓이는 걸 막는다.
+    -->
+    <delete id="delete">
+        DELETE FROM tbl_llm_categorization_job
+         WHERE id = #{id}
+    </delete>
+
     <update id="markFinished">
         UPDATE tbl_llm_categorization_job
            SET status = #{status},

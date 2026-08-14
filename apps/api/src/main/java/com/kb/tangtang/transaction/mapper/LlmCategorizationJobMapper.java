@@ -20,4 +20,11 @@ public interface LlmCategorizationJobMapper {
     /** 작업 종료 처리(COMPLETED 또는 FAILED) + finished_at 기록. */
     int markFinished(@Param("id") Long id, @Param("status") String status,
                       @Param("finishedAt") LocalDateTime finishedAt);
+
+    /**
+     * 항목이 하나도 안 붙은 빈 작업을 지운다(이슈 #199 최종 리뷰).
+     * 배치가 30분마다 같은 거래를 다시 등록하려 하면 항목은 전부 UNIQUE 위반으로 걸러지는데
+     * 작업 행만 매 틱 남아 PENDING 이 무한히 쌓였다. 항목이 0건일 때만 부른다.
+     */
+    int delete(@Param("id") Long id);
 }

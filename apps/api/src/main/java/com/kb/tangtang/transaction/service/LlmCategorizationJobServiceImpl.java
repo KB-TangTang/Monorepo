@@ -52,6 +52,15 @@ public class LlmCategorizationJobServiceImpl implements LlmCategorizationJobServ
         }
     }
 
+    /**
+     * 청크 하나를 작업 한 건으로 등록한다.
+     *
+     * ⚠ 항목이 하나도 안 붙으면 방금 만든 작업 행을 지운다(이슈 #199 최종 리뷰).
+     *   어떤 거래가 UNIQUE 제약에 걸리는지는 insert 를 해 봐야만 알 수 있어(작업 행 먼저 → 항목 시도)
+     *   순서를 뒤집을 수 없다. 그런데 배치 스케줄러가 30분마다 도는 지금은, 규칙으로 영영 분류되지
+     *   않는 거래들이 매 틱 같은 청크로 다시 올라와 항목은 전부 걸러지고 **빈 PENDING 작업만** 무한히
+     *   쌓인다. 성공한 항목 수를 세서 0이면 되돌린다.
+     */
     private void registerBatch(long userId, List<Transaction> chunk) {
         LlmCategorizationJob job = LlmCategorizationJob.builder()
                 .userId(userId)
@@ -60,6 +69,7 @@ public class LlmCategorizationJobServiceImpl implements LlmCategorizationJobServ
                 .build();
         jobMapper.insert(job);
 
+        int registered = 0;
         for (Transaction tx : chunk) {
             LlmCategorizationJobItem item = LlmCategorizationJobItem.builder()
                     .jobId(job.getId())
@@ -67,9 +77,14 @@ public class LlmCategorizationJobServiceImpl implements LlmCategorizationJobServ
                     .build();
             try {
                 jobItemMapper.insert(item);
+                registered++;
             } catch (DuplicateKeyException e) {
                 /* 재동기화로 이미 다른(PENDING/PROCESSING) 작업에 등록된 거래 — 중복 등록하지 않고 넘어간다. */
             }
+        }
+
+        if (registered == 0) {
+            jobMapper.delete(job.getId());
         }
     }
 }

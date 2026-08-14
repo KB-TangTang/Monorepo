@@ -54,8 +54,10 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 이슈 #147 — 금융 동기화 오케스트레이터.
@@ -193,6 +195,13 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         LocalDateTime startedAt = LocalDateTime.now(clock);
         String scenarioKey = scenarioKeyProvider.resolve(userId);
         MonthlyFetchCursor monthlyCursor = buildMonthlyFetchCursor(userId);
+        /*
+         * 사용자가 직접 해제한(is_active=0) 계좌는 동기화가 되살리면 안 된다(이슈 #199 최종 리뷰).
+         * upsertConnectedAccount 가 무조건 reactivate 를 부르는데, 배치가 30분마다 도는 지금은
+         * disconnect() 한 계좌가 한 틱 안에 조용히 되살아난다. 여기서 한 번만 읽어 아래로 넘긴다
+         * (monthlyCursor 와 같은 이유 — 저장 루프 안에서 매번 DB 를 때리지 않기 위함).
+         */
+        Set<String> inactiveAccountKeys = new HashSet<>(connectedAccountMapper.findInactiveKeysByUser(userId));
 
         /*
          * 지금 처리 중인 소스를 담아 두는 커서. 실패 이력에 소스명을 남겨야 하는데 예외 자체에는
@@ -215,7 +224,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          */
         List<Long> upsertedTransactionIds;
         try {
-            upsertedTransactionIds = saveAll(userId, bundle, startedAt);
+            upsertedTransactionIds = saveAll(userId, bundle, startedAt, inactiveAccountKeys);
         } catch (RuntimeException e) {
             recordFailure(userId, SAVE_PHASE, e.getMessage(), startedAt);
             throw e;
@@ -391,19 +400,24 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      *    설계 §8 이 요구하는 "전부 성공한 뒤 하나의 커밋" 을 실제로 보장하려면 경계를 코드로 명시해야
      *    해서 TransactionTemplate 을 쓴다. 콜백 안에서 예외가 나면 그때까지의 쓰기가 전부 롤백된다.
      */
-    private List<Long> saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
-        return transactionTemplate.execute(status -> writeAll(userId, bundle, startedAt));
+    private List<Long> saveAll(long userId, SyncBundle bundle, LocalDateTime startedAt,
+                               Set<String> inactiveKeys) {
+        return transactionTemplate.execute(status -> writeAll(userId, bundle, startedAt, inactiveKeys));
     }
 
     /** 실제 쓰기. 순서: 상품 upsert → 거래 upsert → correlation 연결 → 성공 이력. 이번 호출에서 upsert 된 거래 id 목록을 돌려준다. */
-    private List<Long> writeAll(long userId, SyncBundle bundle, LocalDateTime startedAt) {
+    private List<Long> writeAll(long userId, SyncBundle bundle, LocalDateTime startedAt,
+                                Set<String> inactiveKeys) {
         LocalDateTime now = LocalDateTime.now(clock);
         List<Transaction> upserted = new ArrayList<>();
 
         /* BANK: 계좌 upsert + 거래 upsert. 계좌 타입은 목서버 accountTypeCode 를 그대로 안 쓰고
            우리 도메인 값(DEMAND_DEPOSIT)으로 저장한다 — AccountLinkService 관례와 동일. */
         for (BankAccountSyncDto account : bundle.bankAccounts) {
-            Long connectedAccountId = upsertBankAccount(userId, account, now);
+            Long connectedAccountId = upsertBankAccount(userId, account, now, inactiveKeys);
+            if (connectedAccountId == null) {
+                continue;   // 사용자가 해제한 계좌 — 계좌도 거래도 되살리지 않는다
+            }
             for (BankTransactionSyncDto tx :
                     bundle.bankTransactions.getOrDefault(account.getAccountId(), List.of())) {
                 /*
@@ -447,10 +461,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
 
         /* 나머지 소스(DEPOSIT/SECURITIES/LOAN/PAY_MONEY)도 같은 upsert-then-transaction 패턴. */
-        saveDeposits(userId, bundle, now, upserted);
-        saveSecurities(userId, bundle, now, upserted);
+        saveDeposits(userId, bundle, now, upserted, inactiveKeys);
+        saveSecurities(userId, bundle, now, upserted, inactiveKeys);
         saveLoans(userId, bundle, upserted);
-        savePayMoney(userId, bundle, now, upserted);
+        savePayMoney(userId, bundle, now, upserted, inactiveKeys);
 
         /* 반환값은 연결된 쌍의 수가 아니라 갱신된 행 수(쌍당 2)다 — 다중 테이블 UPDATE 라서.
            로그를 남기는 이유: correlationId 추출이 조용히 깨져도(RawJsonFields.parse 참고) 이 값이
@@ -469,7 +483,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return upserted.stream().map(Transaction::getId).collect(java.util.stream.Collectors.toList());
     }
 
-    private void saveDeposits(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
+    private void saveDeposits(long userId, SyncBundle bundle, LocalDateTime now,
+                              List<Transaction> upserted, Set<String> inactiveKeys) {
         for (DepositSyncDto deposit : bundle.deposits) {
             String accountNoEncrypted = "MOCK-DEPOSIT-" + deposit.getDepositAccountId();
             ConnectedAccount row = ConnectedAccount.builder()
@@ -484,7 +499,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .syncStatus("NORMAL")
                     .lastSyncAt(now)
                     .build();
-            Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted);
+            Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted, inactiveKeys);
+            if (accountId == null) {
+                continue;   // 사용자가 해제한 계좌 — 계좌도 거래도 되살리지 않는다
+            }
             for (DepositTransactionSyncDto tx :
                     bundle.depositTransactions.getOrDefault(deposit.getDepositAccountId(), List.of())) {
                 /* 예적금 납입은 소비가 아니라 상품으로의 자금 이동이다 — 소비 집계에 섞이면 안 된다. */
@@ -497,7 +515,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
-    private void saveSecurities(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
+    private void saveSecurities(long userId, SyncBundle bundle, LocalDateTime now,
+                                List<Transaction> upserted, Set<String> inactiveKeys) {
         if (bundle.stock == null) {
             return;
         }
@@ -512,7 +531,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .syncStatus("NORMAL")
                 .lastSyncAt(now)
                 .build();
-        Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted);
+        Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted, inactiveKeys);
+        if (accountId == null) {
+            return;     // 사용자가 해제한 계좌 — 보유종목·거래까지 통째로 건너뛴다
+        }
 
         for (StockHoldingSyncDto holding : holdings(bundle.stock)) {
             InvestmentHolding ih = InvestmentHolding.builder()
@@ -588,7 +610,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
-    private void savePayMoney(long userId, SyncBundle bundle, LocalDateTime now, List<Transaction> upserted) {
+    private void savePayMoney(long userId, SyncBundle bundle, LocalDateTime now,
+                              List<Transaction> upserted, Set<String> inactiveKeys) {
         for (PayMoneySyncDto payMoney : bundle.payMoney) {
             String accountNoEncrypted = "MOCK-PAYMONEY-" + payMoney.getPayMoneyId();
             ConnectedAccount row = ConnectedAccount.builder()
@@ -602,7 +625,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .syncStatus("NORMAL")
                     .lastSyncAt(now)
                     .build();
-            Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted);
+            Long accountId = upsertConnectedAccount(userId, row, accountNoEncrypted, inactiveKeys);
+            if (accountId == null) {
+                continue;   // 사용자가 해제한 계좌 — 계좌도 거래도 되살리지 않는다
+            }
             for (PayMoneyTransactionSyncDto tx :
                     bundle.payMoneyTransactions.getOrDefault(payMoney.getPayMoneyId(), List.of())) {
                 /*
@@ -622,7 +648,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     /* ── upsert 헬퍼 ───────────────────────────────────── */
 
-    private Long upsertBankAccount(long userId, BankAccountSyncDto account, LocalDateTime now) {
+    private Long upsertBankAccount(long userId, BankAccountSyncDto account, LocalDateTime now,
+                                   Set<String> inactiveKeys) {
         String accountType = "SAVINGS".equalsIgnoreCase(account.getAccountTypeCode())
                 ? "SAVINGS" : "DEMAND_DEPOSIT";
         String accountNoEncrypted = "MOCK-BANK-" + account.getAccountId();
@@ -638,7 +665,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                 .syncStatus("NORMAL")
                 .lastSyncAt(now)
                 .build();
-        return upsertConnectedAccount(userId, row, accountNoEncrypted);
+        return upsertConnectedAccount(userId, row, accountNoEncrypted, inactiveKeys);
     }
 
     /**
@@ -646,8 +673,18 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
      *
      * ⚠ 계좌번호 원본이 없는 목서버 데이터라 account_no_encrypted 에 "MOCK-{소스}-{목서버ID}" 를 넣는다.
      *   HMAC 해시가 아니므로 AccountLinkService 로 연결한 실제 계좌 행과 겹치지 않는다.
+     *
+     * ⚠ 사용자가 해제한 계좌면 **아무것도 하지 않고 null 을 돌려준다**(이슈 #199 최종 리뷰).
+     *   reactivate 의 SQL 은 is_active=1 을 무조건 세우는데, 그 동작 자체는 AccountLinkService 의
+     *   재연결 흐름이 의존하므로 손대지 않는다 — 되살리면 안 되는 상황을 여기서 거른다.
+     *   null 을 받은 호출부는 그 계좌의 거래까지 통째로 건너뛴다.
      */
-    private Long upsertConnectedAccount(long userId, ConnectedAccount row, String accountNoEncrypted) {
+    private Long upsertConnectedAccount(long userId, ConnectedAccount row, String accountNoEncrypted,
+                                        Set<String> inactiveKeys) {
+        if (inactiveKeys.contains(accountNoEncrypted)) {
+            log.debug("사용자가 해제한 계좌라 동기화에서 제외한다 userId={} key={}", userId, accountNoEncrypted);
+            return null;
+        }
         if (connectedAccountMapper.reactivate(row) > 0) {
             return findConnectedAccountId(userId, accountNoEncrypted);
         }

@@ -30,16 +30,20 @@ public class FinancialSyncBatchScheduler {
     private final FinancialSyncService financialSyncService;
     private final boolean enabled;
     private final int maxUsersPerTick;
+    /** 재동기화 쿨다운(분). 마지막 동기화 시도가 이보다 최근인 사용자는 이번 틱에서 뺀다(이슈 #199 최종 리뷰). */
+    private final int minIntervalMinutes;
 
     @Autowired
     public FinancialSyncBatchScheduler(ConnectedAccountMapper connectedAccountMapper,
                                        FinancialSyncService financialSyncService,
                                        @Value("${financial.sync.batch.enabled}") boolean enabled,
-                                       @Value("${financial.sync.batch.max-users-per-tick}") int maxUsersPerTick) {
+                                       @Value("${financial.sync.batch.max-users-per-tick}") int maxUsersPerTick,
+                                       @Value("${financial.sync.batch.min-interval-minutes}") int minIntervalMinutes) {
         this.connectedAccountMapper = connectedAccountMapper;
         this.financialSyncService = financialSyncService;
         this.enabled = enabled;
         this.maxUsersPerTick = maxUsersPerTick;
+        this.minIntervalMinutes = minIntervalMinutes;
     }
 
     @Scheduled(fixedDelayString = "${financial.sync.batch.fixed-delay-ms}")
@@ -47,7 +51,7 @@ public class FinancialSyncBatchScheduler {
         if (!enabled) {
             return;
         }
-        for (Long userId : connectedAccountMapper.findUserIdsDueForSync(maxUsersPerTick)) {
+        for (Long userId : connectedAccountMapper.findUserIdsDueForSync(minIntervalMinutes, maxUsersPerTick)) {
             try {
                 financialSyncService.sync(userId);
             } catch (Exception e) {

@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -110,5 +111,32 @@ class LlmCategorizationJobServiceImplTest {
 
         verify(jobItemMapper, times(2)).insert(any(LlmCategorizationJobItem.class));
         verify(jobMapper, times(1)).insert(any(LlmCategorizationJob.class));
+        /* 한 건이라도 붙었으면 작업 행은 남아야 한다. */
+        verify(jobMapper, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("청크의 모든 거래가 이미 등록돼 있으면 빈 작업 행을 남기지 않는다")
+    void jobWithNoItemsIsDeleted() {
+        /*
+         * 이슈 #199 최종 리뷰. 배치 스케줄러가 30분마다 돌면서, 규칙으로도 LLM 으로도 끝내 분류되지
+         * 않는 거래들이 매 틱 같은 청크로 다시 올라온다. 항목은 UNIQUE 제약으로 전부 걸러지는데
+         * 작업 행만 남아 PENDING 이 무한히 쌓였다.
+         */
+        Transaction tx1 = Transaction.builder().id(1L).trDate(LocalDate.of(2026, 1, 1)).build();
+        Transaction tx2 = Transaction.builder().id(2L).trDate(LocalDate.of(2026, 1, 2)).build();
+        when(transactionMapper.findByIds(List.of(1L, 2L))).thenReturn(List.of(tx1, tx2));
+        when(jobMapper.insert(any(LlmCategorizationJob.class))).thenAnswer(inv -> {
+            ((LlmCategorizationJob) inv.getArgument(0)).setId(42L);  // useGeneratedKeys 흉내
+            return 1;
+        });
+        when(jobItemMapper.insert(any(LlmCategorizationJobItem.class)))
+                .thenThrow(new DuplicateKeyException("Duplicate entry for key 'uk_lcji_transaction'"));
+
+        service.registerPendingJobs(1L, List.of(1L, 2L));
+
+        verify(jobItemMapper, times(2)).insert(any(LlmCategorizationJobItem.class));
+        verify(jobMapper, times(1)).insert(any(LlmCategorizationJob.class));
+        verify(jobMapper).delete(42L);
     }
 }

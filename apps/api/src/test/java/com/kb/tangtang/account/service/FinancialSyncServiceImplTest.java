@@ -167,8 +167,21 @@ class FinancialSyncServiceImplTest {
         when(client.getCards("1")).thenReturn(List.of());
 
         /* reactivate 가 0 을 돌려주므로 기본 시나리오는 insert 경로다. update 경로는
-           resyncReusesExistingRowOnUpdatePath 가 따로 검증한다. */
-        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> 1);
+           resyncReusesExistingRowOnUpdatePath 가 따로 검증한다.
+
+           ⚠ 반드시 PK 를 채워야 한다. XML 의 insert 는 useGeneratedKeys="true" 라 실제로는 항상
+             id 가 돌아오는데, 예전 스텁은 그걸 흉내내지 않아 계좌 PK 가 null 인 채로(현실에 없는 상태)
+             테스트가 돌았다 — 그래서 "계좌 PK 가 null" 을 "이 계좌는 건너뛴다" 신호로 쓸 수가 없었다
+             (이슈 #199 최종 리뷰). */
+        when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
+            /* null 체크 필수: 개별 테스트가 이 스텁을 덮어쓸 때 when(mock.insert(any())) 호출 자체가
+               여기 답변을 인자 null 로 한 번 실행시킨다. */
+            ConnectedAccount saved = inv.getArgument(0);
+            if (saved != null) {
+                saved.setId(77L);
+            }
+            return 1;
+        });
         when(transactionMapper.update(any())).thenReturn(0);
         when(transactionMapper.insert(any())).thenReturn(1);
     }
@@ -314,6 +327,7 @@ class FinancialSyncServiceImplTest {
     void allWritesHappenInsideOneTransaction() {
         when(connectedAccountMapper.insert(any())).thenAnswer(inv -> {
             timeline.add("WRITE:account");
+            ((ConnectedAccount) inv.getArgument(0)).setId(77L);  // useGeneratedKeys 흉내
             return 1;
         });
         when(transactionMapper.insert(any())).thenAnswer(inv -> {
@@ -626,6 +640,44 @@ class FinancialSyncServiceImplTest {
         verify(client).getBankTransactions("1", 101L, "2026-07");
         verify(client).getBankTransactions("1", 101L, "2026-08");
         verify(client, never()).getBankTransactions(eq("1"), eq(101L), isNull());
+    }
+
+    @Test
+    @DisplayName("사용자가 해제한 계좌는 동기화가 되살리지 않는다 — 계좌도 거래도 손대지 않는다")
+    void userDisconnectedAccountIsNotResurrected() {
+        /*
+         * 이슈 #199 최종 리뷰(Critical). upsertConnectedAccount 가 무조건 reactivate(is_active=1) 를
+         * 부르는 탓에, 사용자가 disconnect() 로 끊은 계좌가 30분 배치 한 틱이면 조용히 되살아났다.
+         * reactivate 의 SQL 자체는 AccountLinkService 의 정당한 재연결이 의존하므로 손대지 않고,
+         * 되살리면 안 되는 계좌를 여기(동기화 파이프라인)에서 거른다.
+         */
+        when(connectedAccountMapper.findInactiveKeysByUser(1L)).thenReturn(List.of("MOCK-BANK-101"));
+
+        FinancialSyncResultDto result = service.sync(1L);
+
+        assertEquals("COMPLETED", result.getStatus());
+        /* 계좌를 되살리지도, 새로 만들지도 않는다. */
+        verify(connectedAccountMapper, never()).reactivate(any());
+        verify(connectedAccountMapper, never()).insert(any());
+        /* 그 계좌의 거래도 들어오면 안 된다 — 계좌만 막고 거래를 넣으면 고아 거래가 된다. */
+        verify(transactionMapper, never()).insert(argThat(t ->
+                t.getCodefTrKey() != null && t.getCodefTrKey().startsWith("BANK-")));
+        verify(transactionMapper, never()).update(argThat(t ->
+                t.getCodefTrKey() != null && t.getCodefTrKey().startsWith("BANK-")));
+        assertEquals(0, result.getCollectedTransactionCount());
+    }
+
+    @Test
+    @DisplayName("해제되지 않은 계좌는 평소대로 동기화된다 — 제외 목록이 과잉 차단하면 안 된다")
+    void activeAccountIsStillSyncedWhenAnotherAccountIsDisconnected() {
+        when(connectedAccountMapper.findInactiveKeysByUser(1L))
+                .thenReturn(List.of("MOCK-BANK-999"));   // 다른 계좌만 해제된 상태
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper).reactivate(argThat(a ->
+                "MOCK-BANK-101".equals(a.getAccountNoEncrypted())));
+        verify(transactionMapper).insert(argThat(t -> "BANK".equals(t.getSourceType())));
     }
 
     @Test
