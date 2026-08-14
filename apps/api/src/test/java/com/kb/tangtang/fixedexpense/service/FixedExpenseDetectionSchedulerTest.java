@@ -9,13 +9,13 @@ import static org.mockito.Mockito.verify;
 class FixedExpenseDetectionSchedulerTest {
 
     @Test
-    void scheduledDetectionDelegatesToBatchService() {
+    void scheduledBatchDelegatesToLifecycleAndDetectionBatchService() {
         FixedExpenseDetectionBatchService batchService = mock(FixedExpenseDetectionBatchService.class);
         FixedExpenseDetectionScheduler scheduler = new FixedExpenseDetectionScheduler(batchService);
 
-        scheduler.detectMonthlyFixedExpenses();
+        scheduler.runDailyFixedExpenseBatch();
 
-        verify(batchService).detectAllUsers();
+        verify(batchService).runDailyFixedExpenseBatch();
     }
 
     @Test
@@ -26,6 +26,6 @@ class FixedExpenseDetectionSchedulerTest {
         scheduler.recoverMonthlyFixedExpensesOnStartup();
         scheduler.recoverMonthlyFixedExpensesOnStartup();
 
-        verify(batchService, times(1)).detectAllUsers();
+        verify(batchService, times(1)).runDailyFixedExpenseBatch();
     }
 }
