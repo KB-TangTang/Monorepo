@@ -30,6 +30,8 @@ public interface MonthlyReportMapper {
 
     int countActiveFixedExpenseCandidates(@Param("userId") long userId);
 
+    int countActiveConfirmedFixedExpenses(@Param("userId") long userId);
+
     BigDecimal sumActiveTotalAssets(@Param("userId") long userId);
 
     BigDecimal sumLoanBalances(@Param("userId") long userId);

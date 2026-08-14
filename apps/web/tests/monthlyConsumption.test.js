@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildMonthlyTrendSlots,
+    canOpenFixedExpenseSavings,
     composeMonthlyConsumptionReport,
     fetchMonthlyConsumptionState,
     formatChangeRate,
@@ -84,10 +85,7 @@ test('카테고리 증감과 화면 상태를 표시한다', () => {
         resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.FIRST_REPORT } }),
         'first-report',
     );
-    assert.equal(
-        resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.READY } }),
-        'ready',
-    );
+    assert.equal(resolveReportState({ report: { status: MONTHLY_REPORT_STATUS.READY } }), 'ready');
 });
 
 test('온보딩 상태는 완료 월 집계 API를 호출하지 않고 로컬 화면 상태를 만든다', async () => {
@@ -136,6 +134,13 @@ test('고정 지출 의심 건은 명시적인 배열 또는 false일 때만 확
     assert.equal(resolveFixedExpenseStatus(undefined), 'unknown');
 });
 
+test('후보가 없어도 확정 고정지출이 있으면 절약 감정서로 이동할 수 있다', () => {
+    assert.equal(canOpenFixedExpenseSavings(1, 0), true);
+    assert.equal(canOpenFixedExpenseSavings(0, 2), true);
+    assert.equal(canOpenFixedExpenseSavings(0, 0), false);
+    assert.equal(canOpenFixedExpenseSavings(undefined, undefined), false);
+});
+
 test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () => {
     const report = composeMonthlyConsumptionReport(
         {
@@ -144,6 +149,7 @@ test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () =
             hasPreviousComparison: true,
             monthOverMonthRate: -25,
             fixedExpenseCandidateCount: 2,
+            confirmedFixedExpenseCount: 1,
         },
         {
             items: [
@@ -177,6 +183,7 @@ test('월간 리포트 API 응답을 기존 화면 모델로 조합한다', () =
 
     assert.equal(report.period, '2026-07');
     assert.equal(report.fixedExpenseCandidateCount, 2);
+    assert.equal(report.confirmedFixedExpenseCount, 1);
     assert.deepEqual(
         report.monthlyTrend.map((item) => item.yearMonth),
         ['2026-06', '2026-07'],
@@ -255,6 +262,7 @@ test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다
 
     assert.equal(months.find((month) => month.value === '2026-07').available, true);
     assert.equal(report.fixedExpenseCandidateCount, 1);
+    assert.equal(report.confirmedFixedExpenseCount, 0);
     assert.equal(report.parentCategories.length, report.categories.length);
     assert.equal(report.monthlyTrend.at(-1).yearMonth, '2026-07');
     assert.equal(report.monthlyTrend.at(-1).hasData, true);
@@ -276,6 +284,7 @@ test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지�
         [3, 4],
     );
     assert.deepEqual(REPORTS['2026-04'].fixedExpenseCandidates, []);
+    assert.equal(REPORTS['2026-04'].confirmedFixedExpenseCount, 2);
 });
 
 test('모든 리포트에 최근 6개월 슬롯을 만들고 내역 없는 달은 비워 둔다', () => {
@@ -337,12 +346,15 @@ test('AI 조회 결과는 소비 리포트에 선택적으로 결합하고 피�
 });
 
 test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순서로 표시한다', () => {
-    assert.deepEqual(resolveMonthlySavingsAnalogyCard({ savingsAnalogy: '이번달 아낀 소비는 쌀 3포대' }), {
-        variant: 'saving',
-        eyebrow: '이번 달의 절약 한 장면',
-        title: '이번달 아낀 소비는 쌀 3포대',
-        description: '이 흐름, 다음 달에도 이어가봐요.',
-    });
+    assert.deepEqual(
+        resolveMonthlySavingsAnalogyCard({ savingsAnalogy: '이번달 아낀 소비는 쌀 3포대' }),
+        {
+            variant: 'saving',
+            eyebrow: '이번 달의 절약 한 장면',
+            title: '이번달 아낀 소비는 쌀 3포대',
+            description: '이 흐름, 다음 달에도 이어가봐요.',
+        },
+    );
     assert.deepEqual(
         resolveMonthlySavingsAnalogyCard({
             savingsAnalogy: null,

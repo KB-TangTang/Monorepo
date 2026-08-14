@@ -9,12 +9,13 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import FixedExpensePageHeader from '@/components/fixed-expense/FixedExpensePageHeader.vue';
 import FixedExpenseReceiptPanel from '@/components/fixed-expense/FixedExpenseReceiptPanel.vue';
 import FixedExpenseSummaryCard from '@/components/fixed-expense/FixedExpenseSummaryCard.vue';
+import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
 import { formatSavingsWon, formatWon, resolveFixedExpenseState } from '@/utils/fixedExpense';
 
 const router = useRouter();
 const store = useFixedExpenseStore();
-const { savings, loading, error } = storeToRefs(store);
+const { savings, loading, error, source } = storeToRefs(store);
 const state = computed(() =>
     resolveFixedExpenseState({ loading: loading.value, error: error.value, data: savings.value }),
 );
@@ -25,6 +26,14 @@ function goBack() {
         return;
     }
     router.push('/asset');
+}
+
+async function switchSource(nextSource) {
+    if (nextSource === source.value) {
+        return;
+    }
+    store.setSource(nextSource);
+    await store.loadSavings();
 }
 
 onMounted(() => store.loadSavings());
@@ -87,6 +96,13 @@ onMounted(() => store.loadSavings());
                 </BaseButton>
             </div>
         </template>
+
+        <TempFixedExpenseSourceToggle
+            :source="source"
+            :loading="loading"
+            elevated
+            @toggle="switchSource"
+        />
     </article>
 </template>
 

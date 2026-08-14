@@ -32,6 +32,9 @@ test('목록과 상세가 같은 식별자로 연결된다', () => {
     const listItem = FIXED_EXPENSE_FIXTURE.confirmed[0];
     const expense = FIXED_EXPENSE_FIXTURE.confirmed.find((item) => item.id === listItem.id);
     assert.equal(expense.name, listItem.name);
+    assert.equal(expense.status, 'ACTIVE');
+    assert.notEqual(expense.confirmedAt, null);
+    assert.equal(FIXED_EXPENSE_FIXTURE.candidates[0].confirmedAt, null);
 });
 
 test('탐지 후보를 고정지출로 지정한다', () => {
@@ -43,6 +46,8 @@ test('탐지 후보를 고정지출로 지정한다', () => {
     );
     assert.equal(state.overview.confirmedCount, 5);
     assert.equal(state.overview.candidateCount, 1);
+    assert.equal(state.confirmed.at(-1).status, 'ACTIVE');
+    assert.notEqual(state.confirmed.at(-1).confirmedAt, null);
 });
 
 test('고정지출이 아닌 후보를 제외한다', () => {

@@ -66,6 +66,16 @@
         WHERE user_id = #{userId}
           AND status = 'ACTIVE'
           AND is_excluded = 0
+          AND confirmed_at IS NULL
+    </select>
+
+    <select id="countActiveConfirmedFixedExpenses" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NOT NULL
     </select>
 
     <select id="sumActiveTotalAssets" resultType="java.math.BigDecimal">
