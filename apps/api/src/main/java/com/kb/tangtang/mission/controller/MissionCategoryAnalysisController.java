@@ -1,5 +1,6 @@
 package com.kb.tangtang.mission.controller;
 
+import com.kb.tangtang.mission.docs.MissionCategoryAnalysisControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.MissionCategoryAnalysisDto;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/missions")
-public class MissionCategoryAnalysisController {
+public class MissionCategoryAnalysisController implements MissionCategoryAnalysisControllerDocs {
 
     private final MissionCategoryAnalysisService missionCategoryAnalysisService;
 

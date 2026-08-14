@@ -1,5 +1,6 @@
 package com.kb.tangtang.common.dev;
 
+import com.kb.tangtang.common.docs.DevBatchTriggerControllerDocs;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
@@ -32,7 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/dev/batches")
 @Log4j2
-public class DevBatchTriggerController {
+public class DevBatchTriggerController implements DevBatchTriggerControllerDocs {
 
     private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;

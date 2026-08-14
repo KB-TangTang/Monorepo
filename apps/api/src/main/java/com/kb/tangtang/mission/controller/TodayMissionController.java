@@ -1,5 +1,6 @@
 package com.kb.tangtang.mission.controller;
 
+import com.kb.tangtang.mission.docs.TodayMissionControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.TodayMissionDto;
@@ -11,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/missions")
-public class TodayMissionController {
+public class TodayMissionController implements TodayMissionControllerDocs {
 
     private final TodayMissionService todayMissionService;
 

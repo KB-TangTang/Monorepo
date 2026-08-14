@@ -151,4 +151,25 @@ class MonthlyReportControllerTest {
                 .andExpect(jsonPath("$.data.feedbacks").isEmpty())
                 .andExpect(jsonPath("$.data.savingsAnalogy").doesNotExist());
     }
+
+    @Test
+    @DisplayName("스냅샷 행이 없으면 AI 상태 조회가 온디맨드 생성 결과를 반환한다")
+    void generatesAiAnalysisWhenSnapshotIsMissing() throws Exception {
+        org.mockito.Mockito.when(aiAnalysisService.generateIfSnapshotMissing(USER_ID, "2026-07"))
+                .thenReturn(MonthlyAiAnalysisDto.builder()
+                        .yearMonth("2026-07")
+                        .status("COMPLETED")
+                        .feedbacks(List.of("새로 생성한 분석"))
+                        .savingsAnalogy("이번달 아낀 128,000원은 치킨 5마리")
+                        .build());
+
+        mockMvc().perform(get("/api/reports/monthly/ai-analysis")
+                        .param("yearMonth", "2026-07"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.feedbacks[0]").value("새로 생성한 분석"));
+
+        org.mockito.Mockito.verify(aiAnalysisService).generateIfSnapshotMissing(USER_ID, "2026-07");
+        org.mockito.Mockito.verifyNoInteractions(aiAnalysisQueryService);
+    }
 }

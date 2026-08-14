@@ -5,12 +5,14 @@ import com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot;
 import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -29,8 +31,9 @@ public class MonthlyAiAnalysisQueryService {
 
     @Autowired
     public MonthlyAiAnalysisQueryService(MonthlyReportMapper monthlyReportMapper,
-                                         MonthlyAiAnalysisResultReader resultReader) {
-        this(monthlyReportMapper, resultReader, Clock.systemDefaultZone());
+                                         MonthlyAiAnalysisResultReader resultReader,
+                                         @Value("${report.monthly.zone:Asia/Seoul}") String zoneId) {
+        this(monthlyReportMapper, resultReader, Clock.system(ZoneId.of(zoneId)));
     }
 
     MonthlyAiAnalysisQueryService(MonthlyReportMapper monthlyReportMapper,

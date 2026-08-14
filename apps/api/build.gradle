@@ -63,6 +63,26 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
+    /*
+     * ---- Swagger (Springfox) ----
+     * springdoc-openapi 는 쓸 수 없다. 1.8.0 이 금지 대상인 Boot 모듈 2종(코어·autoconfigure)을
+     * 런타임 의존성으로 끌고 오고(실측), 2.x 는 Spring 6 을 요구한다.
+     * Springfox 는 Boot 의존이 0건이라 금지 기술에 걸리지 않는다
+     * (`./gradlew :apps:api:dependencies --configuration runtimeClasspath` 로 확인 가능).
+     * 3.0.0 이 아니라 2.9.2 인 이유는 수업 자료(Spring 5.3 · Java 17 · war)에서 검증된 조합이기
+     * 때문이다. (DECISIONS.md 2026-08-13 (4) 참고)
+     *
+     * ⚠ commons-logging 을 반드시 뺀다. springfox 2.9.2 가 commons-logging:1.1.3 을 딸려오는데
+     *   이 프로젝트는 위 spring-context 에서 이미 그것을 빼고 log4j-slf4j-impl 로 통일해 뒀다.
+     *   놔두면 SLF4J 와 JCL 이 이중 바인딩된다.
+     */
+    implementation('io.springfox:springfox-swagger2:2.9.2') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+    implementation('io.springfox:springfox-swagger-ui:2.9.2') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+
     // ---- JWT (jjwt) — Spring Boot 스타터가 아니므로 금지 기술이 아니다 ----
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.12.6'

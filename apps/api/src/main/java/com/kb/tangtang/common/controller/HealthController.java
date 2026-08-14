@@ -1,5 +1,6 @@
 package com.kb.tangtang.common.controller;
 
+import com.kb.tangtang.common.docs.HealthControllerDocs;
 import com.kb.tangtang.common.dto.ApiResponse;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,7 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 @Log4j2
-public class HealthController {
+public class HealthController implements HealthControllerDocs {
 
     @GetMapping("/health")
     public ApiResponse<Map<String, String>> health() {

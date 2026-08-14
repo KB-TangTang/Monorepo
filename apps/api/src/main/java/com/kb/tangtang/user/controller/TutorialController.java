@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.controller;
 
+import com.kb.tangtang.user.docs.TutorialControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.user.domain.TutorialType;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 마이페이지에 이미 있는 기능이라 완료 처리와 짝으로 둔다.
  */
 @RestController
-public class TutorialController {
+public class TutorialController implements TutorialControllerDocs {
 
     private final UserService userService;
 

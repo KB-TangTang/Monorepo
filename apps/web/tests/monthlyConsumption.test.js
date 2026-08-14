@@ -341,7 +341,7 @@ test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순
         variant: 'saving',
         eyebrow: '이번 달의 절약 한 장면',
         title: '이번달 아낀 소비는 쌀 3포대',
-        description: '이 흐름, 다음 달에도 이어가보자.',
+        description: '이 흐름, 다음 달에도 이어가봐요.',
     });
     assert.deepEqual(
         resolveMonthlySavingsAnalogyCard({
@@ -353,15 +353,33 @@ test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순
             variant: 'increase',
             eyebrow: '소비 흐름 점검',
             title: '지난달보다 소비가 늘어났어요',
-            description: '가장 자주 쓴 항목부터 가볍게 점검해봐.',
+            description: '가장 자주 쓴 항목부터 가볍게 점검해봐요.',
         },
     );
-    assert.equal(
+    assert.deepEqual(
         resolveMonthlySavingsAnalogyCard({
             savingsAnalogy: null,
             hasPreviousComparison: false,
             monthOverMonthRate: null,
-        }).variant,
-        'start',
+        }),
+        {
+            variant: 'start',
+            eyebrow: '다음 달을 위한 한 걸음',
+            title: '탕이와 함께 절약해봐요',
+            description: '이번 달 소비를 기준으로 다음 달 목표를 세워봐요.',
+        },
+    );
+    assert.deepEqual(
+        resolveMonthlySavingsAnalogyCard({
+            savingsAnalogy: null,
+            hasPreviousComparison: true,
+            monthOverMonthRate: null,
+        }),
+        {
+            variant: 'start',
+            eyebrow: '다음 달을 위한 한 걸음',
+            title: '탕이와 함께 절약해봐요',
+            description: '이번 달 소비 흐름을 살피고, 다음 목표를 정해봐요.',
+        },
     );
 });

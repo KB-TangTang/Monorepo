@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.controller;
 
+import com.kb.tangtang.challenge.docs.ChallengeGroupControllerDocs;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
@@ -22,7 +23,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/group-challenges")
-public class ChallengeGroupController {
+public class ChallengeGroupController implements ChallengeGroupControllerDocs {
 
     private final ChallengeGroupService challengeGroupService;
 
