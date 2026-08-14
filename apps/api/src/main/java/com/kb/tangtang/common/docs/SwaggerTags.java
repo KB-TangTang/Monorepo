@@ -44,6 +44,9 @@ public final class SwaggerTags {
     /** 고정지출 후보 확정·제외와 절약 리포트. */
     public static final String FIXED_EXPENSE = "07. 고정지출 · 절약";
 
+    /** 거래내역 조회·사용자 카테고리 수정. */
+    public static final String TRANSACTION = "08. 거래내역";
+
     /** 개발·시연 전용(/api/dev/**). SwaggerConfig 가 별도 그룹으로 분리한다. */
     public static final String DEV = "99. [DEV] 개발 · 시연 전용";
 
