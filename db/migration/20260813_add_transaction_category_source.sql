@@ -24,11 +24,24 @@ ALTER TABLE tbl_transaction
   ADD CONSTRAINT ck_tx_category_source
   CHECK (category_source IS NULL OR category_source IN ('RULE_MCC', 'RULE_KEYWORD', 'LLM', 'USER'));
 
--- category_id 가 NULL(아직 분류 안 됨)이면 category_source 도 반드시 NULL —
--- "미분류" 상태와 "무언가로 분류된" 상태를 명확히 구분하기 위함
-ALTER TABLE tbl_transaction
-  ADD CONSTRAINT ck_tx_category_source_requires_id
-  CHECK (category_id IS NOT NULL OR category_source IS NULL);
+-- ⚠ "category_id 가 NULL 이면 category_source 도 NULL" 규칙은 DB 로 강제하지 않는다.
+--   (2026-08-14 결정. DECISIONS.md 참고)
+--
+--   아래 CHECK 을 걸면 MySQL 8 이 거부한다.
+--     [HY000][3823] Column 'category_id' cannot be used in a check constraint
+--     'ck_tx_category_source_requires_id': needed in a foreign key constraint
+--     'fk_tx_category' referential action.
+--
+--   fk_tx_category 가 ON DELETE SET NULL 이라 tbl_category 행이 지워지면 MySQL 이 category_id 를
+--   NULL 로 바꾸는데, 이 경로에서는 CHECK 이 평가되지 않는다. 지킬 수 없는 제약이므로 생성 자체를
+--   막는 것이다. 트리거도 참조 액션에는 발화하지 않아 같은 구멍이 남는다.
+--
+--   ⇒ 이 규칙은 분류 로직(서비스 계층)에서 지킨다. category_id 를 NULL 로 되돌릴 때는
+--     category_source 도 함께 NULL 로 만든다.
+--
+-- ALTER TABLE tbl_transaction
+--   ADD CONSTRAINT ck_tx_category_source_requires_id
+--   CHECK (category_id IS NOT NULL OR category_source IS NULL);
 
 -- =====================================================================
 -- 적용 확인 (선택)
@@ -36,4 +49,5 @@ ALTER TABLE tbl_transaction
 -- SHOW CREATE TABLE tbl_transaction\G
 --
 -- 기대 결과
---   category_source 컬럼 있음, ck_tx_category_source·ck_tx_category_source_requires_id 있음
+--   category_source 컬럼 있음, ck_tx_category_source 있음
+--   (ck_tx_category_source_requires_id 는 위 사유로 만들지 않는다)
