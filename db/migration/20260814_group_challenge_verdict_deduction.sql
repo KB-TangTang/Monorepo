@@ -16,7 +16,7 @@
 --
 --   daily_amount              → 배치 전용 (집계 원본)
 --   verdict_deduction_amount  → 판결 전용 (무죄 시 인정된 감액)
---   effective_amount          → 자동 계산 (daily_amount - verdict_deduction_amount)
+--   effective_amount          → 자동 계산 GREATEST(daily_amount - verdict_deduction_amount, 0)
 --
 -- ⚠ 배치 구현 시 UPSERT 의 UPDATE 절에 verdict_deduction_amount 를 **절대 넣지 말 것.**
 --   넣는 순간 감액이 5분마다 0으로 초기화되고, 원인이 화면에 드러나지 않는다.
@@ -49,12 +49,27 @@ ALTER TABLE tbl_group_challenge_daily_result
 -- MySQL 이 정의 검증 순서 때문에 거부할 수 있다. 나누면 확실하다.
 --
 -- STORED 인 이유: 랭킹 정렬·집계에 쓰이므로 인덱스를 걸 수 있어야 한다(VIRTUAL 은 제약이 많다).
--- 음수가 될 수 있다(감액이 집계액을 넘는 경우) — 상한 검증은 애플리케이션이 한다.
--- 원 거래액이 이 테이블에 없어 DB 제약으로는 판단할 수 없기 때문이다.
+--
+-- GREATEST(..., 0) 으로 **0 에서 바닥을 친다.** 이 값은 일일 결산 랭킹의 정렬 키이고
+-- 적게 쓴 사람이 위로 간다. 음수가 나오면 감액을 크게 받은 사람이 **한 푼도 안 쓴 사람보다
+-- 위로 올라간다** — 표시가 이상한 정도가 아니라 순위가 뒤집힌다.
+--
+-- 음수는 실제로 생긴다. 두 컬럼의 갱신 주체가 다르기 때문이다.
+--   daily_amount             : 5분마다 배치가 다시 계산해 덮어쓴다
+--   verdict_deduction_amount : 판결 시점에 한 번 박히고 그대로 남는다
+-- 거래가 환불되거나 카테고리가 재분류돼 daily_amount 가 줄면 그 순간 역전된다.
+-- 환불은 이미 다루는 시나리오다(GC_05_01·02).
+--
+-- 원본 두 컬럼이 그대로 남아 있어 바닥을 치는 것은 파생값뿐이다.
+-- 원래 차이가 필요하면 언제든 daily_amount - verdict_deduction_amount 로 다시 구한다.
+--
+-- ⚠ 대신 "감액이 집계액을 넘었다"는 사실이 이 컬럼에서는 안 보이게 된다. 데이터 이상 신호이므로
+--   배치(#168)에서 verdict_deduction_amount > daily_amount 인 행을 로그로 남길 것.
+--   조용히 0 으로 덮이면 원인을 찾을 수 없다.
 ALTER TABLE tbl_group_challenge_daily_result
     ADD COLUMN effective_amount DECIMAL(15,2)
-        AS (daily_amount - verdict_deduction_amount) STORED
-        COMMENT '실효 소비액. 일일 결산 랭킹이 쓰는 값. daily_amount - verdict_deduction_amount'
+        AS (GREATEST(daily_amount - verdict_deduction_amount, 0)) STORED
+        COMMENT '실효 소비액. 일일 결산 랭킹이 쓰는 값. GREATEST(daily_amount - verdict_deduction_amount, 0)'
         AFTER verdict_deduction_amount;
 
 -- ── 4. 변론: 컬럼 의미 변경 + 감액 컬럼 추가 ────────────────────────────
