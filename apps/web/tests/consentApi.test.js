@@ -15,9 +15,8 @@ registerHooks({
 
 const stub = await import('./stubs/httpStub.js');
 const { fetchMyConsents, submitConsents, withdrawConsent } = await import('../src/api/consent.js');
-const { fetchMissionMonthlyScore, fetchTodayMission } = await import(
-    '../src/api/personalMission.js'
-);
+const { fetchMissionMonthlyScore, fetchMissionRankings, fetchTodayMission } =
+    await import('../src/api/personalMission.js');
 
 test('챌린지 참여 동의는 CHALLENGE scope와 단일 동의 항목으로 저장한다', async () => {
     stub.reset();
@@ -64,4 +63,15 @@ test('개인 미션 월간 점수는 monthly score API로 조회한다', async (
 
     assert.equal(stub.calls[0].method, 'get');
     assert.equal(stub.calls[0].args[0], '/missions/monthly-score');
+});
+
+test('개인 미션 랭킹은 선택한 월을 쿼리 파라미터로 조회한다', async () => {
+    stub.reset();
+
+    await fetchMissionRankings('2026-07');
+
+    assert.deepEqual(stub.calls[0], {
+        method: 'get',
+        args: ['/missions/rankings', { params: { yearMonth: '2026-07' } }],
+    });
 });
