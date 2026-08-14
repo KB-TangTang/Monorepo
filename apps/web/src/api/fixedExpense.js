@@ -4,20 +4,42 @@ function unavailable(message) {
     throw new ApiError('API_NOT_AVAILABLE', message, 0);
 }
 
-export async function fetchFixedExpenseSavings() {
-    return http.get('/fixedExpenses/savingReport');
+function toParams({ yearMonth, categoryId } = {}) {
+    const params = {};
+    if (yearMonth) {
+        params.yearMonth = yearMonth;
+    }
+    if (categoryId) {
+        params.categoryId = categoryId;
+    }
+    return params;
 }
 
-export async function fetchFixedExpenseOverview() {
-    return unavailable('고정지출 관리 조회 API는 후속 이슈에서 연동됩니다.');
+function toDetailModel(detail) {
+    return {
+        ...detail.item,
+        paymentHistory: detail.paymentHistory ?? [],
+        evidenceMonths: detail.evidenceMonths ?? [],
+        sixMonthTotal: detail.sixMonthTotal ?? 0,
+        changeNotice: detail.changeNotice ?? null,
+    };
 }
 
-export async function fetchFixedExpenseDetail() {
-    return unavailable('고정지출 상세 조회 API는 후속 이슈에서 연동됩니다.');
+export async function fetchFixedExpenseSavings(yearMonth) {
+    return http.get('/fixedExpenses/savingReport', { params: toParams({ yearMonth }) });
+}
+
+export async function fetchFixedExpenseOverview(options) {
+    return http.get('/fixedExpenses/candidates', { params: toParams(options) });
+}
+
+export async function fetchFixedExpenseDetail(expenseId) {
+    const detail = await http.get(`/fixedExpenses/candidates/${expenseId}`);
+    return toDetailModel(detail);
 }
 
 export async function fetchFixedExpenseCandidate(candidateId) {
-    return http.get(`/fixedExpenses/candidates/${candidateId}`);
+    return fetchFixedExpenseDetail(candidateId);
 }
 
 export async function confirmFixedExpenseCandidate() {

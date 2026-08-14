@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.fixedexpense.mapper.FixedExpenseQueryMapper">
+
+    <sql id="activeItemCondition">
+        f.user_id = #{userId}
+        AND f.status = 'ACTIVE'
+        AND f.is_excluded = 0
+        <if test="categoryId != null">
+            AND f.category_id = #{categoryId}
+        </if>
+    </sql>
+
+    <sql id="itemColumns">
+        f.id,
+        f.user_id,
+        f.merchant_name_normalized,
+        f.avg_amount,
+        f.cycle_days,
+        f.detected_count,
+        f.category_id,
+        COALESCE(c.category_name, '미분류') AS category_name,
+        f.is_excluded,
+        f.status,
+        f.next_expected_date,
+        f.confirmed_at
+    </sql>
+
+    <select id="findActiveItems"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseReadRow">
+        SELECT <include refid="itemColumns"/>
+        FROM tbl_fixed_expense_candidate f
+        LEFT JOIN tbl_category c ON c.id = f.category_id
+        WHERE <include refid="activeItemCondition"/>
+        <choose>
+            <when test="confirmed">
+                AND f.confirmed_at IS NOT NULL
+            </when>
+            <otherwise>
+                AND f.confirmed_at IS NULL
+            </otherwise>
+        </choose>
+        ORDER BY f.next_expected_date ASC, f.id ASC
+    </select>
+
+    <select id="findOwnedActiveItem"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseReadRow">
+        SELECT <include refid="itemColumns"/>
+        FROM tbl_fixed_expense_candidate f
+        LEFT JOIN tbl_category c ON c.id = f.category_id
+        WHERE f.id = #{candidateId}
+          AND f.user_id = #{userId}
+          AND f.status = 'ACTIVE'
+          AND f.is_excluded = 0
+    </select>
+
+    <sql id="paymentHistoryCondition">
+        t.user_id = #{userId}
+        AND t.candidate_id = #{candidateId}
+        AND t.tr_date &gt;= #{startDate}
+        AND t.tr_date &lt; #{endDate}
+        AND t.classification = 'CONSUMPTION'
+        AND COALESCE(t.cancel_yn, 'N') &lt;&gt; 'Y'
+        AND t.is_refund = 0
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <select id="findRecentPaymentHistory"
+            resultType="com.kb.tangtang.fixedexpense.dto.FixedExpensePaymentHistoryDto">
+        SELECT t.id,
+               t.tr_date AS `date`,
+               COALESCE(a.bank_name, a.account_name, '결제수단') AS provider,
+               t.amount
+        FROM tbl_transaction t
+        LEFT JOIN tbl_connected_account a ON a.id = t.account_id
+        WHERE <include refid="paymentHistoryCondition"/>
+        ORDER BY t.tr_date DESC, t.id DESC
+        LIMIT 6
+    </select>
+
+    <select id="sumPaymentHistory" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(t.amount), 0)
+        FROM tbl_transaction t
+        WHERE <include refid="paymentHistoryCondition"/>
+    </select>
+</mapper>
