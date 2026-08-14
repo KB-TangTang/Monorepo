@@ -1,5 +1,6 @@
 package com.kb.tangtang.report.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.dto.MonthlyCategoryReportDto;
@@ -16,7 +17,7 @@ import springfox.documentation.annotations.ApiIgnore;
  *
  * <p>모든 엔드포인트가 {@code yearMonth} 를 {@code YYYY-MM} 형식으로 받는다.
  */
-@Api(tags = "10. 월간 리포트(판결문) - 소비 추이 · 요약 · AI 분석")
+@Api(tags = SwaggerTags.REPORT)
 public interface MonthlyReportControllerDocs {
 
     @ApiOperation(value = "월별 소비 추이", notes = "해당 월을 포함한 최근 6개월 추이를 내려준다.")

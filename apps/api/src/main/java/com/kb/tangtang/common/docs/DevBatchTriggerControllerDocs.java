@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 /** {@code DevBatchTriggerController} 의 Swagger 문서. */
-@Api(tags = "99. [DEV] 배치 수동 트리거")
+@Api(tags = SwaggerTags.DEV)
 public interface DevBatchTriggerControllerDocs {
 
     @ApiOperation(value = "[DEV] 배치 즉시 실행",

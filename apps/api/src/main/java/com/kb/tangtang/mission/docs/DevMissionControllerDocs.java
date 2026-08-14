@@ -1,5 +1,6 @@
 package com.kb.tangtang.mission.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.TodayMissionDto;
 import io.swagger.annotations.Api;
@@ -7,7 +8,7 @@ import io.swagger.annotations.ApiOperation;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code DevMissionController} 의 Swagger 문서. */
-@Api(tags = "99. [DEV] 미션 재배정")
+@Api(tags = SwaggerTags.DEV)
 public interface DevMissionControllerDocs {
 
     @ApiOperation(value = "[DEV] 오늘의 미션 재배정",

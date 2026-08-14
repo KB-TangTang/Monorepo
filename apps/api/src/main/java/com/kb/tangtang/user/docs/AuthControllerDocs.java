@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.user.dto.LoginResponseDto;
 import io.swagger.annotations.Api;
@@ -18,7 +19,7 @@ import java.io.IOException;
  * Spring 5.3 의 {@code HandlerMethod} 가 인터페이스 쪽 파라미터 애노테이션까지 합쳐 주므로
  * {@code @ApiIgnore}·{@code @ApiParam} 이 그대로 반영된다.
  */
-@Api(tags = "01. 인증 - 구글 OAuth 로그인 · 토큰 재발급")
+@Api(tags = SwaggerTags.USER)
 public interface AuthControllerDocs {
 
     @ApiOperation(

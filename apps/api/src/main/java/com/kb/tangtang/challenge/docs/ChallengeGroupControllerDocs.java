@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -13,7 +14,7 @@ import springfox.documentation.annotations.ApiIgnore;
 import java.util.List;
 
 /** {@code ChallengeGroupController} 의 Swagger 문서. */
-@Api(tags = "06. 그룹 챌린지(지방법원) - 생성 · 초대 · 참여 · 조회")
+@Api(tags = SwaggerTags.GROUP_CHALLENGE)
 public interface ChallengeGroupControllerDocs {
 
     @ApiOperation(value = "그룹 챌린지 생성",

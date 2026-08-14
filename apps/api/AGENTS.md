@@ -89,10 +89,21 @@ events.publishEvent(new NotificationRequestedEvent(
 ## API 문서 (Swagger)
 
 문서는 **Springfox 2.9.2** 가 코드에서 만든다. 서버를 띄우고 <http://localhost:8080/swagger-ui.html> 을 연다.
-(springdoc 은 금지 대상인 Boot 모듈을 의존성으로 끌고 와 쓸 수 없다 — DECISIONS.md 2026-08-13 (4))
+(springdoc 은 금지 대상인 Boot 모듈을 의존성으로 끌고 와 쓸 수 없다. DECISIONS.md 2026-08-13 (4))
 
-**엔드포인트를 추가하면 문서 애노테이션도 같이 단다.** 규칙은 셋뿐이다.
+**엔드포인트를 추가하면 문서 애노테이션도 같이 단다.** 규칙은 넷뿐이다.
 
+0. **태그는 `SwaggerTags` 상수를 쓴다.** 문자열을 직접 적지 않는다.
+   ```java
+   @Api(tags = SwaggerTags.MISSION)   // O
+   @Api(tags = "미션 API")             // X — 섹션이 하나 더 생긴다
+   ```
+   - **태그 = 모듈**이다. 한 모듈에 컨트롤러가 몇 개든 태그는 하나다. 컨트롤러마다 태그를 만들면
+     섹션이 수십 개로 불어나 문서를 훑을 수 없게 된다(2026-08-14 결정. 그 전엔 컨트롤러당 하나였다).
+   - 경로가 다른 모듈처럼 보여도 **자기 모듈 태그를 쓴다.** `@ApiOperation(tags = ...)` 로
+     메서드만 옮기려 하면 **클래스 태그에 더해져 두 섹션에 중복으로 뜬다**(springfox 2.9.2 실측).
+   - 정말 새 모듈이면 `SwaggerTags` 에 상수를 추가하고 **`SwaggerConfig` 의 태그 설명 목록에도 넣는다.**
+     빠뜨리면 설명 없는 섹션이 된다.
 1. 문서 애노테이션은 **컨트롤러가 아니라 `<모듈>/docs/<컨트롤러명>Docs` 인터페이스**에 단다.
    컨트롤러는 그 인터페이스를 `implements` 하기만 한다.
    - 컨트롤러에 직접 달면 `io.swagger.annotations.ApiResponse` 와 우리 공통 래퍼
@@ -104,7 +115,7 @@ events.publishEvent(new NotificationRequestedEvent(
    구분은 응답 본문의 `code` 로 한다. HTTP 상태를 나열해봐야 정보가 없다.
    알아야 할 오류 코드는 `@ApiOperation(notes = ...)` 에 적는다.
 
-`/api/dev/**` 는 `SwaggerConfig` 가 「02. 개발 전용 API」 그룹으로 자동 분리한다 — 따로 할 일은 없다.
+`/api/dev/**` 는 `SwaggerConfig` 가 「02. 개발 전용 API」 그룹으로 자동 분리한다. 따로 할 일은 없다.
 
 > `SwaggerConfig` 에 **`@Configuration` 을 붙이지 말 것.** `RootConfig` 가 `com.kb.tangtang` 전체를
 > 스캔해 루트 컨텍스트에도 중복 등록된다. `WebConfig#getServletConfigClasses()` 에만 등록한다.

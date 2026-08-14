@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.user.dto.UserDifficultyUpdateRequestDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -15,7 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /** {@code UserController} 의 Swagger 문서. */
-@Api(tags = "02. 회원 - 내 정보 · 닉네임 · 프로필 이미지 · 탈퇴")
+@Api(tags = SwaggerTags.USER)
 public interface UserControllerDocs {
 
     @ApiOperation(

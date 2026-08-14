@@ -7,7 +7,7 @@ import io.swagger.annotations.ApiOperation;
 import java.util.Map;
 
 /** {@code HealthController} 의 Swagger 문서. */
-@Api(tags = "00. 헬스체크")
+@Api(tags = SwaggerTags.HEALTH)
 public interface HealthControllerDocs {
 
     @ApiOperation(value = "서버 기동 확인",

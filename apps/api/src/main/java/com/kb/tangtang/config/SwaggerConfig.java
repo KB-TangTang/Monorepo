@@ -1,5 +1,6 @@
 package com.kb.tangtang.config;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RestController;
 import springfox.documentation.builders.ApiInfoBuilder;
@@ -9,6 +10,7 @@ import springfox.documentation.service.ApiInfo;
 import springfox.documentation.service.ApiKey;
 import springfox.documentation.service.AuthorizationScope;
 import springfox.documentation.service.SecurityReference;
+import springfox.documentation.service.Tag;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spi.service.contexts.SecurityContext;
 import springfox.documentation.spring.web.plugins.Docket;
@@ -52,6 +54,21 @@ public class SwaggerConfig {
     public Docket api() {
         return baseDocket()
                 .groupName("01. 서비스 API")
+                /*
+                 * 화면에 그려지는 섹션 목록이다. 순서도 여기서 정해진다.
+                 * 이름은 SwaggerTags 상수를 그대로 쓴다 — 문자열을 다시 적으면 오타 하나로
+                 * 설명 없는 빈 섹션이 하나 더 생긴다.
+                 * 태그를 추가할 일이 있으면 SwaggerTags 의 주석을 먼저 읽는다.
+                 */
+                .tags(
+                        new Tag(SwaggerTags.HEALTH, "서버 기동 확인. 인증이 필요 없다"),
+                        new Tag(SwaggerTags.USER,
+                                "구글 로그인 · 토큰 재발급 · 내 정보 · 닉네임 · 프로필 이미지 · 약관 동의 · 탈퇴 · 튜토리얼"),
+                        new Tag(SwaggerTags.ACCOUNT, "CODEF 기관 인증 · 계좌 연결. 연동 5단계 순서대로 나열돼 있다"),
+                        new Tag(SwaggerTags.MISSION, "오늘의 미션 · 연속 성공일 · 요주의 카테고리 분석"),
+                        new Tag(SwaggerTags.GROUP_CHALLENGE, "생성 · 초대 · 참여 · 조회"),
+                        new Tag(SwaggerTags.NOTIFICATION, "목록 · 읽음 처리 · SSE 실시간 스트림"),
+                        new Tag(SwaggerTags.REPORT, "소비 추이 · 요약 · AI 분석. 완료된 월만 조회된다"))
                 .select()
                 .apis(RequestHandlerSelectors.withClassAnnotation(RestController.class))
                 // /api/dev/** 는 운영에 나가지 않는 배치 트리거·미션 재배정용이다.
@@ -65,6 +82,8 @@ public class SwaggerConfig {
     public Docket devApi() {
         return baseDocket()
                 .groupName("02. 개발 전용 API")
+                // 서비스 태그를 여기에 선언하면 엔드포인트가 없는 빈 섹션으로 그려진다. 그룹별로 나눠 선언한다.
+                .tags(new Tag(SwaggerTags.DEV, "배치 수동 트리거 · 미션 재배정. 로컬에서만 동작한다"))
                 .select()
                 .apis(RequestHandlerSelectors.withClassAnnotation(RestController.class))
                 .paths(PathSelectors.regex("/api/dev/.*"))

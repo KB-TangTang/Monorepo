@@ -1,5 +1,6 @@
 package com.kb.tangtang.notification.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.notification.dto.NotificationListDto;
 import com.kb.tangtang.notification.dto.UnreadCountDto;
@@ -10,7 +11,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code NotificationController} 의 Swagger 문서. */
-@Api(tags = "09. 알림 - 목록 · 읽음 처리 · SSE 실시간 스트림")
+@Api(tags = SwaggerTags.NOTIFICATION)
 public interface NotificationControllerDocs {
 
     @ApiOperation(value = "알림 목록 조회",
