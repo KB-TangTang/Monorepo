@@ -12,6 +12,12 @@ export function fetchMissionMonthlyScore() {
     return http.get('/missions/monthly-score');
 }
 
+export function fetchMissionRankings(yearMonth) {
+    return http.get('/missions/rankings', {
+        params: { yearMonth },
+    });
+}
+
 export function fetchMissionCategoryAnalysis() {
     return http.get('/missions/categoryAnalysis');
 }
