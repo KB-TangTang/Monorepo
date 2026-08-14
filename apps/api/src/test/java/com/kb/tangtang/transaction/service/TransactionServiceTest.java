@@ -132,4 +132,21 @@ class TransactionServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
         verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
     }
+
+    @Test
+    @DisplayName("applyToMerchant=true인데 가맹점명이 정규화하면 빈 문자열이면 MERCHANT_NAME_REQUIRED다")
+    void merchantNameRequiredWhenNormalizedNameIsEmpty() {
+        Transaction transactionWithBlankMerchant = Transaction.builder()
+                .id(TRANSACTION_ID).userId(USER_ID).merchantName("(주)")
+                .build();
+        when(transactionMapper.findByIdAndUser(TRANSACTION_ID, USER_ID)).thenReturn(transactionWithBlankMerchant);
+        when(categoryMapper.findById(CATEGORY_ID)).thenReturn(Category.builder().id(CATEGORY_ID).build());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateCategory(USER_ID, TRANSACTION_ID, CATEGORY_ID, true));
+
+        assertEquals("MERCHANT_NAME_REQUIRED", exception.getCode());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
+        verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
+    }
 }

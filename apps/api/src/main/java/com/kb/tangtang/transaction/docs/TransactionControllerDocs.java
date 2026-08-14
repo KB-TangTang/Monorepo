@@ -18,7 +18,8 @@ public interface TransactionControllerDocs {
                     + "applyToMerchant=true면 같은 가맹점명(정규화 기준)의 이후 거래에도 최우선 적용되도록 "
                     + "tbl_user_category_map에 규칙을 등록한다 — 이미 등록된 과거 거래는 소급 반영되지 않는다. "
                     + "거래가 없거나 본인 소유가 아니면 404 NOT_FOUND, categoryId가 없는 카테고리면 "
-                    + "404 CATEGORY_NOT_FOUND, categoryId 자체가 없으면 400 INVALID_REQUEST다.")
+                    + "404 CATEGORY_NOT_FOUND, categoryId 자체가 없으면 400 INVALID_REQUEST다. "
+                    + "applyToMerchant=true인데 거래에 가맹점명이 없으면 400 MERCHANT_NAME_REQUIRED다.")
     ApiResponse<TransactionCategoryUpdateResultDto> updateCategory(
             @ApiIgnore Long userId,
             @ApiParam(value = "수정할 거래 ID", required = true, example = "501") long transactionId,
