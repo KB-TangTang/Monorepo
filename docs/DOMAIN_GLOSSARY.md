@@ -58,6 +58,7 @@
 | 한글 | 영문 코드명 | 모듈 | 테이블(예정) | 설명 |
 |---|---|---|---|---|
 | 계좌 연동 | `accountLink` | account | `tbl_account` | CODEF 연동 |
+| 자산 현황 | `assetSummary` | account | `tbl_asset_snapshot`(기존) | 순자산·구성·6개월 추이 요약 카드 |
 | 카드 | `card` | account | `tbl_card` | |
 | 거래내역 | `transaction` | transaction | `tbl_transaction` | 수집된 원본 |
 | 가맹점 | `merchant` | transaction | — | 거래내역의 상호명 |

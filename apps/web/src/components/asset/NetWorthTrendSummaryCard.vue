@@ -10,17 +10,27 @@ const props = defineProps({
     trend: { type: Array, required: true },
 });
 
-const current = computed(() => props.trend[props.trend.length - 1]);
-const changeAmount = computed(() => current.value - props.trend[0]);
-const changePercent = computed(() => getSignedPercent(props.trend[0], current.value));
-const changeMonths = computed(() => props.trend.length);
+// 스냅샷이 없는 이전 달은 null 로 들어온다 — "N개월간 변화"는 실제 데이터가 있는
+// 구간만으로 계산한다. 전부 null 이 없는 값(0)으로 계산하면 예: 6개월 전이 미집계인데
+// 그 값을 0원으로 취급해 변화량이 실제보다 과장되게 표시된다.
+const availableTrend = computed(() =>
+    props.trend.filter((value) => value !== null && value !== undefined),
+);
+const current = computed(() => availableTrend.value[availableTrend.value.length - 1] ?? 0);
+const earliestAvailable = computed(() => availableTrend.value[0] ?? current.value);
+const changeAmount = computed(() => current.value - earliestAvailable.value);
+const changePercent = computed(() => getSignedPercent(earliestAvailable.value, current.value));
+const changeMonths = computed(() => availableTrend.value.length);
 </script>
 
 <template>
     <section class="trend-summary">
         <p class="trend-summary__label">현재 순자산 평결액</p>
         <p class="trend-summary__amount">{{ formatWon(current) }}</p>
-        <p class="trend-summary__change" :class="{ 'trend-summary__change--down': changeAmount < 0 }">
+        <p
+            class="trend-summary__change"
+            :class="{ 'trend-summary__change--down': changeAmount < 0 }"
+        >
             {{ changeMonths }}개월간 {{ formatSignedWon(changeAmount) }} ({{ changePercent }})
         </p>
     </section>
@@ -29,14 +39,18 @@ const changeMonths = computed(() => props.trend.length);
 <style scoped>
 .trend-summary {
     padding: var(--tt-space-6);
-    background: var(--tt-gray-900);
+    /* Ink 스탯 카드 배경 — 의미 토큰 이름 그대로 "역전(다크) 배경"용이다. */
+    background: var(--tt-surface-inverse);
     border-radius: var(--tt-radius-xl);
 }
 
 .trend-summary__label {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-medium);
-    color: var(--tt-gray-400);
+    /* v1 의 --tt-gray-400 은 v2 에 없다 — 어두운 배경 위 텍스트는 --tt-text-inverse 뿐이라
+       불투명도로 톤을 낮춘다. */
+    color: var(--tt-text-inverse);
+    opacity: 0.7;
 }
 
 .trend-summary__amount {
@@ -51,10 +65,10 @@ const changeMonths = computed(() => props.trend.length);
 .trend-summary__change {
     margin-top: var(--tt-space-3);
     font-weight: var(--tt-fw-bold);
-    color: var(--tt-innocent-300);
+    color: var(--tt-success);
 }
 
 .trend-summary__change--down {
-    color: var(--tt-guilty-300);
+    color: var(--tt-danger);
 }
 </style>

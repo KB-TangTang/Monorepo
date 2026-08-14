@@ -4,6 +4,7 @@ import com.kb.tangtang.account.domain.Loan;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -14,4 +15,10 @@ public interface LoanMapper {
     int update(Loan loan);
 
     int insert(Loan loan);
+
+    /** 자산 현황 카드용 대출 잔액 합계. 행이 없으면 0 (report 모듈 sumLoanBalances 와 동일 규칙). */
+    BigDecimal sumBalanceByUser(@Param("userId") long userId);
+
+    /** 자산 현황 카드의 대출 그룹 개수 표기용. */
+    int countByUser(@Param("userId") long userId);
 }

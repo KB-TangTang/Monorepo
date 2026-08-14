@@ -567,6 +567,56 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
 > ⚠ `TOKEN_EXPIRED` 는 인증 절의 액세스 토큰 만료와 **이름만 같다.** 이쪽은 HTTP 400 이라
 > 프론트 `http.js` 의 자동 재발급(401 트리거)을 유발하지 않는다.
 
+## 자산 현황 (이슈 #240)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/assets/summary?baseDate=YYYY-MM-DD` | Bearer | 순자산·전월 대비 증감·6개월 추이·구성·종류별 목록 |
+
+`baseDate` 는 선택값이며 생략하면 오늘 날짜(`Asia/Seoul`)를 기준으로 한다. `YYYY-MM-DD` 형식이
+아니면 `400 INVALID_REQUEST` 다.
+
+- `asOf` 는 이 응답을 계산한 단일 기준 시각이다. `netWorth`·`composition`·`assetGroups`·`trend` 의
+  마지막 달 값이 전부 이 시각의 라이브 잔액을 사용해 화면 카드 간 금액이 어긋나지 않는다.
+- `netWorth` = 입출금 + 예적금 + 투자 + 페이머니 − 대출잔액. 연결 해제(`is_active=0`) 계좌는 제외한다.
+  투자 금액은 증권계좌 `balance` 가 아니라 `tbl_investment_holding.market_value` 합계다(보유 종목이
+  없으면 계좌 `balance` 로 대체). 대출은 `tbl_loan.balance` 합계이며 `composition`·`assetGroups` 에서는
+  음수로 내려간다.
+- `composition`(도넛차트용)·`assetGroups`(종류별 목록용)는 항상 `DEMAND_DEPOSIT`·`SAVINGS`·
+  `SECURITIES`·`PAY_MONEY`·`LOAN` 5종을 고정 순서로 반환한다. 연결된 계좌가 없는 종류도
+  `amount=0`·`count=0` 으로 채워 화면이 빈 배열을 따로 처리하지 않게 한다.
+- 전월 비교(`previousMonthNetWorth`·`changeAmount`·`changeRate`)와 `trend`(최근 6개월, `baseDate`가
+  속한 달 포함)의 과거월 값은 `tbl_asset_snapshot.net_worth`·`total_debt` 를 조회해 채운다. 이
+  테이블은 아직 월간 배치가 아니라 `POST /api/reports/monthly/ai-analysis` 호출 시에만 채워지므로,
+  해당 월 스냅샷이 없으면 `trend` 항목의 `netWorth`·`totalDebt`는 `null`, 전월 비교 3개 필드도 전부
+  `null` 이다 — 가입 첫 달의 전월 비교를 생략하는 월간 리포트(`hasPreviousComparison=false`)와 같은
+  "데이터 없음" 처리 기준이다. `trend` 의 마지막 항목(= `baseDate` 가 속한 달)만은 스냅샷 유무와
+  무관하게 방금 계산한 라이브 `netWorth`·대출잔액(`totalDebt`)을 그대로 채운다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "asOf": "2026-08-15T10:30:00",
+    "netWorth": 9445500,
+    "previousMonthNetWorth": 9125500,
+    "changeAmount": 320000,
+    "changeRate": 3.51,
+    "trend": [
+      { "yearMonth": "2026-03", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-08", "netWorth": 9445500, "totalDebt": 1500000 }
+    ],
+    "composition": [
+      { "type": "DEMAND_DEPOSIT", "label": "입출금", "amount": 2066800 },
+      { "type": "LOAN", "label": "대출", "amount": -1500000 }
+    ],
+    "assetGroups": [
+      { "type": "DEMAND_DEPOSIT", "label": "입출금 계좌", "count": 2, "amount": 2066800 }
+    ]
+  }
+}
+```
+
 ## 금융 데이터 동기화 (이슈 #147)
 
 | 메서드 | 경로 | 인증 | 응답 |

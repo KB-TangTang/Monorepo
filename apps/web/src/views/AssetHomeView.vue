@@ -1,6 +1,6 @@
 <!--
   용도: "자산" 탭의 실제 진입 화면. 순자산 요약 · 자산 구성 · 계좌 목록을 순서대로 보여준다.
-  언제 쓰는지: router/index.js 의 /asset 라우트. 백엔드 연동 전까지 api/asset.js 가 목업 데이터를 반환한다.
+  언제 쓰는지: router/index.js 의 /asset 라우트. GET /api/assets/summary(이슈 #240) 결과를 보여준다.
 -->
 <script setup>
 import { onMounted, ref } from 'vue';

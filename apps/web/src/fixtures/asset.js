@@ -1,65 +1,3 @@
-const NET_WORTH_TREND_VALUES = [12200000, 12350000, 12100000, 12500000, 12700000, 12846000];
-
-const ASSET_SUMMARY = {
-    netWorth: 12846000,
-    monthOverMonthChange: 320000,
-    trend: NET_WORTH_TREND_VALUES,
-    composition: [
-        { code: 'checking', label: '입출금', amount: 2066800, tone: 'navy' },
-        { code: 'savings', label: '예적금', amount: 5420000, tone: 'blue' },
-        { code: 'investment', label: '투자', amount: 3214200, tone: 'teal' },
-        { code: 'paymoney', label: '페이머니', amount: 244500, tone: 'gray' },
-        { code: 'loan', label: '대출', amount: -1500000, tone: 'danger' },
-    ],
-    accounts: [
-        {
-            code: 'checking',
-            label: '입출금 계좌',
-            badge: 'W',
-            count: 2,
-            amount: 2066800,
-            tone: 'navy',
-        },
-        {
-            code: 'savings',
-            label: '예금·적금',
-            badge: 'S',
-            count: 2,
-            amount: 5420000,
-            tone: 'blue',
-        },
-        {
-            code: 'investment',
-            label: '투자·증권',
-            badge: 'I',
-            count: 1,
-            amount: 3214200,
-            tone: 'teal',
-        },
-        {
-            code: 'paymoney',
-            label: '페이머니',
-            badge: 'P',
-            count: 1,
-            amount: 244500,
-            tone: 'gray',
-        },
-        {
-            code: 'loan',
-            label: '대출',
-            badge: 'L',
-            count: 1,
-            amount: -1500000,
-            tone: 'danger',
-        },
-    ],
-    netWorthTrend: {
-        months: ['1월', '2월', '3월', '4월', '5월', '6월'],
-        netWorth: NET_WORTH_TREND_VALUES,
-        totalDebt: [1800000, 1750000, 1700000, 1650000, 1600000, 1500000],
-    },
-};
-
 const CHECKING_DETAIL = {
     total: 2066800,
     syncedLabel: '방금 동기화',
@@ -189,11 +127,4 @@ const PAYMONEY_DETAIL = {
     ],
 };
 
-export {
-    ASSET_SUMMARY,
-    CHECKING_DETAIL,
-    SAVINGS_DETAIL,
-    INVESTMENT_DETAIL,
-    LOAN_DETAIL,
-    PAYMONEY_DETAIL,
-};
+export { CHECKING_DETAIL, SAVINGS_DETAIL, INVESTMENT_DETAIL, LOAN_DETAIL, PAYMONEY_DETAIL };

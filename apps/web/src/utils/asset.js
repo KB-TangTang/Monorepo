@@ -2,17 +2,23 @@ const EOK = 100000000;
 const MAN = 10000;
 const TEN_MILLION = 10000000;
 
+/*
+ * v1 디자인 토큰(--tt-gray-*, --tt-accent-700 등)은 tokens.css v2(Ink/Gold 체계)로 교체되며
+ * 사라졌다 — 그 값을 그대로 쓰면 정의되지 않은 var() 라 무효 선언이 되어 색이 아예 안 먹거나
+ * 서로 다른 tone 이 같은 값으로 보인다(예: navy·blue 가 둘 다 흐려 보이던 문제).
+ * v2 의미 토큰 5종(Ink/Blue/Green/Gold/Red)으로 다시 매핑한다.
+ */
 const TONE_COLORS = {
-    navy: 'var(--tt-gray-900)',
-    blue: 'var(--tt-primary)',
+    navy: 'var(--tt-primary)',
+    blue: 'var(--tt-info)',
     teal: 'var(--tt-success)',
-    gray: 'var(--tt-gray-300)',
+    gray: 'var(--tt-text-hint)',
     danger: 'var(--tt-danger)',
-    accent: 'var(--tt-accent-700)',
+    accent: 'var(--tt-accent)',
 };
 
 function toneColor(tone) {
-    return TONE_COLORS[tone] ?? 'var(--tt-gray-300)';
+    return TONE_COLORS[tone] ?? 'var(--tt-text-hint)';
 }
 
 function formatWon(amount) {
@@ -99,12 +105,16 @@ function getSparklinePoints(trend, width, height) {
 }
 
 function getBarHeights(netWorthArr, debtArr, maxHeightPx) {
-    const totals = netWorthArr.map((netWorth, i) => netWorth + debtArr[i]);
+    // 스냅샷이 없는 달은 null 로 들어온다 — 막대 높이는 0 으로 그리고,
+    // "데이터 없음" 표시는 호출부가 별도로 판단한다(hasData 는 이 함수의 관심사가 아니다).
+    const safeNetWorth = netWorthArr.map((v) => v ?? 0);
+    const safeDebt = debtArr.map((v) => v ?? 0);
+    const totals = safeNetWorth.map((netWorth, i) => netWorth + safeDebt[i]);
     const maxTotal = Math.max(...totals);
     const scale = maxTotal === 0 ? 0 : maxHeightPx / maxTotal;
-    return netWorthArr.map((netWorth, i) => ({
+    return safeNetWorth.map((netWorth, i) => ({
         netWorthHeight: netWorth * scale,
-        debtHeight: debtArr[i] * scale,
+        debtHeight: safeDebt[i] * scale,
     }));
 }
 

@@ -40,4 +40,16 @@
              #{interestRate}, #{startDate}, #{maturityDate}, #{monthlyPayment}, #{nextPaymentDate})
     </insert>
 
+    <select id="sumBalanceByUser" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(balance), 0)
+        FROM tbl_loan
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="countByUser" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_loan
+        WHERE user_id = #{userId}
+    </select>
+
 </mapper>
