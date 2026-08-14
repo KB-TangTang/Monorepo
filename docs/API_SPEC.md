@@ -21,7 +21,7 @@
 | `01. 서비스 API` | 정식 엔드포인트 52개 |
 | `02. 개발 전용 API` | `/api/dev/**`. 배치 트리거·미션 재배정. 로컬에서만 동작한다 |
 
-**섹션은 모듈 단위 7개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
+**섹션은 모듈 단위 8개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
 로그인·내 정보·동의·튜토리얼이 함께 들어간다. 태그 이름은 `common/docs/SwaggerTags` 가 소유한다.
 
 | 섹션 | 모듈 |
@@ -33,6 +33,7 @@
 | `04. 그룹 챌린지(지방법원)` | challenge |
 | `05. 알림` | notification |
 | `06. 월간 리포트(판결문)` | report |
+| `07. 고정지출 · 절약` | fixedexpense |
 
 - 인증이 필요한 API 를 호출하려면 우측 상단 **Authorize** 에 `Bearer {accessToken}` 을 넣는다.
   (`Bearer ` 접두사까지 포함해야 한다. 인터셉터가 접두사를 직접 잘라낸다)
@@ -47,6 +48,61 @@
 > 이 `API_SPEC.md` 와 산출물 엑셀(`탕탕_API_연동규격_정의서`)을 **대체하지 않는다.**
 > 제출 정본은 엑셀이고, Swagger 는 개발·시연·QA 용이다.
 > 설정 근거는 `.claude/context/DECISIONS.md` 2026-08-13 (4) 참고.
+
+## 고정지출 관리·절약 감정서
+
+모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청으로 받지 않는다. 목록과 절약 감정서는
+`yearMonth`를 생략하면 `Asia/Seoul` 현재월을 사용한다. 값이 있으면 `YYYY-MM` 형식의 현재월만
+허용한다. 고정지출 상태 이력 스냅샷은 아직 없으므로 과거월·미래월 조회는 지원하지 않는다.
+
+| Method | Endpoint | 응답 책임 |
+|---|---|---|
+| GET | `/api/fixedExpenses/candidates?yearMonth=YYYY-MM&categoryId={id}` | 현재 활성 후보·확정 목록과 일관된 관리 요약 |
+| GET | `/api/fixedExpenses/candidates/{candidateId}` | 후보·확정 항목 공통 상세와 최근 6개월 결제 이력 |
+| GET | `/api/fixedExpenses/savingReport?yearMonth=YYYY-MM` | 확정 활성 항목별·월간·연간 절약 가능액 |
+
+- 목록은 페이지네이션 없이 조건에 맞는 전체 배열을 반환한다. `categoryId`는 선택값이며 요약·후보·확정
+  배열에 함께 적용된다.
+- 후보는 `ACTIVE`·미제외·`confirmedAt=null`, 확정 항목은 `ACTIVE`·미제외·`confirmedAt!=null`이다.
+  BUFFER·검증 취소·제외 항목은 목록과 절약 감정서에서 제외한다.
+- `expectedMonthlyAmount`는 목록에 포함된 후보와 확정 항목의 `averageAmount` 합계다. 절약 감정서는
+  확정 항목만 `savingsAmount=averageAmount`로 계산하며, `yearlySavings=monthlySavings*12`다.
+- 상세의 `paymentHistory`는 유효 소비 거래만 최신순으로 최대 6건이며, `sixMonthTotal`은 최근 6개월
+  유효 결제 전체 합계다. 소유하지 않았거나 활성·미제외 상태가 아닌 항목은 `404 NOT_FOUND`다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "yearMonth": "2026-08",
+    "summary": {
+      "expectedMonthlyAmount": 86900,
+      "confirmedCount": 2,
+      "candidateCount": 1
+    },
+    "confirmed": [
+      {
+        "id": 101,
+        "status": "ACTIVE",
+        "isExcluded": false,
+        "isConfirmed": true,
+        "confirmedAt": "2026-08-14T10:02:03",
+        "categoryCode": "subscription",
+        "categoryLabel": "구",
+        "name": "넷플릭스",
+        "averageAmount": 17000,
+        "billingCycle": { "type": "monthly", "day": 17 },
+        "nextPaymentDate": "2026-08-17",
+        "paymentLabel": "월 결제"
+      }
+    ],
+    "candidates": []
+  }
+}
+```
+
+절약 감정서가 비어도 `200 OK`와 `monthlySavings=0`, `yearlySavings=0`, `items=[]`를 반환한다.
+`yearMonth` 형식과 양수 `categoryId` 검증 실패는 `400 INVALID_REQUEST`다.
 
 ## 월간 소비 리포트
 
