@@ -43,7 +43,13 @@ watch(
     flex-direction: column;
     width: 100%;
     max-width: var(--tt-content-max);
+    /*
+     * 100vh 는 주소창이 보이는 모바일 브라우저에서 실제 화면보다 커서, 내용이 한 화면에
+     * 들어가도 늘 주소창 높이만큼 스크롤이 생긴다(안드·iOS 공통). dvh 로 실제 높이를 쓴다.
+     * 아래 줄을 모르는 브라우저는 위의 100vh 를 그대로 쓴다.
+     */
     min-height: 100vh;
+    min-height: 100dvh;
     margin: 0 auto;
     background: var(--tt-bg);
 }

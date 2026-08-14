@@ -83,7 +83,10 @@ defineExpose({ releaseHistory });
                     ref="panel"
                     class="tt-sheet__panel"
                     :class="{ 'tt-sheet__panel--dragging': dragging }"
-                    :style="[height ? { height } : null, dragOffset ? { transform: `translateY(${dragOffset}px)` } : null]"
+                    :style="[
+                        height ? { height } : null,
+                        dragOffset ? { transform: `translateY(${dragOffset}px)` } : null,
+                    ]"
                     role="dialog"
                     aria-modal="true"
                     :aria-label="title || undefined"
@@ -125,6 +128,12 @@ defineExpose({ releaseHistory });
     align-items: flex-end;
     justify-content: center;
     background: var(--tt-overlay-dim);
+    /*
+     * 키보드가 가린 높이만큼 패널을 띄운다. iOS 는 키보드가 올라와도 fixed 요소를
+     * 밀어주지 않아 이 값이 없으면 시트가 키보드 밑에 깔린다 (useOverlay 의 주석 참고).
+     * 안드로이드·데스크톱에서는 값이 없거나 0 이라 아무 영향이 없다.
+     */
+    padding-bottom: var(--tt-keyboard-inset, 0px);
 }
 
 .tt-sheet__panel {
@@ -134,7 +143,8 @@ defineExpose({ releaseHistory });
     flex-direction: column;
     width: 100%;
     max-width: var(--tt-content-max);
-    max-height: 88vh;
+    /* 키보드가 올라온 만큼 최대 높이도 줄여야 패널 위쪽이 화면 밖으로 넘어가지 않는다 */
+    max-height: calc(88vh - var(--tt-keyboard-inset, 0px));
     padding: 0 var(--tt-space-5) calc(var(--tt-space-5) + env(safe-area-inset-bottom));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);

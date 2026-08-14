@@ -116,7 +116,12 @@ function isActive(tab) {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    height: var(--tt-tabbar-height);
+    /*
+     * 아이폰에서는 아래 padding 이 홈 인디케이터 자리를 차지하므로 항목 높이를 그만큼 깎아
+     * 전체 바 높이를 안드로이드와 비슷하게 맞춘다 (64+34=98 → 52+34=86).
+     * 안드로이드는 --tt-tabbar-trim 이 0 이라 그대로 64px.
+     */
+    height: calc(var(--tt-tabbar-height) - var(--tt-tabbar-trim));
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-medium);

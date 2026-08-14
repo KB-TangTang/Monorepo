@@ -21,7 +21,13 @@ html {
 }
 
 body {
+    /*
+     * 100vh 는 주소창이 있는 모바일 브라우저에서 실제 보이는 높이보다 크다.
+     * 내용이 한 화면에 들어가도 주소창 높이만큼 항상 스크롤이 생긴다(안드·iOS 공통).
+     * 100dvh 를 모르는 브라우저를 위해 100vh 를 먼저 둔다.
+     */
     min-height: 100vh;
+    min-height: 100dvh;
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-medium);
@@ -59,6 +65,22 @@ textarea,
 select {
     font: inherit;
     color: inherit;
+}
+
+/*
+ * iOS 는 글자 16px 미만인 입력창에 포커스가 가면 화면을 자동으로 확대한다.
+ * (닉네임 수정 바텀시트가 커져 보이던 원인. 확대된 뒤에는 되돌아오지도 않는다.)
+ * @supports (-webkit-touch-callout: none) 은 iOS WebKit 에서만 참이라
+ * 안드로이드·데스크톱 타이포는 건드리지 않는다.
+ * 각 컴포넌트가 scoped 클래스로 font-size 를 지정하고 있어 !important 가 필요하다 —
+ * 플랫폼 회피용 예외이므로 이 규칙 밖에서 !important 를 늘리지 말 것.
+ */
+@supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
 }
 
 img,
