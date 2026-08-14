@@ -8,4 +8,5 @@ import lombok.Getter;
 public class MissionMonthlyScoreDto {
     private String yearMonth;
     private int totalScore;
+    private Integer topPercent;
 }

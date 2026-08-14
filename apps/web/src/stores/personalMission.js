@@ -22,6 +22,7 @@ import {
     reassignTodayMission as requestTodayMissionReassignment,
 } from '@/api/personalMission';
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
+import { normalizeMonthlyScore } from '@/services/missionMonthlyScore';
 import { updateMyDifficulty } from '@/api/user';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
@@ -181,10 +182,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         async loadMissionMonthlyScore() {
             const monthlyScore = await fetchMissionMonthlyScore();
-            this.monthlyScore = {
-                ...this.monthlyScore,
-                score: Number(monthlyScore?.totalScore) || 0,
-            };
+            this.monthlyScore = normalizeMonthlyScore(monthlyScore);
         },
 
         async waitForTodayMission() {

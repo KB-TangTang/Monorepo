@@ -639,20 +639,21 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 전날 `PENDING` 미션을 자정 배치에서 먼저 판정한 뒤 성공이면 증가하고, 실패면 0으로 초기화한다.
 - 주간 결과의 `SUCCESS`, `FAIL`, `PENDING`을 화면에서 각각 인정, 기각, 오늘 수사 중으로 표시한다.
 
-### 개인 미션 월간 점수 조회 (이슈 #194)
+### 개인 미션 월간 점수 및 상위 백분율 조회 (이슈 #194, #226)
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/missions/monthly-score` | Bearer | 로그인 사용자의 이번 달 개인 미션 누적 점수 |
+| GET | `/api/missions/monthly-score` | Bearer | 로그인 사용자의 이번 달 개인 미션 누적 점수와 상위 백분율 |
 
-응답은 `{ yearMonth, totalScore }` 형태다. `yearMonth`는 `Asia/Seoul` 기준 현재 월의 `YYYY-MM` 값이다.
+응답은 `{ yearMonth, totalScore, topPercent }` 형태다. `yearMonth`는 `Asia/Seoul` 기준 현재 월의 `YYYY-MM` 값이다.
 
 ```json
 {
   "success": true,
   "data": {
     "yearMonth": "2026-08",
-    "totalScore": 75
+    "totalScore": 75,
+    "topPercent": 15
   }
 }
 ```
@@ -662,7 +663,8 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 전날 미션과 해당일 미션이 모두 `SUCCESS`이면 해당일 점수에 연속 성공 보너스 5점을 더한다.
 - 전날 미션이 `FAIL`이거나 배정 이력이 없으면 연속 성공으로 계산하지 않는다.
 - 월간 점수는 해당 월 확정 미션 이력 전체를 다시 합산해 `tbl_monthly_ranking.total_score`에 갱신하므로 배치 재실행에도 중복 반영되지 않는다.
-- 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0을 반환한다.
+- `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
+- 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
 
 ## 개인 미션 월간 랭킹 조회 (이슈 #209)
 
