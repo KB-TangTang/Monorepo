@@ -1,5 +1,6 @@
 package com.kb.tangtang.mission.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.MissionCategoryAnalysisDto;
 import io.swagger.annotations.Api;
@@ -7,7 +8,7 @@ import io.swagger.annotations.ApiOperation;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code MissionCategoryAnalysisController} 의 Swagger 문서. */
-@Api(tags = "08. 개인 미션 - 요주의 카테고리 분석")
+@Api(tags = SwaggerTags.MISSION)
 public interface MissionCategoryAnalysisControllerDocs {
 
     @ApiOperation(value = "요주의 카테고리 분석 조회",

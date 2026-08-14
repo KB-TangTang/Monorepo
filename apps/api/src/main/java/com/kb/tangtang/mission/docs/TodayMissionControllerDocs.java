@@ -1,5 +1,6 @@
 package com.kb.tangtang.mission.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.MissionStreakDto;
 import com.kb.tangtang.mission.dto.TodayMissionDto;
@@ -8,7 +9,7 @@ import io.swagger.annotations.ApiOperation;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code TodayMissionController} 의 Swagger 문서. */
-@Api(tags = "07. 개인 미션 - 오늘의 미션 · 연속 성공일")
+@Api(tags = SwaggerTags.MISSION)
 public interface TodayMissionControllerDocs {
 
     @ApiOperation(value = "오늘의 미션 조회",

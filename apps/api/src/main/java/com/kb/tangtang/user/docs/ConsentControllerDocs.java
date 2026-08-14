@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.docs;
 
+import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.user.dto.ConsentCatalogDto;
 import com.kb.tangtang.user.dto.ConsentResultDto;
@@ -11,7 +12,7 @@ import io.swagger.annotations.ApiParam;
 import springfox.documentation.annotations.ApiIgnore;
 
 /** {@code ConsentController} 의 Swagger 문서. */
-@Api(tags = "03. 동의 - 약관 · 금융데이터 동의")
+@Api(tags = SwaggerTags.USER)
 public interface ConsentControllerDocs {
 
     @ApiOperation(
