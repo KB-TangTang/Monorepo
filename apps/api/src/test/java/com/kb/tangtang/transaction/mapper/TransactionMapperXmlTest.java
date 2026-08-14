@@ -32,6 +32,8 @@ class TransactionMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".update"));
         assertTrue(configuration.hasStatement(namespace + ".insert"));
         assertTrue(configuration.hasStatement(namespace + ".linkByCorrelation"));
+        assertTrue(configuration.hasStatement(namespace + ".findByIdAndUser"));
+        assertTrue(configuration.hasStatement(namespace + ".updateCategoryByUser"));
     }
 
     @Test
@@ -58,5 +60,29 @@ class TransactionMapperXmlTest {
 
         assertFalse(sql.contains("category_id = ?"), "update문 SET절에 category_id 가 남아있다: " + sql);
         assertFalse(sql.contains("category_source = ?"), "update문 SET절에 category_source 가 남아있다: " + sql);
+    }
+
+    @Test
+    @DisplayName("updateCategoryByUser는 user_id까지 WHERE에 넣어 소유권을 DB 레벨에서 강제한다")
+    void updateCategoryByUserEnforcesOwnership() throws Exception {
+        Configuration configuration = new Configuration();
+
+        try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
+            new XMLMapperBuilder(inputStream, configuration, RESOURCE,
+                    configuration.getSqlFragments()).parse();
+        }
+
+        String namespace = TransactionMapper.class.getName();
+        MappedStatement statement = configuration.getMappedStatement(namespace + ".updateCategoryByUser");
+        BoundSql boundSql = statement.getBoundSql(
+                new java.util.HashMap<String, Object>() {{
+                    put("id", 1L);
+                    put("userId", 1L);
+                    put("categoryId", 1L);
+                }});
+        String sql = boundSql.getSql().replaceAll("\\s+", " ");
+
+        assertTrue(sql.contains("WHERE id = ?"), "id 조건이 없다: " + sql);
+        assertTrue(sql.contains("AND user_id = ?"), "user_id 조건이 없다(소유권 미검증): " + sql);
     }
 }

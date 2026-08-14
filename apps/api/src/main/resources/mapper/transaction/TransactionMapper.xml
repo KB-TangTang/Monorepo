@@ -104,4 +104,27 @@
          <foreach item="txId" collection="ids" open="(" separator="," close=")">#{txId}</foreach>
     </select>
 
+    <select id="findByIdAndUser" resultType="com.kb.tangtang.transaction.domain.Transaction">
+        SELECT id, user_id, account_id, codef_tr_key, merchant_name, merchant_name_normalized,
+               amount, direction, tr_date, tr_time, description1, classification, category_id,
+               category_source, is_excluded_from_summary, loan_id, source_type, card_id,
+               correlation_id, linked_transaction_id, original_approval_no,
+               merchant_category_code, merchant_category_name, is_refund, refunded_amount
+          FROM tbl_transaction
+         WHERE id = #{id}
+           AND user_id = #{userId}
+    </select>
+
+    <!--
+      사용자가 직접 지정하는 카테고리 수정 전용. updateCategory()(재동기화 보호용)와 분리한 이유는
+      인터페이스 쪽 주석 참고. user_id까지 WHERE에 넣어 소유권을 DB 레벨에서도 강제한다.
+    -->
+    <update id="updateCategoryByUser">
+        UPDATE tbl_transaction
+           SET category_id = #{categoryId},
+               category_source = 'USER'
+         WHERE id = #{id}
+           AND user_id = #{userId}
+    </update>
+
 </mapper>
