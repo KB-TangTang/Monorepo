@@ -29,3 +29,21 @@ test('인증서 발급 버튼은 개인 인증서 페이지로 이동한다', ()
 test('명예의 전당에는 대법원·지방법원 전환 탭을 표시하지 않는다', () => {
     assert.doesNotMatch(viewSource, /ChallengeModeTabBar/);
 });
+
+test('개발 환경에서도 fixture 대신 월간 랭킹 API를 호출한다', () => {
+    assert.match(viewSource, /fetchMissionRankings\(selectedPeriod\.value\)/);
+    assert.doesNotMatch(viewSource, /import\.meta\.env\.DEV/);
+    assert.doesNotMatch(viewSource, /MOCK_PERSONAL_RANKINGS/);
+});
+
+test('성적표에 처음 진입하면 현재 달을 기본으로 조회한다', () => {
+    assert.match(viewSource, /now\.getFullYear\(\)/);
+    assert.match(viewSource, /now\.getMonth\(\) \+ 1/);
+    assert.match(viewSource, /: currentPeriod/);
+});
+
+test('API의 랭킹 보유 월 목록으로 선택 가능한 월과 연도를 구성한다', () => {
+    assert.match(viewSource, /fetchMissionRankingMonths\(\)/);
+    assert.match(viewSource, /createRankingMonths\(years, availablePeriodsSet\)/);
+    assert.match(viewSource, /:months="rankingMonths"/);
+});

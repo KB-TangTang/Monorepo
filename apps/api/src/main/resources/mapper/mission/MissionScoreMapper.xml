@@ -37,4 +37,53 @@
            AND `year_month` = #{yearMonth}
     </select>
 
+    <sql id="rankedUsers">
+        SELECT ranking.user_id,
+               COALESCE(NULLIF(TRIM(u.nickname), ''), u.social_name) AS nickname,
+               u.profile_image_key,
+               ranking.total_score,
+               ROW_NUMBER() OVER (
+                   ORDER BY ranking.total_score DESC, ranking.user_id ASC
+               ) AS `rank`
+          FROM tbl_monthly_ranking ranking
+          JOIN tbl_user u ON u.id = ranking.user_id
+         WHERE ranking.`year_month` = #{yearMonth}
+           AND u.status = 'ACTIVE'
+    </sql>
+
+    <select id="findTopRankings" resultType="com.kb.tangtang.mission.domain.MissionRankingRow">
+        SELECT ranked.user_id,
+               ranked.nickname,
+               ranked.profile_image_key,
+               ranked.total_score,
+               ranked.`rank`
+          FROM (<include refid="rankedUsers" />) ranked
+         WHERE ranked.`rank` &lt;= #{limit}
+         ORDER BY ranked.`rank`
+    </select>
+
+    <select id="findUserRanking" resultType="com.kb.tangtang.mission.domain.MissionRankingRow">
+        SELECT ranked.user_id,
+               ranked.nickname,
+               ranked.profile_image_key,
+               ranked.total_score,
+               ranked.`rank`
+          FROM (<include refid="rankedUsers" />) ranked
+         WHERE ranked.user_id = #{userId}
+    </select>
+
+    <select id="countRankingUsers" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+          FROM tbl_monthly_ranking ranking
+          JOIN tbl_user u ON u.id = ranking.user_id
+         WHERE ranking.`year_month` = #{yearMonth}
+           AND u.status = 'ACTIVE'
+    </select>
+
+    <select id="findRankingMonths" resultType="java.lang.String">
+        SELECT DISTINCT `year_month`
+          FROM tbl_monthly_ranking
+         ORDER BY `year_month` DESC
+    </select>
+
 </mapper>

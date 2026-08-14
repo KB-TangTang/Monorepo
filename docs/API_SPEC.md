@@ -608,6 +608,16 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 월간 점수는 해당 월 확정 미션 이력 전체를 다시 합산해 `tbl_monthly_ranking.total_score`에 갱신하므로 배치 재실행에도 중복 반영되지 않는다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0을 반환한다.
 
+## 개인 미션 월간 랭킹 조회 (이슈 #209)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/missions/rankings?yearMonth=YYYY-MM` | Bearer | 해당 월 상위 10명과 내 순위 |
+| GET | `/api/missions/rankings/months` | Bearer | 전체 랭킹 데이터가 있는 `YYYY-MM` 목록 |
+
+- 월 목록 응답은 `{ "yearMonths": ["2026-08", "2026-07"] }` 형식이다.
+- 프론트에서 이 목록을 기준으로 월 선택 버튼과 연도 이동을 활성화한다.
+
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
 | 메서드 | 경로 | 인증 | 응답 |

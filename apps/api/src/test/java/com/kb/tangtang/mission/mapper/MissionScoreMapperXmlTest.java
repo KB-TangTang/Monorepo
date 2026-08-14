@@ -27,6 +27,10 @@ class MissionScoreMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + "calculateMonthlyScore"));
         assertTrue(configuration.hasStatement(namespace + "upsertMonthlyScore"));
         assertTrue(configuration.hasStatement(namespace + "findMonthlyScore"));
+        assertTrue(configuration.hasStatement(namespace + "findTopRankings"));
+        assertTrue(configuration.hasStatement(namespace + "findUserRanking"));
+        assertTrue(configuration.hasStatement(namespace + "countRankingUsers"));
+        assertTrue(configuration.hasStatement(namespace + "findRankingMonths"));
 
         BoundSql scoreSql = configuration.getMappedStatement(namespace + "calculateMonthlyScore")
                 .getBoundSql(Map.of(
@@ -39,5 +43,16 @@ class MissionScoreMapperXmlTest {
         BoundSql upsertSql = configuration.getMappedStatement(namespace + "upsertMonthlyScore")
                 .getBoundSql(Map.of("userId", 7L, "yearMonth", "2026-08", "totalScore", 75));
         assertTrue(upsertSql.getSql().contains("ON DUPLICATE KEY UPDATE"));
+
+        BoundSql rankingSql = configuration.getMappedStatement(namespace + "findTopRankings")
+                .getBoundSql(Map.of("yearMonth", "2026-08", "limit", 10));
+        assertTrue(rankingSql.getSql().contains("ROW_NUMBER() OVER"));
+        assertTrue(rankingSql.getSql().contains("u.status = 'ACTIVE'"));
+
+        BoundSql monthsSql = configuration.getMappedStatement(namespace + "findRankingMonths")
+                .getBoundSql(Map.of());
+        assertTrue(monthsSql.getSql().contains("SELECT DISTINCT"));
+        assertTrue(monthsSql.getSql().contains("FROM tbl_monthly_ranking"));
+        assertTrue(!monthsSql.getSql().contains("user_id"));
     }
 }
