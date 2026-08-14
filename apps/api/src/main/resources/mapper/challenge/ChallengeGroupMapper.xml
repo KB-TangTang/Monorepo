@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨져 컨텍스트가 통째로 뜨지 않는다.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.ChallengeGroupMapper">
+
+    <sql id="columns">
+        g.id, g.admin_id, g.group_name, g.category_id, g.limit_amount, g.eval_type,
+        g.max_members, g.start_date, g.end_date, g.invite_code, g.status, g.memo,
+        c.category_name
+    </sql>
+
+    <!--
+      category_id 가 NULL 이면 총소비 챌린지다. LEFT JOIN 이라 category_name 도 NULL 로 남는다.
+    -->
+    <sql id="fromGroup">
+        FROM tbl_challenge_group g
+        LEFT JOIN tbl_category c ON c.id = g.category_id
+    </sql>
+
+    <!--
+      채번된 id 를 곧바로 tbl_group_member INSERT 에 써야 해서 useGeneratedKeys 를 쓴다.
+      created_at 은 컬럼 기본값에 맡긴다 — 응답에 쓰지 않는 값이라 되받아올 이유가 없다.
+    -->
+    <insert id="insertGroup" parameterType="com.kb.tangtang.challenge.domain.ChallengeGroup"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_challenge_group
+            (admin_id, group_name, category_id, limit_amount, eval_type,
+             max_members, start_date, end_date, invite_code, status, memo)
+        VALUES
+            (#{adminId}, #{groupName}, #{categoryId}, #{limitAmount}, #{evalType},
+             #{maxMembers}, #{startDate}, #{endDate}, #{inviteCode}, #{status}, #{memo})
+    </insert>
+
+    <select id="findById" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        WHERE g.id = #{groupId}
+    </select>
+
+    <select id="findByInviteCode" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        WHERE g.invite_code = #{inviteCode}
+    </select>
+
+    <!--
+      내가 참여자인 그룹만 본다. 방장 여부는 admin_id 로 따로 판정하므로
+      여기서 admin_id 를 OR 로 붙이지 않는다 — 방장도 tbl_group_member 에 들어 있다.
+
+      정렬은 시작일 내림차순. 최근 만든 챌린지가 위에 오는 게 목록 화면의 기대다.
+    -->
+    <select id="findMyGroups" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        JOIN tbl_group_member m ON m.group_id = g.id AND m.user_id = #{userId}
+        <if test="statuses != null and !statuses.isEmpty()">
+            WHERE g.status IN
+            <foreach collection="statuses" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        </if>
+        ORDER BY g.start_date DESC, g.id DESC
+    </select>
+
+    <select id="countByInviteCode" resultType="int">
+        SELECT COUNT(*) FROM tbl_challenge_group WHERE invite_code = #{inviteCode}
+    </select>
+
+    <!--
+      상태 전이 배치(이슈 #152). idx_cg_status_start (status, start_date) 를 탄다.
+      정렬을 id 로 두는 이유는 배치 로그를 두 번 돌렸을 때 순서가 같아야 비교하기 쉬워서다.
+    -->
+    <select id="findGroupsToStart" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        WHERE g.status = #{status}
+          AND g.start_date &lt;= #{today}
+        ORDER BY g.id
+    </select>
+
+    <!--
+      조건부 상태 변경. WHERE 의 status 비교가 곧 멱등성 장치다 —
+      이미 전이된 그룹은 0 행이 바뀌고, 호출부가 그걸 보고 알림을 건너뛴다.
+      updated_at 은 ON UPDATE CURRENT_TIMESTAMP 라 따로 쓰지 않는다.
+    -->
+    <update id="updateStatusIfCurrent">
+        UPDATE tbl_challenge_group
+        SET status = #{toStatus}
+        WHERE id = #{groupId}
+          AND status = #{fromStatus}
+    </update>
+</mapper>

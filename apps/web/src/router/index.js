@@ -125,6 +125,12 @@ const routes = [
         component: () => import('@/views/my/ConsentManageView.vue'),
         meta: { title: '동의 관리' },
     },
+    {
+        path: '/my/withdraw',
+        name: 'myWithdraw',
+        component: () => import('@/views/my/WithdrawView.vue'),
+        meta: { title: '회원 탈퇴' },
+    },
     // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
     {
         path: '/group-challenges',
@@ -219,6 +225,25 @@ const routes = [
         component: () => import('@/views/challenge/group/VoteDoneView.vue'),
         meta: { title: '투표 완료', hideTabBar: true },
     },
+    // ↓ 재판 진행 현황 · 최종 판결 · 판결 상세 (#GC_08). 기소 후 판결까지 타임라인과 결과 화면.
+    {
+        path: '/group-challenges/:id/trial/:indictmentId',
+        name: 'trialProgress',
+        component: () => import('@/views/challenge/group/judgment/TrialProgressView.vue'),
+        meta: { title: '재판 진행 현황', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict',
+        name: 'verdictResult',
+        component: () => import('@/views/challenge/group/judgment/VerdictResultView.vue'),
+        meta: { title: '최종 판결', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict/detail',
+        name: 'verdictDetail',
+        component: () => import('@/views/challenge/group/judgment/VerdictDetailView.vue'),
+        meta: { title: '판결 상세', hideTabBar: true },
+    },
     // ↓ 동점 AI 판결 플로우 (#105). 투표 종료 상태 UI와의 실제 연결은 후속 작업에서 처리한다.
     {
         path: '/group-challenges/:id/vote/:indictmentId/tie',
@@ -262,12 +287,6 @@ const routes = [
         name: 'challengeNetSavings',
         component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
         meta: { title: '카테고리별 순 절감액' },
-    },
-    {
-        path: '/asset/fixed-expenses/savings',
-        name: 'fixedExpenseSavings',
-        component: () => import('@/views/fixed-expense/FixedExpenseSavingsView.vue'),
-        meta: { title: '절약 감정서' },
     },
     {
         path: '/asset/fixed-expenses',

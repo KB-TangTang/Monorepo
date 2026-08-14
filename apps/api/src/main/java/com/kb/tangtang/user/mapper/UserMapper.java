@@ -31,6 +31,19 @@ public interface UserMapper {
      */
     int updateNickname(@Param("id") Long id, @Param("nickname") String nickname);
 
+    Long findDifficultyIdByName(@Param("difficultyName") String difficultyName);
+
+    int updateDifficulty(@Param("id") Long id, @Param("difficultyId") Long difficultyId);
+
+    /**
+     * 프로필 이미지 키 갱신. **삭제도 이 메서드로 한다** — null 을 넣으면 미설정으로 돌아간다.
+     * 설정과 해제를 한 메서드로 두는 이유는 updateTutorialSeenAt 과 같다.
+     *
+     * @return 바뀐 행 수. 0 이면 그 사용자가 없다는 뜻이라 서비스가 404 로 바꾼다.
+     */
+    int updateProfileImageKey(@Param("id") Long id,
+                              @Param("profileImageKey") String profileImageKey);
+
     /**
      * 튜토리얼 완료 시각 갱신 (이슈 #128).
      *
@@ -43,4 +56,13 @@ public interface UserMapper {
     int updateTutorialSeenAt(@Param("id") Long id,
                              @Param("target") String target,
                              @Param("seenAt") java.time.LocalDateTime seenAt);
+
+    /**
+     * 회원 탈퇴. 상태 변경 · 식별정보 익명화 · 유니크 키 비우기를 한 문장으로 한다.
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     *
+     * @return 갱신된 행 수. 0 이면 이미 탈퇴했거나 ACTIVE 가 아니다(멱등).
+     */
+    int withdraw(@Param("id") Long id,
+                 @Param("withdrawnAt") java.time.LocalDateTime withdrawnAt);
 }

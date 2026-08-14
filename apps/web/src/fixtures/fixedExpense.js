@@ -37,6 +37,9 @@ export const FIXED_EXPENSE_FIXTURE = {
     confirmed: [
         {
             id: 'netflix',
+            status: 'ACTIVE',
+            confirmedAt: '2026-07-18T09:00:00',
+            isExcluded: false,
             categoryCode: 'subscription',
             categoryLabel: '구',
             name: '넷플릭스',
@@ -59,6 +62,9 @@ export const FIXED_EXPENSE_FIXTURE = {
         },
         {
             id: 'gym-membership',
+            status: 'ACTIVE',
+            confirmedAt: '2026-06-06T09:00:00',
+            isExcluded: false,
             categoryCode: 'living',
             categoryLabel: '생',
             name: '헬스장 정기권',
@@ -76,6 +82,9 @@ export const FIXED_EXPENSE_FIXTURE = {
     candidates: [
         {
             id: 'youtube-premium',
+            status: 'ACTIVE',
+            confirmedAt: null,
+            isExcluded: false,
             caseNumber: '2026-고정-0729',
             categoryCode: 'subscription',
             categoryLabel: '구',

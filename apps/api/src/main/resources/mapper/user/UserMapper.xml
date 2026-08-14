@@ -9,8 +9,8 @@
 
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
-        id, social_provider, provider_user_id, email, nickname, social_name, name,
-        status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
+        id, social_provider, provider_user_id, email, nickname, social_name, profile_image_key,
+        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -61,6 +61,19 @@
            AND status = 'ACTIVE'
     </update>
 
+    <select id="findDifficultyIdByName" resultType="java.lang.Long">
+        SELECT id
+          FROM tbl_mission_difficulty
+         WHERE difficulty_name = #{difficultyName}
+    </select>
+
+    <update id="updateDifficulty">
+        UPDATE tbl_user
+           SET difficulty_id = #{difficultyId}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
     <!--
       튜토리얼 완료 시각. 완료(시각)와 「다시 보기」(NULL)를 한 문장으로 처리한다.
 
@@ -82,6 +95,54 @@
                group_tutorial_seen_at = CASE WHEN #{target} = 'GROUP'
                                              THEN #{seenAt,jdbcType=TIMESTAMP}
                                              ELSE group_tutorial_seen_at END
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      프로필 이미지 키 갱신. profileImageKey 가 null 이면 미설정으로 되돌린다.
+      #{} 는 null 을 그대로 NULL 로 바인딩하므로 분기가 필요 없다.
+
+      status = 'ACTIVE' 가드는 형제 갱신문(updateName·updateNickname·updateTutorialSeenAt)과 같다.
+      UserService.findActive() 는 이름과 달리 status 를 보지 않으므로(null 체크만 한다)
+      **이 가드가 탈퇴·차단 계정의 쓰기를 막는 유일한 장치다.** 빼면 0행 대신 1행이 갱신된다.
+    -->
+    <update id="updateProfileImageKey">
+        UPDATE tbl_user
+           SET profile_image_key = #{profileImageKey}
+         WHERE id     = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      회원 탈퇴. 행을 지우지 않는다 — tbl_user(id) 를 참조하는 FK 가 22개이고
+      그 중 tbl_group_member·tbl_vote·tbl_group_challenge_daily_result 는
+      **다른 사용자의** 그룹챌린지 이력과 얽혀 있다. 물리 삭제하면 남의 판결 기록이 깨진다.
+      (tbl_user.status 주석 「물리 삭제 없음」 · DECISIONS.md 2026-08-13)
+
+      provider_user_id 에 접미사를 붙여 uk_user_social 을 비운다 →
+      같은 구글 계정으로 재가입하면 findBySocialId 가 미스가 나 신규 가입 경로를 탄다.
+      VARCHAR(100) 이고 구글 sub 는 21자라 접미사를 붙여도 40자 안쪽이다.
+
+      WHERE status = 'ACTIVE' 가 멱등성을 만든다 — 두 번 호출해도 접미사가 두 번 붙지 않는다.
+      형제 갱신문(updateName·updateNickname·updateProfileImageKey)이 쓰는 조건과 같다.
+
+      profile_image_key 는 NULL 로만 만들고 저장소 파일은 지우지 않는다.
+      키를 잃으면 참조할 방법이 없고, 파일 I/O 를 트랜잭션에 넣으면 실패가 탈퇴를 롤백시킨다.
+    -->
+    <update id="withdraw">
+        UPDATE tbl_user
+           SET status            = 'WITHDRAWN',
+               withdrawn_at      = #{withdrawnAt},
+               email             = NULL,
+               nickname          = NULL,
+               social_name       = NULL,
+               name              = NULL,
+               phone             = NULL,
+               birth_date        = NULL,
+               gender            = NULL,
+               profile_image_key = NULL,
+               provider_user_id  = CONCAT(provider_user_id, '_withdrawn_', id)
          WHERE id     = #{id}
            AND status = 'ACTIVE'
     </update>

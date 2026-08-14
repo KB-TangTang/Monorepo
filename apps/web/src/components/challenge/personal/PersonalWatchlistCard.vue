@@ -2,18 +2,15 @@
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/solid';
 import { tangiFieldVerify } from '@/fixtures/personalChallenge';
-import { getWatchlistStatusLabel } from '@/services/personalMissionFlow';
+import {
+    formatWatchlistMissionRound,
+    formatWatchlistRotationStatus,
+} from '@/services/personalMissionFlow';
 
 defineProps({
     items: { type: Array, required: true },
-    weekRange: { type: String, required: true },
-    currentIndex: { type: Number, default: 1 },
-    totalCount: { type: Number, default: 3 },
-    comment: { type: String, default: '' },
-    uncategorizedWarning: { type: String, default: '' },
+    analysisPeriod: { type: String, default: '' },
 });
-
-defineEmits(['organize-click']);
 
 const isOpen = ref(false);
 
@@ -23,21 +20,14 @@ function toggle() {
 
 function statusBadgeClass(status) {
     switch (status) {
-        case 'CLEARED':
+        case 'SUCCESS':
             return 'watchlist__status--cleared';
-        case 'TODAY':
+        case 'PENDING':
             return 'watchlist__status--today';
+        case 'FAIL':
+            return 'watchlist__status--failed';
         default:
             return 'watchlist__status--pending';
-    }
-}
-
-function barColorClass(status) {
-    switch (status) {
-        case 'TODAY':
-            return 'watchlist__bar-fill--today';
-        default:
-            return 'watchlist__bar-fill--muted';
     }
 }
 </script>
@@ -47,9 +37,9 @@ function barColorClass(status) {
         <div class="watchlist__trigger" @click="toggle">
             <img :src="tangiFieldVerify" alt="" class="watchlist__tangi" />
             <div class="watchlist__header-text">
-                <div class="watchlist__title">이번 주 요주의 대상</div>
+                <div class="watchlist__title">새로 선정된 요주의 대상</div>
                 <div class="watchlist__meta">
-                    {{ weekRange }} · {{ totalCount }}곳 중 {{ currentIndex }}번째
+                    {{ analysisPeriod }} · 전체 소비 대비 상위 {{ items.length }}개
                 </div>
             </div>
             <ChevronDownIcon
@@ -59,45 +49,40 @@ function barColorClass(status) {
         </div>
 
         <Transition name="watchlist-slide">
-        <div v-if="isOpen" class="watchlist__body">
-            <div class="watchlist__items">
-                <div
-                    v-for="item in items"
-                    :key="item.name"
-                    class="watchlist__item"
-                    :class="{ 'watchlist__item--muted': item.status !== 'TODAY' }"
-                >
-                    <div class="watchlist__item-header">
-                        <span class="watchlist__item-name">
-                            {{ item.name }}
-                            <b class="watchlist__item-ratio">{{ item.ratio }}%</b>
-                        </span>
-                        <span
-                            class="watchlist__status"
-                            :class="statusBadgeClass(item.status)"
-                        >
-                            {{ getWatchlistStatusLabel(item.status, item.clearedDate) }}
-                        </span>
-                    </div>
-                    <div class="watchlist__bar">
-                        <div
-                            class="watchlist__bar-fill"
-                            :class="barColorClass(item.status)"
-                            :style="{ width: item.progress + '%' }"
-                        ></div>
+            <div v-if="isOpen" class="watchlist__body">
+                <div class="watchlist__items">
+                    <div
+                        v-for="item in items"
+                        :key="item.name"
+                        class="watchlist__item"
+                        :class="{ 'watchlist__item--muted': item.rotationResult === 'WAITING' }"
+                    >
+                        <div class="watchlist__item-header">
+                            <span class="watchlist__item-name">
+                                {{ item.name }}
+                                <b class="watchlist__item-ratio">{{ item.ratio }}%</b>
+                            </span>
+                            <span class="watchlist__status-group">
+                                <span class="watchlist__status watchlist__status--round">
+                                    {{ formatWatchlistMissionRound(item) }}
+                                </span>
+                                <span
+                                    class="watchlist__status"
+                                    :class="statusBadgeClass(item.rotationResult)"
+                                >
+                                    {{ formatWatchlistRotationStatus(item) }}
+                                </span>
+                            </span>
+                        </div>
+                        <div class="watchlist__bar">
+                            <div
+                                class="watchlist__bar-fill"
+                                :style="{ width: item.ratio + '%' }"
+                            ></div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div v-if="comment" class="watchlist__comment">{{ comment }}</div>
-
-            <div v-if="uncategorizedWarning" class="watchlist__warning">
-                <span class="watchlist__warning-text">{{ uncategorizedWarning }}</span>
-                <button type="button" class="watchlist__organize" @click="$emit('organize-click')">
-                    거래내역 정리 ›
-                </button>
-            </div>
-        </div>
         </Transition>
     </div>
 </template>
@@ -203,6 +188,18 @@ function barColorClass(status) {
     white-space: nowrap;
 }
 
+.watchlist__status-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.watchlist__status--round {
+    background: var(--tt-bg-fill);
+    color: var(--tt-text-body);
+}
+
 .watchlist__status--cleared {
     background: var(--tt-success-subtle);
     color: var(--tt-success);
@@ -211,6 +208,11 @@ function barColorClass(status) {
 .watchlist__status--today {
     background: var(--tt-surface-inverse);
     color: var(--tt-accent);
+}
+
+.watchlist__status--failed {
+    background: var(--tt-danger-subtle);
+    color: var(--tt-danger);
 }
 
 .watchlist__status--pending {
@@ -232,8 +234,16 @@ function barColorClass(status) {
     transition: width 0.4s ease;
 }
 
-.watchlist__bar-fill--today {
-    background: var(--tt-accent);
+.watchlist__item:nth-child(3n + 1) .watchlist__bar-fill {
+    background: var(--tt-primary);
+}
+
+.watchlist__item:nth-child(3n + 2) .watchlist__bar-fill {
+    background: var(--tt-success);
+}
+
+.watchlist__item:nth-child(3n) .watchlist__bar-fill {
+    background: var(--tt-danger);
 }
 
 .watchlist__bar-fill--muted {
@@ -250,30 +260,6 @@ function barColorClass(status) {
     color: var(--tt-text-body);
     line-height: 1.5;
     word-break: keep-all;
-}
-
-.watchlist__warning {
-    margin-top: 9px;
-    border-top: 1px dashed var(--tt-border);
-    padding-top: 9px;
-    font-size: var(--tt-fs-overline);
-    color: var(--tt-text-muted);
-    font-weight: var(--tt-fw-semibold);
-    line-height: 1.55;
-    white-space: pre-line;
-}
-
-.watchlist__organize {
-    display: inline;
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--tt-info);
-    font-weight: var(--tt-fw-black);
-    font-size: var(--tt-fs-overline);
-    white-space: nowrap;
-    cursor: pointer;
-    font-family: var(--tt-font-sans);
 }
 
 /* ── 슬라이드 트랜지션 ── */

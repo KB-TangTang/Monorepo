@@ -3,18 +3,27 @@ import {
     MOCK_DATA_REQUIREMENTS,
     MOCK_PROSECUTORS,
     MOCK_TODAY_BRIEFING,
-    MOCK_VERDICT_SUCCESS,
     MOCK_WEEKLY_WATCHLIST,
     MOCK_WATCHLIST_META,
+    MOCK_WEEKLY_VERDICT,
     MOCK_MONTHLY_SCORE,
     MOCK_COMMON_MISSION,
 } from '@/fixtures/personalChallenge';
-import {
-    MOCK_PERSONAL_MISSION_PROFILE,
-} from '@/fixtures/personalMission';
+import { MOCK_PERSONAL_MISSION_PROFILE } from '@/fixtures/personalMission';
 import {
     hasEnoughPersonalMissionData,
+    toTodayMissionBriefing,
 } from '@/services/personalMissionFlow';
+import {
+    fetchMissionCategoryAnalysis,
+    fetchMissionMonthlyScore,
+    fetchMissionStreak,
+    fetchTodayMission,
+    reassignTodayMission as requestTodayMissionReassignment,
+} from '@/api/personalMission';
+import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
+import { normalizeMonthlyScore } from '@/services/missionMonthlyScore';
+import { updateMyDifficulty } from '@/api/user';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
@@ -25,6 +34,13 @@ const STORAGE_KEY = 'tangtang-personal-mission-challenge';
  */
 const LEGACY_PROSECUTOR_ID = { TOUGH: 'HARD', STRICT: 'NORMAL', LENIENT: 'EASY' };
 const DEFAULT_PROSECUTOR_ID = 'NORMAL';
+const TODAY_MISSION_RETRY_COUNT = 5;
+const TODAY_MISSION_RETRY_DELAY_MS = 200;
+const DIFFICULTY_IDS = { EASY: 1, NORMAL: 2, HARD: 3 };
+
+function delay(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
 
 function normalizeProsecutorId(id) {
     return LEGACY_PROSECUTOR_ID[id] ?? id ?? DEFAULT_PROSECUTOR_ID;
@@ -41,7 +57,12 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     state: () => ({
         profile: MOCK_PERSONAL_MISSION_PROFILE,
         hasAgreed: false,
+        consentState: null,
+        todayMission: null,
+        categoryAnalysis: null,
+        missionStreak: null,
         selectedProsecutorId: DEFAULT_PROSECUTOR_ID,
+        selectedDifficultyId: DEFAULT_PROSECUTOR_ID,
         pendingVerdict: null,
         courtMode: 'supreme',
         isHydrated: false,
@@ -53,6 +74,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         monthlyScore: MOCK_MONTHLY_SCORE,
         dataRequirements: MOCK_DATA_REQUIREMENTS,
         commonMission: MOCK_COMMON_MISSION,
+        weeklyVerdict: MOCK_WEEKLY_VERDICT,
     }),
 
     getters: {
@@ -81,11 +103,23 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
          * 5. 정상 → active
          */
         screenState() {
-            if (!this.hasAgreed) return 'consent';
+            if (this.consentState === null) return 'loading';
+            if (this.consentState === 'ERROR') return 'error';
+            if (this.consentState === CHALLENGE_CONSENT_STATE.FIRST) return 'consent';
+            if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN && !this.todayMission) {
+                return 'withdrawn';
+            }
+            if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN) {
+                return this.hasPendingVerdict ? 'verdict' : 'active';
+            }
             if (!this.isAccountLinked) return 'no-account';
             if (!this.hasEnoughData) return 'insufficient';
             if (this.hasPendingVerdict) return 'verdict';
             return 'active';
+        },
+
+        todayBriefing(state) {
+            return toTodayMissionBriefing(state.todayMission) ?? state.briefing;
         },
     },
 
@@ -116,12 +150,89 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         agree() {
             this.hasAgreed = true;
+            this.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
             this.save();
+        },
+
+        setConsentState(consentState) {
+            this.consentState = consentState;
+            this.hasAgreed = consentState === CHALLENGE_CONSENT_STATE.ACTIVE;
+        },
+
+        async loadTodayMission() {
+            try {
+                this.todayMission = await fetchTodayMission();
+                return true;
+            } catch (error) {
+                if (error.code === 'TODAY_MISSION_NOT_FOUND') {
+                    this.todayMission = null;
+                    return false;
+                }
+                throw error;
+            }
+        },
+
+        async loadCategoryAnalysis() {
+            this.categoryAnalysis = await fetchMissionCategoryAnalysis();
+        },
+
+        async loadMissionStreak() {
+            this.missionStreak = await fetchMissionStreak();
+        },
+
+        async loadMissionMonthlyScore() {
+            const monthlyScore = await fetchMissionMonthlyScore();
+            this.monthlyScore = normalizeMonthlyScore(monthlyScore);
+        },
+
+        async waitForTodayMission() {
+            for (let attempt = 0; attempt < TODAY_MISSION_RETRY_COUNT; attempt += 1) {
+                if (await this.loadTodayMission()) {
+                    return true;
+                }
+                if (attempt < TODAY_MISSION_RETRY_COUNT - 1) {
+                    await delay(TODAY_MISSION_RETRY_DELAY_MS);
+                }
+            }
+            return false;
+        },
+
+        async reassignTodayMission() {
+            this.todayMission = await requestTodayMissionReassignment();
+            return this.todayMission;
         },
 
         selectProsecutor(prosecutorId) {
             this.selectedProsecutorId = prosecutorId;
             this.save();
+        },
+
+        async saveProsecutorDifficulty(prosecutorId) {
+            const user = await updateMyDifficulty(prosecutorId);
+            if (Number(user?.difficultyId) !== DIFFICULTY_IDS[prosecutorId]) {
+                throw new Error(
+                    '담당 검사 난이도가 서버에 저장되지 않았어요. 서버를 다시 실행한 뒤 시도해 주세요.',
+                );
+            }
+            this.selectedProsecutorId = prosecutorId;
+            this.selectedDifficultyId = prosecutorId;
+            this.save();
+            return user;
+        },
+
+        selectDifficulty(difficultyId) {
+            this.selectedDifficultyId = difficultyId;
+        },
+
+        async saveDifficulty() {
+            const difficultyName = this.selectedDifficultyId;
+            const user = await updateMyDifficulty(difficultyName);
+            if (Number(user?.difficultyId) !== DIFFICULTY_IDS[difficultyName]) {
+                throw new Error(
+                    '선택한 난이도가 서버에 저장되지 않았어요. 서버를 다시 실행한 뒤 시도해주세요.',
+                );
+            }
+            return user;
         },
 
         acknowledgeVerdict() {
@@ -133,10 +244,18 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             localStorage.removeItem(STORAGE_KEY);
 
             this.hasAgreed = false;
+            this.consentState = CHALLENGE_CONSENT_STATE.FIRST;
+            this.todayMission = null;
             this.selectedProsecutorId = DEFAULT_PROSECUTOR_ID;
             this.pendingVerdict = null;
             this.courtMode = 'supreme';
             this.isHydrated = true;
+        },
+
+        setDemoWithdrawnWithoutMission() {
+            this.hasAgreed = false;
+            this.consentState = CHALLENGE_CONSENT_STATE.WITHDRAWN;
+            this.todayMission = null;
         },
 
         /* 데모용: 판정 테스트 */

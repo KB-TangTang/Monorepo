@@ -49,6 +49,17 @@ class ConsentCatalogTest {
     }
 
     @Test
+    @DisplayName("CHALLENGE는 개인·그룹 공통 참여 동의 하나로 구성된다")
+    void challengeScope() {
+        List<ConsentItemDto> items = catalog().items(ConsentScope.CHALLENGE);
+
+        assertEquals(1, items.size());
+        assertEquals("CHALLENGE", items.get(0).getType());
+        assertEquals("챌린지 참여", items.get(0).getLabel());
+        assertFalse(items.get(0).isRequired());
+    }
+
+    @Test
     @DisplayName("SIGNUP 필수 타입은 TERMS·PRIVACY·FINANCIAL_DATA 다")
     void signupRequiredTypes() {
         assertEquals(
@@ -65,6 +76,7 @@ class ConsentCatalogTest {
         assertTrue(ConsentType.THIRD_PARTY.withdrawable());
         assertTrue(ConsentType.AI_USAGE.withdrawable());
         assertTrue(ConsentType.MARKETING.withdrawable());
+        assertTrue(ConsentType.CHALLENGE.withdrawable());
     }
 
     @Test

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.fixedexpense.mapper.FixedExpenseLifecycleMapper">
+
+    <sql id="validLifecyclePaymentCondition">
+        t.user_id = #{userId}
+        AND t.merchant_name_normalized = #{merchantNameNormalized}
+        AND t.tr_date &gt;= #{startDate}
+        AND t.tr_date &lt;= #{endDate}
+        AND t.amount &gt; 0
+        AND t.classification = 'CONSUMPTION'
+        AND COALESCE(t.cancel_yn, 'N') &lt;&gt; 'Y'
+        AND t.is_refund = 0
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <select id="findLifecycleCandidates"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseCandidate">
+        SELECT id,
+               user_id,
+               merchant_name_normalized,
+               avg_amount,
+               cycle_days,
+               detected_count,
+               category_id,
+               is_excluded,
+               status,
+               next_expected_date,
+               confirmed_at,
+               relapse_detected_at
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND is_excluded = 0
+          AND (
+                (status = 'ACTIVE' AND confirmed_at IS NOT NULL)
+                OR status = 'BUFFER'
+              )
+        ORDER BY id
+    </select>
+
+    <select id="findEligiblePayments"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseDetectionTransaction">
+        SELECT t.id,
+               t.user_id,
+               t.merchant_name_normalized,
+               t.amount,
+               t.tr_date,
+               t.category_id,
+               t.classification,
+               t.cancel_yn,
+               t.is_refund,
+               t.is_excluded_from_summary
+        FROM tbl_transaction t
+        WHERE <include refid="validLifecyclePaymentCondition"/>
+        ORDER BY t.tr_date, t.id
+    </select>
+
+    <!-- 상태와 이전 예정일을 함께 조건으로 두어 재실행·동시 실행의 중복 갱신을 막는다. -->
+    <update id="advanceConfirmedCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET next_expected_date = #{nextExpectedDate}
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NOT NULL
+          AND next_expected_date = #{expectedDate}
+    </update>
+
+    <update id="moveConfirmedCandidateToBuffer">
+        UPDATE tbl_fixed_expense_candidate
+        SET status = 'BUFFER',
+            next_expected_date = #{nextExpectedDate}
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NOT NULL
+          AND next_expected_date = #{expectedDate}
+    </update>
+
+    <update id="reactivateBufferedCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET status = 'ACTIVE',
+            confirmed_at = NULL,
+            relapse_detected_at = #{relapseDetectedAt},
+            next_expected_date = #{nextExpectedDate}
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'BUFFER'
+          AND is_excluded = 0
+          AND next_expected_date = #{expectedDate}
+    </update>
+
+    <update id="verifyBufferedCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET status = 'VERIFIED_CANCELLED',
+            verified_at = #{verifiedAt}
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'BUFFER'
+          AND is_excluded = 0
+          AND next_expected_date = #{expectedDate}
+    </update>
+
+    <update id="linkPaymentToCandidate">
+        UPDATE tbl_transaction
+        SET candidate_id = #{candidateId}
+        WHERE id = #{transactionId}
+          AND user_id = #{userId}
+    </update>
+</mapper>

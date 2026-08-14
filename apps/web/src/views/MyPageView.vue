@@ -14,13 +14,48 @@ import MyProfileCard from '@/components/my/MyProfileCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMe, logout } from '@/api/auth';
-import { updateMyNickname } from '@/api/user';
+import { deleteMyProfileImage, updateMyNickname, uploadMyProfileImage } from '@/api/user';
 import { useAuthStore } from '@/stores/auth';
 import { resetPersonalTutorial, resetGroupTutorial } from '@/services/tutorialGuide';
 import { NICKNAME_MAX_LENGTH, resolveDisplayName, validateNickname } from '@/utils/user';
 
 const router = useRouter();
 const auth = useAuthStore();
+
+const photoSheetOpen = ref(false);
+const photoInput = ref(null);
+const photoBusy = ref(false);
+const photoError = ref('');
+
+async function runPhoto(action) {
+    photoBusy.value = true;
+    photoError.value = '';
+    try {
+        const updated = await action();
+        /* 이 화면은 fetchMe() 결과를 따로 들고 있다 — 스토어와 함께 갈아끼워야 카드가 바뀐다 */
+        user.value = { ...user.value, ...updated };
+        auth.mergeUser(updated);
+        /*
+         * ⚠ releaseHistory() 를 부르지 않는다. 그건 **오버레이 안에서 라우터 이동이 뒤따를 때만**
+         * 쓰는 것이다(useOverlay.js 참고). 여기는 그냥 닫기라 deactivate() 가 history.back() 으로
+         * 자기가 쌓은 항목을 걷어가야 한다. 부르면 고아 히스토리가 남아 뒤로가기 첫 번째 누름이
+         * 먹통이 된다. 같은 화면의 saveNickname() 도 부르지 않는다 — 그쪽이 올바른 본보기다.
+         */
+        photoSheetOpen.value = false;
+    } catch (err) {
+        photoError.value = err.message ?? '사진을 바꾸지 못했어요.';
+    } finally {
+        photoBusy.value = false;
+    }
+}
+
+function onPickPhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) {
+        runPhoto(() => uploadMyProfileImage(file));
+    }
+}
 
 const MENU = [
     { key: 'nickname', label: '닉네임 수정' },
@@ -186,7 +221,9 @@ async function confirmLogout() {
             -->
             <StateError v-if="errorMessage" :message="errorMessage" @retry="load" />
             <template v-else>
-                <MyProfileCard :user="user" />
+                <button type="button" class="my-page__profile" @click="photoSheetOpen = true">
+                    <MyProfileCard :user="user" />
+                </button>
                 <MyMenuList :items="MENU" @select="onSelect" />
             </template>
 
@@ -197,6 +234,17 @@ async function confirmLogout() {
                     @click="logoutSheetOpen = true"
                 >
                     로그아웃
+                </button>
+                <!--
+                  로그아웃과 달리 바텀시트를 띄우지 않는다 — 파기 항목 고지가 시트에 담기에는 길고,
+                  되돌아 나올 수 있는 화면이어야 한다. (DECISIONS.md 2026-08-13 회원 탈퇴)
+                -->
+                <button
+                    type="button"
+                    class="my-page__withdraw-button"
+                    @click="router.push({ name: 'myWithdraw' })"
+                >
+                    회원 탈퇴
                 </button>
             </div>
         </template>
@@ -250,6 +298,31 @@ async function confirmLogout() {
                 <BaseButton variant="ghost" block @click="logoutSheetOpen = false">취소</BaseButton>
             </div>
         </BaseBottomSheet>
+
+        <BaseBottomSheet v-model="photoSheetOpen" title="프로필 사진">
+            <div class="my-page__sheet">
+                <BaseButton block :loading="photoBusy" @click="photoInput?.click()">
+                    사진 변경
+                </BaseButton>
+                <BaseButton
+                    v-if="user?.profileImageUrl"
+                    block
+                    variant="ghost"
+                    :loading="photoBusy"
+                    @click="runPhoto(deleteMyProfileImage)"
+                >
+                    기본 이미지로 되돌리기
+                </BaseButton>
+                <p v-if="photoError" class="my-page__sheet-error" role="alert">{{ photoError }}</p>
+                <input
+                    ref="photoInput"
+                    type="file"
+                    accept="image/*"
+                    class="my-page__file"
+                    @change="onPickPhoto"
+                />
+            </div>
+        </BaseBottomSheet>
     </div>
 </template>
 
@@ -272,6 +345,20 @@ async function confirmLogout() {
 .my-page__logout {
     margin-top: var(--tt-space-2);
     text-align: center;
+}
+
+/* 로그아웃보다 한 단계 약한 위계 — 실수로 누르는 것을 막는다 */
+.my-page__withdraw-button {
+    display: block;
+    margin: var(--tt-space-1) auto 0;
+    padding: var(--tt-space-2);
+    border: 0;
+    background: none;
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-hint);
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .my-page__logout-button {
@@ -303,5 +390,19 @@ async function confirmLogout() {
 .my-page__sheet-text {
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
+}
+
+.my-page__profile {
+    display: block;
+    width: 100%;
+    padding: 0;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.my-page__file {
+    display: none;
 }
 </style>

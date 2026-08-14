@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,10 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,12 +44,18 @@ class UserServiceTest {
     private static final long USER_ID = 7L;
 
     @Mock private UserMapper userMapper;
+    @Mock private ProfileImageUrlResolver profileImageUrlResolver;
+    @Mock private ImageStorage imageStorage;
+    @Mock private ImageProcessor imageProcessor;
+    @Mock private ConsentService consentService;
+    @Mock private RefreshTokenService refreshTokenService;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userMapper);
+        service = new UserService(userMapper, profileImageUrlResolver, imageStorage, imageProcessor,
+                consentService, refreshTokenService);
     }
 
     private static UserDto user(String name) {
@@ -88,6 +99,34 @@ class UserServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.me(USER_ID));
         assertEquals("NOT_FOUND", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("난이도 이름을 DB ID로 찾아 저장하고 갱신된 사용자 정보를 돌려준다")
+    void updateDifficulty() {
+        when(userMapper.findDifficultyIdByName("HARD")).thenReturn(3L);
+        when(userMapper.updateDifficulty(USER_ID, 3L)).thenReturn(1);
+        UserDto updatedUser = user("장재한");
+        updatedUser.setDifficultyId(3L);
+        when(userMapper.findById(USER_ID)).thenReturn(updatedUser);
+
+        UserMeDto result = service.updateDifficulty(USER_ID, " hard ");
+
+        assertEquals(3L, result.getDifficultyId());
+        verify(userMapper).updateDifficulty(USER_ID, 3L);
+    }
+
+    @Test
+    @DisplayName("DB에 없는 난이도는 저장하지 않는다")
+    void updateDifficultyRejectsUnknownName() {
+        when(userMapper.findDifficultyIdByName("EXTREME")).thenReturn(null);
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> service.updateDifficulty(USER_ID, "EXTREME"));
+
+        assertEquals("INVALID_MISSION_DIFFICULTY", ex.getCode());
+        verify(userMapper, never()).updateDifficulty(anyLong(), anyLong());
     }
 
     @Test
@@ -375,5 +414,106 @@ class UserServiceTest {
 
         assertEquals("NOT_FOUND", ex.getCode());
         verify(userMapper, never()).findById(anyLong());
+    }
+
+    /* ── 프로필 이미지 (이슈 #150) ───────────────────────── */
+
+    @Test
+    @DisplayName("업로드하면 새 키로 저장하고 옛 이미지를 지운다 — 순서를 뒤집으면 실패 시 원본까지 잃는다")
+    void uploadReplacesOldImage() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(1);
+
+        service.updateProfileImage(USER_ID, new byte[]{1, 2});
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(imageStorage).store(any(), key.capture());
+        assertTrue(key.getValue().startsWith("profile/" + USER_ID + "/"));
+        assertTrue(key.getValue().endsWith(".jpg"));
+        verify(imageStorage).delete("profile/7/old.jpg");
+    }
+
+    @Test
+    @DisplayName("옛 이미지가 없으면 삭제를 부르지 않는다")
+    void uploadWithoutOldImage() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(1);
+
+        service.updateProfileImage(USER_ID, new byte[]{1, 2});
+
+        verify(imageStorage, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("삭제하면 파일을 지우고 키를 비운다")
+    void deleteClearsKey() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        service.deleteProfileImage(USER_ID);
+
+        verify(imageStorage).delete("profile/7/old.jpg");
+        verify(userMapper).updateProfileImageKey(USER_ID, null);
+    }
+
+    @Test
+    @DisplayName("이미 미설정이어도 삭제는 성공이다 — 없는 것을 지우는 건 오류가 아니다")
+    void deleteIsIdempotent() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        service.deleteProfileImage(USER_ID);
+
+        verify(imageStorage, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("DB 갱신이 0행이면 방금 저장한 파일을 지우고 NOT_FOUND — 탈퇴·차단 계정이 이 경로를 매번 탄다")
+    void uploadCleansUpNewFileWhenUpdateFails() {
+        when(userMapper.findById(USER_ID)).thenReturn(user("장재한"));
+        when(imageProcessor.toSquareJpeg(any())).thenReturn(new byte[]{9});
+        when(imageStorage.store(any(), anyString())).thenAnswer(i -> i.getArgument(1));
+        when(userMapper.updateProfileImageKey(eq(USER_ID), anyString())).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateProfileImage(USER_ID, new byte[]{1, 2}));
+
+        assertEquals("NOT_FOUND", ex.getCode());
+
+        ArgumentCaptor<String> storedKey = ArgumentCaptor.forClass(String.class);
+        verify(imageStorage).store(any(), storedKey.capture());
+        verify(imageStorage).delete(storedKey.getValue());
+    }
+
+    @Test
+    @DisplayName("탈퇴는 동의 철회 → 토큰 폐기 → 익명화 순서로 실행된다")
+    void 탈퇴_순서() {
+        when(userMapper.withdraw(eq(USER_ID), any(LocalDateTime.class))).thenReturn(1);
+
+        service.withdraw(USER_ID);
+
+        /*
+         * 순서가 중요하다 — 익명화가 먼저 일어나면 그 뒤 단계가 식별정보를 잃은 행을 보게 된다.
+         */
+        InOrder order = inOrder(consentService, refreshTokenService, userMapper);
+        order.verify(consentService).withdrawAll(USER_ID);
+        order.verify(refreshTokenService).revokeAll(USER_ID);
+        order.verify(userMapper).withdraw(eq(USER_ID), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 계정이 다시 호출해도 예외를 던지지 않는다 — 멱등")
+    void 탈퇴_멱등() {
+        when(userMapper.withdraw(eq(USER_ID), any(LocalDateTime.class))).thenReturn(0);
+
+        service.withdraw(USER_ID);   // 예외가 없으면 통과
     }
 }

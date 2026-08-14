@@ -73,6 +73,9 @@ export function applyCandidateDecision(source, candidateId, decision) {
 
     const confirmedExpense = {
         ...candidate,
+        status: 'ACTIVE',
+        confirmedAt: new Date().toISOString(),
+        isExcluded: false,
         description: '프리미엄 요금제',
         paymentLabel: '월 결제',
         sixMonthTotal: candidate.paymentHistory.reduce((total, item) => total + item.amount, 0),

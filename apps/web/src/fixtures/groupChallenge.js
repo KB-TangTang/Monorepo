@@ -559,35 +559,3 @@ export const MOCK_TODO_ITEMS = [
     { id: 4, type: 'accuse', title: '기소 되어 변론이 필요해요!', amount: 23000, challengeName: '신상 지름신 봉인령', challengeId: 3, indictmentId: 201, deadlineMinutes: 44 * 60 },
     { id: 5, type: 'vote', title: '민지님의 변론에 투표하세요', challengeName: '신상 지름신 봉인령', challengeId: 5, indictmentId: 301, tally: '2/5 투표', deadlineMinutes: 52 * 60 },
 ];
-
-/* ────────────────────────────────────────────────────────────
- * 6. 홈 위젯용 진행 중 챌린지 (간소화 버전)
- * ──────────────────────────────────────────────────────────── */
-
-export const MOCK_ACTIVE_CHALLENGES = [
-    {
-        id: 1,
-        groupName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        limitAmount: 15000,
-        currentDay: 6,
-        totalDays: 7,
-        livesCount: 5,
-        maxLives: 7,
-        memberCount: 5,
-        pendingTrialCount: 1,
-    },
-    {
-        id: 4,
-        groupName: '택시 대신 지하철',
-        evalType: 'DAILY',
-        limitAmount: 8000,
-        currentDay: 7,
-        totalDays: 7,
-        livesCount: 5,
-        maxLives: 7,
-        memberCount: 4,
-        pendingTrialCount: 0,
-        pendingDefenseCount: 1,
-    },
-];

@@ -26,8 +26,145 @@ export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     return Math.min(Math.round((currentAmount / targetAmount) * 100), 100);
 }
 
+export function toTodayMissionBriefing(mission) {
+    if (!mission) {
+        return null;
+    }
+
+    const targetAmount = Number(mission.targetValue ?? 0);
+    const currentAmount = Number(mission.currentAmount ?? 0);
+    const isRelativeMission = mission.missionType === 'RELATIVE';
+
+    return {
+        missionTitle: mission.missionTitle ?? '',
+        missionContent: mission.missionContent ?? '',
+        categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
+        alibiCondition: isRelativeMission
+            ? `오늘 ${formatWon(targetAmount)} 이하`
+            : (mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? ''),
+        currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
+        limitAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
+        streakDays: Number.isFinite(Number(mission.streakDays)) ? Number(mission.streakDays) : 0,
+        difficultyName: mission.difficultyName ?? '',
+        assignDate: mission.assignDate ?? '',
+        assignmentReason: mission.assignmentReason ?? '',
+    };
+}
+
 export function formatWon(amount) {
-    return `${Number(amount).toLocaleString('ko-KR')}원`;
+    const numericAmount = Number(amount);
+    const roundedAmount = Number.isFinite(numericAmount) ? Math.round(numericAmount) : 0;
+    return `${roundedAmount.toLocaleString('ko-KR')}원`;
+}
+
+export function formatMissionAssignmentSummary(mission) {
+    if (!mission) {
+        return '배정 없음';
+    }
+
+    const difficultyName = mission.difficultyName ?? '난이도 없음';
+    const targetRate = Number(mission.targetRate);
+    const rateLabel = Number.isFinite(targetRate) ? `${targetRate}%` : '절감률 없음';
+
+    return `${difficultyName} · ${rateLabel} · 목표 ${formatWon(mission.targetValue)}`;
+}
+
+export function toWatchCategoryModel(analysis) {
+    const topCategories = analysis?.topCategories ?? [];
+
+    return {
+        period: formatAnalysisPeriod(analysis?.analysisStartDate, analysis?.analysisEndDate),
+        items: topCategories.map((category) => ({
+            categoryId: category.categoryId,
+            name: category.categoryName ?? category.parentCategoryName ?? '',
+            ratio: Math.round(Number(category.spendingRatio) || 0),
+            missionRound: Number(category.missionRound) || 1,
+            rotationAssignDate: formatShortDate(category.rotationAssignDate),
+            rotationResult: category.rotationResult ?? 'WAITING',
+        })),
+    };
+}
+
+export function formatWatchlistRotationStatus(item) {
+    if (item?.rotationResult === 'PENDING') {
+        return '오늘 수사 중';
+    }
+
+    if (item?.rotationResult === 'SUCCESS' || item?.rotationResult === 'FAIL') {
+        const resultLabel = item.rotationResult === 'SUCCESS' ? '인정' : '기각';
+        return item.rotationAssignDate ? `${item.rotationAssignDate} ${resultLabel}` : resultLabel;
+    }
+
+    return '대기';
+}
+
+export function formatWatchlistMissionRound(item) {
+    const missionRound = Math.max(Number(item?.missionRound) || 1, 1);
+    if (missionRound === 1 && item?.rotationResult === 'PENDING') {
+        return '첫 수사';
+    }
+    if (missionRound === 1 && item?.rotationResult === 'WAITING') {
+        return '첫 수사 예정';
+    }
+    if (item?.rotationResult === 'WAITING') {
+        return `수사 ${missionRound}회차 예정`;
+    }
+    return `수사 ${missionRound}회차`;
+}
+
+export function toWeeklyVerdictModel(streak, today = new Date()) {
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    const resultsByDate = new Map(
+        (streak?.weeklyResults ?? []).map((item) => [item.date, item.result]),
+    );
+    const todayKey = formatLocalDateKey(today);
+    const weekStart = streak?.weekStartDate
+        ? new Date(`${streak.weekStartDate}T00:00:00`)
+        : startOfCurrentWeek(today);
+
+    return {
+        streakDays: Number(streak?.streakCount) || 0,
+        longestStreakDays: Number(streak?.longestStreakCount) || 0,
+        days: dayNames.map((dow, index) => {
+            const date = new Date(weekStart);
+            date.setDate(weekStart.getDate() + index);
+            const dateKey = formatLocalDateKey(date);
+            const result = resultsByDate.get(dateKey);
+
+            let status = 'pending';
+            if (dateKey === todayKey && result === 'PENDING') status = 'today';
+            else if (result === 'SUCCESS') status = 'success';
+            else if (result === 'FAIL') status = 'failed';
+
+            return { dow, date: dateKey, status };
+        }),
+    };
+}
+
+function startOfCurrentWeek(date) {
+    const monday = new Date(date);
+    const daysFromMonday = (monday.getDay() + 6) % 7;
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - daysFromMonday);
+    return monday;
+}
+
+function formatLocalDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatAnalysisPeriod(startDate, endDate) {
+    if (!startDate || !endDate) return '';
+    return `${formatShortDate(startDate)} – ${formatShortDate(endDate)}`;
+}
+
+function formatShortDate(dateValue) {
+    if (!dateValue) return '';
+    const [, month, day] = dateValue.split('-');
+    return `${Number(month)}/${Number(day)}`;
 }
 
 /* ── v4 추가 함수 ──────────────────────────────────── */

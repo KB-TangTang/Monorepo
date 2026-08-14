@@ -63,3 +63,10 @@
         font-size: clamp(var(--tt-fs-section), 6vw, var(--tt-fs-title));
     }
 }
+.difficulty__error {
+    margin: 0 0 var(--tt-space-3);
+    color: var(--tt-danger);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    text-align: center;
+}

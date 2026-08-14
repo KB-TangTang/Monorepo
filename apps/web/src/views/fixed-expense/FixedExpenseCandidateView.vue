@@ -10,13 +10,14 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import FixedExpenseCandidateEvidence from '@/components/fixed-expense/FixedExpenseCandidateEvidence.vue';
 import FixedExpensePageHeader from '@/components/fixed-expense/FixedExpensePageHeader.vue';
+import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
 import { formatBillingCycle, formatWon, resolveFixedExpenseState } from '@/utils/fixedExpense';
 
 const route = useRoute();
 const router = useRouter();
 const store = useFixedExpenseStore();
-const { selectedCandidate, loading, error, actionLoading } = storeToRefs(store);
+const { selectedCandidate, loading, error, actionLoading, source } = storeToRefs(store);
 const state = computed(() =>
     resolveFixedExpenseState({
         loading: loading.value,
@@ -32,12 +33,28 @@ async function decide(decision) {
     }
 }
 
+function goBack() {
+    router.back();
+}
+
+async function switchSource(nextSource) {
+    if (nextSource === source.value) {
+        return;
+    }
+    store.setSource(nextSource);
+    await store.loadCandidate(route.params.candidateId);
+}
+
 onMounted(() => store.loadCandidate(route.params.candidateId));
 </script>
 
 <template>
     <article class="candidate-view">
-        <FixedExpensePageHeader title="이 지출, 고정지출인가요?" />
+        <FixedExpensePageHeader
+            title="이 지출, 고정지출인가요?"
+            back-label="이전 화면으로 이동"
+            @back="goBack"
+        />
         <p class="candidate-view__lead">
             반복 패턴을 탐지했어요. 맞으면 지정, 아니면 해제해 주세요
         </p>
@@ -107,6 +124,13 @@ onMounted(() => store.loadCandidate(route.params.candidateId));
                 </BaseButton>
             </div>
         </template>
+
+        <TempFixedExpenseSourceToggle
+            :source="source"
+            :loading="loading || actionLoading"
+            elevated
+            @toggle="switchSource"
+        />
     </article>
 </template>
 

@@ -5,7 +5,7 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import GroupCodeInput from '@/components/challenge/group/GroupCodeInput.vue';
 import GroupExpiredModal from '@/components/challenge/group/GroupExpiredModal.vue';
 import GroupNotFoundModal from '@/components/challenge/group/GroupNotFoundModal.vue';
-import { validateInviteCode } from '@/api/groupChallenge';
+import { previewInviteCode } from '@/api/groupChallenge';
 
 defineProps({
     modelValue: { type: Boolean, required: true },
@@ -14,37 +14,71 @@ defineProps({
 const emit = defineEmits(['update:model-value']);
 
 const router = useRouter();
+const sheetRef = ref(null);
 const code = ref('');
 const isLoading = ref(false);
 const showExpired = ref(false);
-const expiredGroup = ref(null);
+const blockedGroup = ref(null);
+const blockedReason = ref('');
 const showNotFound = ref(false);
 const notFoundCode = ref('');
+const errorText = ref('');
 
 function closeSheet() {
     emit('update:model-value', false);
     code.value = '';
+    errorText.value = '';
+}
+
+/*
+ * 시트 안에서 다른 화면으로 나갈 때는 시트가 쌓아둔 히스토리 항목을 넘겨받은 뒤
+ * push 가 아닌 replace 로 옮긴다. 그러지 않으면 시트가 닫히며 실행하는 history.back() 이
+ * 방금 한 이동을 되감아 「입장하기」를 눌러도 아무 일도 안 난 것처럼 보인다.
+ * (useOverlay 의 releaseHistory 주석 참고)
+ */
+function leaveSheet(location) {
+    sheetRef.value?.releaseHistory?.();
+    closeSheet();
+    router.replace(location);
 }
 
 async function handleEnter() {
     if (code.value.length < 5 || isLoading.value) return;
 
+    /* closeSheet() 가 입력값을 비우므로 넘길 코드를 먼저 붙잡아 둔다.
+     * 예전에 closeSheet() 뒤에 code.value 를 읽어 빈 코드로 이동했고,
+     * 참여 화면은 코드가 없다고 판단해 홈으로 되돌렸다 — 눌러도 아무 일도 안 나는 것처럼 보였다. */
+    const entered = code.value;
+
     isLoading.value = true;
+    errorText.value = '';
     try {
-        const result = await validateInviteCode(code.value);
-        if (result.expired) {
-            expiredGroup.value = result.group;
+        const result = await previewInviteCode(entered);
+
+        /* 이미 참여 중이면 「참여할까요?」를 다시 물을 이유가 없다. 목록으로 보낸다. */
+        if (result.reason === 'ALREADY_JOINED') {
+            leaveSheet({ name: 'groupChallengeList' });
+            return;
+        }
+        if (!result.joinable) {
+            blockedGroup.value = result.group;
+            blockedReason.value = result.reason;
             showExpired.value = true;
             return;
         }
-        closeSheet();
-        router.push({
+        leaveSheet({
             name: 'groupChallengeJoin',
-            params: { code: code.value },
+            params: { code: entered },
         });
-    } catch {
-        notFoundCode.value = code.value;
-        showNotFound.value = true;
+    } catch (e) {
+        /* 실패를 한 덩어리로 묶으면 코드 오타인지 로그인 만료인지 서버 오류인지 구분할 수 없다.
+         * 서버가 「코드 없음」이라고 답한 경우만 전용 모달이고, 나머지는 실제 메시지를 보여준다. */
+        if (e.code === 'GROUP_INVITE_CODE_NOT_FOUND') {
+            notFoundCode.value = entered;
+            showNotFound.value = true;
+        } else {
+            errorText.value = e.message ?? '초대 코드를 확인하지 못했습니다.';
+        }
     } finally {
         isLoading.value = false;
     }
@@ -53,7 +87,8 @@ async function handleEnter() {
 function handleExpiredConfirm() {
     showExpired.value = false;
     code.value = '';
-    expiredGroup.value = null;
+    blockedGroup.value = null;
+    blockedReason.value = '';
 }
 
 function handleNotFoundConfirm() {
@@ -65,6 +100,7 @@ function handleNotFoundConfirm() {
 
 <template>
     <BaseBottomSheet
+        ref="sheetRef"
         :model-value="modelValue"
         @update:model-value="emit('update:model-value', $event)"
         @close="closeSheet"
@@ -93,6 +129,8 @@ function handleNotFoundConfirm() {
                 />
             </div>
 
+            <p v-if="errorText" class="gjcs-error">{{ errorText }}</p>
+
             <!-- 입장하기 버튼 -->
             <button
                 type="button"
@@ -110,11 +148,12 @@ function handleNotFoundConfirm() {
         </div>
     </BaseBottomSheet>
 
-    <!-- 만료 모달 -->
+    <!-- 참여 불가 모달 (만료 · 정원 초과 · 종료) -->
     <GroupExpiredModal
         v-model="showExpired"
-        :group-name="expiredGroup?.groupName ?? ''"
-        :group-code="expiredGroup?.inviteCode ?? ''"
+        :reason="blockedReason"
+        :group-name="blockedGroup?.groupName ?? ''"
+        :group-code="blockedGroup?.inviteCode ?? ''"
         @confirm="handleExpiredConfirm"
     />
 
@@ -178,6 +217,19 @@ function handleNotFoundConfirm() {
 /* ── 입력 영역 ─────────────────────────── */
 .gjcs-input-area {
     margin-top: 16px;
+}
+
+/* ── 실패 안내 ─────────────────────────── */
+.gjcs-error {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
+    text-align: center;
+    line-height: 1.5;
 }
 
 /* ── 입장하기 버튼 ─────────────────────── */

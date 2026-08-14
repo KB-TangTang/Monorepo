@@ -138,7 +138,7 @@ export const MOCK_CHALLENGE_DETAILS = {
                 hasDefended: true,
                 voteCount: 2,
                 totalVoters: 3,
-                myVote: null,
+                myVote: 'INNOCENT', /* 투표 완료 → vote-done 카드 */
             },
             {
                 id: 104,
@@ -1166,6 +1166,40 @@ export const MOCK_VOTE_DETAIL = {
         ],
     },
 
+    /* ── indictmentId=104 · 유현 · 배달 소비 줄이기 ── */
+    104: {
+        indictmentId: 104,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        limitAmount: 15000,
+        currentAmount: 16800,
+        exceededAmount: 1800,
+
+        defendant: {
+            userId: 2,
+            ...AVATAR[2],
+        },
+
+        defenseMessage: '퇴근길에 편의점에서 도시락이랑 음료를 샀는데, 집에 밥이 없어서 어쩔 수 없었어요. 내일은 미리 준비하겠습니다.',
+        actualCostAmount: 16800,
+        defenseDate: '2026-08-05',
+
+        evidences: [
+            { id: 1, label: '증 제1호 · 편의점 영수증', fileName: 'receipt_conv2.jpg' },
+        ],
+
+        deadlineSeconds: 52 * 60,
+
+        voteCount: 0,
+        totalVoters: 3,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 3, ...AVATAR[3], voted: false },
+            { userId: 5, ...AVATAR[5], voted: false },
+        ],
+    },
+
     /* ── indictmentId=201 · 하은 · 택시 대신 지하철 ── */
     201: {
         indictmentId: 201,
@@ -1196,6 +1230,38 @@ export const MOCK_VOTE_DETAIL = {
         members: [
             { userId: 1, ...AVATAR[1], voted: false },
             { userId: 3, ...AVATAR[3], voted: true },
+        ],
+    },
+
+    /* ── indictmentId=103 · 준서 · 배달 소비 줄이기 ── */
+    103: {
+        indictmentId: 103,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        limitAmount: 15000,
+        currentAmount: 24120,
+        exceededAmount: 9120,
+
+        defendant: {
+            userId: 3,
+            ...AVATAR[3],
+        },
+
+        defenseMessage: '점심에 팀 회식을 해서 제 카드로 결제했어요. 4인분이라 실제 부담은 6,000원입니다.',
+        actualCostAmount: 6000,
+        defenseDate: '2026-08-03',
+
+        evidences: [],
+
+        deadlineSeconds: 4 * 60 * 60 + 18 * 60,
+
+        voteCount: 2,
+        totalVoters: 3,
+        members: [
+            { userId: 1, ...AVATAR[1], voted: false },
+            { userId: 2, ...AVATAR[2], voted: true },
+            { userId: 5, ...AVATAR[5], voted: true },
         ],
     },
 
@@ -1234,5 +1300,204 @@ export const MOCK_VOTE_DETAIL = {
             { userId: 4, ...AVATAR[4], voted: false },
             { userId: 6, ...AVATAR[6], voted: false },
         ],
+    },
+};
+
+/* ────────────────────────────────────────────────────────────
+ * 4. MOCK_TRIAL_PROGRESS — 재판 진행 현황 (TrialProgressView)
+ *    indictmentId 기준. 단계별 상태:
+ *      INDICTED         — 기소 접수됨, 변론 대기
+ *      DEFENSE_SUBMITTED — 변론 제출 완료, 투표 대기
+ *      VOTING           — 배심원 투표 진행 중
+ *      VERDICT_DONE     — 최종 판결 확정
+ * ──────────────────────────────────────────────────────────── */
+
+export const MOCK_TRIAL_PROGRESS = {
+    /* ── 102: 투표 진행 중 (디자인 00 기본 상태) ── */
+    102: {
+        indictmentId: 102,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0805',
+        status: 'VOTING',
+
+        defendant: { userId: 5, ...AVATAR[5] },
+
+        steps: {
+            indictedAt: '20:14',
+            defenseSubmittedAt: '20:32',
+            voteDeadline: '23:59',
+            verdictAt: null,
+        },
+
+        vote: {
+            votedCount: 4,
+            totalVoters: 6,
+            remainingVoters: 2,
+        },
+    },
+
+    /* ── 103: 최종 판결 · 무죄 ── */
+    103: {
+        indictmentId: 103,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0803',
+        status: 'VERDICT_DONE',
+
+        defendant: { userId: 3, ...AVATAR[3] },
+
+        steps: {
+            indictedAt: '19:42',
+            defenseSubmittedAt: '20:05',
+            voteDeadline: '23:59',
+            verdictAt: '23:59',
+        },
+
+        vote: {
+            votedCount: 3,
+            totalVoters: 3,
+            remainingVoters: 0,
+        },
+    },
+
+    /* ── 101: 기소 접수됨 (변론 대기) ── */
+    101: {
+        indictmentId: 101,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0805',
+        status: 'INDICTED',
+
+        defendant: { userId: 1, ...AVATAR[1] },
+
+        steps: {
+            indictedAt: '23:30',
+            defenseSubmittedAt: null,
+            voteDeadline: '23:59',
+            verdictAt: null,
+        },
+
+        vote: {
+            votedCount: 0,
+            totalVoters: 3,
+            remainingVoters: 3,
+        },
+    },
+
+    /* ── 104: 투표 진행 중 ── */
+    104: {
+        indictmentId: 104,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0805-2',
+        status: 'VOTING',
+
+        defendant: { userId: 2, ...AVATAR[2] },
+
+        steps: {
+            indictedAt: '23:30',
+            defenseSubmittedAt: '23:55',
+            voteDeadline: '23:59',
+            verdictAt: null,
+        },
+
+        vote: {
+            votedCount: 0,
+            totalVoters: 3,
+            remainingVoters: 3,
+        },
+    },
+
+    /* ── 201: 변론 제출 완료 (투표 대기) ── */
+    201: {
+        indictmentId: 201,
+        challengeId: 4,
+        challengeName: '택시 대신 지하철',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0804',
+        status: 'DEFENSE_SUBMITTED',
+
+        defendant: { userId: 6, ...AVATAR[6] },
+
+        steps: {
+            indictedAt: '23:30',
+            defenseSubmittedAt: '23:48',
+            voteDeadline: '23:59',
+            verdictAt: null,
+        },
+
+        vote: {
+            votedCount: 0,
+            totalVoters: 2,
+            remainingVoters: 2,
+        },
+    },
+};
+
+/* ────────────────────────────────────────────────────────────
+ * 5. MOCK_VERDICT_RESULT — 최종 판결 결과 (VerdictResultView / VerdictDetailView)
+ *    indictmentId 기준. outcome: 'INNOCENT' | 'GUILTY'
+ * ──────────────────────────────────────────────────────────── */
+
+export const MOCK_VERDICT_RESULT = {
+    /* ── 103: 무죄 ── */
+    103: {
+        indictmentId: 103,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0803',
+        outcome: 'INNOCENT',
+
+        defendant: { userId: 3, ...AVATAR[3] },
+
+        innocentVotes: 4,
+        guiltyVotes: 2,
+        totalVoters: 6,
+
+        /* 판결 상세 */
+        detail: {
+            judgmentDate: '6월 19일',
+            currentAmount: 37400,
+            limitAmount: 25000,
+            actualCostAmount: 8000,
+            reason: '변론과 실제 부담금, 익명 투표 결과를 반영했어요.',
+        },
+    },
+
+    /* ── 102: 유죄 (시나리오용) ── */
+    102: {
+        indictmentId: 102,
+        challengeId: 1,
+        challengeName: '배달 소비 줄이기',
+        evalType: 'DAILY',
+        evalLabel: '일일결산',
+        caseNumber: '2026-재판-0805',
+        outcome: 'GUILTY',
+
+        defendant: { userId: 5, ...AVATAR[5] },
+
+        innocentVotes: 2,
+        guiltyVotes: 4,
+        totalVoters: 6,
+
+        detail: {
+            judgmentDate: '6월 19일',
+            currentAmount: 37400,
+            limitAmount: 25000,
+            actualCostAmount: 8000,
+            reason: '변론과 실제 부담금, 익명 투표 결과를 반영했어요.',
+        },
     },
 };

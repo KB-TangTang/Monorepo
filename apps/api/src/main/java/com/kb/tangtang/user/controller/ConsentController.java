@@ -1,5 +1,6 @@
 package com.kb.tangtang.user.controller;
 
+import com.kb.tangtang.user.docs.ConsentControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -28,7 +29,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/consents")
-public class ConsentController {
+public class ConsentController implements ConsentControllerDocs {
 
     private final ConsentService consentService;
     private final ConsentCatalog catalog;

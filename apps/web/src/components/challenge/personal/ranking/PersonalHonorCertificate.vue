@@ -27,15 +27,15 @@ defineProps({
             <section class="honor-certificate__rank">
                 <small>전체 명예 법정 순위</small>
                 <strong>
-                    {{ ranking.myRank.toLocaleString('ko-KR') }}<em>위</em>
+                    {{ ranking.myRanking.rank.toLocaleString('ko-KR') }}<em>위</em>
                     <span>/ {{ ranking.totalUsers.toLocaleString('ko-KR') }}명</span>
                 </strong>
-                <b>상위<br />{{ ranking.percentile }}%</b>
+                <b>상위<br />{{ ranking.myRanking.topPercent }}%</b>
             </section>
 
             <dl class="honor-certificate__stats">
                 <div>
-                    <dd>{{ ranking.score.toLocaleString('ko-KR') }}</dd>
+                    <dd>{{ ranking.myRanking.totalScore.toLocaleString('ko-KR') }}</dd>
                     <dt>누적 점수</dt>
                 </div>
                 <div>

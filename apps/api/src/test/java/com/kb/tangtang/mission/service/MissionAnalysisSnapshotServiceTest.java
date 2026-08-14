@@ -12,12 +12,14 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionAnalysisSnapshotServiceTest {
@@ -27,7 +29,10 @@ class MissionAnalysisSnapshotServiceTest {
 
     private static class FakeSnapshotMapper implements MissionAnalysisSnapshotMapper {
         List<MissionAnalysisSnapshot> pendingSnapshots = List.of();
+        List<MissionAnalysisSnapshot> latestCycleSnapshots = List.of();
         final List<MissionAnalysisSnapshot> insertedSnapshots = new ArrayList<>();
+        LocalDateTime qualifiedAt;
+        LocalDateTime markedQualifiedAt;
 
         @Override
         public List<MissionAnalysisSnapshot> findPendingSnapshots(long userId) {
@@ -35,15 +40,43 @@ class MissionAnalysisSnapshotServiceTest {
         }
 
         @Override
+        public List<MissionAnalysisSnapshot> findLatestCycleSnapshots(long userId) {
+            return latestCycleSnapshots;
+        }
+
+        @Override
+        public MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(long userId) {
+            return pendingSnapshots.isEmpty() ? null : pendingSnapshots.get(0);
+        }
+
+        @Override
+        public LocalDateTime findQualifiedAt(long userId) {
+            return qualifiedAt;
+        }
+
+        @Override
+        public int markQualified(long userId, LocalDateTime qualifiedAt) {
+            markedQualifiedAt = qualifiedAt;
+            this.qualifiedAt = qualifiedAt;
+            return 1;
+        }
+
+        @Override
         public int insertSnapshots(List<MissionAnalysisSnapshot> snapshots) {
             insertedSnapshots.addAll(snapshots);
             return snapshots.size();
+        }
+
+        @Override
+        public int markAssigned(long snapshotId, LocalDate assignedDate) {
+            return 1;
         }
     }
 
     private static class StubCategoryAnalysisService extends MissionCategoryAnalysisService {
         MissionCategoryAnalysisDto result;
         int callCount;
+        int qualifiedCallCount;
 
         StubCategoryAnalysisService() {
             super((MissionCategoryAnalysisMapper) null);
@@ -52,6 +85,12 @@ class MissionAnalysisSnapshotServiceTest {
         @Override
         public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
             callCount++;
+            return result;
+        }
+
+        @Override
+        public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
+            qualifiedCallCount++;
             return result;
         }
     }
@@ -106,6 +145,27 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(new BigDecimal("17.89"), mapper.insertedSnapshots.get(0).getSpendingRatio());
         assertEquals(4, mapper.insertedSnapshots.get(0).getTransactionCount());
         assertEquals(1, analysisService.callCount);
+        assertEquals(0, analysisService.qualifiedCallCount);
+        assertEquals(TODAY.atStartOfDay(), mapper.markedQualifiedAt);
+    }
+
+    @Test
+    @DisplayName("자격 획득 시각이 있으면 최초 50건 조건 없이 재분석한다")
+    void qualifiedUserUsesAnalysisWithoutInitialRequirement() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        mapper.qualifiedAt = LocalDateTime.of(2026, 7, 1, 10, 0);
+        StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.result = eligibleAnalysis(List.of(
+                category(1, 18L, "쇼핑", "패션", "120000", 12, "40.00")));
+
+        MissionAnalysisSnapshotDto result = service(mapper, analysisService)
+                .getOrCreateSnapshot(USER_ID);
+
+        assertTrue(result.isAvailable());
+        assertEquals(0, analysisService.callCount);
+        assertEquals(1, analysisService.qualifiedCallCount);
+        assertEquals(1, mapper.insertedSnapshots.size());
+        assertNull(mapper.markedQualifiedAt);
     }
 
     @Test
@@ -142,6 +202,29 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(2, result.getItems().size());
     }
 
+    @Test
+    @DisplayName("현재 주기 스냅샷을 로테이션 상태와 수사 회차로 변환한다")
+    void returnsCurrentRotationAnalysis() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        mapper.latestCycleSnapshots = List.of(
+                rotationSnapshot(1, "패션", LocalDate.of(2026, 8, 11), "SUCCESS", 3),
+                rotationSnapshot(2, "취미", TODAY, "PENDING", 1),
+                rotationSnapshot(3, "배달앱", null, "WAITING", 2));
+
+        MissionCategoryAnalysisDto result = service(mapper, new StubCategoryAnalysisService())
+                .getCurrentRotationAnalysis(USER_ID);
+
+        assertEquals(LocalDate.of(2026, 7, 14), result.getAnalysisStartDate());
+        assertEquals(LocalDate.of(2026, 8, 10), result.getAnalysisEndDate());
+        assertEquals(3, result.getTopCategories().size());
+        assertEquals("SUCCESS", result.getTopCategories().get(0).getRotationResult());
+        assertEquals(LocalDate.of(2026, 8, 11),
+                result.getTopCategories().get(0).getRotationAssignDate());
+        assertEquals(3, result.getTopCategories().get(0).getMissionRound());
+        assertEquals("WAITING", result.getTopCategories().get(2).getRotationResult());
+        assertNull(result.getTopCategories().get(2).getRotationAssignDate());
+    }
+
     private MissionCategoryAnalysisDto eligibleAnalysis(List<MissionCategoryRankDto> categories) {
         return MissionCategoryAnalysisDto.builder()
                 .relativeEligible(true)
@@ -175,6 +258,25 @@ class MissionAnalysisSnapshotServiceTest {
                 .spendingAmount(new BigDecimal(spendingAmount))
                 .spendingRatio(new BigDecimal(spendingRatio))
                 .transactionCount(rank + 2)
+                .build();
+    }
+
+    private MissionAnalysisSnapshot rotationSnapshot(int rank, String categoryName,
+                                                      LocalDate assignedDate, String rotationResult,
+                                                      int missionRound) {
+        return MissionAnalysisSnapshot.builder()
+                .userId(USER_ID)
+                .cycleStartDate(TODAY)
+                .categoryId((long) rank)
+                .parentCategoryName("테스트")
+                .categoryName(categoryName)
+                .categoryRank(rank)
+                .spendingAmount(new BigDecimal("100000"))
+                .spendingRatio(new BigDecimal("10.00"))
+                .transactionCount(3)
+                .assignedDate(assignedDate)
+                .rotationResult(rotationResult)
+                .missionRound(missionRound)
                 .build();
     }
 }

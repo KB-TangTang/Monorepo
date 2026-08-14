@@ -4,6 +4,7 @@ import com.kb.tangtang.mission.domain.MissionAnalysisSnapshot;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -11,5 +12,17 @@ public interface MissionAnalysisSnapshotMapper {
 
     List<MissionAnalysisSnapshot> findPendingSnapshots(@Param("userId") long userId);
 
+    List<MissionAnalysisSnapshot> findLatestCycleSnapshots(@Param("userId") long userId);
+
+    MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(@Param("userId") long userId);
+
+    LocalDateTime findQualifiedAt(@Param("userId") long userId);
+
+    int markQualified(@Param("userId") long userId,
+                      @Param("qualifiedAt") LocalDateTime qualifiedAt);
+
     int insertSnapshots(@Param("snapshots") List<MissionAnalysisSnapshot> snapshots);
+
+    int markAssigned(@Param("snapshotId") long snapshotId,
+                     @Param("assignedDate") java.time.LocalDate assignedDate);
 }

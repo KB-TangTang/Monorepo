@@ -5,12 +5,13 @@
 -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 const props = defineProps({
     indictments: { type: Array, required: true },
 });
 
-const emit = defineEmits(['defend', 'vote']);
+const emit = defineEmits(['defend', 'vote', 'trial']);
 
 const currentSlide = ref(0);
 const scrollEl = ref(null);
@@ -51,8 +52,10 @@ function cardTitle(item) {
 function cardDesc(item) {
     const t = cardType(item);
     if (t === 'defense-needed') return `${item.settlementDate} 결산 · 초과`;
-    if (t === 'defense-done') return `${item.settlementDate} 결산 · 초과 ${item.exceededAmount.toLocaleString()}원`;
-    if (t === 'vote-done') return `${item.settlementDate} 결산 · 초과 ${item.exceededAmount.toLocaleString()}원`;
+    if (t === 'defense-done')
+        return `${item.settlementDate} 결산 · 초과 ${item.exceededAmount.toLocaleString()}원`;
+    if (t === 'vote-done')
+        return `${item.settlementDate} 결산 · 초과 ${item.exceededAmount.toLocaleString()}원`;
     return `${item.settlementDate} 결산 · 초과`;
 }
 
@@ -71,11 +74,7 @@ function deadline(item) {
 
 <template>
     <div class="trial-carousel">
-        <div
-            ref="scrollEl"
-            class="trial-carousel__track"
-            @scroll.passive="onScroll"
-        >
+        <div ref="scrollEl" class="trial-carousel__track" @scroll.passive="onScroll">
             <div
                 v-for="item in indictments"
                 :key="item.id"
@@ -89,11 +88,36 @@ function deadline(item) {
                 <div class="trial-carousel__header">
                     <template v-if="isUrgent(item)">
                         <svg class="trial-carousel__siren" viewBox="0 0 24 24" fill="none">
-                            <line x1="5" y1="10" x2="2.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
-                            <line x1="19" y1="10" x2="21.5" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.35" />
+                            <line
+                                x1="5"
+                                y1="10"
+                                x2="2.5"
+                                y2="8"
+                                stroke="currentColor"
+                                stroke-width="1.6"
+                                stroke-linecap="round"
+                                opacity="0.35"
+                            />
+                            <line
+                                x1="19"
+                                y1="10"
+                                x2="21.5"
+                                y2="8"
+                                stroke="currentColor"
+                                stroke-width="1.6"
+                                stroke-linecap="round"
+                                opacity="0.35"
+                            />
                             <path d="M8 14c0-4 2-7 4-7s4 3 4 7" fill="currentColor" />
                             <rect x="6" y="14" width="12" height="3" rx="1" fill="currentColor" />
-                            <rect x="4.5" y="17" width="15" height="2.5" rx="1" fill="var(--tt-text-hint)" />
+                            <rect
+                                x="4.5"
+                                y="17"
+                                width="15"
+                                height="2.5"
+                                rx="1"
+                                fill="var(--tt-text-hint)"
+                            />
                         </svg>
                         <span class="trial-carousel__title trial-carousel__title--urgent">
                             {{ cardTitle(item) }}
@@ -105,17 +129,27 @@ function deadline(item) {
                         <div class="trial-carousel__done-row">
                             <div class="trial-carousel__done-info">
                                 <div class="trial-carousel__title trial-carousel__title--muted">
-                                    {{ cardType(item) === 'defense-done' ? '내 재판' : `${item.nickname}님 재판` }}
+                                    {{
+                                        cardType(item) === 'defense-done'
+                                            ? '내 재판'
+                                            : `${item.nickname}님 재판`
+                                    }}
                                 </div>
                                 <div class="trial-carousel__sub">
                                     {{ cardDesc(item) }}
                                 </div>
                             </div>
-                            <div class="trial-carousel__stamp">
+                            <div
+                                class="trial-carousel__stamp"
+                                :class="{
+                                    'trial-carousel__stamp--blue': cardType(item) === 'vote-done',
+                                }"
+                            >
                                 <span
                                     v-for="(line, li) in stampLabel(item).split('\n')"
                                     :key="li"
-                                >{{ line }}</span>
+                                    >{{ line }}</span
+                                >
                             </div>
                         </div>
                     </template>
@@ -129,35 +163,42 @@ function deadline(item) {
                             class="trial-carousel__person"
                         >
                             <div class="trial-carousel__avatar-wrap">
-                                <div
-                                    class="trial-carousel__avatar"
-                                    :style="{ background: item.avatarColor || '#232842' }"
-                                >{{ item.initial }}</div>
+                                <UserAvatar
+                                    :image-url="item.profileImage"
+                                    :name="item.nickname"
+                                    :color="item.avatarColor"
+                                    :size="28"
+                                />
                                 <span class="trial-carousel__me-tag">나</span>
                             </div>
                             <div class="trial-carousel__person-text">
-                                <div class="trial-carousel__person-title">내가 한도를 초과했어요</div>
+                                <div class="trial-carousel__person-title">
+                                    내가 한도를 초과했어요
+                                </div>
                                 <div class="trial-carousel__person-sub">
                                     {{ item.settlementDate }} 결산 · 초과
-                                    <b class="trial-carousel__exceeded">{{ item.exceededAmount.toLocaleString() }}원</b>
+                                    <b class="trial-carousel__exceeded"
+                                        >{{ item.exceededAmount.toLocaleString() }}원</b
+                                    >
                                 </div>
                             </div>
                         </div>
-                        <div
-                            v-else
-                            class="trial-carousel__person"
-                        >
-                            <div
-                                class="trial-carousel__avatar"
-                                :style="{ background: item.avatarColor }"
-                            >{{ item.initial }}</div>
+                        <div v-else class="trial-carousel__person">
+                            <UserAvatar
+                                :image-url="item.profileImage"
+                                :name="item.nickname"
+                                :color="item.avatarColor"
+                                :size="28"
+                            />
                             <div class="trial-carousel__person-text">
                                 <div class="trial-carousel__person-title">
                                     {{ item.nickname }}님이 한도를 초과했어요
                                 </div>
                                 <div class="trial-carousel__person-sub">
                                     {{ item.settlementDate }} 결산 · 초과
-                                    <b class="trial-carousel__exceeded">{{ item.exceededAmount.toLocaleString() }}원</b>
+                                    <b class="trial-carousel__exceeded"
+                                        >{{ item.exceededAmount.toLocaleString() }}원</b
+                                    >
                                 </div>
                             </div>
                         </div>
@@ -173,7 +214,9 @@ function deadline(item) {
                                     v-for="n in item.totalVoters"
                                     :key="n"
                                     class="trial-carousel__vote-dot"
-                                    :class="{ 'trial-carousel__vote-dot--filled': n <= item.voteCount }"
+                                    :class="{
+                                        'trial-carousel__vote-dot--filled': n <= item.voteCount,
+                                    }"
                                 ></span>
                             </span>
                             <span class="trial-carousel__vote-count">
@@ -189,13 +232,21 @@ function deadline(item) {
                             'trial-carousel__cta--defense': cardType(item) === 'defense-needed',
                             'trial-carousel__cta--vote': cardType(item) === 'vote-needed',
                         }"
-                        @click="cardType(item) === 'defense-needed' ? emit('defend', item) : emit('vote', item)"
+                        @click="
+                            cardType(item) === 'defense-needed'
+                                ? emit('defend', item)
+                                : emit('vote', item)
+                        "
                     >
-                        {{ cardType(item) === 'defense-needed' ? '변론 작성하기' : '변론 확인하고 투표하기' }}
+                        {{
+                            cardType(item) === 'defense-needed'
+                                ? '변론 작성하기'
+                                : '변론 확인하고 투표하기'
+                        }}
                     </button>
                 </template>
 
-                <!-- 본문: done 카드 — 투표 현황 + 마감 -->
+                <!-- 본문: done 카드 — 투표 현황 + CTA -->
                 <template v-else>
                     <div class="trial-carousel__vote-status">
                         <span class="trial-carousel__vote-label">투표 현황</span>
@@ -211,9 +262,16 @@ function deadline(item) {
                             {{ item.voteCount }} / {{ item.totalVoters }}명
                         </span>
                     </div>
-                    <div class="trial-carousel__deadline-bottom">
-                        {{ deadline(item) }}
-                    </div>
+                    <button
+                        class="trial-carousel__cta"
+                        :class="{
+                            'trial-carousel__cta--trial': cardType(item) === 'defense-done',
+                            'trial-carousel__cta--trial-outline': cardType(item) === 'vote-done',
+                        }"
+                        @click="emit('trial', item)"
+                    >
+                        재판 현황 보기
+                    </button>
                 </template>
             </div>
         </div>
@@ -262,8 +320,8 @@ function deadline(item) {
 }
 
 .trial-carousel__card--urgent {
-    background: #FDF4F1;
-    border: 1px solid #F0D2C9;
+    background: #fdf4f1;
+    border: 1px solid #f0d2c9;
     box-shadow: 0 10px 26px rgba(224, 102, 75, 0.16);
     padding: 11px 14px 13px;
     aspect-ratio: 1.75 / 1;
@@ -294,8 +352,15 @@ function deadline(item) {
 }
 
 @keyframes tt-siren {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.3; transform: scale(0.88); }
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.3;
+        transform: scale(0.88);
+    }
 }
 
 .trial-carousel__title--urgent {
@@ -312,7 +377,7 @@ function deadline(item) {
 
 .trial-carousel__deadline {
     margin-left: auto;
-    background: #FBE9E4;
+    background: #fbe9e4;
     color: var(--tt-red-deep);
     font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
@@ -378,19 +443,6 @@ function deadline(item) {
     flex: none;
 }
 
-.trial-carousel__avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    color: var(--tt-white);
-    font-size: 11px;
-    font-weight: var(--tt-fw-black);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-}
-
 .trial-carousel__me-tag {
     position: absolute;
     right: -3px;
@@ -447,7 +499,7 @@ function deadline(item) {
     flex: 1;
     height: 5px;
     border-radius: var(--tt-radius-full);
-    background: #E1E4EC;
+    background: #e1e4ec;
 }
 
 .trial-carousel__vote-dot--filled {
@@ -485,11 +537,21 @@ function deadline(item) {
     background: var(--tt-blue);
 }
 
-/* ── 마감 (done 카드 하단) ── */
-.trial-carousel__deadline-bottom {
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-hint);
+.trial-carousel__cta--trial {
+    background: var(--tt-blue);
+}
+
+.trial-carousel__cta--trial-outline {
+    background: transparent;
+    border: 1.5px solid var(--tt-blue);
+    color: var(--tt-blue);
+}
+
+/* ── 스탬프 파란색 변형 (투표 완료) ── */
+.trial-carousel__stamp--blue {
+    border-color: var(--tt-blue);
+    box-shadow: inset 0 0 0 1px rgba(47, 90, 208, 0.3);
+    color: var(--tt-blue);
 }
 
 /* ── 페이지 인디케이터 ── */
@@ -504,7 +566,7 @@ function deadline(item) {
     width: 5px;
     height: 5px;
     border-radius: var(--tt-radius-full);
-    background: #DCDFE7;
+    background: #dcdfe7;
     transition: all 0.2s;
 }
 

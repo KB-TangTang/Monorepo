@@ -92,6 +92,16 @@ public class RootConfig {
         config.setJdbcUrl(url);
         config.setUsername(username);
         config.setPassword(password);
+        /*
+         * maximumPoolSize 를 지정하지 않아 HikariCP 기본값 10 을 쓴다. 의도한 것이다.
+         *
+         * 2026-08-14 부하테스트에서 이 값을 30 으로 올려 125 VU 로 재측정했으나
+         * 처리량이 311.9 → 306.3 req/s (-1.8%) 로 사실상 변화가 없었다.
+         * 같은 조건 재측정의 편차가 8.6% 인 환경이라 노이즈 범위다.
+         * 병목은 커넥션이 아니라 측정 머신의 CPU 였다 (perf/README.md 「3차 측정」).
+         *
+         * 근거 없이 값을 올리지 말 것. 올릴 일이 생기면 EC2 에서 다시 측정하고 정한다.
+         */
         return new HikariDataSource(config);
     }
 
@@ -137,16 +147,23 @@ public class RootConfig {
      *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
      *   하트비트가 막으려던 바로 그 상황이다.
      *
+     * feature/147-asset-api
      * poolSize 는 @Scheduled 작업 수(현재 4개: SseHeartbeat.ping · NotificationDlqRetryScheduler.retryDue ·
      * LlmCategorizationScheduler.pollAndProcess · FinancialSyncBatchScheduler.runBatch)보다 넉넉해야
      * 한다. 작업 수와 딱 맞추면 여유가 사라져 한 작업이 길어질 때 다른 작업이 밀린다 — LLM 폴링과
      * 금융 동기화 배치 둘 다 한 tick 에 여러 건의 외부 HTTP 호출을 순차로 수행하므로 실제로 오래
      * 점유한다(이슈 #199).
+     *
+     * DEV
+     * poolSize 는 @Scheduled 개수보다 넉넉해야 한다. 자리가 모자라면 오래 걸리는 배치가 자리를
+     * 점유하는 동안 하트비트가 밀린다. 2026-08-13 기준 스케줄러 4개
+     * (SseHeartbeat · NotificationDlqRetry · RelativeMissionAssignment · ChallengeGroupStatus)
+     * 이고 그룹챌린지 배치가 3개 더 붙을 예정(#168 · #170 · #172)이라 8 로 둔다.
      */
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(6);
+        scheduler.setPoolSize(8);
         scheduler.setThreadNamePrefix("tt-sched-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);

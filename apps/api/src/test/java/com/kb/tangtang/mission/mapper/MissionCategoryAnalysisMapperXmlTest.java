@@ -25,7 +25,7 @@ class MissionCategoryAnalysisMapperXmlTest {
         }
 
         String namespace = MissionCategoryAnalysisMapper.class.getName();
-        assertTrue(configuration.hasStatement(namespace + ".findFirstTransactionDate"));
+        assertTrue(configuration.hasStatement(namespace + ".countAllConsumptionTransactions"));
         assertTrue(configuration.hasStatement(namespace + ".countConsumptionTransactions"));
         assertTrue(configuration.hasStatement(namespace + ".sumCategorizedConsumption"));
         assertTrue(configuration.hasStatement(namespace + ".findTopCategorySpending"));

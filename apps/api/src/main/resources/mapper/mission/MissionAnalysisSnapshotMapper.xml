@@ -3,6 +3,49 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.kb.tangtang.mission.mapper.MissionAnalysisSnapshotMapper">
 
+    <select id="findLatestCycleSnapshots"
+            resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
+        SELECT analysis.id,
+               analysis.user_id,
+               analysis.cycle_start_date,
+               analysis.category_id,
+               parent.category_name AS parent_category_name,
+               category.category_name,
+               analysis.category_rank,
+               analysis.spending_amount,
+               analysis.spending_ratio,
+               analysis.transaction_count,
+               analysis.assigned_date,
+               CASE
+                   WHEN analysis.assigned_date IS NULL THEN 'WAITING'
+                   ELSE COALESCE(assignment.result, 'WAITING')
+               END AS rotation_result,
+               (
+                   SELECT COUNT(*)
+                   FROM tbl_user_mission_info category_assignment
+                   JOIN tbl_mission_pool category_mission
+                     ON category_mission.id = category_assignment.mission_id
+                   WHERE category_assignment.user_id = analysis.user_id
+                     AND category_mission.category_id = analysis.category_id
+               ) + CASE
+                       WHEN analysis.assigned_date IS NULL THEN 1
+                       ELSE 0
+                   END AS mission_round
+        FROM tbl_user_mission_analysis analysis
+        JOIN tbl_category category ON category.id = analysis.category_id
+        LEFT JOIN tbl_category parent ON parent.id = category.parent_id
+        LEFT JOIN tbl_user_mission_info assignment
+          ON assignment.user_id = analysis.user_id
+         AND assignment.assign_date = analysis.assigned_date
+        WHERE analysis.user_id = #{userId}
+          AND analysis.cycle_start_date = (
+              SELECT MAX(latest.cycle_start_date)
+              FROM tbl_user_mission_analysis latest
+              WHERE latest.user_id = #{userId}
+          )
+        ORDER BY analysis.category_rank
+    </select>
+
     <select id="findPendingSnapshots"
             resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
         SELECT analysis.id,
@@ -29,6 +72,38 @@
         ORDER BY analysis.category_rank
     </select>
 
+    <select id="findNextPendingSnapshotForUpdate"
+            resultType="com.kb.tangtang.mission.domain.MissionAnalysisSnapshot">
+        SELECT analysis.id, analysis.user_id, analysis.cycle_start_date, analysis.category_id,
+               category.category_name, analysis.category_rank, analysis.spending_amount,
+               analysis.spending_ratio, analysis.transaction_count, analysis.assigned_date
+        FROM tbl_user_mission_analysis analysis
+        JOIN tbl_category category ON category.id = analysis.category_id
+        WHERE analysis.user_id = #{userId}
+          AND analysis.assigned_date IS NULL
+          AND analysis.cycle_start_date = (
+              SELECT MAX(latest.cycle_start_date)
+              FROM tbl_user_mission_analysis latest
+              WHERE latest.user_id = #{userId}
+          )
+        ORDER BY analysis.category_rank
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findQualifiedAt" resultType="java.time.LocalDateTime">
+        SELECT relative_mission_qualified_at
+        FROM tbl_user
+        WHERE id = #{userId}
+    </select>
+
+    <update id="markQualified">
+        UPDATE tbl_user
+        SET relative_mission_qualified_at = #{qualifiedAt}
+        WHERE id = #{userId}
+          AND relative_mission_qualified_at IS NULL
+    </update>
+
     <insert id="insertSnapshots">
         INSERT INTO tbl_user_mission_analysis (
             user_id,
@@ -52,5 +127,11 @@
             )
         </foreach>
     </insert>
+
+    <update id="markAssigned">
+        UPDATE tbl_user_mission_analysis
+        SET assigned_date = #{assignedDate}
+        WHERE id = #{snapshotId} AND assigned_date IS NULL
+    </update>
 
 </mapper>

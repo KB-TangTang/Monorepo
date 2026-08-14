@@ -22,9 +22,14 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
         return new Class[]{RootConfig.class};
     }
 
+    /*
+     * SwaggerConfig 는 여기서만 등록한다. @Configuration 을 붙여 컴포넌트 스캔에 맡기면
+     * RootConfig 가 com.kb.tangtang 전체를 스캔하면서 루트 컨텍스트에도 중복 등록한다.
+     * springfox 는 DispatcherServlet 의 핸들러 매핑을 읽어야 하므로 서블릿 컨텍스트가 맞다.
+     */
     @Override
     protected Class<?>[] getServletConfigClasses() {
-        return new Class[]{ServletConfig.class};
+        return new Class[]{ServletConfig.class, SwaggerConfig.class};
     }
 
     @Override

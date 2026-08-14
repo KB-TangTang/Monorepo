@@ -27,6 +27,7 @@ KB IT's Your Life 7기 종합실무 프로젝트. 6인 팀이 동시에 개발�
 - **모듈 간 비동기**: Spring Event (`ApplicationEventPublisher` + `@EventListener`/`@Async`) — 메시지 브로커 없음
 - **실시간 알림**: SSE (`SseEmitter`). `WebConfig` 에 `setAsyncSupported(true)` 적용됨
 - **알림 실패 대비**: `tbl_notification_dlq` + 스케줄 재시도 배치
+- **API 문서**: Springfox 2.9.2 → `/swagger-ui.html`. **springdoc 은 금지 대상인 Boot 모듈을 끌고 와 사용 불가**
 - 빌드에 **JDK 17 필수** (toolchain 강제. JDK 21만 설치된 환경은 빌드 실패)
 - 프론트는 **Node 24.12 이상 필수**. 팀 표준은 **24.14.1** — 버전이 다르면 빌드 산출물이 미묘하게 달라진다
 

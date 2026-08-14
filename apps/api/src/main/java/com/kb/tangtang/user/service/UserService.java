@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -39,14 +42,26 @@ public class UserService {
     private static final int NICKNAME_MAX_LENGTH = 50;
 
     private final UserMapper userMapper;
+    private final ProfileImageUrlResolver profileImageUrlResolver;
+    private final ImageStorage imageStorage;
+    private final ImageProcessor imageProcessor;
+    private final ConsentService consentService;
+    private final RefreshTokenService refreshTokenService;
 
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
+                       ImageStorage imageStorage, ImageProcessor imageProcessor,
+                       ConsentService consentService, RefreshTokenService refreshTokenService) {
         this.userMapper = userMapper;
+        this.profileImageUrlResolver = profileImageUrlResolver;
+        this.imageStorage = imageStorage;
+        this.imageProcessor = imageProcessor;
+        this.consentService = consentService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional(readOnly = true)
     public UserMeDto me(long userId) {
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -64,7 +79,7 @@ public class UserService {
         if (userMapper.updateName(userId, name) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
     }
 
     /**
@@ -84,7 +99,96 @@ public class UserService {
         if (userMapper.updateNickname(userId, nickname) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
+    }
+
+    @Transactional
+    public UserMeDto updateDifficulty(long userId, String rawDifficultyName) {
+        String difficultyName = rawDifficultyName == null ? "" : rawDifficultyName.trim().toUpperCase();
+        Long difficultyId = userMapper.findDifficultyIdByName(difficultyName);
+        if (difficultyId == null) {
+            throw new BusinessException("INVALID_MISSION_DIFFICULTY", "선택할 수 없는 미션 난이도입니다.");
+        }
+        if (userMapper.updateDifficulty(userId, difficultyId) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 업로드 (온보딩 AU_03_01 · 마이페이지 MY_01_03 공용).
+     *
+     * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
+     *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
+     *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
+     */
+    @Transactional
+    public UserMeDto updateProfileImage(long userId, byte[] content) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        byte[] jpeg = imageProcessor.toSquareJpeg(content);
+        String newKey = "profile/" + userId + "/" + UUID.randomUUID() + ".jpg";
+        imageStorage.store(jpeg, newKey);
+
+        if (userMapper.updateProfileImageKey(userId, newKey) == 0) {
+            /*
+             * 탈퇴·차단 계정이 유효한 JWT 로 여기까지 들어오면 매번 이 경로를 탄다
+             * (findActive 는 status 를 보지 않고, updateProfileImageKey 는
+             *  WHERE status = 'ACTIVE' 라 0행이 된다). 방금 저장한 파일을 그대로 두면
+             * 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 NOT_FOUND 를 던진다.
+             * delete 는 멱등이라 정리 자체가 실패할 일은 없다.
+             */
+            imageStorage.delete(newKey);
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+     * 이미 미설정이어도 성공으로 처리한다. 없는 것을 지우는 것은 오류가 아니다.
+     */
+    @Transactional
+    public UserMeDto deleteProfileImage(long userId) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        if (userMapper.updateProfileImageKey(userId, null) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (oldKey != null) {
+            imageStorage.delete(oldKey);
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 회원 탈퇴 (MY_01_05).
+     *
+     * 물리 삭제하지 않는다 — tbl_user(id) 를 참조하는 FK 가 22개이고 그 중
+     * tbl_group_member·tbl_vote 등은 **다른 사용자의** 그룹챌린지 이력이다.
+     * 식별정보만 즉시 지우고 행은 남긴다. (DECISIONS.md 2026-08-13)
+     *
+     * ⚠ 순서가 중요하다. ③이 식별정보를 지우므로 ①·②보다 뒤여야 한다.
+     *   ① 동의 전건 철회 — ConsentWithdrawnListener 가 같은 트랜잭션에서 계좌 연동을 끊는다
+     *   ② 리프레시 토큰 전건 폐기
+     *   ③ 상태 변경 + 익명화 + provider_user_id 접미사(→ 재가입 가능)
+     *
+     * 0행이어도 예외를 던지지 않는다 — 이미 탈퇴한 계정의 재요청은 오류가 아니다(멱등).
+     *
+     * 액세스 토큰은 서명만 검증하므로 만료(jwt.access-token-validity=900, 최대 15분)까지는
+     * 살아 있다. 리프레시 토큰이 폐기돼 그 뒤로 세션이 이어지지 않는 것으로 갈음한다 —
+     * 매 요청 DB 조회를 추가하는 비용이 15분의 잔여 창보다 크다.
+     */
+    @Transactional
+    public void withdraw(long userId) {
+        consentService.withdrawAll(userId);
+        refreshTokenService.revokeAll(userId);
+        userMapper.withdraw(userId, LocalDateTime.now());
     }
 
     /**
@@ -149,7 +253,13 @@ public class UserService {
         if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        return UserMeDto.from(findActive(userId));
+        return meOf(userId);
+    }
+
+    /** 조회 → URL 조립 → DTO. 네 곳이 같은 일을 하므로 여기 모은다. */
+    private UserMeDto meOf(long userId) {
+        UserDto user = findActive(userId);
+        return UserMeDto.from(user, profileImageUrlResolver.resolve(user));
     }
 
     private UserDto findActive(long userId) {

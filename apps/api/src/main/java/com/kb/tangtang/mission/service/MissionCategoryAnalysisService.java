@@ -37,20 +37,26 @@ public class MissionCategoryAnalysisService {
 
     @Transactional(readOnly = true)
     public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
+        return getCategoryAnalysis(userId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
+        return getCategoryAnalysis(userId, false);
+    }
+
+    private MissionCategoryAnalysisDto getCategoryAnalysis(long userId, boolean requireInitialQualification) {
         LocalDate endDateExclusive = LocalDate.now(clock);
         LocalDate startDate = endDateExclusive.minusDays(ANALYSIS_DAYS);
         LocalDate analysisEndDate = endDateExclusive.minusDays(1);
 
-        LocalDate firstTransactionDate = missionCategoryAnalysisMapper.findFirstTransactionDate(userId);
+        int allTransactionCount = missionCategoryAnalysisMapper.countAllConsumptionTransactions(userId);
         int transactionCount = missionCategoryAnalysisMapper.countConsumptionTransactions(
                 userId, startDate, endDateExclusive);
 
-        boolean hasEnoughHistory = firstTransactionDate != null
-                && !firstTransactionDate.isAfter(startDate);
-        boolean requirementsMet = hasEnoughHistory
-                && transactionCount >= MIN_TRANSACTION_COUNT;
+        boolean requirementsMet = allTransactionCount >= MIN_TRANSACTION_COUNT;
 
-        if (!requirementsMet) {
+        if (requireInitialQualification && !requirementsMet) {
             return result(startDate, analysisEndDate, transactionCount, false, List.of());
         }
 
@@ -63,7 +69,8 @@ public class MissionCategoryAnalysisService {
         BigDecimal totalConsumption = zeroIfNull(
                 missionCategoryAnalysisMapper.sumCategorizedConsumption(
                         userId, startDate, endDateExclusive));
-        List<MissionCategoryRankDto> topCategories = createTopCategories(spendingRows, totalConsumption);
+        List<MissionCategoryRankDto> topCategories = createTopCategories(
+                userId, spendingRows, totalConsumption);
 
         return result(startDate, analysisEndDate, transactionCount, true, topCategories);
     }
@@ -82,7 +89,8 @@ public class MissionCategoryAnalysisService {
                 .build();
     }
 
-    private List<MissionCategoryRankDto> createTopCategories(List<CategorySpending> spendingRows,
+    private List<MissionCategoryRankDto> createTopCategories(long userId,
+                                                              List<CategorySpending> spendingRows,
                                                               BigDecimal totalConsumption) {
         List<MissionCategoryRankDto> topCategories = new ArrayList<>();
         for (int index = 0; index < spendingRows.size(); index++) {

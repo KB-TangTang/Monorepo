@@ -26,4 +26,6 @@ public class MissionAnalysisSnapshot {
     private BigDecimal spendingRatio;
     private int transactionCount;
     private LocalDate assignedDate;
+    private String rotationResult;
+    private int missionRound;
 }

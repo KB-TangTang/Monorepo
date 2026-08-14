@@ -19,6 +19,7 @@ import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 import BentoStats from '@/components/common/cards/BentoStats.vue';
 import JudgmentCard from '@/components/common/cards/JudgmentCard.vue';
 import LifeGauge from '@/components/common/cards/LifeGauge.vue';
@@ -33,6 +34,7 @@ const SECTIONS = [
     { id: 'type', label: '타이포' },
     { id: 'tabbar', label: 'TheTabBar' },
     { id: 'card', label: 'BaseCard' },
+    { id: 'user-avatar', label: 'UserAvatar' },
     { id: 'button', label: 'BaseButton' },
     { id: 'back-header', label: 'BaseBackHeader' },
     { id: 'input', label: 'BaseInput' },
@@ -209,6 +211,7 @@ const CODE = {
     backHeader: `<BaseBackHeader title="예적금" back-label="자산 홈으로 돌아가기" />`,
     input: `<BaseInput v-model="plea" label="변론" :maxlength="200" multiline
     hint="1회만 제출할 수 있습니다" />`,
+    userAvatar: `<UserAvatar :image-url="user.profileImageUrl" :name="user.nickname" size="md" />`,
     modal: `<BaseModal v-model="isOpen" title="정말 해지할까요?">
     <p>해지하면 이번 달 절감액 집계에서 빠집니다.</p>
     <template #footer>
@@ -376,6 +379,32 @@ const CODE = {
                 <div class="demo">
                     <span class="demo__label">padding="none"</span>
                     <BaseCard padding="none">여백 없는 카드 — 목록·이미지를 꽉 채울 때</BaseCard>
+                </div>
+            </CatalogItem>
+        </section>
+
+        <section id="user-avatar" class="catalog__section">
+            <h2 class="catalog__h2">UserAvatar</h2>
+            <CatalogItem
+                name="UserAvatar"
+                purpose="사람 아바타. 이미지가 있으면 사진, 없으면 이니셜 + 색상 원으로 떨어진다."
+                :code="CODE.userAvatar"
+            >
+                <div class="demo">
+                    <span class="demo__label">size="sm" / "md" / "lg"</span>
+                    <UserAvatar name="김지갑" size="sm" />
+                    <UserAvatar name="김지갑" size="md" />
+                    <UserAvatar name="김지갑" size="lg" />
+                </div>
+                <div class="demo">
+                    <span class="demo__label">이름이 다르면 색도 다르다</span>
+                    <UserAvatar name="김지갑" size="md" />
+                    <UserAvatar name="이유현" size="md" />
+                    <UserAvatar name="박준서" size="md" />
+                </div>
+                <div class="demo">
+                    <span class="demo__label">깨진 URL → 이니셜 폴백</span>
+                    <UserAvatar name="김지갑" image-url="/uploads/none.jpg" size="lg" />
                 </div>
             </CatalogItem>
         </section>

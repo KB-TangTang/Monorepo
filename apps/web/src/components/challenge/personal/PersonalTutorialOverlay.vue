@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, onUnmounted } from 'vue';
+import { CursorArrowRippleIcon } from '@heroicons/vue/24/solid';
 import TutorialStepIndicator from '@/components/challenge/TutorialStepIndicator.vue';
 import TutorialNavBar from '@/components/challenge/TutorialNavBar.vue';
 
@@ -110,7 +111,7 @@ onUnmounted(() => {
                                         </div>
                                     </div>
 
-                                    <div class="pt-file-label">FILE 01 · 대법원</div>
+                                    <div class="pt-file-label" style="margin-top: 20px">FILE 01 · 대법원</div>
                                     <h3 class="pt-title">매일 소비 재판이<br />열려요</h3>
                                     <p class="pt-desc">검사 탕이가 지켜보는 가운데,<br />하루 한 건의 미션이 배정됩니다.</p>
 
@@ -136,7 +137,7 @@ onUnmounted(() => {
                                 <div v-else-if="step === 1" class="pt-body pt-body--left">
                                     <div class="pt-file-label">FILE 02 · 담당 검사</div>
                                     <h3 class="pt-title">검사가 깐깐할수록<br />점수가 커져요</h3>
-                                    <p class="pt-desc">담당 검사가 목표 절감률을 정해요. 눌러서 성향을 비교해 보세요.</p>
+                                    <p class="pt-desc">담당 검사가 목표 절감률을 정해요.</p>
 
                                     <div class="pt-pros-list">
                                         <div
@@ -220,7 +221,7 @@ onUnmounted(() => {
                                                 class="pt-sim-btn pt-sim-btn--gold"
                                                 @click="isOverLimit = true"
                                             >
-                                                커피 한 잔 결제해 보기 · −4,500원
+                                                커피 한 잔 결제해 보기 <CursorArrowRippleIcon class="pt-sim-btn__icon" />
                                             </button>
                                         </div>
 
@@ -234,7 +235,7 @@ onUnmounted(() => {
                                                 <span class="pt-text-danger">1,800원 초과!</span>
                                             </div>
                                             <div class="pt-tangi-bubble pt-tangi-bubble--danger">
-                                                <img :src="raidTangi" alt="출동한 검사 탕이" class="pt-tangi-bubble__img" />
+                                                <img :src="fieldVerification" alt="출동한 검사 탕이" class="pt-tangi-bubble__img" />
                                                 <span class="pt-tangi-bubble__danger-text">"한도 초과, 현행범입니다!"</span>
                                             </div>
                                             <button
@@ -288,9 +289,10 @@ onUnmounted(() => {
                                         </div>
                                         <div class="pt-verdict-card__badges">
                                             <span class="pt-badge pt-badge--gold">+20점</span>
-                                            <span class="pt-badge pt-badge--gold">보너스 +5점</span>
+                                            <span class="pt-badge pt-badge--gold">연속 보너스 +5점</span>
                                             <span class="pt-badge pt-badge--success">연속 6일</span>
                                         </div>
+                                        <p class="pt-verdict-card__bonus-hint">연속 성공 시 매일 보너스 점수가 추가돼요</p>
                                     </div>
 
                                     <!-- 불인정 판결문 -->
@@ -764,14 +766,24 @@ onUnmounted(() => {
     font-size: 13.5px;
     padding: 12px;
     border-radius: 13px;
-    text-align: center;
     cursor: pointer;
     border: none;
     font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .pt-sim-btn:active {
     opacity: 0.85;
+}
+
+.pt-sim-btn__icon {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
 }
 
 .pt-sim-btn--gold {
@@ -908,6 +920,14 @@ onUnmounted(() => {
 .pt-badge--success { background: var(--tt-success-subtle); color: var(--tt-success); }
 .pt-badge--muted { background: var(--tt-bg-fill); color: var(--tt-text-hint); }
 .pt-badge--danger { background: var(--tt-danger-subtle); color: var(--tt-danger-deep); }
+
+.pt-verdict-card__bonus-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: var(--tt-fw-semibold);
+    color: var(--tt-text-hint);
+    text-align: center;
+}
 
 /* 명예의 전당 안내 */
 .pt-honor-card {

@@ -17,7 +17,9 @@ public enum ConsentScope {
             ConsentType.AI_USAGE,
             ConsentType.MARKETING)),
 
-    FINANCIAL(List.of(ConsentType.THIRD_PARTY));
+    FINANCIAL(List.of(ConsentType.THIRD_PARTY)),
+
+    CHALLENGE(List.of(ConsentType.CHALLENGE));
 
     private final List<ConsentType> types;
 

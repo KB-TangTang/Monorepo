@@ -1,47 +1,51 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 import PersonalRankingMonthPicker from '@/components/challenge/personal/ranking/PersonalRankingMonthPicker.vue';
 import tangtangMascot from '@/assets/images/tangtang.png';
-import tangtangTrophyMascot from '@/assets/images/emotions/53_with_trophy_ver1.png';
-import { MOCK_PERSONAL_RANKING_MONTHS, MOCK_PERSONAL_RANKINGS } from '@/fixtures/personalRanking';
+import firstRankTangi from '@/assets/images/ranking/tang-ranking-first.png';
+import secondRankTangi from '@/assets/images/ranking/tang-ranking-second.png';
+import thirdRankTangi from '@/assets/images/ranking/tang-ranking-third.png';
+import { fetchMissionRankingMonths, fetchMissionRankings } from '@/api/personalMission';
 
 const route = useRoute();
 const router = useRouter();
 const isMonthPickerOpen = ref(false);
-
-/*
- * URL에 유효한 month query가 있으면 해당 월을 사용하고,
- * 없거나 데이터가 없는 월이면 가장 최근 조회 가능 월을 기본값으로 사용합니다.
- */
-const latestAvailablePeriod = [...MOCK_PERSONAL_RANKING_MONTHS]
-    .reverse()
-    .find((month) => month.available)?.value;
+const ranking = ref(null);
+const isLoading = ref(false);
+const errorMessage = ref('');
+const now = new Date();
+const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const yearMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+const rankingMonths = ref(createRankingMonths([now.getFullYear()], new Set()));
 
 const initialPeriod =
-    typeof route.query.month === 'string' &&
-    MOCK_PERSONAL_RANKING_MONTHS.some((month) => month.value === route.query.month)
+    typeof route.query.month === 'string' && yearMonthPattern.test(route.query.month)
         ? route.query.month
-        : latestAvailablePeriod;
+        : currentPeriod;
 
 const selectedPeriod = ref(initialPeriod);
 
-/* 선택 월이 바뀌면 화면에 표시할 랭킹 데이터도 자동으로 변경됩니다. */
-const ranking = computed(() => MOCK_PERSONAL_RANKINGS[selectedPeriod.value]);
 const hasRanking = computed(() => Boolean(ranking.value));
+const podium = computed(() => ranking.value?.topRankings.slice(0, 3) ?? []);
+const rankingList = computed(() => ranking.value?.topRankings.slice(3, 10) ?? []);
+
+const podiumImages = {
+    1: firstRankTangi,
+    2: secondRankTangi,
+    3: thirdRankTangi,
+};
 
 const selectedMonth = computed(() =>
-    MOCK_PERSONAL_RANKING_MONTHS.find((month) => month.value === selectedPeriod.value),
+    rankingMonths.value.find((month) => month.value === selectedPeriod.value),
 );
 
-const availablePeriods = computed(() => MOCK_PERSONAL_RANKING_MONTHS.map((month) => month.value));
+const availablePeriods = computed(() => rankingMonths.value.map((month) => month.value));
 
-const currentPeriodIndex = computed(() =>
-    availablePeriods.value.indexOf(selectedPeriod.value),
-);
+const currentPeriodIndex = computed(() => availablePeriods.value.indexOf(selectedPeriod.value));
 
 const previousPeriod = computed(() => availablePeriods.value[currentPeriodIndex.value - 1]);
 const nextPeriod = computed(() => availablePeriods.value[currentPeriodIndex.value + 1]);
@@ -57,26 +61,73 @@ function openCertificate() {
     });
 }
 
-function updatePeriod(period) {
+function createRankingMonths(years, availablePeriodsSet) {
+    return [...new Set(years)]
+        .sort((a, b) => a - b)
+        .flatMap((year) =>
+            Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1;
+                const value = `${year}-${String(month).padStart(2, '0')}`;
+                return {
+                    value,
+                    year,
+                    month,
+                    available: availablePeriodsSet.has(value),
+                };
+            }),
+        );
+}
+
+async function loadRankingMonths() {
+    try {
+        const result = await fetchMissionRankingMonths();
+        const availablePeriodsSet = new Set(result?.yearMonths ?? []);
+        const years = [
+            now.getFullYear(),
+            ...[...availablePeriodsSet].map((period) => Number(period.slice(0, 4))),
+        ];
+        rankingMonths.value = createRankingMonths(years, availablePeriodsSet);
+    } catch {
+        // 월 목록 조회가 실패해도 현재 월 랭킹 본문은 계속 조회한다.
+    }
+}
+
+async function loadRanking() {
+    isLoading.value = true;
+    errorMessage.value = '';
+
+    try {
+        ranking.value = await fetchMissionRankings(selectedPeriod.value);
+    } catch (error) {
+        ranking.value = null;
+        errorMessage.value = error.message || '랭킹을 불러오지 못했어요.';
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function updatePeriod(period) {
     selectedPeriod.value = period;
 
     router.replace({
         name: 'personalRanking',
         query: { month: period },
     });
+
+    await loadRanking();
 }
 
-function movePeriod(direction) {
+async function movePeriod(direction) {
     const period = availablePeriods.value[currentPeriodIndex.value + direction];
 
     if (period) {
-        updatePeriod(period);
+        await updatePeriod(period);
     }
 }
 
 /* 다음 단계에서 월 선택 바텀시트가 이 함수를 호출합니다. */
 function selectPeriod(period) {
-    if (!MOCK_PERSONAL_RANKING_MONTHS.some((month) => month.value === period)) {
+    if (!rankingMonths.value.some((month) => month.value === period)) {
         return;
     }
 
@@ -88,6 +139,11 @@ function selectPeriod(period) {
 
     updatePeriod(period);
 }
+
+onMounted(async () => {
+    await loadRankingMonths();
+    await loadRanking();
+});
 </script>
 
 <template>
@@ -120,96 +176,101 @@ function selectPeriod(period) {
             </button>
         </section>
 
-        <template v-if="hasRanking">
+        <p v-if="isLoading" class="personal-ranking__status" role="status">
+            랭킹을 불러오고 있어요.
+        </p>
+
+        <template v-else-if="hasRanking">
             <section class="personal-ranking__podium-section">
                 <header class="personal-ranking__podium-header">
                     <h2>이번 달 명예의 전당</h2>
-                    <button type="button" @click="openCertificate">명예 인증서 발급 받기</button>
+                    <button type="button" @click="openCertificate">♙ 인증서 발급</button>
                 </header>
                 <div class="personal-ranking__podium">
                     <article
-                        v-for="member in ranking.podium"
+                        v-for="member in podium"
                         :key="member.rank"
                         :class="`personal-ranking__podium-item--${member.rank}`"
                         class="personal-ranking__podium-item"
                     >
-                        <span
-                            v-if="member.rank === 1"
-                            class="personal-ranking__podium-medal"
-                            aria-label="월간 랭킹 1위"
-                        >
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                aria-hidden="true"
-                            >
-                                <path d="M8 4h8v4a4 4 0 0 1-8 0V4Z" />
-                                <path d="M8 6H5v1a4 4 0 0 0 4 4" />
-                                <path d="M16 6h3v1a4 4 0 0 1-4 4" />
-                                <path d="M12 12v4" />
-                                <path d="M9 20h6" />
-                                <path d="M10 16h4v4h-4z" />
-                            </svg>
+                        <span class="personal-ranking__podium-crown" aria-hidden="true">
+                            <small>{{ member.rank }}</small>
                         </span>
                         <span class="personal-ranking__podium-avatar">
-                            {{ member.name.slice(0, 1) }}
+                            <img :src="podiumImages[member.rank]" alt="" />
                         </span>
-                        <strong class="personal-ranking__podium-name">{{ member.name }}</strong>
+                        <strong class="personal-ranking__podium-name">{{ member.nickname }}</strong>
                         <small class="personal-ranking__podium-score">
-                            {{ member.score.toLocaleString('ko-KR') }}점
+                            {{ member.totalScore.toLocaleString('ko-KR') }}점
                         </small>
-                        <div class="personal-ranking__podium-rank">{{ member.rank }}</div>
                     </article>
                 </div>
             </section>
 
-            <section class="personal-ranking__mine">
-                <strong>{{ ranking.myRank.toLocaleString('ko-KR') }}</strong>
-                <span class="personal-ranking__avatar">나</span>
-                <p>
-                    <b>나</b>
-                    <small>
-                        연속 {{ ranking.streakDays }}일 · 최고 {{ ranking.bestStreakDays }}일
-                    </small>
-                </p>
-                <strong class="personal-ranking__mine-score">
-                    <span>상위 {{ ranking.percentile }}%</span>
-                    <span>{{ ranking.score.toLocaleString('ko-KR') }}점</span>
-                </strong>
+            <section class="personal-ranking__list" aria-labelledby="personal-ranking-list-title">
+                <header class="personal-ranking__list-header">
+                    <h2 id="personal-ranking-list-title">전체 랭킹</h2>
+                    <p><span aria-hidden="true">↻</span> 매월 1일 초기화</p>
+                </header>
+                <ol>
+                    <li v-for="member in rankingList" :key="member.rank">
+                        <strong>{{ member.rank }}위</strong>
+                        <UserAvatar
+                            :image-url="member.profileImageUrl"
+                            :name="member.nickname"
+                            :size="40"
+                        />
+                        <span>{{ member.nickname }}</span>
+                        <b>{{ member.totalScore.toLocaleString('ko-KR') }}점</b>
+                    </li>
+                </ol>
             </section>
 
-            <aside class="personal-ranking__reset-notice">
-                <span aria-hidden="true">↻</span>
-                <p>매월 1일, 점수는 0점부터 다시 시작해요.</p>
-            </aside>
-
-            <div class="personal-ranking__mascot-scene" aria-hidden="true">
-                <img :src="tangtangTrophyMascot" alt="" />
+            <div class="personal-ranking__mine-dock">
+                <section class="personal-ranking__mine">
+                    <p class="personal-ranking__mine-rank">
+                        <span>내 순위</span>
+                        <strong>{{ ranking.myRanking.rank.toLocaleString('ko-KR') }}위</strong>
+                    </p>
+                    <UserAvatar
+                        :image-url="ranking.myRanking.profileImageUrl"
+                        :name="ranking.myRanking.nickname"
+                        :size="48"
+                    />
+                    <b>{{ ranking.myRanking.nickname }}</b>
+                    <span class="personal-ranking__mine-percentile">
+                        상위 {{ ranking.myRanking.topPercent }}%
+                    </span>
+                    <strong class="personal-ranking__mine-score">
+                        {{ ranking.myRanking.totalScore.toLocaleString('ko-KR') }}점
+                    </strong>
+                </section>
             </div>
         </template>
 
         <StateEmpty
             v-else
-            title="아직 랭킹 데이터가 없어요"
-            :description="`${selectedMonth?.year}.${String(selectedMonth?.month).padStart(2, '0')} 랭킹이 집계되면 명예의 전당에서 만나요.`"
+            :title="errorMessage ? '랭킹을 불러오지 못했어요' : '아직 랭킹 데이터가 없어요'"
+            :description="
+                errorMessage ||
+                `${selectedMonth?.year}.${String(selectedMonth?.month).padStart(2, '0')} 랭킹이 집계되면 명예의 전당에서 만나요.`
+            "
         >
             <template #icon>
-                <img :src="tangtangMascot" alt="쉬고 있는 탕이" class="personal-ranking__empty-mascot" />
+                <img
+                    :src="tangtangMascot"
+                    alt="쉬고 있는 탕이"
+                    class="personal-ranking__empty-mascot"
+                />
             </template>
         </StateEmpty>
 
         <PersonalRankingMonthPicker
             v-model="isMonthPickerOpen"
-            :months="MOCK_PERSONAL_RANKING_MONTHS"
+            :months="rankingMonths"
             :selected-period="selectedPeriod"
             @select="selectPeriod"
         />
-
-        <ChallengeModeTabBar active-mode="personal" />
     </main>
 </template>
 

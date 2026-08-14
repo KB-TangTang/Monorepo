@@ -1,58 +1,51 @@
-import { FIXED_EXPENSE_FIXTURE } from '@/fixtures/fixedExpense';
-import { applyCandidateDecision } from '@/utils/fixedExpense';
+import http, { ApiError } from '@/api/http';
 
-function clone(value) {
-    return JSON.parse(JSON.stringify(value));
+function unavailable(message) {
+    throw new ApiError('API_NOT_AVAILABLE', message, 0);
 }
 
-function createMockState() {
-    return clone(FIXED_EXPENSE_FIXTURE);
-}
-
-let mockState = createMockState();
-
-function findById(items, id, message) {
-    const item = items.find((entry) => entry.id === id);
-    if (!item) {
-        const error = new Error(message);
-        error.code = 'NOT_FOUND';
-        throw error;
+function toParams({ yearMonth, categoryId } = {}) {
+    const params = {};
+    if (yearMonth) {
+        params.yearMonth = yearMonth;
     }
-    return item;
+    if (categoryId) {
+        params.categoryId = categoryId;
+    }
+    return params;
 }
 
-export async function fetchFixedExpenseSavings() {
-    return clone(mockState.savings);
+function toDetailModel(detail) {
+    return {
+        ...detail.item,
+        paymentHistory: detail.paymentHistory ?? [],
+        evidenceMonths: detail.evidenceMonths ?? [],
+        sixMonthTotal: detail.sixMonthTotal ?? 0,
+        changeNotice: detail.changeNotice ?? null,
+    };
 }
 
-export async function fetchFixedExpenseOverview() {
-    return clone({
-        summary: mockState.overview,
-        confirmed: mockState.confirmed,
-        candidates: mockState.candidates,
-    });
+export async function fetchFixedExpenseSavings(yearMonth) {
+    return http.get('/fixedExpenses/savingReport', { params: toParams({ yearMonth }) });
+}
+
+export async function fetchFixedExpenseOverview(options) {
+    return http.get('/fixedExpenses/candidates', { params: toParams(options) });
 }
 
 export async function fetchFixedExpenseDetail(expenseId) {
-    return clone(findById(mockState.confirmed, expenseId, '고정지출 정보를 찾을 수 없습니다.'));
+    const detail = await http.get(`/fixedExpenses/candidates/${expenseId}`);
+    return toDetailModel(detail);
 }
 
 export async function fetchFixedExpenseCandidate(candidateId) {
-    return clone(findById(mockState.candidates, candidateId, '탐지 후보 정보를 찾을 수 없습니다.'));
+    return fetchFixedExpenseDetail(candidateId);
 }
 
-export async function confirmFixedExpenseCandidate(candidateId) {
-    const { state, result } = applyCandidateDecision(mockState, candidateId, 'confirm');
-    mockState = state;
-    return clone(result);
+export async function confirmFixedExpenseCandidate() {
+    return unavailable('고정지출 후보 확정 API는 후속 이슈에서 연동됩니다.');
 }
 
-export async function dismissFixedExpenseCandidate(candidateId) {
-    const { state, result } = applyCandidateDecision(mockState, candidateId, 'dismiss');
-    mockState = state;
-    return clone(result);
-}
-
-export function resetFixedExpenseMock() {
-    mockState = createMockState();
+export async function dismissFixedExpenseCandidate() {
+    return unavailable('고정지출 후보 제외 API는 후속 이슈에서 연동됩니다.');
 }

@@ -37,13 +37,14 @@ class AuthServiceTest {
     @Mock private JwtProvider jwtProvider;
     @Mock private ConsentService consentService;
     @Mock private com.kb.tangtang.account.service.ConnectedAccountQuery connectedAccountQuery;
+    @Mock private ProfileImageUrlResolver profileImageUrlResolver;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(googleOAuthClient, refreshTokenService, userMapper, jwtProvider,
-                consentService, connectedAccountQuery);
+                consentService, connectedAccountQuery, profileImageUrlResolver);
     }
 
     private static GoogleProfileDto profile() {
@@ -97,7 +98,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("처음 로그인하는 사용자는 EASY 난이도로 새로 만든다")
+    @DisplayName("처음 로그인하는 사용자는 NORMAL 난이도로 새로 만든다")
     void firstLoginCreatesUser() {
         when(googleOAuthClient.exchangeCodeForProfile("code")).thenReturn(profile());
         when(userMapper.findBySocialId("GOOGLE", "google-sub-1")).thenReturn(null);
@@ -127,7 +128,7 @@ class AuthServiceTest {
         assertEquals("지윤", created.getSocialName());
         assertNull(created.getNickname(), "가입 시 닉네임은 비어 있어야 온보딩이 뜬다");
         assertEquals("ACTIVE", created.getStatus());
-        assertEquals(1L, created.getDifficultyId(), "가입 시 EASY(1) 를 부여한다");
+        assertEquals(2L, created.getDifficultyId(), "가입 시 NORMAL(2) 를 부여한다");
 
         assertEquals("access-jwt", result.getResponse().getAccessToken());
         assertEquals("refresh-raw", result.getRefreshToken());
@@ -165,6 +166,31 @@ class AuthServiceTest {
 
         assertEquals("USER_WITHDRAWN", ex.getCode());
         verify(jwtProvider, never()).createAccessToken(anyLong());
+    }
+
+    /**
+     * 이 설계의 핵심 주장은 「provider_user_id 를 비우면 재가입이 저절로 된다」이고,
+     * 그래서 AuthService 를 한 줄도 고치지 않았다. 그 성질이 유지되는지 못을 박는다.
+     * (DECISIONS.md 2026-08-13 회원 탈퇴)
+     */
+    @Test
+    @DisplayName("재가입자의 새 행은 변조되지 않은 원래 sub 를 갖는다")
+    void 재가입_새행은_원래sub() {
+        // 탈퇴로 옛 행의 provider_user_id 가 변조돼 findBySocialId 가 미스가 난 상황
+        when(googleOAuthClient.exchangeCodeForProfile("code")).thenReturn(profile());
+        when(userMapper.findBySocialId("GOOGLE", "google-sub-1")).thenReturn(null);
+        doAnswer(invocation -> {
+            UserDto arg = invocation.getArgument(0);
+            arg.setId(12L);
+            return null;
+        }).when(userMapper).insert(any(UserDto.class));
+
+        authService.loginWithGoogleCode("code");
+
+        ArgumentCaptor<UserDto> captor = ArgumentCaptor.forClass(UserDto.class);
+        verify(userMapper).insert(captor.capture());
+        assertEquals("google-sub-1", captor.getValue().getProviderUserId(),
+                "_withdrawn_ 접미사는 옛 행에만 붙는다. 새 행이 이걸 물려받으면 다음 로그인도 신규 가입이 된다");
     }
 
     @Test

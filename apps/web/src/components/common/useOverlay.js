@@ -31,6 +31,63 @@ function unlockScroll() {
     }
 }
 
+/*
+ * iOS 키보드 대응.
+ *
+ * 안드로이드는 키보드가 올라오면 뷰포트 자체가 줄어들어 position: fixed 인 바텀시트가
+ * 저절로 키보드 위로 올라온다. iOS 는 레이아웃 뷰포트를 그대로 두고 보이는 영역(visual
+ * viewport)만 줄이기 때문에, 시트가 키보드 밑에 깔린 채 남는다.
+ *
+ * 그래서 키보드가 가린 높이를 직접 재서 --tt-keyboard-inset 에 넣는다.
+ * 오버레이(.tt-sheet)가 이 값만큼 아래 여백을 두면 패널이 키보드 위로 떠오른다.
+ * visualViewport 가 없는 환경(구형 브라우저·테스트)에서는 아무것도 하지 않는다.
+ */
+let keyboardWatchCount = 0;
+
+/**
+ * 키보드가 화면 아래를 가린 높이(px). 계산만 하는 순수 함수라 단위 테스트가 붙어 있다.
+ *
+ * innerHeight 는 레이아웃 뷰포트(키보드가 올라와도 그대로), viewport.height 는 실제 보이는
+ * 높이다. offsetTop 은 iOS 가 포커스된 입력창을 보이려고 화면을 밀어올린 양이라 함께 빼야
+ * 시트가 정확히 키보드 바로 위에 선다.
+ *
+ * @param {number} innerHeight window.innerHeight
+ * @param {{height: number, offsetTop: number}|undefined} viewport window.visualViewport
+ * @returns {number} 0 이상의 정수
+ */
+export function keyboardInsetOf(innerHeight, viewport) {
+    if (!viewport) {
+        return 0;
+    }
+    return Math.max(0, Math.round(innerHeight - viewport.height - viewport.offsetTop));
+}
+
+function syncKeyboardInset() {
+    if (!window.visualViewport) {
+        return;
+    }
+    const inset = keyboardInsetOf(window.innerHeight, window.visualViewport);
+    document.documentElement.style.setProperty('--tt-keyboard-inset', `${inset}px`);
+}
+
+function watchKeyboard() {
+    if (keyboardWatchCount === 0 && window.visualViewport) {
+        window.visualViewport.addEventListener('resize', syncKeyboardInset);
+        window.visualViewport.addEventListener('scroll', syncKeyboardInset);
+        syncKeyboardInset();
+    }
+    keyboardWatchCount += 1;
+}
+
+function unwatchKeyboard() {
+    keyboardWatchCount = Math.max(0, keyboardWatchCount - 1);
+    if (keyboardWatchCount === 0) {
+        window.visualViewport?.removeEventListener('resize', syncKeyboardInset);
+        window.visualViewport?.removeEventListener('scroll', syncKeyboardInset);
+        document.documentElement.style.removeProperty('--tt-keyboard-inset');
+    }
+}
+
 const FOCUSABLE = [
     'a[href]',
     'button:not([disabled])',
@@ -100,6 +157,7 @@ export function useOverlay({ isOpen, panelRef, canCloseOnEsc, requestClose }) {
         active = true;
         lastFocused = document.activeElement;
         lockScroll();
+        watchKeyboard();
         document.addEventListener('keydown', onKeydown, true);
         window.history.pushState({ ttOverlay: true }, '');
         pushedHistory = true;
@@ -118,6 +176,7 @@ export function useOverlay({ isOpen, panelRef, canCloseOnEsc, requestClose }) {
         document.removeEventListener('keydown', onKeydown, true);
         window.removeEventListener('popstate', onPopState);
         unlockScroll();
+        unwatchKeyboard();
         /* 내부 UI 로 닫은 경우에는 쌓아둔 히스토리 항목을 되돌린다.
          * popstate 로 닫힌 경우엔 이미 소비됐으므로 건드리지 않는다.
          * releaseHistory() 로 소유권을 넘긴 경우에도 건드리지 않는다. */

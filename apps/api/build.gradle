@@ -1,6 +1,8 @@
 plugins {
     id 'java'
     id 'war'
+    // 코드 커버리지. Gradle 기본 제공 플러그인이라 의존성이 늘지 않고, 빌드 산출물(war)에도 섞이지 않는다.
+    id 'jacoco'
 }
 
 group 'com.kb.tangtang'
@@ -63,6 +65,26 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
+    /*
+     * ---- Swagger (Springfox) ----
+     * springdoc-openapi 는 쓸 수 없다. 1.8.0 이 금지 대상인 Boot 모듈 2종(코어·autoconfigure)을
+     * 런타임 의존성으로 끌고 오고(실측), 2.x 는 Spring 6 을 요구한다.
+     * Springfox 는 Boot 의존이 0건이라 금지 기술에 걸리지 않는다
+     * (`./gradlew :apps:api:dependencies --configuration runtimeClasspath` 로 확인 가능).
+     * 3.0.0 이 아니라 2.9.2 인 이유는 수업 자료(Spring 5.3 · Java 17 · war)에서 검증된 조합이기
+     * 때문이다. (DECISIONS.md 2026-08-13 (4) 참고)
+     *
+     * ⚠ commons-logging 을 반드시 뺀다. springfox 2.9.2 가 commons-logging:1.1.3 을 딸려오는데
+     *   이 프로젝트는 위 spring-context 에서 이미 그것을 빼고 log4j-slf4j-impl 로 통일해 뒀다.
+     *   놔두면 SLF4J 와 JCL 이 이중 바인딩된다.
+     */
+    implementation('io.springfox:springfox-swagger2:2.9.2') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+    implementation('io.springfox:springfox-swagger-ui:2.9.2') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+
     // ---- JWT (jjwt) — Spring Boot 스타터가 아니므로 금지 기술이 아니다 ----
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.12.6'
@@ -102,4 +124,47 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // 테스트가 끝나면 커버리지 리포트까지 한 번에 만든다. 따로 태스크를 부를 필요가 없다.
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+/*
+ * ---- 코드 커버리지 (JaCoCo) ----
+ *
+ * 리포트: apps/api/build/reports/jacoco/test/html/index.html
+ * 실행:   ./gradlew :apps:api:test          (테스트 후 리포트가 자동 생성된다)
+ *         ./gradlew :apps:api:jacocoTestReport   (테스트를 다시 돌리지 않고 리포트만)
+ *
+ * ⚠ 커버리지 숫자를 목표로 삼지 않는다. **어디를 안 건드렸는지 찾는 지도**로 쓴다.
+ *   실제 DB 가 필요한 테스트는 팀 규칙상 @Disabled 라(apps/api/AGENTS.md 「테스트」),
+ *   그만큼 커버리지가 낮게 나오는 것은 정상이다.
+ */
+jacoco {
+    toolVersion = '0.8.12'   // Java 17 지원 버전
+}
+
+jacocoTestReport {
+    dependsOn tasks.named('test')
+
+    reports {
+        html.required = true    // 사람이 보는 것
+        xml.required = true     // CI·뱃지 도구가 읽는 것
+        csv.required = false
+    }
+
+    /*
+     * 로직이 없는 코드는 뺀다. 넣어두면 분모만 키워서 「어디를 안 짰나」가 안 보인다.
+     *  - dto : Lombok 이 만든 getter/setter/equals. 테스트할 로직이 아니다
+     *  - docs: Swagger 애노테이션만 있는 인터페이스. 실행 코드가 없다
+     *  - config: 스프링 설정. 컨텍스트가 떠야 실행되는데 그런 테스트는 @Disabled 다
+     */
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    '**/dto/**',
+                    '**/docs/**',
+                    '**/config/**',
+            ])
+        }))
+    }
 }

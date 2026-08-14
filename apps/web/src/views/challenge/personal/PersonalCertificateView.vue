@@ -30,14 +30,14 @@ const period = computed(() => {
 const ranking = computed(() => MOCK_PERSONAL_RANKINGS[period.value]);
 const periodLabel = computed(() => period.value.replace('-', '.'));
 const certificateTitles = computed(() => [
-    `상위 ${ranking.value.percentile}%의 판결력`,
+    `상위 ${ranking.value.myRanking.topPercent}%의 판결력`,
     ...MOCK_PERSONAL_CERTIFICATE_TITLES.slice(1),
 ]);
 const selectedTitle = ref(certificateTitles.value[0]);
 const selectedRatio = ref('portrait');
 
 watch(period, () => {
-    selectedTitle.value = `상위 ${ranking.value.percentile}%의 판결력`;
+    selectedTitle.value = `상위 ${ranking.value.myRanking.topPercent}%의 판결력`;
 });
 
 const judgmentDate = computed(() => {

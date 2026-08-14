@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /** 상대형 미션 후보 카테고리 한 건. */
 @Getter
@@ -17,4 +18,7 @@ public class MissionCategoryRankDto {
     private BigDecimal totalAmount;
     private int transactionCount;
     private BigDecimal spendingRatio;
+    private LocalDate rotationAssignDate;
+    private String rotationResult;
+    private int missionRound;
 }
