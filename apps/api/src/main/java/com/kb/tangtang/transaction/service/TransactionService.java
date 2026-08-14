@@ -51,6 +51,9 @@ public class TransactionService {
         transactionMapper.updateCategoryByUser(transactionId, userId, categoryId);
 
         if (applyToMerchant) {
+            if (transaction.getMerchantName() == null) {
+                throw new BusinessException("MERCHANT_NAME_REQUIRED", "가맹점명이 없는 거래는 가맹점 규칙을 적용할 수 없습니다.");
+            }
             String normalized = MerchantNameNormalizer.normalize(transaction.getMerchantName());
             userCategoryMapMapper.upsert(userId, normalized, categoryId);
         }

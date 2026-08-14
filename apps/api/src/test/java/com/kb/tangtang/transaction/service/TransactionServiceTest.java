@@ -115,4 +115,21 @@ class TransactionServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
         verify(transactionMapper, never()).findByIdAndUser(anyLong(), anyLong());
     }
+
+    @Test
+    @DisplayName("applyToMerchant=true인데 가맹점명이 없으면 MERCHANT_NAME_REQUIRED다")
+    void merchantNameRequiredWhenApplyingMerchantRule() {
+        Transaction transactionWithoutMerchant = Transaction.builder()
+                .id(TRANSACTION_ID).userId(USER_ID).merchantName(null)
+                .build();
+        when(transactionMapper.findByIdAndUser(TRANSACTION_ID, USER_ID)).thenReturn(transactionWithoutMerchant);
+        when(categoryMapper.findById(CATEGORY_ID)).thenReturn(Category.builder().id(CATEGORY_ID).build());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateCategory(USER_ID, TRANSACTION_ID, CATEGORY_ID, true));
+
+        assertEquals("MERCHANT_NAME_REQUIRED", exception.getCode());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
+        verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
+    }
 }
