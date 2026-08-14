@@ -1,5 +1,6 @@
 package com.kb.tangtang.report.controller;
 
+import com.kb.tangtang.report.docs.MonthlyReportControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.report.dto.MonthlyCategoryReportDto;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/reports/monthly")
-public class MonthlyReportController {
+public class MonthlyReportController implements MonthlyReportControllerDocs {
 
     private final MonthlyReportService monthlyReportService;
     private final MonthlyAiAnalysisService monthlyAiAnalysisService;

@@ -1,5 +1,6 @@
 package com.kb.tangtang.notification.controller;
 
+import com.kb.tangtang.notification.docs.NotificationControllerDocs;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.notification.dto.NotificationListDto;
@@ -24,7 +25,7 @@ import java.io.IOException;
  */
 @RestController
 @RequestMapping("/api/notifications")
-public class NotificationController {
+public class NotificationController implements NotificationControllerDocs {
 
     private final NotificationService notificationService;
     private final SseEmitterRegistry registry;

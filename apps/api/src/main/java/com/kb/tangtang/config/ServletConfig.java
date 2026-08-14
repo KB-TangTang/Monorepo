@@ -114,6 +114,17 @@ public class ServletConfig implements WebMvcConfigurer {
          */
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + imageStorageProperties.getLocalDir() + "/");
+
+        /*
+         * Swagger UI. springfox-swagger-ui 2.9.2 는 정적 파일을 jar 안
+         * META-INF/resources 아래에 담아둔다 — 이 두 줄이 없으면 /swagger-ui.html 이 404 다.
+         * (/v2/api-docs 와 /swagger-resources 는 springfox 가 컨트롤러로 직접 매핑하므로
+         *  리소스 핸들러가 필요 없다)
+         */
+        registry.addResourceHandler("/swagger-ui.html")
+                .addResourceLocations("classpath:/META-INF/resources/");
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
     }
 
     @Bean

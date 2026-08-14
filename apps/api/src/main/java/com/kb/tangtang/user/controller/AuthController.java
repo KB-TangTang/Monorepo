@@ -3,6 +3,7 @@ package com.kb.tangtang.user.controller;
 import com.kb.tangtang.common.auth.AuthCookieWriter;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.docs.AuthControllerDocs;
 import com.kb.tangtang.user.dto.AuthResultDto;
 import com.kb.tangtang.user.dto.LoginResponseDto;
 import com.kb.tangtang.user.service.AuthService;
@@ -31,7 +32,7 @@ import java.util.Base64;
 @RestController
 @RequestMapping("/api/auth")
 @Log4j2
-public class AuthController {
+public class AuthController implements AuthControllerDocs {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
