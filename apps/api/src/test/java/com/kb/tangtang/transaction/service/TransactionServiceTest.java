@@ -130,6 +130,7 @@ class TransactionServiceTest {
 
         assertEquals("MERCHANT_NAME_REQUIRED", exception.getCode());
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
+        verify(transactionMapper, never()).updateCategoryByUser(anyLong(), anyLong(), any());
         verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
     }
 
@@ -147,6 +148,7 @@ class TransactionServiceTest {
 
         assertEquals("MERCHANT_NAME_REQUIRED", exception.getCode());
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
+        verify(transactionMapper, never()).updateCategoryByUser(anyLong(), anyLong(), any());
         verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
     }
 }

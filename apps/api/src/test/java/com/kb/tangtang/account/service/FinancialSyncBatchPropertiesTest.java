@@ -20,8 +20,8 @@ class FinancialSyncBatchPropertiesTest {
         }
 
         assertEquals("true", properties.getProperty("financial.sync.batch.enabled"));
-        assertEquals("1800000", properties.getProperty("financial.sync.batch.fixed-delay-ms"));
+        assertEquals("1200000", properties.getProperty("financial.sync.batch.fixed-delay-ms"));
         assertEquals("20", properties.getProperty("financial.sync.batch.max-users-per-tick"));
-        assertEquals("25", properties.getProperty("financial.sync.batch.min-interval-minutes"));
+        assertEquals("15", properties.getProperty("financial.sync.batch.min-interval-minutes"));
     }
 }

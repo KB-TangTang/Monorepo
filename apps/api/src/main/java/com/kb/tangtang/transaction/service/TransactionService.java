@@ -48,14 +48,18 @@ public class TransactionService {
             throw new BusinessException("CATEGORY_NOT_FOUND", "카테고리를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 
+        String normalizedMerchantName = null;
+        if (applyToMerchant) {
+            normalizedMerchantName = MerchantNameNormalizer.normalize(transaction.getMerchantName());
+            if (normalizedMerchantName == null || normalizedMerchantName.isEmpty()) {
+                throw new BusinessException("MERCHANT_NAME_REQUIRED", "가맹점명이 없는 거래는 가맹점 규칙을 적용할 수 없습니다.");
+            }
+        }
+
         transactionMapper.updateCategoryByUser(transactionId, userId, categoryId);
 
         if (applyToMerchant) {
-            String normalized = MerchantNameNormalizer.normalize(transaction.getMerchantName());
-            if (normalized == null || normalized.isEmpty()) {
-                throw new BusinessException("MERCHANT_NAME_REQUIRED", "가맹점명이 없는 거래는 가맹점 규칙을 적용할 수 없습니다.");
-            }
-            userCategoryMapMapper.upsert(userId, normalized, categoryId);
+            userCategoryMapMapper.upsert(userId, normalizedMerchantName, categoryId);
         }
 
         return TransactionCategoryUpdateResultDto.builder()
