@@ -13,6 +13,7 @@ import com.kb.tangtang.report.dto.MonthlySpendingTrendItemDto;
 import com.kb.tangtang.report.dto.MonthlySummaryDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,9 +45,15 @@ public class MonthlyReportService {
     private final MonthlyReportMapper monthlyReportMapper;
     private final Clock clock;
 
-    @Autowired
+    /** 테스트용 상속과 기존 직접 생성 경로의 KST 기본값을 유지한다. */
     public MonthlyReportService(MonthlyReportMapper monthlyReportMapper) {
-        this(monthlyReportMapper, Clock.systemDefaultZone());
+        this(monthlyReportMapper, Clock.system(ZoneId.of("Asia/Seoul")));
+    }
+
+    @Autowired
+    public MonthlyReportService(MonthlyReportMapper monthlyReportMapper,
+                                @Value("${report.monthly.zone:Asia/Seoul}") String zoneId) {
+        this(monthlyReportMapper, Clock.system(ZoneId.of(zoneId)));
     }
 
     MonthlyReportService(MonthlyReportMapper monthlyReportMapper, Clock clock) {

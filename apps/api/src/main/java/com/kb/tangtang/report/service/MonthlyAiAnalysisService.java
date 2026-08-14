@@ -19,6 +19,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -54,9 +55,10 @@ public class MonthlyAiAnalysisService {
                                     MonthlyAiAnalysisSnapshotService snapshotService,
                                     MonthlyAiAnalysisResultReader resultReader,
                                     ObjectMapper objectMapper,
-                                    @Value("${openai.model:gpt-5-nano}") String model) {
+                                    @Value("${openai.model:gpt-5-nano}") String model,
+                                    @Value("${report.monthly.zone:Asia/Seoul}") String zoneId) {
         this(monthlyReportMapper, provider, stateService, snapshotService, resultReader,
-                objectMapper, Clock.systemDefaultZone(), model);
+                objectMapper, Clock.system(ZoneId.of(zoneId)), model);
     }
 
     MonthlyAiAnalysisService(MonthlyReportMapper monthlyReportMapper,
@@ -90,6 +92,26 @@ public class MonthlyAiAnalysisService {
 
     public MonthlyAiAnalysisDto generate(long userId, String rawYearMonth) {
         ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+        return generate(userId, period);
+    }
+
+    /**
+     * 월초 배치가 실행되지 않아 스냅샷 행이 전혀 없는 경우에만 온디맨드 생성을 시작한다.
+     * 이미 존재하는 행의 상태 변경과 재시도 결정은 호출자에게 맡긴다.
+     *
+     * @return 새로 생성한 결과. 스냅샷 행이 이미 있으면 {@code null}
+     */
+    public MonthlyAiAnalysisDto generateIfSnapshotMissing(long userId, String rawYearMonth) {
+        ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+        MonthlyAiAnalysisSnapshot snapshot = monthlyReportMapper.findAiAnalysisSnapshot(
+                userId, period.yearMonth.toString());
+        if (snapshot != null) {
+            return null;
+        }
+        return generate(userId, period);
+    }
+
+    private MonthlyAiAnalysisDto generate(long userId, ReportPeriod period) {
         MonthlyAiAnalysisSnapshot initialSnapshot = monthlyReportMapper.findAiAnalysisSnapshot(
                 userId, period.yearMonth.toString());
         if (initialSnapshot != null && STATUS_COMPLETED.equals(initialSnapshot.getAiAnalysisStatus())) {
@@ -104,6 +126,15 @@ public class MonthlyAiAnalysisService {
             snapshotService.savePendingSnapshot(userId, period.yearMonth.toString());
         }
 
+        return generateUsingPreparedSnapshot(userId, period);
+    }
+
+    /** 배치가 저장한 스냅샷을 사용해 AI 상태 전이와 생성을 수행한다. */
+    public MonthlyAiAnalysisDto generateUsingPreparedSnapshot(long userId, String rawYearMonth) {
+        return generateUsingPreparedSnapshot(userId, validateReportPeriod(userId, rawYearMonth));
+    }
+
+    private MonthlyAiAnalysisDto generateUsingPreparedSnapshot(long userId, ReportPeriod period) {
         MonthlyAiAnalysisSnapshot snapshot = requireSnapshot(userId, period.yearMonth);
         if (STATUS_COMPLETED.equals(snapshot.getAiAnalysisStatus())) {
             return resultReader.readCompleted(snapshot, period.yearMonth.toString());

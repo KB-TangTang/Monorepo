@@ -128,8 +128,8 @@ export function resolveMonthlySavingsAnalogyCard(report) {
         eyebrow: '다음 달을 위한 한 걸음',
         title: '탕이와 함께 절약해봐요',
         description: report.hasPreviousComparison
-            ? '이번 달 소비 흐름을 살피고, 다음 목표를 정해보자.'
-            : '이번 달 소비를 기준으로 다음 달 목표를 세워보자.',
+            ? '이번 달 소비 흐름을 살피고, 다음 목표를 정해봐요.'
+            : '이번 달 소비를 기준으로 다음 달 목표를 세워봐요.',
     };
 }
 

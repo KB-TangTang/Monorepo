@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.report.mapper.MonthlyReportBatchMapper">
+
+    <select id="findEligibleCandidates"
+            resultType="com.kb.tangtang.report.domain.MonthlyReportBatchCandidate">
+        SELECT u.id AS user_id
+        FROM tbl_user u
+        LEFT JOIN tbl_asset_snapshot s
+               ON s.user_id = u.id
+              AND s.`year_month` = #{yearMonth}
+        WHERE u.status = 'ACTIVE'
+          AND u.created_at &lt; #{targetMonthEnd}
+          AND (
+              s.id IS NULL
+              OR s.ai_analysis_status = 'NOT_REQUESTED'
+              OR (
+                  s.ai_analysis_status = 'FAILED'
+                  AND s.ai_analysis_attempt_count &lt; #{maxAutoAttempts}
+                  AND s.ai_analysis_failed_at IS NOT NULL
+                  AND s.ai_analysis_failed_at &lt;= #{retryNotBefore}
+                  AND s.ai_analysis_failure_code IN ('TOO_MANY_REQUESTS', 'AI_PROVIDER_UNAVAILABLE')
+              )
+          )
+        ORDER BY u.id
+    </select>
+</mapper>
