@@ -15,7 +15,9 @@ registerHooks({
 
 const stub = await import('./stubs/httpStub.js');
 const { fetchMyConsents, submitConsents, withdrawConsent } = await import('../src/api/consent.js');
-const { fetchTodayMission } = await import('../src/api/personalMission.js');
+const { fetchMissionMonthlyScore, fetchTodayMission } = await import(
+    '../src/api/personalMission.js'
+);
 
 test('챌린지 참여 동의는 CHALLENGE scope와 단일 동의 항목으로 저장한다', async () => {
     stub.reset();
@@ -53,4 +55,13 @@ test('오늘 개인 미션은 today mission API로 조회한다', async () => {
 
     assert.equal(stub.calls[0].method, 'get');
     assert.equal(stub.calls[0].args[0], '/missions/today');
+});
+
+test('개인 미션 월간 점수는 monthly score API로 조회한다', async () => {
+    stub.reset();
+
+    await fetchMissionMonthlyScore();
+
+    assert.equal(stub.calls[0].method, 'get');
+    assert.equal(stub.calls[0].args[0], '/missions/monthly-score');
 });

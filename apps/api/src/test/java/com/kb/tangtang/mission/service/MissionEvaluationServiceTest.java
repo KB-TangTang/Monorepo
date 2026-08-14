@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.YearMonth;
 
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -23,11 +25,12 @@ class MissionEvaluationServiceTest {
     private static final LocalDateTime EVALUATED_AT = LocalDateTime.of(2026, 8, 14, 0, 0);
 
     @Mock MissionEvaluationMapper mapper;
+    @Mock MissionScoreService missionScoreService;
     MissionEvaluationService service;
 
     @BeforeEach
     void setUp() {
-        service = new MissionEvaluationService(mapper);
+        service = new MissionEvaluationService(mapper, missionScoreService);
     }
 
     @Test
@@ -41,6 +44,7 @@ class MissionEvaluationServiceTest {
         InOrder order = inOrder(mapper);
         order.verify(mapper).updateMissionResult(11L, "SUCCESS", EVALUATED_AT);
         order.verify(mapper).increaseSuccessStreak(7L, EVALUATED_AT);
+        verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
         verify(mapper, never()).resetStreak(7L, EVALUATED_AT);
     }
 
@@ -53,6 +57,7 @@ class MissionEvaluationServiceTest {
         service.evaluate(11L, EVALUATED_AT);
 
         verify(mapper).resetStreak(7L, EVALUATED_AT);
+        verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
         verify(mapper, never()).increaseSuccessStreak(7L, EVALUATED_AT);
     }
 
@@ -70,6 +75,7 @@ class MissionEvaluationServiceTest {
         MissionEvaluationTarget target = new MissionEvaluationTarget();
         target.setAssignmentId(11L);
         target.setUserId(7L);
+        target.setAssignDate(LocalDate.of(2026, 8, 13));
         target.setCurrentAmount(new BigDecimal(currentAmount));
         target.setTargetValue(new BigDecimal(targetValue));
         return target;

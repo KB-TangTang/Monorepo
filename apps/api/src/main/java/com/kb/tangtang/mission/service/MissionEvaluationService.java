@@ -7,14 +7,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 
 @Service
 public class MissionEvaluationService {
 
     private final MissionEvaluationMapper mapper;
+    private final MissionScoreService missionScoreService;
 
-    public MissionEvaluationService(MissionEvaluationMapper mapper) {
+    public MissionEvaluationService(MissionEvaluationMapper mapper,
+                                    MissionScoreService missionScoreService) {
         this.mapper = mapper;
+        this.missionScoreService = missionScoreService;
     }
 
     @Transactional
@@ -36,6 +40,8 @@ public class MissionEvaluationService {
         } else {
             mapper.resetStreak(target.getUserId(), evaluatedAt);
         }
+        missionScoreService.recalculate(
+                target.getUserId(), YearMonth.from(target.getAssignDate()));
     }
 
     private BigDecimal amount(BigDecimal value) {
