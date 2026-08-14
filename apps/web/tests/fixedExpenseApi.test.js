@@ -19,6 +19,10 @@ const {
     fetchFixedExpenseDetail,
     fetchFixedExpenseOverview,
     fetchFixedExpenseSavings,
+    confirmFixedExpenseCandidate,
+    dismissFixedExpenseCandidate,
+    runFixedExpensePaymentReminderBatch,
+    resetFixedExpensePaymentReminders,
 } = await import('../src/api/fixedExpense.js');
 
 test('고정지출 관리 목록은 API 모드에서 기간·카테고리 필터를 전달한다', async () => {
@@ -78,4 +82,40 @@ test('절약 감정서는 yearMonth를 전달하고 ApiResponse에서 풀린 pay
         method: 'get',
         args: ['/fixedExpenses/savingReport', { params: { yearMonth: '2026-08' } }],
     });
+});
+
+test('후보 확정과 제외는 DB 반영 API에 각각 CONFIRM·EXCLUDE action을 보낸다', async () => {
+    stub.reset();
+    stub.setPatchResponses([
+        { candidateId: 101, isConfirmed: true, isExcluded: false },
+        { candidateId: 201, isConfirmed: false, isExcluded: true },
+    ]);
+
+    await confirmFixedExpenseCandidate(101);
+    await dismissFixedExpenseCandidate(201);
+
+    assert.deepEqual(stub.calls, [
+        {
+            method: 'patch',
+            args: ['/fixedExpenses/candidates/101', { action: 'CONFIRM' }],
+        },
+        {
+            method: 'patch',
+            args: ['/fixedExpenses/candidates/201', { action: 'EXCLUDE' }],
+        },
+    ]);
+});
+
+test('개발용 결제 예정 알림은 수동 실행하고 현재 사용자의 테스트 이력만 초기화한다', async () => {
+    stub.reset();
+    stub.setPostResponses([{ batch: 'fixed-expense-payment-reminders', affected: 1 }]);
+    stub.setDeleteResponses([{ deletedNotifications: 1, deletedReminderHistory: 1 }]);
+
+    await runFixedExpensePaymentReminderBatch();
+    await resetFixedExpensePaymentReminders();
+
+    assert.deepEqual(stub.calls, [
+        { method: 'post', args: ['/dev/batches/fixed-expense-payment-reminders'] },
+        { method: 'delete', args: ['/dev/batches/fixed-expense-payment-reminders'] },
+    ]);
 });

@@ -29,6 +29,7 @@ const FLOATING_ABOVE_TABBAR = [
     ['자산 현황/거래내역 토글', 'src/components/asset/AssetLedgerToggle.vue'],
     ['자료실 보고서 토글', 'src/components/challenge/report/ChallengeReportToggle.vue'],
     ['고정지출 출처 토글', 'src/components/fixed-expense/TempFixedExpenseSourceToggle.vue'],
+    ['고정지출 개발 알림 버튼', 'src/views/fixed-expense/FixedExpenseManagementView.vue'],
     [
         '월간 보고서 출처 토글',
         'src/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue',

@@ -48,4 +48,7 @@ public interface NotificationMapper {
     int markRead(@Param("id") long id, @Param("userId") long userId);
 
     int markAllRead(@Param("userId") long userId);
+
+    /** 개발용 결제 예정 알림 재현 시 해당 사용자·알림 유형만 비운다. */
+    int deleteByUserAndType(@Param("userId") long userId, @Param("type") String type);
 }
