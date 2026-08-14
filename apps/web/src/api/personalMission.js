@@ -18,6 +18,10 @@ export function fetchMissionRankings(yearMonth) {
     });
 }
 
+export function fetchMissionRankingMonths() {
+    return http.get('/missions/rankings/months');
+}
+
 export function fetchMissionCategoryAnalysis() {
     return http.get('/missions/categoryAnalysis');
 }

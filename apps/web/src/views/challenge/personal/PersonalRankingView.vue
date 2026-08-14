@@ -9,8 +9,7 @@ import tangtangMascot from '@/assets/images/tangtang.png';
 import firstRankTangi from '@/assets/images/ranking/tang-ranking-first.png';
 import secondRankTangi from '@/assets/images/ranking/tang-ranking-second.png';
 import thirdRankTangi from '@/assets/images/ranking/tang-ranking-third.png';
-import { fetchMissionRankings } from '@/api/personalMission';
-import { MOCK_PERSONAL_RANKING_MONTHS, MOCK_PERSONAL_RANKINGS } from '@/fixtures/personalRanking';
+import { fetchMissionRankingMonths, fetchMissionRankings } from '@/api/personalMission';
 
 const route = useRoute();
 const router = useRouter();
@@ -18,20 +17,15 @@ const isMonthPickerOpen = ref(false);
 const ranking = ref(null);
 const isLoading = ref(false);
 const errorMessage = ref('');
-
-/*
- * URL에 유효한 month query가 있으면 해당 월을 사용하고,
- * 없거나 데이터가 없는 월이면 가장 최근 조회 가능 월을 기본값으로 사용합니다.
- */
-const latestAvailablePeriod = [...MOCK_PERSONAL_RANKING_MONTHS]
-    .reverse()
-    .find((month) => month.available)?.value;
+const now = new Date();
+const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const yearMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+const rankingMonths = ref(createRankingMonths([now.getFullYear()], new Set()));
 
 const initialPeriod =
-    typeof route.query.month === 'string' &&
-    MOCK_PERSONAL_RANKING_MONTHS.some((month) => month.value === route.query.month)
+    typeof route.query.month === 'string' && yearMonthPattern.test(route.query.month)
         ? route.query.month
-        : latestAvailablePeriod;
+        : currentPeriod;
 
 const selectedPeriod = ref(initialPeriod);
 
@@ -46,10 +40,10 @@ const podiumImages = {
 };
 
 const selectedMonth = computed(() =>
-    MOCK_PERSONAL_RANKING_MONTHS.find((month) => month.value === selectedPeriod.value),
+    rankingMonths.value.find((month) => month.value === selectedPeriod.value),
 );
 
-const availablePeriods = computed(() => MOCK_PERSONAL_RANKING_MONTHS.map((month) => month.value));
+const availablePeriods = computed(() => rankingMonths.value.map((month) => month.value));
 
 const currentPeriodIndex = computed(() => availablePeriods.value.indexOf(selectedPeriod.value));
 
@@ -67,15 +61,40 @@ function openCertificate() {
     });
 }
 
+function createRankingMonths(years, availablePeriodsSet) {
+    return [...new Set(years)]
+        .sort((a, b) => a - b)
+        .flatMap((year) =>
+            Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1;
+                const value = `${year}-${String(month).padStart(2, '0')}`;
+                return {
+                    value,
+                    year,
+                    month,
+                    available: availablePeriodsSet.has(value),
+                };
+            }),
+        );
+}
+
+async function loadRankingMonths() {
+    try {
+        const result = await fetchMissionRankingMonths();
+        const availablePeriodsSet = new Set(result?.yearMonths ?? []);
+        const years = [
+            now.getFullYear(),
+            ...[...availablePeriodsSet].map((period) => Number(period.slice(0, 4))),
+        ];
+        rankingMonths.value = createRankingMonths(years, availablePeriodsSet);
+    } catch {
+        // 월 목록 조회가 실패해도 현재 월 랭킹 본문은 계속 조회한다.
+    }
+}
+
 async function loadRanking() {
     isLoading.value = true;
     errorMessage.value = '';
-
-    if (import.meta.env.DEV) {
-        ranking.value = MOCK_PERSONAL_RANKINGS[selectedPeriod.value] ?? null;
-        isLoading.value = false;
-        return;
-    }
 
     try {
         ranking.value = await fetchMissionRankings(selectedPeriod.value);
@@ -108,7 +127,7 @@ async function movePeriod(direction) {
 
 /* 다음 단계에서 월 선택 바텀시트가 이 함수를 호출합니다. */
 function selectPeriod(period) {
-    if (!MOCK_PERSONAL_RANKING_MONTHS.some((month) => month.value === period)) {
+    if (!rankingMonths.value.some((month) => month.value === period)) {
         return;
     }
 
@@ -121,7 +140,10 @@ function selectPeriod(period) {
     updatePeriod(period);
 }
 
-onMounted(loadRanking);
+onMounted(async () => {
+    await loadRankingMonths();
+    await loadRanking();
+});
 </script>
 
 <template>
@@ -245,7 +267,7 @@ onMounted(loadRanking);
 
         <PersonalRankingMonthPicker
             v-model="isMonthPickerOpen"
-            :months="MOCK_PERSONAL_RANKING_MONTHS"
+            :months="rankingMonths"
             :selected-period="selectedPeriod"
             @select="selectPeriod"
         />
