@@ -61,8 +61,14 @@ public class MissionScoreService {
     @Transactional(readOnly = true)
     public MissionMonthlyScoreDto getCurrentScore(long userId) {
         YearMonth yearMonth = YearMonth.now(clock.withZone(SEOUL_ZONE));
-        Integer totalScore = missionScoreMapper.findMonthlyScore(userId, yearMonth.toString());
-        return new MissionMonthlyScoreDto(yearMonth.toString(), totalScore == null ? 0 : totalScore);
+        MissionRankingRow ranking = missionScoreMapper.findUserRanking(userId, yearMonth.toString());
+        if (ranking == null) {
+            return new MissionMonthlyScoreDto(yearMonth.toString(), 0, null);
+        }
+
+        int totalUsers = missionScoreMapper.countRankingUsers(yearMonth.toString());
+        int topPercent = calculateTopPercent(ranking.getRank(), totalUsers);
+        return new MissionMonthlyScoreDto(yearMonth.toString(), ranking.getTotalScore(), topPercent);
     }
 
     @Transactional(readOnly = true)
@@ -118,9 +124,7 @@ public class MissionScoreService {
         if (row == null) {
             return null;
         }
-        int topPercent = totalUsers == 0
-                ? 0
-                : (int) Math.ceil(row.getRank() * 100.0 / totalUsers);
+        int topPercent = calculateTopPercent(row.getRank(), totalUsers);
         return new MissionMyRankingDto(
                 row.getRank(),
                 row.getNickname(),
@@ -128,6 +132,12 @@ public class MissionScoreService {
                 row.getTotalScore(),
                 topPercent
         );
+    }
+
+    private int calculateTopPercent(int rank, int totalUsers) {
+        return totalUsers == 0
+                ? 0
+                : (int) Math.ceil(rank * 100.0 / totalUsers);
     }
 
     private String resolveProfileImageUrl(String profileImageKey) {

@@ -28,7 +28,7 @@ class MissionScoreControllerTest {
         MissionScoreService service = new MissionScoreService((MissionScoreMapper) null) {
             @Override
             public MissionMonthlyScoreDto getCurrentScore(long userId) {
-                return new MissionMonthlyScoreDto("2026-08", 75);
+                return new MissionMonthlyScoreDto("2026-08", 75, 15);
             }
         };
         MockMvc mockMvc = MockMvcBuilders
@@ -40,7 +40,8 @@ class MissionScoreControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.yearMonth").value("2026-08"))
-                .andExpect(jsonPath("$.data.totalScore").value(75));
+                .andExpect(jsonPath("$.data.totalScore").value(75))
+                .andExpect(jsonPath("$.data.topPercent").value(15));
     }
 
     @Test

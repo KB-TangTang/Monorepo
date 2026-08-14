@@ -52,12 +52,15 @@ class MissionScoreServiceTest {
 
     @Test
     void returnsCurrentSeoulMonthScore() {
-        when(missionScoreMapper.findMonthlyScore(USER_ID, "2026-08")).thenReturn(120);
+        when(missionScoreMapper.findUserRanking(USER_ID, "2026-08"))
+                .thenReturn(rankingRow(USER_ID, "나", null, 120, 7));
+        when(missionScoreMapper.countRankingUsers("2026-08")).thenReturn(37);
 
         MissionMonthlyScoreDto result = service.getCurrentScore(USER_ID);
 
         assertEquals("2026-08", result.getYearMonth());
         assertEquals(120, result.getTotalScore());
+        assertEquals(19, result.getTopPercent());
     }
 
     @Test
@@ -65,6 +68,7 @@ class MissionScoreServiceTest {
         MissionMonthlyScoreDto result = service.getCurrentScore(USER_ID);
 
         assertEquals(0, result.getTotalScore());
+        assertNull(result.getTopPercent());
     }
 
     @Test

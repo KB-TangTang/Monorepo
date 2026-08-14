@@ -336,9 +336,7 @@ async function reassignTodayMission() {
                     :streak-days="weeklyVerdictModel.streakDays"
                     :prosecutor-image="store.selectedProsecutor?.image"
                     :score="store.monthlyScore.score"
-                    :percentile="store.monthlyScore.percentile"
-                    :next-tier-gap="store.monthlyScore.nextTierGap"
-                    :tier-progress="store.monthlyScore.tierProgress"
+                    :top-percent="store.monthlyScore.topPercent"
                     @report-click="openPersonalRanking"
                 />
 
