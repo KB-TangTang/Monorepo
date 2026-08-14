@@ -88,7 +88,9 @@ defineExpose({ releaseHistory });
     display: flex;
     align-items: center;
     justify-content: center;
+    /* 아래 여백은 키보드가 가린 높이만큼 더 준다 — 시트와 같은 이유(useOverlay 주석 참고) */
     padding: var(--tt-space-5);
+    padding-bottom: calc(var(--tt-space-5) + var(--tt-keyboard-inset, 0px));
     background: var(--tt-overlay-dim);
 }
 

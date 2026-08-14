@@ -88,18 +88,30 @@ function startGoogleLogin() {
 </template>
 
 <style scoped>
+/*
+ * 이 화면은 스크롤 없이 한 화면에 들어가야 한다(안드·iOS 공통 요청, 2026-08-14).
+ * 두 가지를 함께 지킨다.
+ *  1) 높이 기준을 100dvh 로 — 100vh 는 주소창이 보이는 브라우저에서 실제 화면보다 커서
+ *     내용이 아무리 짧아도 주소창 높이만큼 스크롤이 생긴다.
+ *  2) 고정 여백을 줄이고 마스코트 원을 화면 높이에 비례(24vh)하게 —
+ *     작은 기기(아이폰 SE 등)에서는 원이 같이 줄어 넘치지 않는다.
+ * 여백을 다시 키울 때는 가장 작은 기기에서 스크롤이 생기지 않는지 반드시 확인할 것.
+ */
 .login {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    padding: var(--tt-space-8) var(--tt-space-6) var(--tt-space-10);
+    min-height: 100dvh;
+    /* 탭바가 없는 화면이라 홈 인디케이터 자리는 이 화면이 직접 비워준다 */
+    padding: var(--tt-space-6) var(--tt-space-6)
+        calc(var(--tt-space-6) + env(safe-area-inset-bottom));
     background: var(--tt-bg-subtle);
     text-align: center;
 }
 
 .login__brand {
-    margin-bottom: var(--tt-space-6);
+    margin-bottom: var(--tt-space-4);
     color: var(--tt-primary);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
@@ -108,22 +120,24 @@ function startGoogleLogin() {
 
 .login__hero {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 180px;
-    height: 180px;
-    margin-bottom: var(--tt-space-5);
+    width: min(180px, 24vh);
+    height: min(180px, 24vh);
+    margin-bottom: var(--tt-space-4);
     border-radius: var(--tt-radius-full);
     background: var(--tt-primary-subtle);
 }
 
+/* 원 크기가 화면에 따라 변하므로 마스코트도 비율로 잡는다 (180px 기준 130px = 72%) */
 .login__mascot {
-    width: 130px;
+    width: 72%;
     height: auto;
 }
 
 .login__case {
-    margin-bottom: var(--tt-space-5);
+    margin-bottom: var(--tt-space-4);
     padding: var(--tt-space-2) var(--tt-space-4);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
@@ -134,7 +148,7 @@ function startGoogleLogin() {
 }
 
 .login__title {
-    margin-bottom: var(--tt-space-4);
+    margin-bottom: var(--tt-space-3);
     color: var(--tt-text);
     font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
@@ -142,7 +156,7 @@ function startGoogleLogin() {
 }
 
 .login__lead {
-    margin-bottom: var(--tt-space-8);
+    margin-bottom: var(--tt-space-5);
     color: var(--tt-text-muted);
     font-size: var(--tt-fs-body);
     line-height: var(--tt-lh-normal);
@@ -154,7 +168,7 @@ function startGoogleLogin() {
     justify-content: center;
     gap: var(--tt-space-4);
     width: 100%;
-    padding: var(--tt-space-5);
+    padding: var(--tt-space-4);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
     background: var(--tt-bg);
@@ -198,11 +212,11 @@ function startGoogleLogin() {
 .login__action {
     width: 100%;
     margin-top: auto;
-    padding-top: var(--tt-space-10);
+    padding-top: var(--tt-space-5);
 }
 
 .login__terms {
-    margin-top: var(--tt-space-4);
+    margin-top: var(--tt-space-3);
     color: var(--tt-text-muted);
     font-size: var(--tt-fs-caption);
 }

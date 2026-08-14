@@ -1,6 +1,11 @@
 .challenge-mode {
     position: fixed;
-    bottom: calc(var(--tt-tabbar-height) + var(--tt-space-2));
+    /*
+     * env(safe-area-inset-bottom) 을 빼먹으면 아이폰에서 탭바가 홈 인디케이터 자리만큼
+     * 높아진 만큼 이 토글이 탭바 밑에 깔린다(안드로이드는 inset 이 0 이라 증상이 없다).
+     * 자산·자료실 토글(AssetLedgerToggle · ChallengeReportToggle)과 같은 식이다.
+     */
+    bottom: calc(var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-2));
     left: 50%;
     z-index: var(--tt-z-sticky);
     display: flex;
