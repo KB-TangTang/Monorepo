@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.fixedexpense.mapper.FixedExpenseDetectionMapper">
+
+    <sql id="validDetectionTransactionCondition">
+        t.user_id = #{userId}
+        AND t.tr_date &gt;= #{startDate}
+        AND t.tr_date &lt; #{endDate}
+        AND t.merchant_name_normalized IS NOT NULL
+        AND TRIM(t.merchant_name_normalized) &lt;&gt; ''
+        AND t.amount &gt; 0
+        AND t.classification = 'CONSUMPTION'
+        AND COALESCE(t.cancel_yn, 'N') &lt;&gt; 'Y'
+        AND t.is_refund = 0
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <select id="findActiveRule"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseDetectionRule">
+        SELECT id,
+               min_repeat_count,
+               amount_tolerance_pct,
+               cycle_tolerance_days
+        FROM tbl_fixed_expense_rule
+        WHERE is_active = 1
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findActiveUserIds" resultType="java.lang.Long">
+        SELECT id
+        FROM tbl_user
+        WHERE status = 'ACTIVE'
+        ORDER BY id
+    </select>
+
+    <select id="findDetectionTransactions"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseDetectionTransaction">
+        SELECT t.id,
+               t.user_id,
+               t.merchant_name_normalized,
+               t.amount,
+               t.tr_date,
+               t.category_id,
+               t.classification,
+               t.cancel_yn,
+               t.is_refund,
+               t.is_excluded_from_summary
+        FROM tbl_transaction t
+        WHERE <include refid="validDetectionTransactionCondition"/>
+        ORDER BY t.merchant_name_normalized, t.tr_date, t.id
+    </select>
+
+    <select id="findCandidate"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseCandidate">
+        SELECT id,
+               user_id,
+               merchant_name_normalized,
+               avg_amount,
+               cycle_days,
+               detected_count,
+               category_id,
+               is_excluded,
+               status,
+               next_expected_date,
+               confirmed_at,
+               relapse_detected_at
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND merchant_name_normalized = #{merchantNameNormalized}
+    </select>
+
+    <!-- 유일키가 중복 생성을 막고, 실제 탐지 값은 서비스가 상태 계약에 따라 갱신한다. -->
+    <insert id="upsertCandidate"
+            parameterType="com.kb.tangtang.fixedexpense.domain.FixedExpenseCandidate">
+        INSERT INTO tbl_fixed_expense_candidate (
+            user_id,
+            merchant_name_normalized,
+            avg_amount,
+            cycle_days,
+            detected_count,
+            category_id,
+            is_excluded,
+            status,
+            next_expected_date,
+            confirmed_at,
+            relapse_detected_at
+        ) VALUES (
+            #{userId},
+            #{merchantNameNormalized},
+            #{avgAmount},
+            #{cycleDays},
+            #{detectedCount},
+            #{categoryId},
+            0,
+            'ACTIVE',
+            #{nextExpectedDate},
+            NULL,
+            NULL
+        )
+        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
+    </insert>
+
+    <update id="updateDetectedCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET avg_amount = #{candidate.avgAmount},
+            cycle_days = #{candidate.cycleDays},
+            detected_count = #{candidate.detectedCount},
+            category_id = #{candidate.categoryId},
+            next_expected_date = #{candidate.nextExpectedDate},
+            confirmed_at = CASE
+                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN NULL
+                ELSE confirmed_at
+            END,
+            relapse_detected_at = CASE
+                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN #{relapseDetectedAt}
+                ELSE relapse_detected_at
+            END,
+            status = CASE
+                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN 'ACTIVE'
+                ELSE status
+            END
+        WHERE id = #{candidate.id}
+          AND user_id = #{candidate.userId}
+          AND is_excluded = 0
+    </update>
+
+    <update id="linkTransactionsToCandidate">
+        UPDATE tbl_transaction t
+        SET candidate_id = #{candidateId}
+        WHERE <include refid="validDetectionTransactionCondition"/>
+          AND t.merchant_name_normalized = #{merchantNameNormalized}
+    </update>
+
+</mapper>
