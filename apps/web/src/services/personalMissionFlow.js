@@ -57,6 +57,37 @@ export function formatWon(amount) {
     return `${roundedAmount.toLocaleString('ko-KR')}원`;
 }
 
+export function toMissionVerdictModel(verdict, images = {}) {
+    if (!verdict) {
+        return null;
+    }
+
+    const isSuccess = verdict.result === 'SUCCESS';
+    return {
+        assignmentId: verdict.assignmentId,
+        type: verdict.result,
+        date: formatKoreanDate(verdict.assignDate),
+        categoryName: verdict.categoryName ?? '',
+        tangiQuote: isSuccess
+            ? '"알리바이, 인정하겠습니다"'
+            : '"이번 알리바이는 인정하기 어렵겠군요"',
+        tangiImage: isSuccess ? images.success : images.fail,
+        currentAmount: Number(verdict.currentAmount) || 0,
+        limitAmount: Number(verdict.targetValue) || 0,
+        remainAmount: Number(verdict.remainAmount) || 0,
+        overAmount: Number(verdict.overAmount) || 0,
+        points: Number(verdict.points) || 0,
+        bonusPoints: Number(verdict.bonusPoints) || 0,
+        streakDays: Number(verdict.streakDays) || 0,
+        pendingCount: Number(verdict.pendingCount) || 0,
+        transactions: (verdict.transactions ?? []).map((transaction) => ({
+            id: transaction.transactionId,
+            name: transaction.merchantName,
+            amount: Number(transaction.amount) || 0,
+        })),
+    };
+}
+
 export function formatMissionAssignmentSummary(mission) {
     if (!mission) {
         return '배정 없음';
@@ -165,6 +196,12 @@ function formatShortDate(dateValue) {
     if (!dateValue) return '';
     const [, month, day] = dateValue.split('-');
     return `${Number(month)}/${Number(day)}`;
+}
+
+function formatKoreanDate(dateValue) {
+    if (!dateValue) return '';
+    const [, month, day] = dateValue.split('-');
+    return `${Number(month)}월 ${Number(day)}일`;
 }
 
 /* ── v4 추가 함수 ──────────────────────────────────── */

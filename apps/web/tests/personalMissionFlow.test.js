@@ -4,10 +4,48 @@ import {
     formatWatchlistMissionRound,
     formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    toMissionVerdictModel,
     toWatchCategoryModel,
     toTodayMissionBriefing,
     toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('미확인 판정 API 응답을 성공 모달 표시 모델로 변환한다', () => {
+    const model = toMissionVerdictModel(
+        {
+            assignmentId: 123,
+            result: 'SUCCESS',
+            assignDate: '2026-08-13',
+            categoryName: '배달앱',
+            currentAmount: '9800.00',
+            targetValue: '12000.00',
+            remainAmount: '2200.00',
+            overAmount: 0,
+            points: 35,
+            bonusPoints: 5,
+            streakDays: 6,
+            pendingCount: 2,
+            transactions: [
+                { transactionId: 91, merchantName: '돈까스집 배달주문', amount: '6300.00' },
+            ],
+        },
+        { success: '/success.png', fail: '/fail.png' },
+    );
+
+    assert.equal(model.type, 'SUCCESS');
+    assert.equal(model.date, '8월 13일');
+    assert.equal(model.tangiImage, '/success.png');
+    assert.equal(model.limitAmount, 12000);
+    assert.deepEqual(model.transactions[0], {
+        id: 91,
+        name: '돈까스집 배달주문',
+        amount: 6300,
+    });
+});
+
+test('판정 결과가 없으면 모달 표시 모델도 null이다', () => {
+    assert.equal(toMissionVerdictModel(null), null);
+});
 
 test('이번 주 판정을 월요일부터 일요일 순서로 변환한다', () => {
     const model = toWeeklyVerdictModel(

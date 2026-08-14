@@ -639,6 +639,47 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 전날 `PENDING` 미션을 자정 배치에서 먼저 판정한 뒤 성공이면 증가하고, 실패면 0으로 초기화한다.
 - 주간 결과의 `SUCCESS`, `FAIL`, `PENDING`을 화면에서 각각 인정, 기각, 오늘 수사 중으로 표시한다.
 
+### 개인 미션 미확인 판정 조회 및 확인 (이슈 #230)
+
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/api/missions/verdicts/pending` | Bearer | 확정됐지만 확인하지 않은 개인 미션 판정 1건 조회 |
+| POST | `/api/missions/verdicts/{assignmentId}/acknowledge` | Bearer | 개인 미션 판정 확인 처리 |
+
+미확인 판정 조회 응답은 `{ assignmentId, result, assignDate, categoryName, currentAmount,
+targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingCount, transactions }`
+형태다. `transactions[]` 항목은 `{ transactionId, merchantName, amount }`이다.
+
+- `Asia/Seoul` 기준 전날 배정됐고 `SUCCESS` 또는 `FAIL`로 확정된 판정만 조회한다.
+- 사용자별 하루 한 건 제약에 따라 `pendingCount`는 현재 범위에서 항상 0이다.
+- 미확인 판정이 없으면 성공 응답의 `data`는 `null`이다.
+- 거래 금액은 판정 배치와 동일하게 소비·출금·요약 포함 거래만 합산하고 환불은 차감한다.
+- 확인 API는 최초 `result_checked_at`을 유지하는 멱등 요청이다.
+- 본인 소유의 확정 판정이 아니면 `NOT_FOUND`를 반환한다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "assignmentId": 123,
+    "result": "SUCCESS",
+    "assignDate": "2026-08-13",
+    "categoryName": "배달앱",
+    "currentAmount": 9800,
+    "targetValue": 12000,
+    "remainAmount": 2200,
+    "overAmount": 0,
+    "points": 35,
+    "bonusPoints": 5,
+    "streakDays": 6,
+    "pendingCount": 0,
+    "transactions": [
+      { "transactionId": 91, "merchantName": "돈까스집 배달주문", "amount": 6300 }
+    ]
+  }
+}
+```
+
 ### 개인 미션 월간 점수 및 상위 백분율 조회 (이슈 #194, #226)
 
 | 메서드 | 경로 | 인증 | 응답 |

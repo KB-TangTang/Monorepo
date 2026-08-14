@@ -42,6 +42,8 @@ const consentError = ref('');
 const pageError = ref('');
 const isTangiSheetOpen = ref(false);
 const isVerdictOpen = ref(false);
+const isVerdictAcknowledging = ref(false);
+const verdictError = ref('');
 const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
@@ -85,6 +87,7 @@ onMounted(async () => {
                 store.loadCategoryAnalysis(),
                 store.loadMissionStreak(),
                 store.loadMissionMonthlyScore(),
+                store.loadPendingVerdict(),
             ]);
         }
     } catch (err) {
@@ -160,9 +163,18 @@ async function handleProsecutorConfirm(prosecutorId) {
     }
 }
 
-function handleVerdictAcknowledge() {
-    store.acknowledgeVerdict();
-    isVerdictOpen.value = false;
+async function handleVerdictAcknowledge() {
+    if (isVerdictAcknowledging.value) return;
+    isVerdictAcknowledging.value = true;
+    verdictError.value = '';
+    try {
+        await store.acknowledgeVerdict();
+        isVerdictOpen.value = false;
+    } catch (err) {
+        verdictError.value = err.message ?? '판정 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+    } finally {
+        isVerdictAcknowledging.value = false;
+    }
 }
 
 function linkAccount() {
@@ -237,6 +249,8 @@ async function reassignTodayMission() {
         <PersonalVerdictModal
             v-model="isVerdictOpen"
             :verdict="store.pendingVerdict"
+            :is-acknowledging="isVerdictAcknowledging"
+            :error-message="verdictError"
             @acknowledge="handleVerdictAcknowledge"
         />
 

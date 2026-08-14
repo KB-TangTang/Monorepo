@@ -59,3 +59,37 @@ test('담당 검사 선택을 같은 미션 난이도로 서버에 저장한다'
     assert.match(storeSource, /updateMyDifficulty\(prosecutorId\)/);
     assert.match(storeSource, /selectedDifficultyId = prosecutorId/);
 });
+
+test('재판 탭 진입 시 서버 판정을 조회하고 확인 성공 후에만 모달을 닫는다', async () => {
+    const apiPath = new URL('../src/api/personalMission.js', import.meta.url);
+    const [viewSource, storeSource, apiSource] = await Promise.all([
+        readFile(viewPath, 'utf8'),
+        readFile(storePath, 'utf8'),
+        readFile(apiPath, 'utf8'),
+    ]);
+
+    assert.match(viewSource, /store\.loadPendingVerdict\(\)/);
+    assert.match(viewSource, /await store\.acknowledgeVerdict\(\)/);
+    assert.match(viewSource, /isVerdictOpen\.value = false/);
+    assert.match(storeSource, /fetchPendingMissionVerdict\(\)/);
+    assert.match(
+        storeSource,
+        /requestMissionVerdictAcknowledge\(this\.pendingVerdict\.assignmentId\)/,
+    );
+    assert.doesNotMatch(storeSource, /pendingVerdict:\s*this\.pendingVerdict/);
+    assert.match(apiSource, /get\('\/missions\/verdicts\/pending'\)/);
+    assert.match(apiSource, /post\(`\/missions\/verdicts\/\$\{assignmentId\}\/acknowledge`\)/);
+});
+
+test('판정 근거는 카테고리와 거래 건수를 한 아코디언 카드에 표시한다', async () => {
+    const modalPath = new URL(
+        '../src/components/challenge/personal/PersonalVerdictModal.vue',
+        import.meta.url,
+    );
+    const source = await readFile(modalPath, 'utf8');
+
+    assert.match(source, /const parts = \['판정 근거 보기'\]/);
+    assert.match(source, /parts\.push\(props\.verdict\.categoryName\)/);
+    assert.match(source, /class="verdict__evidence-card"/);
+    assert.match(source, /class="verdict__evidence-toggle"[\s\S]*class="verdict__evidence-list"/);
+});
