@@ -64,16 +64,4 @@
         LIMIT #{limit}
     </select>
 
-    <select id="findLatestMissionStatus"
-            resultType="com.kb.tangtang.mission.domain.CategoryMissionStatus">
-        SELECT assignment.assign_date,
-               assignment.result
-        FROM tbl_user_mission_info assignment
-        JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
-        WHERE assignment.user_id = #{userId}
-          AND mission.category_id = #{categoryId}
-        ORDER BY assignment.assign_date DESC, assignment.id DESC
-        LIMIT 1
-    </select>
-
 </mapper>

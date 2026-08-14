@@ -12,6 +12,8 @@ public interface MissionAnalysisSnapshotMapper {
 
     List<MissionAnalysisSnapshot> findPendingSnapshots(@Param("userId") long userId);
 
+    List<MissionAnalysisSnapshot> findLatestCycleSnapshots(@Param("userId") long userId);
+
     MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(@Param("userId") long userId);
 
     LocalDateTime findQualifiedAt(@Param("userId") long userId);

@@ -78,10 +78,38 @@ export function toWatchCategoryModel(analysis) {
             categoryId: category.categoryId,
             name: category.categoryName ?? category.parentCategoryName ?? '',
             ratio: Math.round(Number(category.spendingRatio) || 0),
-            assignDate: formatShortDate(category.latestMissionAssignDate),
-            result: category.latestMissionResult ?? 'UNASSIGNED',
+            missionRound: Number(category.missionRound) || 1,
+            rotationAssignDate: formatShortDate(category.rotationAssignDate),
+            rotationResult: category.rotationResult ?? 'WAITING',
         })),
     };
+}
+
+export function formatWatchlistRotationStatus(item) {
+    if (item?.rotationResult === 'PENDING') {
+        return '오늘 수사 중';
+    }
+
+    if (item?.rotationResult === 'SUCCESS' || item?.rotationResult === 'FAIL') {
+        const resultLabel = item.rotationResult === 'SUCCESS' ? '인정' : '기각';
+        return item.rotationAssignDate ? `${item.rotationAssignDate} ${resultLabel}` : resultLabel;
+    }
+
+    return '대기';
+}
+
+export function formatWatchlistMissionRound(item) {
+    const missionRound = Math.max(Number(item?.missionRound) || 1, 1);
+    if (missionRound === 1 && item?.rotationResult === 'PENDING') {
+        return '첫 수사';
+    }
+    if (missionRound === 1 && item?.rotationResult === 'WAITING') {
+        return '첫 수사 예정';
+    }
+    if (item?.rotationResult === 'WAITING') {
+        return `수사 ${missionRound}회차 예정`;
+    }
+    return `수사 ${missionRound}회차`;
 }
 
 export function toWeeklyVerdictModel(streak, today = new Date()) {

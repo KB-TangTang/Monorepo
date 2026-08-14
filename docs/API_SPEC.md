@@ -625,10 +625,12 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 | GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
 
 응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
-`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, latestMissionAssignDate, latestMissionResult }` 형태다.
+`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, rotationAssignDate, rotationResult, missionRound }` 형태다.
 
-- `latestMissionAssignDate`, `latestMissionResult`는 해당 카테고리에서 가장 최근에 배정된 개인 미션의 날짜와 결과다.
-- 배정 이력이 없으면 두 값은 `null`이다.
+- 응답의 상위 카테고리는 매일 재산정한 목록이 아니라 아직 소진 중인 현재 분석 주기의 스냅샷이다.
+- `rotationAssignDate`는 현재 주기에서 해당 카테고리가 배정된 날짜다. 아직 배정 전이면 `null`이다.
+- `rotationResult`는 현재 주기의 결과이며 `SUCCESS`, `FAIL`, `PENDING`, `WAITING` 중 하나다. `WAITING`은 현재 주기에 선정됐지만 아직 배정되지 않았다는 뜻이다.
+- `missionRound`는 이번 배정 또는 다음 배정이 해당 카테고리의 몇 번째 수사인지를 나타낸다. 해당 카테고리로 배정된 전체 이력 수를 세고, 현재 주기에서 아직 `WAITING`이면 다음 예정 회차를 위해 1을 더한다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
 - 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
