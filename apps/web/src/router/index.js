@@ -289,12 +289,6 @@ const routes = [
         meta: { title: '카테고리별 순 절감액' },
     },
     {
-        path: '/asset/fixed-expenses/savings',
-        name: 'fixedExpenseSavings',
-        component: () => import('@/views/fixed-expense/FixedExpenseSavingsView.vue'),
-        meta: { title: '절약 감정서' },
-    },
-    {
         path: '/asset/fixed-expenses',
         name: 'fixedExpenseManagement',
         component: () => import('@/views/fixed-expense/FixedExpenseManagementView.vue'),

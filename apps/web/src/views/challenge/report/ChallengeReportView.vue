@@ -99,18 +99,6 @@ function openMonthlyReport() {
     router.push({ name: 'monthlyConsumptionReport', query: { month: selectedPeriod.value } });
 }
 
-function goBack() {
-    if (route.query.from === 'personalRanking') {
-        router.push({
-            name: 'personalRanking',
-            query: { month: selectedPeriod.value },
-        });
-        return;
-    }
-
-    router.back();
-}
-
 onMounted(initialize);
 </script>
 
@@ -119,7 +107,7 @@ onMounted(initialize);
         <ChallengePageHeader
             class="challenge-report__page-header"
             title="재판 보고서"
-            @back="goBack"
+            :show-back="false"
         >
             <template v-if="selectedPeriod" #action>
                 <button
