@@ -68,7 +68,8 @@ public class SwaggerConfig {
                         new Tag(SwaggerTags.MISSION, "오늘의 미션 · 연속 성공일 · 요주의 카테고리 분석"),
                         new Tag(SwaggerTags.GROUP_CHALLENGE, "생성 · 초대 · 참여 · 조회"),
                         new Tag(SwaggerTags.NOTIFICATION, "목록 · 읽음 처리 · SSE 실시간 스트림"),
-                        new Tag(SwaggerTags.REPORT, "소비 추이 · 요약 · AI 분석. 완료된 월만 조회된다"))
+                        new Tag(SwaggerTags.REPORT, "소비 추이 · 요약 · AI 분석. 완료된 월만 조회된다"),
+                        new Tag(SwaggerTags.FIXED_EXPENSE, "탐지 후보 확정 · 제외. 실제 구독 해지는 수행하지 않는다"))
                 .select()
                 .apis(RequestHandlerSelectors.withClassAnnotation(RestController.class))
                 // /api/dev/** 는 운영에 나가지 않는 배치 트리거·미션 재배정용이다.

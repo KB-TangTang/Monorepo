@@ -41,6 +41,9 @@ public final class SwaggerTags {
     /** 월간 리포트. 화면 이름은 「판결문」이다. */
     public static final String REPORT = "06. 월간 리포트(판결문)";
 
+    /** 고정지출 후보 확정·제외와 절약 리포트. */
+    public static final String FIXED_EXPENSE = "07. 고정지출 · 절약";
+
     /** 개발·시연 전용(/api/dev/**). SwaggerConfig 가 별도 그룹으로 분리한다. */
     public static final String DEV = "99. [DEV] 개발 · 시연 전용";
 
