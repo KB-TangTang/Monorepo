@@ -1195,3 +1195,4 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
   소급 반영되지 않는다.**
 - 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
   `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
+  `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.
