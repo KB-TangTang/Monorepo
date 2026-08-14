@@ -6,6 +6,13 @@ const viewSource = await readFile(
     new URL('../src/views/challenge/personal/PersonalRankingView.vue', import.meta.url),
     'utf8',
 );
+const monthPickerSource = await readFile(
+    new URL(
+        '../src/components/challenge/personal/ranking/PersonalRankingMonthPicker.vue',
+        import.meta.url,
+    ),
+    'utf8',
+);
 
 test('명예의 전당은 1~3위 전용 탕이 이미지를 사용한다', () => {
     assert.match(viewSource, /tang-ranking-first\.png/);
@@ -46,4 +53,12 @@ test('API의 랭킹 보유 월 목록으로 선택 가능한 월과 연도를 �
     assert.match(viewSource, /fetchMissionRankingMonths\(\)/);
     assert.match(viewSource, /createRankingMonths\(years, availablePeriodsSet\)/);
     assert.match(viewSource, /:months="rankingMonths"/);
+    assert.doesNotMatch(viewSource, /available: Boolean\(ranking\.value\)/);
+});
+
+test('월 선택창에서 데이터 유무와 관계없이 이전·다음 연도로 이동한다', () => {
+    assert.match(monthPickerSource, /selectedYear\.value - 1/);
+    assert.match(monthPickerSource, /selectedYear\.value \+ 1/);
+    assert.doesNotMatch(monthPickerSource, /:disabled="!previousYear"/);
+    assert.doesNotMatch(monthPickerSource, /:disabled="!nextYear"/);
 });

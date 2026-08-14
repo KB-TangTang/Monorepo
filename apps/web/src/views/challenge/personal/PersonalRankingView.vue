@@ -98,11 +98,6 @@ async function loadRanking() {
 
     try {
         ranking.value = await fetchMissionRankings(selectedPeriod.value);
-        rankingMonths.value = rankingMonths.value.map((month) =>
-            month.value === selectedPeriod.value
-                ? { ...month, available: Boolean(ranking.value) }
-                : month,
-        );
     } catch (error) {
         ranking.value = null;
         errorMessage.value = error.message || '랭킹을 불러오지 못했어요.';

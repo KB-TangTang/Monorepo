@@ -13,10 +13,6 @@ const emit = defineEmits(['update:modelValue', 'select']);
 const draftPeriod = ref(props.selectedPeriod);
 const selectedYear = ref(Number(props.selectedPeriod.slice(0, 4)));
 
-const availableYears = computed(() =>
-    [...new Set(props.months.map((month) => month.year))].sort((a, b) => a - b),
-);
-
 const visibleMonths = computed(() =>
     Array.from({ length: 12 }, (_, index) => {
         const monthNumber = index + 1;
@@ -33,11 +29,12 @@ const visibleMonths = computed(() =>
     }),
 );
 
-const previousYear = computed(() =>
-    [...availableYears.value].reverse().find((year) => year < selectedYear.value),
-);
-const nextYear = computed(() => availableYears.value.find((year) => year > selectedYear.value));
-const draftMonth = computed(() => props.months.find((month) => month.value === draftPeriod.value));
+const previousYear = computed(() => selectedYear.value - 1);
+const nextYear = computed(() => selectedYear.value + 1);
+const draftMonth = computed(() => {
+    const month = props.months.find((item) => item.value === draftPeriod.value);
+    return month?.year === selectedYear.value ? month : null;
+});
 
 watch(
     () => props.modelValue,
@@ -81,7 +78,6 @@ function applyMonth() {
             <button
                 type="button"
                 aria-label="이전 연도"
-                :disabled="!previousYear"
                 @click="moveYear(previousYear)"
             >
                 ‹
@@ -90,7 +86,6 @@ function applyMonth() {
             <button
                 type="button"
                 aria-label="다음 연도"
-                :disabled="!nextYear"
                 @click="moveYear(nextYear)"
             >
                 ›
