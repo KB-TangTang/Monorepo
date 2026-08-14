@@ -8,6 +8,10 @@ export function fetchMissionStreak() {
     return http.get('/missions/streak');
 }
 
+export function fetchMissionMonthlyScore() {
+    return http.get('/missions/monthly-score');
+}
+
 export function fetchMissionCategoryAnalysis() {
     return http.get('/missions/categoryAnalysis');
 }

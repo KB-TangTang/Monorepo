@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionScoreMapper">
+
+    <select id="calculateMonthlyScore" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(
+                   difficulty.score
+                   + CASE WHEN EXISTS (
+                       SELECT 1
+                         FROM tbl_user_mission_info previous_assignment
+                        WHERE previous_assignment.user_id = assignment.user_id
+                          AND previous_assignment.assign_date = DATE_SUB(assignment.assign_date, INTERVAL 1 DAY)
+                          AND previous_assignment.result = 'SUCCESS'
+                   ) THEN 5 ELSE 0 END
+               ), 0)
+          FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
+         WHERE assignment.user_id = #{userId}
+           AND assignment.assign_date BETWEEN #{startDate} AND #{endDate}
+           AND assignment.result = 'SUCCESS'
+    </select>
+
+    <insert id="upsertMonthlyScore">
+        INSERT INTO tbl_monthly_ranking
+            (user_id, `year_month`, total_score, ranking, ratio, monthly_longest_streak)
+        VALUES
+            (#{userId}, #{yearMonth}, #{totalScore}, 0, 0, 0)
+        ON DUPLICATE KEY UPDATE
+            total_score = #{totalScore}
+    </insert>
+
+    <select id="findMonthlyScore" resultType="java.lang.Integer">
+        SELECT total_score
+          FROM tbl_monthly_ranking
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+    </select>
+
+</mapper>

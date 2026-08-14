@@ -16,6 +16,7 @@ import {
 } from '@/services/personalMissionFlow';
 import {
     fetchMissionCategoryAnalysis,
+    fetchMissionMonthlyScore,
     fetchMissionStreak,
     fetchTodayMission,
     reassignTodayMission as requestTodayMissionReassignment,
@@ -176,6 +177,14 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
         async loadMissionStreak() {
             this.missionStreak = await fetchMissionStreak();
+        },
+
+        async loadMissionMonthlyScore() {
+            const monthlyScore = await fetchMissionMonthlyScore();
+            this.monthlyScore = {
+                ...this.monthlyScore,
+                score: Number(monthlyScore?.totalScore) || 0,
+            };
         },
 
         async waitForTodayMission() {

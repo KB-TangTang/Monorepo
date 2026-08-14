@@ -84,6 +84,7 @@ onMounted(async () => {
                 store.loadTodayMission(),
                 store.loadCategoryAnalysis(),
                 store.loadMissionStreak(),
+                store.loadMissionMonthlyScore(),
             ]);
         }
     } catch (err) {
@@ -118,7 +119,11 @@ async function handleAgree() {
         await consentStore.save('CHALLENGE', [{ type: 'CHALLENGE', agreed: true }]);
         store.agree();
         await store.waitForTodayMission();
-        await Promise.all([store.loadCategoryAnalysis(), store.loadMissionStreak()]);
+        await Promise.all([
+            store.loadCategoryAnalysis(),
+            store.loadMissionStreak(),
+            store.loadMissionMonthlyScore(),
+        ]);
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {
