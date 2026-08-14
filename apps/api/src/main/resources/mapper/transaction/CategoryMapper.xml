@@ -9,4 +9,10 @@
          ORDER BY parent_id IS NULL DESC, parent_id, id
     </select>
 
+    <select id="findById" resultType="com.kb.tangtang.transaction.domain.Category">
+        SELECT id, category_name, parent_id
+          FROM tbl_category
+         WHERE id = #{id}
+    </select>
+
 </mapper>
