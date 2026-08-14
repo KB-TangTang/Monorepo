@@ -112,7 +112,11 @@ export default function () {
             }),
         );
 
-        // 6개월치를 훑는다. 셋 중 가장 무겁다.
+        /*
+         * 6개월치를 훑지만 셋 중 가장 "가볍다"(2026-08-14 실측).
+         * 기간이 길어도 결과가 월별 합계 몇 줄뿐이라서다.
+         * 소분류 단위로 쪼개는 categories 가 그룹 수가 많아 제일 무겁다.
+         */
         measure(
             trendTrend,
             http.get(`${BASE_URL}/api/reports/monthly/spending-trend?yearMonth=${YEAR_MONTH}`, {

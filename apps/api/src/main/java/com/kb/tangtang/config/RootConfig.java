@@ -90,6 +90,16 @@ public class RootConfig {
         config.setJdbcUrl(url);
         config.setUsername(username);
         config.setPassword(password);
+        /*
+         * maximumPoolSize 를 지정하지 않아 HikariCP 기본값 10 을 쓴다. 의도한 것이다.
+         *
+         * 2026-08-14 부하테스트에서 이 값을 30 으로 올려 125 VU 로 재측정했으나
+         * 처리량이 311.9 → 306.3 req/s (-1.8%) 로 사실상 변화가 없었다.
+         * 같은 조건 재측정의 편차가 8.6% 인 환경이라 노이즈 범위다.
+         * 병목은 커넥션이 아니라 측정 머신의 CPU 였다 (perf/README.md 「3차 측정」).
+         *
+         * 근거 없이 값을 올리지 말 것. 올릴 일이 생기면 EC2 에서 다시 측정하고 정한다.
+         */
         return new HikariDataSource(config);
     }
 
