@@ -8,6 +8,14 @@ export function fetchMissionStreak() {
     return http.get('/missions/streak');
 }
 
+export function fetchPendingMissionVerdict() {
+    return http.get('/missions/verdicts/pending');
+}
+
+export function acknowledgeMissionVerdict(assignmentId) {
+    return http.post(`/missions/verdicts/${assignmentId}/acknowledge`);
+}
+
 export function fetchMissionMonthlyScore() {
     return http.get('/missions/monthly-score');
 }

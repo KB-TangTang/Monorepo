@@ -12,11 +12,14 @@ import {
 import { MOCK_PERSONAL_MISSION_PROFILE } from '@/fixtures/personalMission';
 import {
     hasEnoughPersonalMissionData,
+    toMissionVerdictModel,
     toTodayMissionBriefing,
 } from '@/services/personalMissionFlow';
 import {
+    acknowledgeMissionVerdict as requestMissionVerdictAcknowledge,
     fetchMissionCategoryAnalysis,
     fetchMissionMonthlyScore,
+    fetchPendingMissionVerdict,
     fetchMissionStreak,
     fetchTodayMission,
     reassignTodayMission as requestTodayMissionReassignment,
@@ -24,6 +27,8 @@ import {
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
 import { normalizeMonthlyScore } from '@/services/missionMonthlyScore';
 import { updateMyDifficulty } from '@/api/user';
+import tangiVerdictSuccess from '@/assets/images/prosecutor_tangtang/field_verification_v1_one_leg_no_emphasis.png';
+import tangiVerdictFail from '@/assets/images/prosecutor_tangtang/scene_raid_v1_one_leg_no_emphasis.png';
 
 const STORAGE_KEY = 'tangtang-personal-mission-challenge';
 
@@ -106,7 +111,11 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             if (this.consentState === null) return 'loading';
             if (this.consentState === 'ERROR') return 'error';
             if (this.consentState === CHALLENGE_CONSENT_STATE.FIRST) return 'consent';
-            if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN && !this.todayMission) {
+            if (
+                this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN &&
+                !this.todayMission &&
+                !this.hasPendingVerdict
+            ) {
                 return 'withdrawn';
             }
             if (this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN) {
@@ -131,7 +140,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
             this.hasAgreed = saved.hasAgreed ?? false;
             this.selectedProsecutorId = normalizeProsecutorId(saved.selectedProsecutorId);
-            this.pendingVerdict = saved.pendingVerdict ?? null;
+            this.pendingVerdict = null;
             this.courtMode = saved.courtMode ?? 'supreme';
             this.isHydrated = true;
         },
@@ -142,7 +151,6 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
                 JSON.stringify({
                     hasAgreed: this.hasAgreed,
                     selectedProsecutorId: this.selectedProsecutorId,
-                    pendingVerdict: this.pendingVerdict,
                     courtMode: this.courtMode,
                 }),
             );
@@ -183,6 +191,14 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         async loadMissionMonthlyScore() {
             const monthlyScore = await fetchMissionMonthlyScore();
             this.monthlyScore = normalizeMonthlyScore(monthlyScore);
+        },
+
+        async loadPendingVerdict() {
+            const verdict = await fetchPendingMissionVerdict();
+            this.pendingVerdict = toMissionVerdictModel(verdict, {
+                success: tangiVerdictSuccess,
+                fail: tangiVerdictFail,
+            });
         },
 
         async waitForTodayMission() {
@@ -235,9 +251,10 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             return user;
         },
 
-        acknowledgeVerdict() {
+        async acknowledgeVerdict() {
+            if (!this.pendingVerdict) return;
+            await requestMissionVerdictAcknowledge(this.pendingVerdict.assignmentId);
             this.pendingVerdict = null;
-            this.save();
         },
 
         resetDemo() {
@@ -261,7 +278,6 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         /* 데모용: 판정 테스트 */
         setDemoVerdict(verdict) {
             this.pendingVerdict = verdict;
-            this.save();
         },
     },
 });

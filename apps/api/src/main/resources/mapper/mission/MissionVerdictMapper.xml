@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionVerdictMapper">
+
+    <sql id="finalizedUncheckedVerdictCondition">
+        assignment.user_id = #{userId}
+        AND assignment.assign_date = #{assignDate}
+        AND assignment.result IN ('SUCCESS', 'FAIL')
+        AND assignment.evaluated_at IS NOT NULL
+        AND assignment.result_checked_at IS NULL
+    </sql>
+
+    <select id="findOldestUncheckedVerdict"
+            resultType="com.kb.tangtang.mission.domain.MissionVerdictRow">
+        SELECT assignment.id AS assignment_id,
+               assignment.result,
+               assignment.assign_date,
+               category.category_name,
+               assignment.target_value,
+               difficulty.score AS base_points,
+               EXISTS (
+                   SELECT 1
+                     FROM tbl_user_mission_info previous_assignment
+                    WHERE previous_assignment.user_id = assignment.user_id
+                      AND previous_assignment.assign_date = DATE_SUB(assignment.assign_date, INTERVAL 1 DAY)
+                      AND previous_assignment.result = 'SUCCESS'
+               ) AS previous_success,
+               COALESCE(SUM(
+                   CASE WHEN mission_transaction.is_refund = 1
+                        THEN -COALESCE(mission_transaction.refunded_amount, mission_transaction.amount)
+                        ELSE mission_transaction.amount
+                   END
+               ), 0) AS current_amount
+          FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
+          LEFT JOIN tbl_category category ON category.id = mission.category_id
+          LEFT JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
+          LEFT JOIN tbl_transaction mission_transaction
+            ON mission_transaction.user_id = assignment.user_id
+           AND mission_transaction.category_id = mission.category_id
+           AND mission_transaction.tr_date = assignment.assign_date
+           AND mission_transaction.classification = 'CONSUMPTION'
+           AND mission_transaction.direction = 'OUT'
+           AND mission_transaction.is_excluded_from_summary = 0
+         WHERE <include refid="finalizedUncheckedVerdictCondition" />
+         GROUP BY assignment.id, assignment.user_id, assignment.result, assignment.assign_date,
+                  category.category_name, assignment.target_value, difficulty.score
+         LIMIT 1
+    </select>
+
+    <select id="countUncheckedVerdicts" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+          FROM tbl_user_mission_info assignment
+         WHERE <include refid="finalizedUncheckedVerdictCondition" />
+    </select>
+
+    <select id="findVerdictTransactions"
+            resultType="com.kb.tangtang.mission.dto.MissionVerdictTransactionDto">
+        SELECT mission_transaction.id AS transaction_id,
+               COALESCE(NULLIF(TRIM(mission_transaction.merchant_name), ''),
+                        NULLIF(TRIM(mission_transaction.description1), ''), '거래') AS merchant_name,
+               CASE WHEN mission_transaction.is_refund = 1
+                    THEN -COALESCE(mission_transaction.refunded_amount, mission_transaction.amount)
+                    ELSE mission_transaction.amount
+               END AS amount
+          FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
+          JOIN tbl_transaction mission_transaction
+            ON mission_transaction.user_id = assignment.user_id
+           AND mission_transaction.category_id = mission.category_id
+           AND mission_transaction.tr_date = assignment.assign_date
+           AND mission_transaction.classification = 'CONSUMPTION'
+           AND mission_transaction.direction = 'OUT'
+           AND mission_transaction.is_excluded_from_summary = 0
+         WHERE assignment.id = #{assignmentId}
+           AND assignment.user_id = #{userId}
+         ORDER BY mission_transaction.tr_time, mission_transaction.id
+    </select>
+
+    <select id="findResultsThroughDate"
+            resultType="com.kb.tangtang.mission.dto.WeeklyMissionResultDto">
+        SELECT assign_date AS date,
+               result
+          FROM tbl_user_mission_info
+         WHERE user_id = #{userId}
+           AND assign_date &lt;= #{endDate}
+           AND result IN ('SUCCESS', 'FAIL')
+         ORDER BY assign_date DESC
+    </select>
+
+    <select id="countOwnedFinalizedVerdict" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+          FROM tbl_user_mission_info
+         WHERE id = #{assignmentId}
+           AND user_id = #{userId}
+           AND result IN ('SUCCESS', 'FAIL')
+           AND evaluated_at IS NOT NULL
+    </select>
+
+    <update id="acknowledgeVerdict">
+        UPDATE tbl_user_mission_info
+           SET result_checked_at = COALESCE(result_checked_at, #{checkedAt})
+         WHERE id = #{assignmentId}
+           AND user_id = #{userId}
+           AND result IN ('SUCCESS', 'FAIL')
+           AND evaluated_at IS NOT NULL
+    </update>
+
+    <select id="findResultCheckedAt" resultType="java.time.LocalDateTime">
+        SELECT result_checked_at
+          FROM tbl_user_mission_info
+         WHERE id = #{assignmentId}
+           AND user_id = #{userId}
+           AND result IN ('SUCCESS', 'FAIL')
+           AND evaluated_at IS NOT NULL
+    </select>
+
+</mapper>

@@ -6,6 +6,8 @@ import { formatWon } from '@/services/personalMissionFlow';
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
     verdict: { type: Object, default: null },
+    isAcknowledging: { type: Boolean, default: false },
+    errorMessage: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:modelValue', 'acknowledge']);
@@ -13,6 +15,18 @@ const emit = defineEmits(['update:modelValue', 'acknowledge']);
 const isEvidenceOpen = ref(false);
 
 const isSuccess = computed(() => props.verdict?.type === 'SUCCESS');
+const evidenceTitle = computed(() => {
+    const parts = ['판정 근거 보기'];
+    if (props.verdict?.categoryName) parts.push(props.verdict.categoryName);
+    parts.push(`거래 ${props.verdict?.transactions?.length ?? 0}건`);
+    return parts.join(' · ');
+});
+const gaugeWidth = computed(() => {
+    const currentAmount = Number(props.verdict?.currentAmount) || 0;
+    const limitAmount = Number(props.verdict?.limitAmount) || 0;
+    if (limitAmount <= 0) return 100;
+    return Math.min((currentAmount / limitAmount) * 100, 100);
+});
 
 function toggleEvidence() {
     isEvidenceOpen.value = !isEvidenceOpen.value;
@@ -20,7 +34,6 @@ function toggleEvidence() {
 
 function acknowledge() {
     emit('acknowledge');
-    emit('update:modelValue', false);
 }
 </script>
 
@@ -35,19 +48,13 @@ function acknowledge() {
         <template #header><span></span></template>
 
         <div v-if="verdict" class="verdict">
-            <!-- 밀린 판정 안내 (실패 시) -->
-            <div v-if="!isSuccess && verdict.pendingCount > 0" class="verdict__pending-bar">
-                <span class="verdict__pending-text">
-                    그동안 판결 {{ verdict.pendingCount }}건이 밀려 있어요
-                </span>
-                <button type="button" class="verdict__pending-link">성적표 보기 ›</button>
-            </div>
-
             <!-- 판정 뱃지 -->
             <div class="verdict__badge-row">
                 <span
                     class="verdict__type-badge"
-                    :class="isSuccess ? 'verdict__type-badge--success' : 'verdict__type-badge--fail'"
+                    :class="
+                        isSuccess ? 'verdict__type-badge--success' : 'verdict__type-badge--fail'
+                    "
                 >
                     {{ isSuccess ? '알리바이 인정' : '알리바이 불인정' }}
                 </span>
@@ -74,56 +81,65 @@ function acknowledge() {
                         class="verdict__gauge-diff"
                         :class="isSuccess ? 'verdict__gauge-diff--ok' : 'verdict__gauge-diff--over'"
                     >
-                        {{ isSuccess ? `여유 ${formatWon(verdict.remainAmount)}` : `+${formatWon(verdict.overAmount)} 초과` }}
+                        {{
+                            isSuccess
+                                ? `여유 ${formatWon(verdict.remainAmount)}`
+                                : `+${formatWon(verdict.overAmount)} 초과`
+                        }}
                     </span>
                 </div>
                 <div class="verdict__gauge-track">
                     <div
                         class="verdict__gauge-fill"
                         :class="isSuccess ? 'verdict__gauge-fill--ok' : 'verdict__gauge-fill--over'"
-                        :style="{ width: Math.min((verdict.currentAmount / verdict.limitAmount) * 100, 100) + '%' }"
+                        :style="{ width: `${gaugeWidth}%` }"
                     ></div>
                 </div>
             </div>
 
             <!-- 판정 근거 -->
-            <button type="button" class="verdict__evidence-toggle" @click="toggleEvidence">
-                <span class="verdict__evidence-title">
-                    판정 근거{{ isEvidenceOpen ? '' : ' 보기' }} · 거래 {{ verdict.transactions.length }}건
-                </span>
-                <svg
-                    width="10"
-                    height="6"
-                    viewBox="0 0 10 6"
-                    fill="none"
-                    class="verdict__evidence-chevron"
-                    :class="{ 'verdict__evidence-chevron--open': isEvidenceOpen }"
+            <div class="verdict__evidence-card">
+                <button
+                    type="button"
+                    class="verdict__evidence-toggle"
+                    :aria-expanded="isEvidenceOpen"
+                    @click="toggleEvidence"
                 >
-                    <path
-                        d="M1 1l4 4 4-4"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
-            </button>
+                    <span class="verdict__evidence-title">{{ evidenceTitle }}</span>
+                    <svg
+                        width="10"
+                        height="6"
+                        viewBox="0 0 10 6"
+                        fill="none"
+                        class="verdict__evidence-chevron"
+                        :class="{ 'verdict__evidence-chevron--open': isEvidenceOpen }"
+                    >
+                        <path
+                            d="M1 1l4 4 4-4"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </button>
 
-            <div v-if="isEvidenceOpen" class="verdict__evidence-list">
-                <div
-                    v-for="tx in verdict.transactions"
-                    :key="tx.name"
-                    class="verdict__tx-row"
-                >
-                    <span class="verdict__tx-name">{{ tx.name }}</span>
-                    <span v-if="tx.manuallyEdited" class="verdict__tx-edited">직접 수정</span>
-                    <span class="verdict__tx-spacer"></span>
-                    <span class="verdict__tx-amount">{{ formatWon(tx.amount) }}</span>
+                <div v-if="isEvidenceOpen" class="verdict__evidence-list">
+                    <div
+                        v-for="tx in verdict.transactions"
+                        :key="tx.id ?? tx.name"
+                        class="verdict__tx-row"
+                    >
+                        <span class="verdict__tx-name">{{ tx.name }}</span>
+                        <span v-if="tx.manuallyEdited" class="verdict__tx-edited">직접 수정</span>
+                        <span class="verdict__tx-spacer"></span>
+                        <span class="verdict__tx-amount">{{ formatWon(tx.amount) }}</span>
+                    </div>
+                    <p class="verdict__evidence-note">
+                        판정은 자정에 확정되며 이후 카테고리를 수정해도 결과는 바뀌지 않아요. 수정
+                        내용은 다음 사건부터 반영됩니다.
+                    </p>
                 </div>
-                <p class="verdict__evidence-note">
-                    판정은 자정에 확정되며 이후 카테고리를 수정해도 결과는 바뀌지 않아요.
-                    수정 내용은 다음 사건부터 반영됩니다.
-                </p>
             </div>
 
             <!-- 점수 뱃지 -->
@@ -143,9 +159,7 @@ function acknowledge() {
                     </span>
                 </template>
                 <template v-else>
-                    <span class="verdict__score-badge verdict__score-badge--muted">
-                        획득 0점
-                    </span>
+                    <span class="verdict__score-badge verdict__score-badge--muted"> 획득 0점 </span>
                     <span class="verdict__score-badge verdict__score-badge--red">
                         연속 인정 리셋
                     </span>
@@ -158,8 +172,14 @@ function acknowledge() {
             </div>
 
             <!-- 확인 CTA -->
-            <button type="button" class="verdict__confirm" @click="acknowledge">
-                확인했습니다
+            <p v-if="errorMessage" class="verdict__error" role="alert">{{ errorMessage }}</p>
+            <button
+                type="button"
+                class="verdict__confirm"
+                :disabled="isAcknowledging"
+                @click="acknowledge"
+            >
+                {{ isAcknowledging ? '저장 중...' : '확인했습니다' }}
             </button>
         </div>
     </BaseModal>
@@ -168,35 +188,6 @@ function acknowledge() {
 <style scoped>
 .verdict {
     text-align: center;
-}
-
-.verdict__pending-bar {
-    background: var(--tt-bg-fill);
-    border-radius: 11px;
-    padding: var(--tt-space-2) 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--tt-space-2);
-    margin-bottom: 13px;
-}
-
-.verdict__pending-text {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-body);
-}
-
-.verdict__pending-link {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-info);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    white-space: nowrap;
-    font-family: var(--tt-font-sans);
 }
 
 .verdict__badge-row {
@@ -346,18 +337,32 @@ function acknowledge() {
     background: var(--tt-danger);
 }
 
-.verdict__evidence-toggle {
+.verdict__evidence-card {
     margin-top: 9px;
-    width: 100%;
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
+    overflow: hidden;
+}
+
+.verdict__evidence-toggle {
+    width: 100%;
+    background: var(--tt-bg);
+    border: 0;
     padding: 10px 13px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
     font-family: var(--tt-font-sans);
+}
+
+.verdict__evidence-toggle:focus {
+    outline: none;
+}
+
+.verdict__evidence-toggle:active {
+    background: var(--tt-bg-fill);
 }
 
 .verdict__evidence-title {
@@ -376,10 +381,7 @@ function acknowledge() {
 }
 
 .verdict__evidence-list {
-    margin-top: var(--tt-space-2);
-    background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-md);
+    border-top: 1px solid var(--tt-border);
     padding: 10px 13px;
     text-align: left;
 }
@@ -489,5 +491,17 @@ function acknowledge() {
     cursor: pointer;
     box-shadow: var(--tt-elevation-4);
     font-family: var(--tt-font-sans);
+}
+
+.verdict__confirm:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.verdict__error {
+    margin-top: var(--tt-space-3);
+    color: var(--tt-danger);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
 }
 </style>
