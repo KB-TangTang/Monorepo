@@ -59,12 +59,22 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         }
     }
 
-    /** 스크롤-업 페이징: 더 오래된 메시지 앞에 삽입 */
+    /**
+     * 스크롤-업 페이징: 더 오래된 메시지 앞에 삽입.
+     *
+     * fetchChatMessages 는 개수(offset)가 아니라 커서를 받는다(이슈 #174 Task 11).
+     * messages 는 오래된 순으로 쌓여 있으므로 맨 앞(0번)이 현재 갖고 있는 것 중 가장
+     * 오래된 메시지다 — 그 messageId 를 before 로 넘겨야 그보다 이전 것을 받는다.
+     */
     async function loadOlderMessages(groupId) {
         if (!hasMore.value || loading.value) return;
         loading.value = true;
         try {
-            const page = await fetchChatMessages(groupId, messages.value.length);
+            const oldest = messages.value[0];
+            const page = await fetchChatMessages(
+                groupId,
+                oldest ? { before: oldest.messageId } : {},
+            );
             messages.value = [...page.messages, ...messages.value];
             hasMore.value = page.hasMore;
         } finally {
