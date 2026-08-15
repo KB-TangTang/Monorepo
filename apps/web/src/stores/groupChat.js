@@ -7,12 +7,22 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import {
-    fetchChatRoomInfo,
-    fetchChatMessages,
-    sendChatMessage,
-    resetUnreadCount,
-} from '@/api/groupChat';
+import { fetchChatRoomInfo, fetchChatMessages, resetUnreadCount } from '@/api/groupChat';
+
+/**
+ * 임시 로컬 발송 스텁 (Task 11 범위 밖 — Task 12 에서 제거 예정).
+ *
+ * 실전송은 이제 REST 가 아니라 STOMP(api/chatSocket.js)가 맡는다(이슈 #174 Task 11).
+ * 이 스토어와 GroupChatView 는 아직 목업 그대로이며 실소켓 연결은 Task 12 가 한다.
+ * 그때까지 예전에 쓰던 REST `sendChatMessage` 가 사라져 빌드가 깨지지 않도록
+ * 화면이 기대하던 모양(messageId, createdAt)만 로컬로 만들어 둔다.
+ */
+function createLocalMessageStub() {
+    return {
+        messageId: `local-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+    };
+}
 
 export const useGroupChatStore = defineStore('groupChat', () => {
     /* ── 상태 ──────────────────────────────────────────── */
@@ -67,10 +77,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         if (!text.trim() || sending.value) return;
         sending.value = true;
         try {
-            const { messageId, createdAt } = await sendChatMessage(groupId, {
-                contentType: 'TEXT',
-                content: text.trim(),
-            });
+            const { messageId, createdAt } = createLocalMessageStub();
             messages.value.push({
                 messageId,
                 groupId: Number(groupId),
@@ -94,10 +101,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         if (sending.value) return;
         sending.value = true;
         try {
-            const { messageId, createdAt } = await sendChatMessage(groupId, {
-                contentType: 'STICKER',
-                content: stickerId,
-            });
+            const { messageId, createdAt } = createLocalMessageStub();
             messages.value.push({
                 messageId,
                 groupId: Number(groupId),
