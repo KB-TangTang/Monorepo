@@ -1431,7 +1431,8 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
         "category": "온라인쇼핑",
         "paymentMethod": "신한카드",
         "classification": "CONSUMPTION",
-        "amount": -48900
+        "amount": -48900,
+        "isRefund": false
       }
     ]
   }
@@ -1440,6 +1441,8 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - `amount`는 부호 있는 값이다 — `CONSUMPTION`은 음수, `INCOME`은 양수, 환불(`is_refund=1`)은
   지출을 상계하는 양수. `TRANSFER`(이체)도 목록에는 포함되지만 `summary.totalSpent`/
   `totalDeposit`/`monthOverMonthRate` 계산에서는 제외된다.
+- `isRefund`: 이 거래가 환불 행인지. `true`면 `amount`가 양수여도 실제로는 이전 소비를 상계하는
+  것이지 새로운 입금이 아니다 — 프론트가 "(환불)" 같은 별도 표기를 붙이는 근거로 쓴다.
 - `paymentMethod`: 신용카드는 `{카드사명}카드`, 체크카드는 `{카드사명} 체크카드`, 계좌 입금은
   `입금`이다. `tbl_transaction.card_id`/`account_id`로 `tbl_card`/`tbl_connected_account`를
   조인해 만든다 — DB에 결제수단 컬럼이 따로 있는 게 아니다.
