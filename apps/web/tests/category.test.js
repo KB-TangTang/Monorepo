@@ -16,9 +16,11 @@ test('지출 카테고리는 대분류 12개를 갖는다', () => {
     assert.equal(EXPENSE_CATEGORIES.length, 12);
 });
 
-test('지출 카테고리는 소분류 46개를 갖는다', () => {
+/* db/seed_category.sql 의 소분류 44개와 같은 수다. '기타' 하위 두 항목('자동 분류 불가 거래'·
+ * '사용자 직접 지정')은 tbl_category 에서 이미 걷어냈으므로 이 목업에도 없다. */
+test('지출 카테고리는 소분류 44개를 갖는다', () => {
     const total = EXPENSE_CATEGORIES.reduce((sum, parent) => sum + parent.children.length, 0);
-    assert.equal(total, 46);
+    assert.equal(total, 44);
 });
 
 test('지출 카테고리 id 는 대분류·소분류 통틀어 중복이 없다', () => {

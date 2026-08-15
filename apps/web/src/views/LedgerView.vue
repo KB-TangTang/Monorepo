@@ -39,8 +39,13 @@ const selectedPaymentMethod = ref('');
 const isPaymentSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
-const { isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
-    useCategoryEdit(transactions);
+const {
+    categories,
+    isApplyingCategory,
+    categoryError,
+    loadCategories,
+    applyCategory: applyCategoryEdit,
+} = useCategoryEdit(transactions);
 
 const state = computed(() =>
     resolveLedgerState({ loading: loading.value, error: errorMessage.value, data: summary.value }),
@@ -122,6 +127,7 @@ function selectPaymentMethod(method) {
 
 function openCategorySheet(tx) {
     selectedTransaction.value = tx;
+    categoryError.value = '';
     isCategorySheetOpen.value = true;
 }
 
@@ -222,6 +228,7 @@ onMounted(async () => {
         <LedgerCategorySheet
             v-model="isCategorySheetOpen"
             :transaction="selectedTransaction"
+            :categories="categories"
             :error="categoryError"
             :confirming="isApplyingCategory"
             @select="applyCategory"

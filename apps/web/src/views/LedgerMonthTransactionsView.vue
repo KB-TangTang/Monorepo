@@ -45,8 +45,13 @@ const isPaymentSheetOpen = ref(false);
 const isCategoryFilterSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
-const { isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
-    useCategoryEdit(transactions);
+const {
+    categories,
+    isApplyingCategory,
+    categoryError,
+    loadCategories,
+    applyCategory: applyCategoryEdit,
+} = useCategoryEdit(transactions);
 
 const scrollEl = ref(null);
 const groupRefs = ref({});
@@ -151,6 +156,7 @@ function selectCategoryFilter(category) {
 
 function openCategorySheet(tx) {
     selectedTransaction.value = tx;
+    categoryError.value = '';
     isCategorySheetOpen.value = true;
 }
 
@@ -166,6 +172,8 @@ function goToSearch() {
 }
 
 onMounted(async () => {
+    /* 아래 try 안에는 이른 return 이 있어서, 카테고리 로드는 항상 돌도록 앞에 둔다. */
+    await loadCategories();
     try {
         months.value = await fetchLedgerMonths();
         if (period.value && !months.value.some((m) => m.value === period.value)) {
@@ -181,7 +189,6 @@ onMounted(async () => {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
         loading.value = false;
     }
-    await loadCategories();
 });
 </script>
 
@@ -280,6 +287,7 @@ onMounted(async () => {
         <LedgerCategorySheet
             v-model="isCategorySheetOpen"
             :transaction="selectedTransaction"
+            :categories="categories"
             :error="categoryError"
             :confirming="isApplyingCategory"
             @select="applyCategory"
