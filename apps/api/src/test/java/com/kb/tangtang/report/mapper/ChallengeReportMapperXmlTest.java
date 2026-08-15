@@ -27,6 +27,13 @@ class ChallengeReportMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findConfirmedReportMonths"));
         assertTrue(configuration.hasStatement(namespace + ".findFirstMissionMonth"));
         assertTrue(configuration.hasStatement(namespace + ".findChallengeConsentMonth"));
+        assertTrue(configuration.hasStatement(namespace + ".findFinalizedReportUserIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findFinalizedMissionRows"));
+        assertTrue(configuration.hasStatement(namespace + ".findFirstMissionDate"));
+        assertTrue(configuration.hasStatement(namespace + ".findDifficultyPolicies"));
+        assertTrue(configuration.hasStatement(namespace + ".upsertMonthlyReport"));
+        assertTrue(configuration.hasStatement(namespace + ".findMonthlyReport"));
+        assertTrue(configuration.hasStatement(namespace + ".findPreviousMonthlyReport"));
 
         try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
             String xml = new String(inputStream.readAllBytes());
@@ -38,6 +45,13 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("tbl_user_mission_info"));
             assertTrue(xml.contains("assign_date &lt; #{currentMonthStart}"));
             assertTrue(xml.contains("created_at &lt; #{currentMonthStart}"));
+            assertTrue(xml.contains("assignment.result IN ('SUCCESS', 'FAIL')"));
+            assertTrue(xml.contains("assignment.base_amount IS NOT NULL"));
+            assertTrue(xml.contains("SELECT MIN(assign_date)"));
+            assertTrue(xml.contains("mission.mission_type"));
+            assertFalse(xml.contains("mission_type = 'RELATIVE'"));
+            assertTrue(xml.contains("CAST(#{weeklyResultsJson} AS JSON)"));
+            assertTrue(xml.contains("ON DUPLICATE KEY UPDATE"));
         }
     }
 }

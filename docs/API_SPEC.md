@@ -939,6 +939,61 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
 
+## 개인 챌린지 월간 성과 리포트 (이슈 #244)
+
+모든 엔드포인트는 Bearer 인증이 필요하며, 사용자 ID를 요청 파라미터로 받지 않는다. 리포트는
+익월 1일 00:20 KST 배치가 전월의 최종 판정 개인 미션을 확정한 뒤에만 조회할 수 있다.
+
+| 메서드 | 경로 | 응답 |
+|---|---|---|
+| GET | `/api/reports/challenge/months` | 진입 상태와 조회 가능한 확정 월 목록 |
+| GET | `/api/reports/challenge?yearMonth=YYYY-MM` | 선택한 확정 월의 개인 챌린지 성과 |
+
+집계 대상은 대상 월에 배정되고 `SUCCESS` 또는 `FAIL`로 최종 판정됐으며 배정 시점 기준금액
+`base_amount(B)`가 저장된 개인 미션이다. 상대형과 절대형을 구분하지 않으며, `PENDING`과 B가 없는
+과거 이력은 제외한다. 결과는 `tbl_challenge_monthly_report`에 사용자·월별로 확정 저장한다.
+API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해당 사용자·전월만 보정 생성하며,
+이미 행이 있으면 다시 계산하지 않는다.
+
+`weeklyResults`는 월요일 시작 달력 주 순서다. 각 주의 `totalDays`·`successDays`·`successRate`는
+선택 월의 날짜만 세므로, 이전 달과 다음 달에 걸친 날짜는 분자·분모에서 모두 제외한다.
+첫 확정 리포트가 시작된 달에는 사용자의 최초 개인 미션 배정일부터 계산한다.
+`week`는 시작 전 주를 생략해도 다시 번호를 매기지 않으며, 해당 월의 달력 주차를 유지한다.
+
+상세 응답은 다음 형태다.
+
+```json
+{
+  "period": "2026-07",
+  "hasChallengeHistory": true,
+  "isFirstServiceMonth": false,
+  "hasPreviousComparison": true,
+  "missionSuccessRate": 82.76,
+  "monthOverMonthPercentagePoint": 9.43,
+  "successfulDays": 24,
+  "challengeDays": 29,
+  "bestStreakDays": 8,
+  "bestWeekday": "화요일",
+  "earnedPoints": 245,
+  "weeklyResults": [
+    { "week": 1, "successDays": 4, "totalDays": 5, "successRate": 80.00 }
+  ],
+  "difficulties": [
+    { "difficultyName": "EASY", "attempts": 12, "successDays": 11, "successRate": 91.67 }
+  ]
+}
+```
+
+첫 챌린지 리포트는 일반 리포트로 반환하되 `isFirstServiceMonth=true`,
+`hasPreviousComparison=false`, `monthOverMonthPercentagePoint=null`이다. 프론트는 이 필드로
+전월 비교 영역만 숨긴다.
+현재 월·미래 월은 `CHALLENGE_REPORT_NOT_AVAILABLE`, 확정 스냅샷이 없는 과거 월은
+`CHALLENGE_REPORT_NOT_FOUND`, 형식 오류는 `INVALID_YEAR_MONTH`로 반환한다.
+
+로컬 시연에서는 `POST /api/dev/reports/challenge/monthly?yearMonth=YYYY-MM`로 선택한 과거 월의
+확정 배치를 즉시 실행할 수 있다. 응답은 `{ yearMonth, affected }`이며, `affected`는 실제로
+스냅샷을 계산한 사용자 수다. `app.env=local`에서만 동작하고 인증이 필요하다.
+
 ## 개인 미션 월간 랭킹 조회 (이슈 #209)
 
 | 메서드 | 경로 | 인증 | 응답 |
