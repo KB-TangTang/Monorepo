@@ -151,6 +151,8 @@ class TransactionQueryServiceTest {
         assertEquals(0, new BigDecimal("3350000").compareTo(items.get(1).getAmount()));
         assertEquals(0, new BigDecimal("4000").compareTo(items.get(2).getAmount()));
         assertEquals(0, new BigDecimal("-50000").compareTo(items.get(3).getAmount()));
+        assertFalse(items.get(0).isRefund());
+        assertTrue(items.get(2).isRefund());
     }
 
     @Test

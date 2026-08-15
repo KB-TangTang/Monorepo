@@ -151,6 +151,7 @@ public class TransactionQueryService {
                     .paymentMethod(resolvePaymentMethod(row))
                     .classification(row.getClassification())
                     .amount(resolveSignedAmount(row))
+                    .isRefund(row.isRefund())
                     .build());
         }
         return items;

@@ -20,4 +20,5 @@ public class TransactionListItemDto {
     private String paymentMethod;
     private String classification;
     private BigDecimal amount;
+    private boolean isRefund;
 }
