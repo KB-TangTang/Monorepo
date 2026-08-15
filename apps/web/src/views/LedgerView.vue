@@ -5,7 +5,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchLedgerMonths, fetchLedgerSummary, fetchLedgerTransactions } from '@/api/ledger';
+import { fetchLedgerMonths, fetchLedgerPeriod } from '@/api/ledger';
 import AssetLedgerToggle from '@/components/asset/AssetLedgerToggle.vue';
 import LedgerCalendar from '@/components/ledger/LedgerCalendar.vue';
 import LedgerMonthNav from '@/components/ledger/LedgerMonthNav.vue';
@@ -80,10 +80,7 @@ async function loadPeriod() {
     errorMessage.value = '';
     selectedDate.value = null;
     try {
-        const [summaryData, transactionData] = await Promise.all([
-            fetchLedgerSummary(period.value),
-            fetchLedgerTransactions(period.value),
-        ]);
+        const { summary: summaryData, transactions: transactionData } = await fetchLedgerPeriod(period.value);
         summary.value = summaryData;
         transactions.value = transactionData;
         selectedDate.value = transactionData.length

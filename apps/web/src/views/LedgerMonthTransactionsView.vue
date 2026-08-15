@@ -6,7 +6,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchLedgerMonths, fetchLedgerTransactions } from '@/api/ledger';
+import { fetchLedgerMonths, fetchLedgerPeriod } from '@/api/ledger';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import LedgerCategoryFilterSheet from '@/components/ledger/LedgerCategoryFilterSheet.vue';
 import LedgerCategorySheet from '@/components/ledger/LedgerCategorySheet.vue';
@@ -106,7 +106,8 @@ async function loadPeriod({ resetScroll } = { resetScroll: false }) {
     loading.value = true;
     errorMessage.value = '';
     try {
-        transactions.value = await fetchLedgerTransactions(period.value);
+        const { transactions: transactionData } = await fetchLedgerPeriod(period.value);
+        transactions.value = transactionData;
     } catch (err) {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
         loading.value = false;

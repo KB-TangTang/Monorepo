@@ -1380,3 +1380,70 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
   `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
   `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.
+
+## 거래내역 월별 조회 (장부)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/transactions/months` | Bearer | `{ months: [{ value, hasData }] }` |
+| GET | `/api/transactions?yearMonth=YYYY-MM` (생략 가능) | Bearer | `{ period, summary, transactions }` |
+
+`GET /api/transactions/months` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "months": [
+      { "value": "2026-06", "hasData": false },
+      { "value": "2026-07", "hasData": true },
+      { "value": "2026-08", "hasData": false }
+    ]
+  }
+}
+```
+- **데이터가 있는 가장 이른 달**(거래가 하나도 없으면 이번 달)~현재월 범위를 **오름차순**으로
+  반환한다. `hasData`는 그 달에 집계 제외(`is_excluded_from_summary=1`)가 아닌 거래가 1건이라도
+  있는지다.
+  > 가입월(`tbl_user.created_at`) 기준이 **아니다.** CODEF 동기화는 계좌 연동 시점부터 과거
+  > 거래를 끌어오므로 데이터가 가입일보다 앞설 수 있다 — 로컬 데모 시드(`seed_local_demo.sql`)가
+  > 실계정에도 과거 7개월치 거래를 백필하면서 `tbl_user.created_at`은 그대로 두기 때문에 이 어긋남이
+  > 실제로 나타난다. 가입월 기준으로 만들었다가 범위가 "이번 달"뿐이 되어 월 이동 버튼이 전부
+  > 비활성화되는 버그가 있었다(2026-08-15 수정).
+
+`GET /api/transactions?yearMonth=2026-07` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "period": "2026-07",
+    "summary": {
+      "period": "2026-07",
+      "totalSpent": 420900,
+      "totalDeposit": 3420000,
+      "monthOverMonthRate": 12.50,
+      "paymentMethods": ["신한카드", "KB국민 체크카드", "입금"]
+    },
+    "transactions": [
+      {
+        "id": 501,
+        "date": "2026-07-29",
+        "merchant": "오늘의집",
+        "category": "온라인쇼핑",
+        "paymentMethod": "신한카드",
+        "classification": "CONSUMPTION",
+        "amount": -48900
+      }
+    ]
+  }
+}
+```
+- `amount`는 부호 있는 값이다 — `CONSUMPTION`은 음수, `INCOME`은 양수, 환불(`is_refund=1`)은
+  지출을 상계하는 양수. `TRANSFER`(이체)도 목록에는 포함되지만 `summary.totalSpent`/
+  `totalDeposit`/`monthOverMonthRate` 계산에서는 제외된다.
+- `paymentMethod`: 신용카드는 `{카드사명}카드`, 체크카드는 `{카드사명} 체크카드`, 계좌 입금은
+  `입금`이다. `tbl_transaction.card_id`/`account_id`로 `tbl_card`/`tbl_connected_account`를
+  조인해 만든다 — DB에 결제수단 컬럼이 따로 있는 게 아니다.
+- `yearMonth`를 생략하면 `period: null`, `summary: null`이고 `transactions`는 기간 제한 없이
+  데이터가 있는 전체 월을 합쳐서 반환한다(검색 화면 전용).
+- `yearMonth`가 `YYYY-MM` 형식이 아니면 `400 INVALID_REQUEST`, 데이터가 있는 가장 이른 달보다
+  이전이면 `400 LEDGER_NOT_AVAILABLE`.
