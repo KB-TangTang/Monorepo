@@ -8,6 +8,7 @@ import {
     findExpenseParentByName,
     resolveCategoryDirection,
     resolveCategoryIcon,
+    resolveCategoryId,
     resolveCategoryTone,
 } from '../src/utils/category.js';
 
@@ -106,4 +107,16 @@ test('resolveCategoryIcon 은 수입 카테고리 아이콘을 반환한다', ()
 
 test('resolveCategoryIcon 은 못 찾으면 기타 아이콘으로 폴백한다', () => {
     assert.equal(resolveCategoryIcon('존재하지않음'), 'EllipsisHorizontalCircle');
+});
+
+test('resolveCategoryId: 이름으로 id를 찾는다', () => {
+    const categories = [
+        { id: 1, name: '식비', parentId: null },
+        { id: 2, name: '음식점/외식', parentId: 1 },
+    ];
+    assert.equal(resolveCategoryId(categories, '음식점/외식'), 2);
+});
+
+test('resolveCategoryId: 없는 이름이면 null이다', () => {
+    assert.equal(resolveCategoryId([], '없는카테고리'), null);
 });

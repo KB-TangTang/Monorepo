@@ -15,3 +15,9 @@ export async function fetchLedgerSearchTransactions() {
     const result = await http.get('/transactions');
     return result.transactions;
 }
+
+/* 거래 한 건의 카테고리를 사용자 지정으로 바꾼다. applyToMerchant=true면 같은 가맹점명의
+ * 이후 거래에도 최우선 적용되지만, 이미 표시된 다른 거래는 소급 반영되지 않는다. */
+export async function updateTransactionCategory(transactionId, { categoryId, applyToMerchant }) {
+    return http.patch(`/transactions/${transactionId}/category`, { categoryId, applyToMerchant });
+}
