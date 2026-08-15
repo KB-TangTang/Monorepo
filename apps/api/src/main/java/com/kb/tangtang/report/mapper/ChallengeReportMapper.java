@@ -28,7 +28,8 @@ public interface ChallengeReportMapper {
 
     List<Long> findFinalizedReportUserIds(@Param("startDate") LocalDate startDate,
                                           @Param("endDate") LocalDate endDate,
-                                          @Param("yearMonth") String yearMonth);
+                                          @Param("yearMonth") String yearMonth,
+                                          @Param("includeExisting") boolean includeExisting);
 
     List<ChallengeMonthlyMissionRow> findFinalizedMissionRows(@Param("userId") long userId,
                                                                @Param("startDate") LocalDate startDate,

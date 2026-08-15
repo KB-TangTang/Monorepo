@@ -42,86 +42,98 @@ const topSavingCategory = computed(() =>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
         </button>
 
-        <div v-if="isDetailsOpen" id="habit-details" class="habit-dropdown__details">
-            <div class="habit-settlement__meta">
-                <div>
-                    <span>덜 쓴 돈</span>
-                    <strong>{{ formatWon(report.savedAmount) }}</strong>
+        <Transition name="receipt-slide">
+            <div v-if="isDetailsOpen" id="habit-details" class="habit-dropdown__details">
+                <div class="habit-settlement__meta">
+                    <div>
+                        <span>덜 쓴 돈</span>
+                        <strong>{{ formatWon(report.savedAmount) }}</strong>
+                    </div>
+                    <div>
+                        <span>더 쓴 돈</span>
+                        <em>{{ formatWon(report.overspentAmount) }}</em>
+                    </div>
+                    <div>
+                        <span>1년이면</span>
+                        <mark>{{ formatWon(report.annualizedNetSavings) }}</mark>
+                    </div>
                 </div>
-                <div>
-                    <span>더 쓴 돈</span>
-                    <em>{{ formatWon(report.overspentAmount) }}</em>
-                </div>
-                <div>
-                    <span>1년이면</span>
-                    <mark>{{ formatWon(report.annualizedNetSavings) }}</mark>
-                </div>
-            </div>
 
-            <section class="habit-category" aria-labelledby="habit-category-title">
-                <button type="button" class="habit-category__toggle" @click="isGuideOpen = true">
-                    <span>
-                        <strong id="habit-category-title">카테고리별 효과</strong>
-                    </span>
-                    <span class="habit-category__help">?&nbsp; 어떻게 계산했나요</span>
-                </button>
-                <div class="habit-category__details">
-                    <div v-if="topSavingCategory" class="habit-category__insight">
-                        <span>이번 달 핵심 변화</span>
-                        <strong
-                            >{{ topSavingCategory.name }}에서
-                            <b>{{ formatWon(topSavingCategory.amount) }}</b> 아꼈어요</strong
-                        >
-                    </div>
-                    <div class="habit-category__card">
-                        <section>
-                            <div class="habit-category__title">
-                                <strong
-                                    >챌린지 성공
-                                    <span>· {{ report.successfulDays }}일</span></strong
-                                >
-                                <mark>평소보다 덜 쓴 돈</mark>
-                            </div>
-                            <ul>
-                                <li v-for="category in successCategories" :key="category.name">
-                                    <i>{{ category.code }}</i>
+                <section class="habit-category" aria-labelledby="habit-category-title">
+                    <button
+                        type="button"
+                        class="habit-category__toggle"
+                        @click="isGuideOpen = true"
+                    >
+                        <span>
+                            <strong id="habit-category-title">카테고리별 효과</strong>
+                        </span>
+                        <span class="habit-category__help">?&nbsp; 어떻게 계산했나요</span>
+                    </button>
+                    <div class="habit-category__details">
+                        <div v-if="topSavingCategory" class="habit-category__insight">
+                            <span>이번 달 핵심 변화</span>
+                            <strong
+                                >{{ topSavingCategory.name }}에서
+                                <b>{{ formatWon(topSavingCategory.amount) }}</b> 아꼈어요</strong
+                            >
+                        </div>
+                        <div class="habit-category__card">
+                            <section>
+                                <div class="habit-category__title">
                                     <strong
-                                        >{{ category.name }}
-                                        <span>{{ category.days }}일</span></strong
+                                        >챌린지 성공
+                                        <span>· {{ report.successfulDays }}일</span></strong
                                     >
-                                    <b>{{ formatSignedWon(category.amount) }}</b>
-                                </li>
-                            </ul>
-                        </section>
-                        <section class="habit-category__failure">
-                            <div class="habit-category__title">
-                                <strong
-                                    >챌린지 실패
-                                    <span
-                                        >·
-                                        {{ report.challengeDays - report.successfulDays }}일</span
-                                    ></strong
-                                >
-                                <mark>평소보다 더 쓴 돈</mark>
-                            </div>
-                            <ul>
-                                <li v-for="category in failureCategories" :key="category.name">
-                                    <i>{{ category.code }}</i>
+                                    <mark>평소보다 덜 쓴 돈</mark>
+                                </div>
+                                <ul>
+                                    <li v-for="category in successCategories" :key="category.name">
+                                        <i>{{ category.code }}</i>
+                                        <strong
+                                            >{{ category.name }}
+                                            <span>{{ category.days }}일</span></strong
+                                        >
+                                        <b>{{ formatSignedWon(category.amount) }}</b>
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="habit-category__failure">
+                                <div class="habit-category__title">
                                     <strong
-                                        >{{ category.name }}
-                                        <span>{{ category.days }}일</span></strong
+                                        >챌린지 실패
+                                        <span
+                                            >·
+                                            {{
+                                                report.challengeDays - report.successfulDays
+                                            }}일</span
+                                        ></strong
                                     >
-                                    <b :class="{ 'habit-category__zero': category.amount === 0 }">
-                                        {{ formatSignedWon(category.amount) }}
-                                    </b>
-                                </li>
-                            </ul>
-                            <p>미션은 못 지켰지만 평소보다 더 쓰지는 않았어요</p>
-                        </section>
+                                    <mark>평소보다 더 쓴 돈</mark>
+                                </div>
+                                <ul>
+                                    <li v-for="category in failureCategories" :key="category.name">
+                                        <i>{{ category.code }}</i>
+                                        <strong
+                                            >{{ category.name }}
+                                            <span>{{ category.days }}일</span></strong
+                                        >
+                                        <b
+                                            :class="{
+                                                'habit-category__zero': category.amount === 0,
+                                            }"
+                                        >
+                                            {{ formatSignedWon(category.amount) }}
+                                        </b>
+                                    </li>
+                                </ul>
+                                <p>미션은 못 지켰지만 평소보다 더 쓰지는 않았어요</p>
+                            </section>
+                        </div>
                     </div>
-                </div>
-            </section>
-        </div>
+                </section>
+            </div>
+        </Transition>
         <ChallengeSavingsGuide v-model="isGuideOpen" @understood="isGuideOpen = false" />
     </section>
 </template>
@@ -197,6 +209,27 @@ const topSavingCategory = computed(() =>
     border-radius: var(--tt-radius-lg);
     border-top-right-radius: 0;
     border-top-left-radius: 0;
+}
+
+.receipt-slide-enter-active,
+.receipt-slide-leave-active {
+    max-height: 4000px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.receipt-slide-enter-from,
+.receipt-slide-leave-to {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .receipt-slide-enter-active,
+    .receipt-slide-leave-active {
+        transition: none;
+    }
 }
 
 .habit-settlement__meta {

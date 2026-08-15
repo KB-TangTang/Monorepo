@@ -39,16 +39,20 @@ public class ChallengeMonthlyReportBatchService {
 
     public void finalizePreviousMonthReports() {
         LocalDateTime now = LocalDateTime.now(clock).withNano(0);
-        finalizeReports(YearMonth.from(now).minusMonths(1), now);
+        finalizeReports(YearMonth.from(now).minusMonths(1), false, now);
     }
 
     public int finalizeReports(YearMonth targetMonth) {
-        return finalizeReports(targetMonth, LocalDateTime.now(clock).withNano(0));
+        return finalizeReports(targetMonth, false);
     }
 
-    int finalizeReports(YearMonth targetMonth, LocalDateTime finalizedAt) {
+    public int finalizeReports(YearMonth targetMonth, boolean includeExisting) {
+        return finalizeReports(targetMonth, includeExisting, LocalDateTime.now(clock).withNano(0));
+    }
+
+    int finalizeReports(YearMonth targetMonth, boolean includeExisting, LocalDateTime finalizedAt) {
         List<Long> userIds = mapper.findFinalizedReportUserIds(
-                targetMonth.atDay(1), targetMonth.atEndOfMonth(), targetMonth.toString());
+                targetMonth.atDay(1), targetMonth.atEndOfMonth(), targetMonth.toString(), includeExisting);
         int completed = 0;
         for (Long userId : userIds) {
             try {
@@ -59,8 +63,8 @@ public class ChallengeMonthlyReportBatchService {
                         userId, targetMonth, exception);
             }
         }
-        log.info("개인 챌린지 월 확정 완료. yearMonth={}, candidates={}, completed={}",
-                targetMonth, userIds.size(), completed);
+        log.info("개인 챌린지 월 확정 완료. yearMonth={}, includeExisting={}, candidates={}, completed={}",
+                targetMonth, includeExisting, userIds.size(), completed);
         return completed;
     }
 }

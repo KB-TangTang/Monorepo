@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.report.domain.ChallengeMonthlyDifficultyPolicy;
 import com.kb.tangtang.report.domain.ChallengeMonthlyMissionRow;
 import com.kb.tangtang.report.domain.ChallengeMonthlyReportSnapshot;
+import com.kb.tangtang.report.dto.ChallengeCategoryEffectDto;
 import com.kb.tangtang.report.dto.ChallengeDifficultyResultDto;
 import com.kb.tangtang.report.dto.ChallengeWeeklyResultDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
@@ -30,7 +31,7 @@ import java.util.Map;
 @Service
 public class ChallengeMonthlyReportSnapshotService {
 
-    private static final String CALCULATION_VERSION = "v2026-08-15";
+    private static final String CALCULATION_VERSION = "v2026-08-15-savings";
     private static final int STREAK_BONUS_POINTS = 5;
     private static final String[] KOREAN_WEEKDAYS = {"월", "화", "수", "목", "금", "토", "일"};
 
@@ -57,6 +58,7 @@ public class ChallengeMonthlyReportSnapshotService {
                 targetMonth, reportStartDate, rows);
         List<ChallengeDifficultyResultDto> difficultyResults = calculateDifficultyResults(
                 mapper.findDifficultyPolicies(), rows);
+        ChallengeSavingsResult savingsResult = calculateSavings(rows);
 
         int successDays = (int) rows.stream().filter(this::isSuccess).count();
         ChallengeMonthlyReportSnapshot snapshot = ChallengeMonthlyReportSnapshot.builder()
@@ -64,6 +66,9 @@ public class ChallengeMonthlyReportSnapshotService {
                 .yearMonth(targetMonth.toString())
                 .totalDays(rows.size())
                 .successDays(successDays)
+                .savedAmount(savingsResult.savedAmount)
+                .overspentAmount(savingsResult.overspentAmount)
+                .categoryEffectsJson(toJson(savingsResult.categoryEffects))
                 .monthlyLongestStreak(calculateLongestStreak(rows))
                 .bestWeekday(calculateBestWeekday(rows))
                 .earnedScore(calculateEarnedScore(rows))
@@ -133,6 +138,41 @@ public class ChallengeMonthlyReportSnapshotService {
                         entry.getKey(), entry.getValue().attempts, entry.getValue().successDays,
                         calculateRate(entry.getValue().successDays, entry.getValue().attempts)))
                 .toList();
+    }
+
+    /**
+     * 기준액은 미션 배정 원장에 고정된 B를 사용한다. 미션 종류가 아니라 B 보유 여부로
+     * 집계 대상을 정했으므로, B가 저장된 절대형 미션도 상대형과 같은 규칙으로 포함된다.
+     */
+    private ChallengeSavingsResult calculateSavings(List<ChallengeMonthlyMissionRow> rows) {
+        BigDecimal savedAmount = BigDecimal.ZERO;
+        BigDecimal overspentAmount = BigDecimal.ZERO;
+        Map<Long, CategoryEffectCounter> categories = new LinkedHashMap<>();
+
+        for (ChallengeMonthlyMissionRow row : rows) {
+            BigDecimal baseAmount = amount(row.getBaseAmount());
+            BigDecimal actualAmount = amount(row.getActualAmount());
+            CategoryEffectCounter category = categories.computeIfAbsent(
+                    row.getCategoryId(), ignored -> new CategoryEffectCounter(row.getCategoryId(), row.getCategoryName()));
+
+            if (isSuccess(row)) {
+                BigDecimal saved = baseAmount.subtract(actualAmount);
+                savedAmount = savedAmount.add(saved);
+                category.successfulDays++;
+                category.savedAmount = category.savedAmount.add(saved);
+                continue;
+            }
+
+            BigDecimal overspent = actualAmount.subtract(baseAmount).max(BigDecimal.ZERO);
+            overspentAmount = overspentAmount.add(overspent);
+            category.failedDays++;
+            category.overspentAmount = category.overspentAmount.add(overspent);
+        }
+
+        List<ChallengeCategoryEffectDto> categoryEffects = categories.values().stream()
+                .map(CategoryEffectCounter::toDto)
+                .toList();
+        return new ChallengeSavingsResult(savedAmount, overspentAmount, categoryEffects);
     }
 
     private int calculateLongestStreak(List<ChallengeMonthlyMissionRow> rows) {
@@ -209,6 +249,10 @@ public class ChallengeMonthlyReportSnapshotService {
         return "SUCCESS".equals(row.getResult());
     }
 
+    private BigDecimal amount(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -220,5 +264,30 @@ public class ChallengeMonthlyReportSnapshotService {
     private static class DifficultyCounter {
         private int attempts;
         private int successDays;
+    }
+
+    private static class CategoryEffectCounter {
+        private final long categoryId;
+        private final String categoryName;
+        private int successfulDays;
+        private BigDecimal savedAmount = BigDecimal.ZERO;
+        private int failedDays;
+        private BigDecimal overspentAmount = BigDecimal.ZERO;
+
+        private CategoryEffectCounter(Long categoryId, String categoryName) {
+            this.categoryId = categoryId == null ? 0L : categoryId;
+            this.categoryName = categoryName;
+        }
+
+        private ChallengeCategoryEffectDto toDto() {
+            return new ChallengeCategoryEffectDto(
+                    categoryId, categoryName, successfulDays, savedAmount, failedDays, overspentAmount);
+        }
+    }
+
+    private record ChallengeSavingsResult(
+            BigDecimal savedAmount,
+            BigDecimal overspentAmount,
+            List<ChallengeCategoryEffectDto> categoryEffects) {
     }
 }
