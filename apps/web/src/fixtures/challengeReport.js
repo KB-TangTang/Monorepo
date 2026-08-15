@@ -49,7 +49,7 @@ const REPORTS = {
             { code: '배', name: '배달', days: 7, amount: 28000, status: 'success' },
             { code: '쇼', name: '쇼핑', days: 5, amount: 18000, status: 'success' },
             { code: '편', name: '편의점', days: 4, amount: 10000, status: 'success' },
-            { code: '야', name: '야식', days: 2, amount: -22000, status: 'failure' },
+            { code: '야', name: '야식', days: 2, amount: 22000, status: 'failure' },
             { code: '택', name: '택시', days: 4, amount: 0, status: 'failure' },
         ],
     },

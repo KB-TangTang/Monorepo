@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.report.domain.ChallengeMonthlyReportRow;
 import com.kb.tangtang.report.dto.ChallengeDifficultyResultDto;
+import com.kb.tangtang.report.dto.ChallengeCategoryEffectDto;
 import com.kb.tangtang.report.dto.ChallengeReportDetailDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
@@ -181,6 +182,11 @@ public class ChallengeReportService {
                 .bestStreakDays(report.getMonthlyLongestStreak())
                 .bestWeekday(report.getBestWeekday())
                 .earnedPoints(report.getEarnedScore())
+                .savedAmount(amount(report.getSavedAmount()))
+                .overspentAmount(amount(report.getOverspentAmount()))
+                .netSavings(amount(report.getNetAmount()))
+                .annualizedNetSavings(amount(report.getNetAmount()).multiply(BigDecimal.valueOf(12)))
+                .categoryEffects(readCategoryEffects(report.getCategoryEffectsJson()))
                 .weeklyResults(readWeeklyResults(report.getWeeklyResultsJson()))
                 .difficulties(readDifficultyResults(report.getDifficultyResultsJson()))
                 .build();
@@ -210,6 +216,10 @@ public class ChallengeReportService {
         return readJson(rawJson, new TypeReference<List<ChallengeDifficultyResultDto>>() { });
     }
 
+    private List<ChallengeCategoryEffectDto> readCategoryEffects(String rawJson) {
+        return readJson(rawJson, new TypeReference<List<ChallengeCategoryEffectDto>>() { });
+    }
+
     private <T> List<T> readJson(String rawJson, TypeReference<List<T>> type) {
         if (rawJson == null || rawJson.isBlank()) {
             return List.of();
@@ -229,5 +239,9 @@ public class ChallengeReportService {
         return BigDecimal.valueOf(successDays)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal amount(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

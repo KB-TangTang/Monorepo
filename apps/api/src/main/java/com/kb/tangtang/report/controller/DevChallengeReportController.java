@@ -24,7 +24,8 @@ public class DevChallengeReportController implements DevChallengeReportControlle
     @PostMapping("/monthly")
     public ApiResponse<ChallengeMonthlyReportBatchRunDto> runMonthlyBatch(
             @LoginUser Long userId,
-            @RequestParam String yearMonth) {
-        return ApiResponse.ok(devChallengeReportService.runMonthlyBatch(yearMonth));
+            @RequestParam String yearMonth,
+            @RequestParam(defaultValue = "false") boolean force) {
+        return ApiResponse.ok(devChallengeReportService.runMonthlyBatch(yearMonth, force));
     }
 }

@@ -46,24 +46,26 @@ const isWeeklyResultsOpen = ref(false);
                     </svg>
                 </button>
             </div>
-            <section
-                v-if="isWeeklyResultsOpen"
-                id="weekly-results"
-                class="weekly-card"
-                aria-labelledby="weekly-title"
-            >
-                <h2 id="weekly-title">주차별 성공률</h2>
-                <ul>
-                    <li v-for="week in report.weeklyResults" :key="week.week">
-                        <i aria-hidden="true"></i>
-                        <strong>{{ week.week }}주차</strong>
-                        <div class="weekly-card__track" aria-hidden="true">
-                            <span :style="{ width: formatPercentage(week.successRate) }"></span>
-                        </div>
-                        <b>{{ week.successDays }}/{{ week.totalDays }}</b>
-                    </li>
-                </ul>
-            </section>
+            <Transition name="receipt-slide">
+                <section
+                    v-if="isWeeklyResultsOpen"
+                    id="weekly-results"
+                    class="weekly-card"
+                    aria-labelledby="weekly-title"
+                >
+                    <h2 id="weekly-title">주차별 성공률</h2>
+                    <ul>
+                        <li v-for="week in report.weeklyResults" :key="week.week">
+                            <i aria-hidden="true"></i>
+                            <strong>{{ week.week }}주차</strong>
+                            <div class="weekly-card__track" aria-hidden="true">
+                                <span :style="{ width: formatPercentage(week.successRate) }"></span>
+                            </div>
+                            <b>{{ week.successDays }}/{{ week.totalDays }}</b>
+                        </li>
+                    </ul>
+                </section>
+            </Transition>
         </section>
 
         <ChallengeConsumptionHabitDropdown v-if="report.netSavings != null" :report="report" />
@@ -280,6 +282,20 @@ const isWeeklyResultsOpen = ref(false);
     border-top: 1px solid var(--tt-border);
 }
 
+.receipt-slide-enter-active,
+.receipt-slide-leave-active {
+    max-height: 4000px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.receipt-slide-enter-from,
+.receipt-slide-leave-to {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+}
+
 .weekly-card h2 {
     margin-bottom: var(--tt-space-3);
     font-size: var(--tt-fs-body);
@@ -345,6 +361,8 @@ const isWeeklyResultsOpen = ref(false);
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .receipt-slide-enter-active,
+    .receipt-slide-leave-active,
     .mission-card__track span,
     .weekly-card__track span,
     .difficulty-card__track span {
