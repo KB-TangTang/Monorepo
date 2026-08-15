@@ -23,7 +23,8 @@ public interface ChatControllerDocs {
 
     @ApiOperation(value = "메시지 목록 조회",
             notes = "before 는 위로 스크롤, after 는 재연결 후 놓친 구간 보충용이다. "
-                    + "둘을 함께 주면 INVALID_REQUEST 다. 둘 다 없으면 최근 limit 건을 준다.")
+                    + "둘을 함께 주면 INVALID_REQUEST 다. 둘 다 없으면 최근 limit 건을 준다. "
+                    + "limit 은 1~100 사이만 허용하며 범위를 벗어나면 INVALID_REQUEST 다.")
     ApiResponse<ChatMessagePageDto> messages(
             @PathVariable long groupId,
             @ApiParam(value = "이 messageId 보다 앞 구간") @RequestParam(required = false) Long before,

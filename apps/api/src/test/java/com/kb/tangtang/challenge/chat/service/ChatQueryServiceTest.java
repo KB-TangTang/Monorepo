@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -82,6 +83,56 @@ class ChatQueryServiceTest {
                 () -> service.messages(GROUP_ID, USER_ID, 21L, 10L, 50));
 
         assertEquals("INVALID_REQUEST", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("limit=0 이면 INVALID_REQUEST 고 store 를 전혀 호출하지 않는다")
+    void rejectsZeroLimit() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.messages(GROUP_ID, USER_ID, null, null, 0));
+
+        assertEquals("INVALID_REQUEST", ex.getCode());
+        verifyNoInteractions(store);
+    }
+
+    @Test
+    @DisplayName("limit 이 음수면 INVALID_REQUEST 고 store 를 전혀 호출하지 않는다")
+    void rejectsNegativeLimit() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.messages(GROUP_ID, USER_ID, null, null, -1));
+
+        assertEquals("INVALID_REQUEST", ex.getCode());
+        verifyNoInteractions(store);
+    }
+
+    @Test
+    @DisplayName("limit 이 100 을 넘으면 INVALID_REQUEST 고 store 를 전혀 호출하지 않는다")
+    void rejectsLimitOverMax() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.messages(GROUP_ID, USER_ID, null, null, 101));
+
+        assertEquals("INVALID_REQUEST", ex.getCode());
+        verifyNoInteractions(store);
+    }
+
+    @Test
+    @DisplayName("limit=1 은 하한 경계로 정상 조회된다")
+    void allowsMinLimit() {
+        when(store.findRecent(GROUP_ID, 1)).thenReturn(List.of());
+
+        service.messages(GROUP_ID, USER_ID, null, null, 1);
+
+        verify(store).findRecent(GROUP_ID, 1);
+    }
+
+    @Test
+    @DisplayName("limit=100 은 상한 경계로 정상 조회된다")
+    void allowsMaxLimit() {
+        when(store.findRecent(GROUP_ID, 100)).thenReturn(List.of());
+
+        service.messages(GROUP_ID, USER_ID, null, null, 100);
+
+        verify(store).findRecent(GROUP_ID, 100);
     }
 
     @Test

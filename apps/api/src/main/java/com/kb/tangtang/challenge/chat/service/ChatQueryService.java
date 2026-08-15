@@ -22,6 +22,10 @@ import java.util.stream.Collectors;
 @Service
 public class ChatQueryService {
 
+    /** 조회 개수 상한. Redis LRANGE 로 그대로 전달되므로 방 전체 유출(limit<=0)·과도한 조회를 막는다 */
+    private static final int MAX_LIMIT = 100;
+    private static final int MIN_LIMIT = 1;
+
     private final ChatRoomAccessService access;
     private final ChatMessageStore store;
 
@@ -45,6 +49,9 @@ public class ChatQueryService {
     public ChatMessagePageDto messages(long groupId, long userId, Long before, Long after, int limit) {
         if (before != null && after != null) {
             throw new BusinessException("INVALID_REQUEST", "before 와 after 는 함께 쓸 수 없어요.");
+        }
+        if (limit < MIN_LIMIT || limit > MAX_LIMIT) {
+            throw new BusinessException("INVALID_REQUEST", "조회 개수는 1~100 사이여야 해요.");
         }
         access.verifyCanEnter(groupId, userId);
 
