@@ -1,5 +1,6 @@
 package com.kb.tangtang.transaction.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,5 +21,12 @@ public class TransactionListItemDto {
     private String paymentMethod;
     private String classification;
     private BigDecimal amount;
+
+    /*
+     * ⚠ boolean isRefund 는 Lombok 이 isRefund() 를 만들고, Jackson 은 그 getter 를 "refund" 로
+     *   읽는다(notification/dto/NotificationDto.java 의 isRead 와 같은 함정). 프론트는
+     *   transaction.isRefund 를 본다 → 이름을 고정하지 않으면 항상 undefined 다.
+     */
+    @Getter(onMethod_ = @JsonProperty("isRefund"))
     private boolean isRefund;
 }
