@@ -21,7 +21,7 @@
 | `01. 서비스 API` | 정식 엔드포인트 52개 |
 | `02. 개발 전용 API` | `/api/dev/**`. 배치 트리거·미션 재배정. 로컬에서만 동작한다 |
 
-**섹션은 모듈 단위 8개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
+**섹션은 모듈 단위 9개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
 로그인·내 정보·동의·튜토리얼이 함께 들어간다. 태그 이름은 `common/docs/SwaggerTags` 가 소유한다.
 
 | 섹션 | 모듈 |
@@ -34,6 +34,7 @@
 | `05. 알림` | notification |
 | `06. 월간 리포트(판결문)` | report |
 | `07. 고정지출 · 절약` | fixedexpense |
+| `08. 거래내역` | transaction |
 
 - 인증이 필요한 API 를 호출하려면 우측 상단 **Authorize** 에 `Bearer {accessToken}` 을 넣는다.
   (`Bearer ` 접두사까지 포함해야 한다. 인터셉터가 접두사를 직접 잘라낸다)
@@ -1159,3 +1160,39 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 저장된 `COMPLETED` JSON이 훼손돼 결과를 안전하게 조립할 수 없는 경우에만
 `503 AI_ANALYSIS_RESULT_UNAVAILABLE`을 반환한다. 이는 월간 총소비·추이·카테고리 조회 실패와
 분리된 부가 데이터 오류이며, 화면은 핵심 리포트를 계속 표시한다.
+
+## 거래 카테고리 수동 수정 (이슈 #237)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| PATCH | `/api/transactions/{transactionId}/category` | Bearer | `{ transactionId, categoryId, categorySource, merchantRuleApplied }` |
+
+요청 본문
+```json
+{
+  "categoryId": 12,
+  "applyToMerchant": false
+}
+```
+
+응답
+```json
+{
+  "success": true,
+  "data": {
+    "transactionId": 501,
+    "categoryId": 12,
+    "categorySource": "USER",
+    "merchantRuleApplied": false
+  }
+}
+```
+
+- 거래 한 건의 카테고리를 사용자가 직접 지정한다. `categorySource`는 항상 `USER`로 바뀐다 — 이미
+  `USER`로 지정된 거래를 다시 고치는 요청도 반영된다(자동 재동기화만 `USER` 값을 보호한다).
+- `applyToMerchant=true`면 같은 요청 안에서 `tbl_user_category_map`에도 가맹점 규칙을 upsert한다.
+  이후 그 가맹점(정규화된 이름 기준)의 새 거래에는 이 카테고리가 최우선 적용된다. **과거 거래는
+  소급 반영되지 않는다.**
+- 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
+  `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
+  `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.

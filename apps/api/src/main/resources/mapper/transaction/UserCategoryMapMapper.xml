@@ -11,4 +11,14 @@
          LIMIT 1
     </select>
 
+    <!--
+      가맹점 규칙 upsert. uk_ucm_user_merchant(user_id, merchant_name_normalized)가 이미 있어
+      ON DUPLICATE KEY UPDATE 한 문장으로 insert/update를 겸한다.
+    -->
+    <insert id="upsert">
+        INSERT INTO tbl_user_category_map (user_id, merchant_name_normalized, category_id)
+        VALUES (#{userId}, #{merchantNameNormalized}, #{categoryId})
+        ON DUPLICATE KEY UPDATE category_id = VALUES(category_id)
+    </insert>
+
 </mapper>

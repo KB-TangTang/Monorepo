@@ -46,4 +46,15 @@ public interface TransactionMapper {
 
     /** id 목록으로 거래를 조회한다. LLM 배치 등록 시 transaction_date 정렬에 쓴다. */
     List<Transaction> findByIds(@Param("ids") List<Long> ids);
+
+    /** 소유권 확인 겸 가맹점명 조회. 사용자 카테고리 수정 API(TransactionService) 전용. */
+    Transaction findByIdAndUser(@Param("id") Long id, @Param("userId") Long userId);
+
+    /**
+     * 사용자가 직접 지정하는 카테고리 수정 전용. updateCategory()의 category_source 가드를 타지
+     * 않는다 — 이미 USER로 지정된 거래를 다시 고치는 요청도 반영해야 하기 때문이다. WHERE에
+     * user_id를 넣어 소유권을 DB 레벨에서도 강제한다.
+     */
+    int updateCategoryByUser(@Param("id") Long id, @Param("userId") Long userId,
+                              @Param("categoryId") Long categoryId);
 }
