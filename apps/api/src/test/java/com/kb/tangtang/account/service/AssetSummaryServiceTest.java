@@ -75,7 +75,7 @@ class AssetSummaryServiceTest {
     private List<AssetTrendItemDto> trendEndingWith(BigDecimal previousMonthNetWorth, BigDecimal previousMonthTotalDebt,
                                                       BigDecimal currentNetWorth, BigDecimal currentTotalDebt) {
         List<AssetTrendItemDto> trend = new ArrayList<>();
-        for (int i = 3; i <= 6; i++) {
+        for (int i = 3; i <= 8; i++) {
             trend.add(AssetTrendItemDto.builder().yearMonth("2026-0" + i).netWorth(null).totalDebt(null).build());
         }
         trend.set(4, AssetTrendItemDto.builder().yearMonth("2026-07")
