@@ -12,11 +12,15 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -99,6 +103,40 @@ class ChatMessageStoreTest {
 
         verify(valueOps).increment("chat:unread:7:3");
         verify(valueOps).increment("chat:unread:7:9");
+    }
+
+    @Test
+    @DisplayName("INCR 결과가 1이면 messages 키의 잔여 TTL 로 unread 키에도 만료 시각을 맞춘다")
+    void increaseUnreadSetsTtlWhenKeyIsFreshlyCreated() {
+        when(valueOps.increment("chat:unread:7:3")).thenReturn(1L);
+        when(redisTemplate.getExpire("chat:messages:7", TimeUnit.SECONDS)).thenReturn(3600L);
+
+        store.increaseUnread(GROUP_ID, List.of(3L));
+
+        verify(redisTemplate).expire("chat:unread:7:3", Duration.ofSeconds(3600L));
+    }
+
+    @Test
+    @DisplayName("INCR 결과가 2 이상이면 이미 만료 시각이 있는 키이므로 expire 를 다시 걸지 않는다")
+    void increaseUnreadSkipsTtlWhenKeyAlreadyExists() {
+        when(valueOps.increment("chat:unread:7:3")).thenReturn(2L);
+
+        store.increaseUnread(GROUP_ID, List.of(3L));
+
+        verify(redisTemplate, never()).getExpire(anyString(), any(TimeUnit.class));
+        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("messages 키에 잔여 TTL 이 없으면(-1 무기한, -2 키 없음) expire 를 걸지 않는다")
+    void increaseUnreadSkipsTtlWhenMessagesTtlMissing() {
+        when(valueOps.increment("chat:unread:7:3")).thenReturn(1L);
+        when(redisTemplate.getExpire("chat:messages:7", TimeUnit.SECONDS)).thenReturn(-1L, -2L);
+
+        store.increaseUnread(GROUP_ID, List.of(3L));
+        store.increaseUnread(GROUP_ID, List.of(3L));
+
+        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
     }
 
     private static String eqKey(String key) {

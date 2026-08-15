@@ -6,6 +6,7 @@ import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
 import com.kb.tangtang.common.exception.BusinessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -17,6 +18,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -71,7 +73,9 @@ public class ChatMessageStore {
                               Long senderId, String senderNickname, String content) {
         Long seq = redis.opsForValue().increment(ChatRedisKeys.seq(groupId));
         if (seq == null) {
-            throw new BusinessException("CHAT_SEQ_FAILED", "메시지 번호를 발급하지 못했어요.");
+            // 사용자 입력 문제가 아니라 Redis 연결·명령 실패이므로 400 이 아닌 500 이다.
+            throw new BusinessException("CHAT_SEQ_FAILED", "메시지 번호를 발급하지 못했어요.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
         ChatMessage message = new ChatMessage(seq, type, senderId, senderNickname,
                 content, LocalDateTime.now());
@@ -99,8 +103,22 @@ public class ChatMessageStore {
         return read(groupId, start, start + limit - 1);
     }
 
+    /**
+     * INCR 결과가 1일 때(=이 방·이 사용자 키가 방금 새로 생겼을 때)만 만료 시각을 맞춘다.
+     * 기준은 messages 키의 잔여 TTL 이다. initRoom 에서 받은 endDate 를 여기까지 다시 끌고 오지
+     * 않기 위해서다 — 방이 살아 있는 한 messages 키가 이미 그 만료 시각을 알고 있으니 그것을 그대로
+     * 복제하면 된다. 잔여 TTL 이 -1(무기한)·-2(키 없음)면 아무것도 하지 않는다.
+     */
     public void increaseUnread(long groupId, Collection<Long> userIds) {
-        userIds.forEach(userId -> redis.opsForValue().increment(ChatRedisKeys.unread(groupId, userId)));
+        userIds.forEach(userId -> {
+            Long count = redis.opsForValue().increment(ChatRedisKeys.unread(groupId, userId));
+            if (count != null && count == 1L) {
+                Long ttlSeconds = redis.getExpire(ChatRedisKeys.messages(groupId), TimeUnit.SECONDS);
+                if (ttlSeconds != null && ttlSeconds > 0) {
+                    redis.expire(ChatRedisKeys.unread(groupId, userId), Duration.ofSeconds(ttlSeconds));
+                }
+            }
+        });
     }
 
     public int unreadOf(long groupId, long userId) {
@@ -145,7 +163,9 @@ public class ChatMessageStore {
         try {
             return MAPPER.writeValueAsString(message);
         } catch (Exception e) {
-            throw new BusinessException("CHAT_SERIALIZE_FAILED", "메시지를 저장하지 못했어요.");
+            // 직렬화 실패는 사용자 입력이 아니라 서버 내부 문제이므로 400 이 아닌 500 이다.
+            throw new BusinessException("CHAT_SERIALIZE_FAILED", "메시지를 저장하지 못했어요.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -153,7 +173,9 @@ public class ChatMessageStore {
         try {
             return MAPPER.readValue(json, ChatMessage.class);
         } catch (Exception e) {
-            throw new BusinessException("CHAT_DESERIALIZE_FAILED", "메시지를 읽지 못했어요.");
+            // 역직렬화 실패는 사용자 입력이 아니라 서버 내부 문제이므로 400 이 아닌 500 이다.
+            throw new BusinessException("CHAT_DESERIALIZE_FAILED", "메시지를 읽지 못했어요.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
