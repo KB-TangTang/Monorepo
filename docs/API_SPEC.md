@@ -572,9 +572,16 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | GET | `/api/assets/summary?baseDate=YYYY-MM-DD` | Bearer | 순자산·전월 대비 증감·6개월 추이·구성·종류별 목록 |
+| GET | `/api/assets/trend?baseDate=YYYY-MM-DD` | Bearer | 순자산·부채 6개월 추이만 |
 
-`baseDate` 는 선택값이며 생략하면 오늘 날짜(`Asia/Seoul`)를 기준으로 한다. `YYYY-MM-DD` 형식이
-아니면 `400 INVALID_REQUEST` 다.
+`baseDate` 는 두 엔드포인트 모두 선택값이며 생략하면 오늘 날짜(`Asia/Seoul`)를 기준으로 한다.
+`YYYY-MM-DD` 형식이 아니면 `400 INVALID_REQUEST` 다.
+
+`GET /api/assets/trend` 는 "순자산 추이" 상세 화면(`NetWorthTrendView`) 전용이다. 자산 홈의
+순자산 카드 스파크라인은 이 엔드포인트를 쓰지 않는다 — 그 화면은 어차피 `/assets/summary` 를
+호출하므로 그 응답의 `trend` 를 그대로 재사용한다(중복 호출 없음). 두 엔드포인트의 6개월 추이
+계산은 백엔드에서 `AssetCompositionCalculator`(라이브 순자산 계산)·`AssetNetWorthTrendService`
+(과거월 스냅샷 조회 + null 채움 + 최신월 라이브 값 채움)를 공유해 로직이 갈라지지 않는다.
 
 - `asOf` 는 이 응답을 계산한 단일 기준 시각이다. `netWorth`·`composition`·`assetGroups`·`trend` 의
   마지막 달 값이 전부 이 시각의 라이브 잔액을 사용해 화면 카드 간 금액이 어긋나지 않는다.
@@ -587,11 +594,12 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
   `amount=0`·`count=0` 으로 채워 화면이 빈 배열을 따로 처리하지 않게 한다.
 - 전월 비교(`previousMonthNetWorth`·`changeAmount`·`changeRate`)와 `trend`(최근 6개월, `baseDate`가
   속한 달 포함)의 과거월 값은 `tbl_asset_snapshot.net_worth`·`total_debt` 를 조회해 채운다. 이
-  테이블은 아직 월간 배치가 아니라 `POST /api/reports/monthly/ai-analysis` 호출 시에만 채워지므로,
-  해당 월 스냅샷이 없으면 `trend` 항목의 `netWorth`·`totalDebt`는 `null`, 전월 비교 3개 필드도 전부
-  `null` 이다 — 가입 첫 달의 전월 비교를 생략하는 월간 리포트(`hasPreviousComparison=false`)와 같은
-  "데이터 없음" 처리 기준이다. `trend` 의 마지막 항목(= `baseDate` 가 속한 달)만은 스냅샷 유무와
-  무관하게 방금 계산한 라이브 `netWorth`·대출잔액(`totalDebt`)을 그대로 채운다.
+  테이블은 매월 초 자동 배치(`MonthlyReportBatchScheduler`)와 `POST /api/reports/monthly/ai-analysis`
+  호출 시 채워진다. 그래도 가입 첫 달처럼 아직 스냅샷이 없는 달은 있을 수 있고, 그 경우
+  `trend` 항목의 `netWorth`·`totalDebt`는 `null`, 전월 비교 3개 필드도 전부 `null` 이다 — 가입
+  첫 달의 전월 비교를 생략하는 월간 리포트(`hasPreviousComparison=false`)와 같은 "데이터 없음"
+  처리 기준이다. `trend` 의 마지막 항목(= `baseDate` 가 속한 달)만은 스냅샷 유무와 무관하게 방금
+  계산한 라이브 `netWorth`·대출잔액(`totalDebt`)을 그대로 채운다.
 
 ```json
 {
@@ -616,6 +624,132 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
   }
 }
 ```
+
+```json
+// GET /api/assets/trend
+{
+  "success": true,
+  "data": {
+    "asOf": "2026-08-15T10:30:00",
+    "trend": [
+      { "yearMonth": "2026-03", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-04", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-05", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-06", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-07", "netWorth": 9125500, "totalDebt": 1600000 },
+      { "yearMonth": "2026-08", "netWorth": 9445500, "totalDebt": 1500000 }
+    ]
+  }
+}
+```
+
+### 자산 상세 목록 (이슈 #240 후속)
+
+자산 홈에서 종류별 카드를 눌렀을 때 진입하는 상세 화면용이다. 세 종류는 응답 모양이 서로 다르다 —
+입출금·예적금·페이머니는 `tbl_connected_account` 한 테이블에서 나와 필드가 같지만, 투자는
+`tbl_investment_holding` 종목별 상세, 대출은 `tbl_loan` 조건이 필요해 엔드포인트를 분리했다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/assets/accounts?type=DEMAND_DEPOSIT\|SAVINGS\|PAY_MONEY` | Bearer | 해당 종류 연결 계좌 목록 + 잔액 합계 |
+| GET | `/api/assets/investments` | Bearer | 보유 종목 목록 + 평가금액·원금 합계 |
+| GET | `/api/assets/loans` | Bearer | 대출 목록 + 잔액 합계 |
+
+- 셋 다 `@LoginUser` 로 식별한 사용자 소유 데이터만 조회한다(`WHERE user_id = ...`). 남의 계좌를
+  가리키는 경로 파라미터 자체가 없어 별도 404 케이스가 없다 — 항상 "내 것"만 나온다.
+- `GET /api/assets/accounts` 의 `type` 은 필수이며 `DEMAND_DEPOSIT`·`SAVINGS`·`PAY_MONEY` 중
+  하나가 아니면 `400 INVALID_REQUEST` 다. `SECURITIES`(투자)·`LOAN`(대출)은 이 엔드포인트가 아니라
+  전용 엔드포인트를 쓴다.
+- `tbl_connected_account.account_type` 의 실제 저장값은 `PAYMONEY`(밑줄 없음)이지만 `type` 쿼리
+  파라미터와 응답의 `accountType` 은 계약값 그대로 나간다 — `/api/assets/summary` 와 동일한
+  정규화 경계를 여기서도 둔다.
+- `GET /api/assets/investments` 의 `profitLossAmount`·`profitLossRate` 는 화면이 다시 계산하지
+  않고 `tbl_investment_holding` 에 동기화된 값을 그대로 옮긴다.
+- `GET /api/assets/loans` 는 `loanNoEncrypted`(내부 upsert 키)를 응답에 포함하지 않는다.
+
+```json
+// GET /api/assets/accounts?type=PAY_MONEY
+{
+  "success": true,
+  "data": {
+    "total": 244500,
+    "accounts": [
+      {
+        "accountId": 7,
+        "bankCode": "0090",
+        "bankName": "카카오뱅크",
+        "shortLabel": "kb",
+        "accountName": "카카오페이머니",
+        "accountNoMasked": null,
+        "accountType": "PAYMONEY",
+        "balance": 150000,
+        "syncStatus": "NORMAL",
+        "lastSyncAt": "2026-08-15T09:00:00",
+        "syncFailReason": null,
+        "expiresAt": "2027-08-15T00:00:00"
+      }
+    ]
+  }
+}
+```
+
+```json
+// GET /api/assets/investments
+{
+  "success": true,
+  "data": {
+    "totalValuation": 2100000,
+    "totalCost": 1980000,
+    "asOf": "2026-08-15T09:41:00",
+    "holdings": [
+      {
+        "accountId": 10,
+        "symbol": "005930",
+        "name": "삼성전자",
+        "marketCountry": "KR",
+        "currency": "KRW",
+        "quantity": 20,
+        "averagePurchasePrice": 75000,
+        "lastPrice": 80000,
+        "purchaseAmount": 1500000,
+        "marketValue": 1600000,
+        "profitLossAmount": 100000,
+        "profitLossRate": 0.0667
+      }
+    ]
+  }
+}
+```
+
+```json
+// GET /api/assets/loans
+{
+  "success": true,
+  "data": {
+    "total": 1500000,
+    "loans": [
+      {
+        "loanId": 3,
+        "bankName": "하나은행",
+        "loanType": "신용대출",
+        "loanAmount": 2000000,
+        "balance": 1500000,
+        "interestRate": 4.5,
+        "startDate": "2025-01-10",
+        "maturityDate": "2027-12-10",
+        "monthlyPayment": 50000,
+        "nextPaymentDate": "2026-09-10"
+      }
+    ]
+  }
+}
+```
+
+### 자산 상세 목록 에러 코드
+
+| 코드 | HTTP | 설명 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `type` 이 `DEMAND_DEPOSIT`·`SAVINGS`·`PAY_MONEY` 중 하나가 아니거나 누락됨 |
 
 ## 금융 데이터 동기화 (이슈 #147)
 
