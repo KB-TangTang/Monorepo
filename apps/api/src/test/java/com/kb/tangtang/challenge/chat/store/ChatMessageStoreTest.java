@@ -1,0 +1,107 @@
+package com.kb.tangtang.challenge.chat.store;
+
+import com.kb.tangtang.challenge.chat.domain.ChatMessage;
+import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ChatMessageStoreTest {
+
+    private static final long GROUP_ID = 7L;
+
+    @Mock private StringRedisTemplate redisTemplate;
+    @Mock private ListOperations<String, String> listOps;
+    @Mock private ValueOperations<String, String> valueOps;
+
+    private ChatMessageStore store;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(redisTemplate.opsForList()).thenReturn(listOps);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        store = new ChatMessageStore(redisTemplate);
+    }
+
+    @Test
+    @DisplayName("최근 조회는 List 의 뒤에서 limit 만큼 읽는다")
+    void findRecentReadsTail() {
+        when(listOps.range("chat:messages:7", -50L, -1L)).thenReturn(List.of());
+
+        store.findRecent(GROUP_ID, 50);
+
+        verify(listOps).range("chat:messages:7", -50L, -1L);
+    }
+
+    @Test
+    @DisplayName("before 조회는 messageId 를 인덱스로 환산한다 (messageId N ↔ 인덱스 N-1)")
+    void findBeforeTranslatesIdToIndex() {
+        // messageId 21 의 바로 앞 5건 → 인덱스 15..19 (messageId 16..20)
+        when(listOps.range("chat:messages:7", 15L, 19L)).thenReturn(List.of());
+
+        store.findBefore(GROUP_ID, 21L, 5);
+
+        verify(listOps).range("chat:messages:7", 15L, 19L);
+    }
+
+    @Test
+    @DisplayName("before 조회가 List 앞쪽을 넘어가면 0 으로 자른다")
+    void findBeforeClampsAtZero() {
+        when(listOps.range("chat:messages:7", 0L, 1L)).thenReturn(List.of());
+
+        store.findBefore(GROUP_ID, 3L, 50);
+
+        verify(listOps).range("chat:messages:7", 0L, 1L);
+    }
+
+    @Test
+    @DisplayName("after 조회는 messageId 다음 인덱스부터 읽는다")
+    void findAfterStartsAtNextIndex() {
+        // messageId 10 다음 3건 → 인덱스 10..12 (messageId 11..13)
+        when(listOps.range("chat:messages:7", 10L, 12L)).thenReturn(List.of());
+
+        store.findAfter(GROUP_ID, 10L, 3);
+
+        verify(listOps).range("chat:messages:7", 10L, 12L);
+    }
+
+    @Test
+    @DisplayName("append 는 seq 를 발급해 messageId 로 쓰고 JSON 을 RPUSH 한다")
+    void appendIncrementsSeqAndPushes() {
+        when(valueOps.increment("chat:seq:7")).thenReturn(42L);
+
+        ChatMessage saved = store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
+
+        assertEquals(42L, saved.getMessageId());
+        assertEquals(ChatMessageType.TEXT, saved.getType());
+        verify(listOps).rightPush(eqKey("chat:messages:7"), anyString());
+    }
+
+    @Test
+    @DisplayName("안 읽은 수는 사용자마다 각자의 키를 올린다")
+    void increaseUnreadUsesPerUserKey() {
+        store.increaseUnread(GROUP_ID, List.of(3L, 9L));
+
+        verify(valueOps).increment("chat:unread:7:3");
+        verify(valueOps).increment("chat:unread:7:9");
+    }
+
+    private static String eqKey(String key) {
+        return org.mockito.ArgumentMatchers.eq(key);
+    }
+}
