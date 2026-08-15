@@ -35,6 +35,7 @@ public enum NotificationType {
      *   예) GROUP_JUDGMENT("판결이 확정됐어요", "{trialName} · 내 사건 {verdict}")
      */
     GROUP_JUDGMENT("판결이 확정됐어요", "{content}"),
+    GROUP_DEFENSE_REGISTERED("변론이 등록됐어요", "{content}"),
     GROUP_TRIAL_OPENED("재판이 열렸어요", "{content}"),
     MISSION_DEADLINE("오늘 미션 마감 임박", "{content}"),
     MONTHLY_REPORT("판결문이 도착했어요", "{content}"),
