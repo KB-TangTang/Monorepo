@@ -101,6 +101,16 @@ dependencies {
     implementation "org.mybatis:mybatis:${mybatisVersion}"
     implementation "org.mybatis:mybatis-spring:${mybatisSpringVersion}"
 
+    /*
+     * 그룹 채팅 (이슈 #174).
+     * spring-data-redis 는 2.7.x 가 상한이다 — 3.x 는 Spring 6 을 요구해 이 스택(5.3.39)에서 못 쓴다.
+     * spring-boot-starter-data-redis 를 쓰면 안 된다(평가 감점). 개별 좌표로 넣고 JavaConfig 로 배선한다.
+     */
+    implementation "org.springframework:spring-websocket:${springVersion}"
+    implementation "org.springframework:spring-messaging:${springVersion}"
+    implementation 'org.springframework.data:spring-data-redis:2.7.18'
+    implementation 'io.lettuce:lettuce-core:6.2.7.RELEASE'
+
     // ---- Test ----
     implementation "org.springframework:spring-test:${springVersion}"
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
