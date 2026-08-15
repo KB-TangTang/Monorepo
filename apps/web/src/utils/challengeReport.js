@@ -31,6 +31,27 @@ export function getPreviousPeriod(referenceDate = new Date()) {
     return `${year}-${month}`;
 }
 
+const DIFFICULTY_PRESENTATION = {
+    EASY: { level: '하', tone: 'low' },
+    NORMAL: { level: '중', tone: 'middle' },
+    HARD: { level: '상', tone: 'high' },
+};
+
+export function toChallengeReportModel(report) {
+    return {
+        ...report,
+        challengeName: '메인 챌린지',
+        difficultySummary: '난이도별 성과를 확인해 보세요',
+        difficulties: (report.difficulties ?? []).map((difficulty) => ({
+            ...difficulty,
+            ...(DIFFICULTY_PRESENTATION[difficulty.difficultyName] ?? {
+                level: difficulty.difficultyName,
+                tone: 'middle',
+            }),
+        })),
+    };
+}
+
 export function isPublishedPeriod(period, referenceDate = new Date()) {
     return period <= getPreviousPeriod(referenceDate);
 }

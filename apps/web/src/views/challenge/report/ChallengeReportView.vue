@@ -82,7 +82,10 @@ async function loadReport() {
                 ? fetchMockChallengeReport
                 : fetchChallengeReport;
         report.value = await fetcher(selectedPeriod.value);
-        if (resolveChallengeReportState({ report: report.value }) === 'ready') {
+        if (
+            resolveChallengeReportState({ report: report.value }) === 'ready' &&
+            report.value.netSavings != null
+        ) {
             isGuideOpen.value = !(await hasSeenNetSavingsGuide());
         }
     } catch (error) {
@@ -206,7 +209,7 @@ onMounted(initialize);
         <ChallengeReportContent
             v-else
             :report="report"
-            :show-comparison="!selectedMonth?.firstReport"
+            :show-comparison="report.hasPreviousComparison ?? !selectedMonth?.firstReport"
             @change-difficulty="router.push({ name: 'personalMissionChallengeDifficulty' })"
             @open-group-history="emit('open-group-history')"
         />

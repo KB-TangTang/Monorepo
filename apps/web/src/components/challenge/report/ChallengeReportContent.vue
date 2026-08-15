@@ -66,7 +66,7 @@ const isWeeklyResultsOpen = ref(false);
             </section>
         </section>
 
-        <ChallengeConsumptionHabitDropdown :report="report" />
+        <ChallengeConsumptionHabitDropdown v-if="report.netSavings != null" :report="report" />
 
         <section class="challenge-summary" aria-label="챌린지 요약">
             <div>
@@ -114,7 +114,7 @@ const isWeeklyResultsOpen = ref(false);
             </div>
         </section>
 
-        <section class="group-section" aria-labelledby="group-title">
+        <section v-if="report.groupRecord" class="group-section" aria-labelledby="group-title">
             <h2 id="group-title">그룹 전적</h2>
             <div class="group-card">
                 <div class="group-card__stats">
