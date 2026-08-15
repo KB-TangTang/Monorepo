@@ -20,25 +20,42 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class ChatSystemMessageListenerTest {
 
+    private static final String TRIAL_DEEP_LINK = "/challenge/group/7/trial/55";
+
     @Mock private ChatMessageService chatMessageService;
 
     @InjectMocks private ChatSystemMessageListener listener;
+
+    @Test
+    @DisplayName("소비 위반 적발은 GROUP_TRIAL_OPENED 로 알린다")
+    void violationDetectedUsesTrialType() {
+        listener.onViolationDetected(new GroupTrialEvents.ViolationDetected(7L, 55L, "절약왕"));
+
+        verify(chatMessageService).postSystemMessage(eq(7L),
+                eq("절약왕님의 소비가 적발됐어요."),
+                eq(TRIAL_DEEP_LINK),
+                eq(NotificationType.GROUP_TRIAL_OPENED));
+    }
 
     @Test
     @DisplayName("재판 개시는 GROUP_TRIAL_OPENED 로 알린다")
     void trialOpenedUsesTrialType() {
         listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
 
-        verify(chatMessageService).postSystemMessage(eq(7L), anyString(), anyString(),
+        verify(chatMessageService).postSystemMessage(eq(7L),
+                eq("절약왕님에 대한 재판이 열렸어요."),
+                eq(TRIAL_DEEP_LINK),
                 eq(NotificationType.GROUP_TRIAL_OPENED));
     }
 
     @Test
-    @DisplayName("변론 등록은 새로 추가한 GROUP_DEFENSE_REGISTERED 를 쓴다")
+    @DisplayName("변론 등록은 GROUP_DEFENSE_REGISTERED 를 쓴다")
     void defenseUsesNewType() {
         listener.onDefenseRegistered(new GroupTrialEvents.DefenseRegistered(7L, 55L, "절약왕"));
 
-        verify(chatMessageService).postSystemMessage(eq(7L), anyString(), anyString(),
+        verify(chatMessageService).postSystemMessage(eq(7L),
+                eq("절약왕님이 변론을 등록했어요."),
+                eq(TRIAL_DEEP_LINK),
                 eq(NotificationType.GROUP_DEFENSE_REGISTERED));
     }
 
@@ -47,7 +64,9 @@ class ChatSystemMessageListenerTest {
     void verdictUsesJudgmentType() {
         listener.onVerdictConfirmed(new GroupTrialEvents.VerdictConfirmed(7L, 55L, "3만원 감액"));
 
-        verify(chatMessageService).postSystemMessage(eq(7L), anyString(), anyString(),
+        verify(chatMessageService).postSystemMessage(eq(7L),
+                eq("판결이 확정됐어요. 3만원 감액"),
+                eq(TRIAL_DEEP_LINK),
                 eq(NotificationType.GROUP_JUDGMENT));
     }
 
