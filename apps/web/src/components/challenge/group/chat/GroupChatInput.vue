@@ -3,6 +3,11 @@ import { ref } from 'vue';
 
 defineProps({
     disabled: { type: Boolean, default: false },
+    /**
+     * 스티커 버튼 노출 여부. 스티커 기능은 이슈 #174 설계상 이번 범위 밖이라 기본 숨김이다.
+     * 버튼 마크업·이벤트는 나중에 스티커를 붙일 때 바로 되살릴 수 있게 지우지 않고 남겨둔다.
+     */
+    showStickerButton: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['send-text', 'toggle-sticker']);
@@ -26,12 +31,22 @@ function handleKeydown(e) {
 
 <template>
     <div class="chat-input" :class="{ 'chat-input--disabled': disabled }">
-        <button class="chat-input__sticker-btn" @click="emit('toggle-sticker')" :disabled="disabled">
+        <button
+            v-if="showStickerButton"
+            class="chat-input__sticker-btn"
+            @click="emit('toggle-sticker')"
+            :disabled="disabled"
+        >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8" />
                 <circle cx="9" cy="10" r="1.2" fill="currentColor" />
                 <circle cx="15" cy="10" r="1.2" fill="currentColor" />
-                <path d="M8.5 14.5c1 1.5 5.5 1.5 7 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                <path
+                    d="M8.5 14.5c1 1.5 5.5 1.5 7 0"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                />
             </svg>
         </button>
 
@@ -44,11 +59,7 @@ function handleKeydown(e) {
             @keydown="handleKeydown"
         />
 
-        <button
-            class="chat-input__send"
-            :disabled="disabled || !text.trim()"
-            @click="handleSend"
-        >
+        <button class="chat-input__send" :disabled="disabled || !text.trim()" @click="handleSend">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                 <path d="M3 10l14-7-7 14v-7H3z" fill="currentColor" />
             </svg>

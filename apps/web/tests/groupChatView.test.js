@@ -86,3 +86,34 @@ test('전송은 REST 스텁이 아니라 소켓으로 나간다', () => {
     );
     assert.ok(/socket\??\.send\(/.test(src), 'socket.send() 로 실전송해야 한다');
 });
+
+/*
+ * 리뷰 Fix round 1 (Important): GroupChatInput 의 스티커 버튼이 toggle-sticker 를 emit 하지만
+ * 이 화면에는 더 이상 그 리스너가 없어 눌러도 반응이 없는 죽은 버튼으로 남아 있었다.
+ * 스티커는 설계상 범위 밖이므로 버튼 자체를 감춘다(마크업은 남겨 나중에 되살리기 쉽게 유지).
+ */
+test('입력바에서 스티커 버튼을 강제로 켜지 않는다', () => {
+    const src = source();
+    assert.ok(
+        !/show-sticker-button\s*=\s*"true"/.test(src),
+        'GroupChatView 가 스티커 버튼을 다시 켜면 안 된다 — 이번 범위 밖이다',
+    );
+});
+
+test('GroupChatInput 의 스티커 버튼은 기본적으로 숨겨져 있다', () => {
+    const inputSrc = readFileSync(
+        new URL('../src/components/challenge/group/chat/GroupChatInput.vue', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(
+        inputSrc,
+        /showStickerButton:\s*\{\s*type:\s*Boolean,\s*default:\s*false\s*\}/,
+        'showStickerButton prop 기본값이 false 여야 눌러도 반응 없는 버튼이 화면에 안 보인다',
+    );
+    assert.match(
+        inputSrc,
+        /<button\s+v-if="showStickerButton"[\s\S]*?chat-input__sticker-btn/,
+        '스티커 버튼은 v-if="showStickerButton" 으로 감싸야 한다 — 마크업은 지우지 않고 감춘다',
+    );
+});

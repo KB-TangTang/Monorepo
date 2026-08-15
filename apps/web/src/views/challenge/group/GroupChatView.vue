@@ -260,7 +260,7 @@ watch(
             <!-- 토스트 -->
             <GroupChatToast :message="toastText" />
 
-            <!-- 입력바 -->
+            <!-- 입력바 (스티커 버튼은 이번 범위 밖이라 GroupChatInput 기본값으로 숨겨져 있다) -->
             <GroupChatInput :disabled="store.isEnded" @send-text="handleSendText" />
         </template>
     </div>
