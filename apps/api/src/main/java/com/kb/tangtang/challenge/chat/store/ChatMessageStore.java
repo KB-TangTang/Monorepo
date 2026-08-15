@@ -51,12 +51,20 @@ public class ChatMessageStore {
         if (memberIds.isEmpty()) {
             return;
         }
-        String[] ids = memberIds.stream().map(String::valueOf).toArray(String[]::new);
-        redis.opsForSet().add(ChatRedisKeys.members(groupId), ids);
+        cacheMembers(groupId, memberIds);
         Duration ttl = ttlUntil(endDate);
         redis.expire(ChatRedisKeys.members(groupId), ttl);
         redis.expire(ChatRedisKeys.seq(groupId), ttl);
         redis.expire(ChatRedisKeys.messages(groupId), ttl);
+    }
+
+    /** 참여자 캐시만 채운다. TTL 은 방 개설 때 걸린 것을 그대로 쓴다 */
+    public void cacheMembers(long groupId, Set<Long> memberIds) {
+        if (memberIds.isEmpty()) {
+            return;
+        }
+        String[] ids = memberIds.stream().map(String::valueOf).toArray(String[]::new);
+        redis.opsForSet().add(ChatRedisKeys.members(groupId), ids);
     }
 
     /** CLOSED 전이 시 즉시 삭제한다. TTL 은 백스톱일 뿐이다 */

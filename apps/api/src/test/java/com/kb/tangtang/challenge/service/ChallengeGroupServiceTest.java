@@ -469,5 +469,13 @@ class ChallengeGroupServiceTest {
                     .filter(m -> groupIds.contains(m.getGroupId()))
                     .toList();
         }
+
+        @Override
+        public List<Long> findUserIdsByGroupId(long groupId) {
+            return members.stream()
+                    .filter(m -> m.getGroupId() == groupId)
+                    .map(GroupMember::getUserId)
+                    .toList();
+        }
     }
 }
