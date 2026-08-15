@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     formatPercentagePoint,
+    formatPeriod,
     formatSignedWon,
     formatWon,
     getPreviousPeriod,
@@ -14,6 +15,8 @@ test('리포트 표시 값을 포맷한다', () => {
     assert.equal(formatSignedWon(40000), '+40,000원');
     assert.equal(formatSignedWon(-22000), '-22,000원');
     assert.equal(formatPercentagePoint(9), '+9%');
+    assert.equal(formatPeriod('2026-06'), '2026년 6월');
+    assert.equal(formatPeriod(''), '');
 });
 
 test('현재 월이 아닌 이전 달까지만 공개한다', () => {
@@ -32,4 +35,12 @@ test('리포트 상태 우선순위를 판정한다', () => {
     assert.equal(resolveChallengeReportState({ error: '오류', report: ready }), 'error');
     assert.equal(resolveChallengeReportState({ report: { hasChallengeHistory: false } }), 'empty');
     assert.equal(resolveChallengeReportState({ report: ready }), 'ready');
+});
+
+test('API 진입 상태를 리포트 빈 상태와 구분한다', () => {
+    assert.equal(resolveChallengeReportState({ entryState: 'NOT_AGREED' }), 'not-agreed');
+    assert.equal(
+        resolveChallengeReportState({ entryState: 'PREPARING_FIRST_REPORT' }),
+        'preparing',
+    );
 });

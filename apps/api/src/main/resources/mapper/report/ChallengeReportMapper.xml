@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.report.mapper.ChallengeReportMapper">
+
+    <select id="hasActiveChallengeConsent" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM tbl_user_consent
+            WHERE user_id = #{userId}
+              AND consent_type = 'CHALLENGE'
+              AND status = 1
+              AND withdrawn_at IS NULL
+              AND (expires_at IS NULL OR expires_at &gt; #{now})
+        )
+    </select>
+
+    <select id="findConfirmedReportMonths" resultType="java.lang.String">
+        SELECT `year_month`
+        FROM tbl_challenge_monthly_report
+        WHERE user_id = #{userId}
+          AND `year_month` &lt; #{currentYearMonth}
+        ORDER BY `year_month` DESC
+    </select>
+
+    <select id="findFirstMissionMonth" resultType="java.lang.String">
+        SELECT DATE_FORMAT(MIN(assign_date), '%Y-%m')
+        FROM tbl_user_mission_info
+        WHERE user_id = #{userId}
+          AND assign_date &lt; #{currentMonthStart}
+    </select>
+
+    <select id="findChallengeConsentMonth" resultType="java.lang.String">
+        SELECT DATE_FORMAT(created_at, '%Y-%m')
+        FROM tbl_user_consent
+        WHERE user_id = #{userId}
+          AND consent_type = 'CHALLENGE'
+          AND status = 1
+          AND withdrawn_at IS NULL
+          AND created_at &lt; #{currentMonthStart}
+    </select>
+</mapper>
