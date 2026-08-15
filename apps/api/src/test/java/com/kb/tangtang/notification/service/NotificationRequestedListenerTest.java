@@ -149,4 +149,18 @@ class NotificationRequestedListenerTest {
         assertTrue(service.created.isEmpty(), "중복이면 저장하지 않는다");
         assertEquals(List.of(), dlq.insertedTypes, "중복 건너뛰기는 실패가 아니다 — DLQ 대상이 아니다");
     }
+
+    @Test
+    @DisplayName("결제 예정 알림은 결제 주기 이력으로 중복을 막으므로 이전 안 읽음 알림이 있어도 저장한다")
+    void createsPaymentDueNotificationEvenWhenGenericUnreadDuplicateExists() {
+        RecordingService service = new RecordingService();
+        service.duplicate = true;
+
+        listenerWith(service, new FakeDlqMapper()).onNotificationRequested(
+                new NotificationRequestedEvent(7L, NotificationType.PAYMENT_DUE,
+                        Map.of("content", "넷플릭스 · 7일 후 결제 예정"), "/asset/fixed-expenses/101"));
+
+        assertEquals(List.of("7|PAYMENT_DUE|넷플릭스 · 7일 후 결제 예정|/asset/fixed-expenses/101"),
+                service.created);
+    }
 }

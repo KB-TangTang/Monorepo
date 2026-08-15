@@ -2,6 +2,7 @@ package com.kb.tangtang.notification.service;
 
 import com.kb.tangtang.notification.domain.NotificationDlqPayload;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -43,10 +44,17 @@ public class NotificationRequestedListener {
         try {
             content = event.type().render(event.params());
             /*
-             * 같은 알림이 안 읽은 채로 남아 있으면 만들지 않는다 (이슈 #70).
-             * 「즉시 조회」를 반복하면 같은 재연동 알림이 누를 때마다 쌓이던 문제를 여기서 막는다 —
-             * 발행 경로가 이 리스너 하나로 모였으므로 억제도 한 곳이면 된다.
+             * PAYMENT_DUE는 고정지출 항목·예정일·알림 유형 유니크 키가 중복을 막는다.
+             * 일반적인 "안 읽음 + 종류 + 딥링크" 억제를 적용하면 이전 결제 주기 알림이 안 읽힌
+             * 경우 새 예정일의 알림까지 막히므로, 발송 이력 등록을 통과한 이벤트는 그대로 저장한다.
              */
+            if (event.type() == NotificationType.PAYMENT_DUE) {
+                sender.send(notificationService.create(
+                        event.userId(), event.type(), content, event.deepLinkUrl()));
+                return;
+            }
+
+            /* 같은 알림이 안 읽은 채로 남아 있으면 만들지 않는다 (이슈 #70). */
             notificationService.createUnlessDuplicate(
                     event.userId(), event.type(), content, event.deepLinkUrl())
                     .ifPresent(sender::send);

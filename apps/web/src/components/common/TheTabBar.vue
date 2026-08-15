@@ -56,6 +56,10 @@ const route = useRoute();
  * /ledger 는 자산 홈의 토글로만 들어가는 화면이라 "자산" 탭을 활성으로 유지한다.
  */
 function isActive(tab) {
+    /* 고정지출처럼 URL 소속과 화면 맥락이 다른 경우 라우트가 지정한 탭을 우선한다. */
+    if (route.meta.tabBar) {
+        return route.meta.tabBar === tab.name;
+    }
     if (tab.name === 'ledger' && route.path.startsWith('/reports')) {
         return true;
     }

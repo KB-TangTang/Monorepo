@@ -72,4 +72,9 @@
         SET is_read = 1
         WHERE user_id = #{userId} AND is_read = 0
     </update>
+
+    <delete id="deleteByUserAndType">
+        DELETE FROM tbl_notification
+        WHERE user_id = #{userId} AND type = #{type}
+    </delete>
 </mapper>

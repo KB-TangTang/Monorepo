@@ -9,6 +9,7 @@ import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
  * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
  * meta.public   — 로그인 없이 접근 가능
  * meta.hideTabBar — 하단 탭바를 숨긴다 (App.vue 가 읽는다)
+ * meta.tabBar — URL 경로와 다르게 활성 표시할 하단 탭 이름
  */
 const routes = [
     {
@@ -292,19 +293,19 @@ const routes = [
         path: '/asset/fixed-expenses',
         name: 'fixedExpenseManagement',
         component: () => import('@/views/fixed-expense/FixedExpenseManagementView.vue'),
-        meta: { title: '고정지출 관리' },
+        meta: { title: '고정지출 관리', tabBar: 'ledger' },
     },
     {
         path: '/asset/fixed-expenses/candidates/:candidateId',
         name: 'fixedExpenseCandidate',
         component: () => import('@/views/fixed-expense/FixedExpenseCandidateView.vue'),
-        meta: { title: '탐지 후보 확인' },
+        meta: { title: '탐지 후보 확인', tabBar: 'ledger' },
     },
     {
         path: '/asset/fixed-expenses/:expenseId',
         name: 'fixedExpenseDetail',
         component: () => import('@/views/fixed-expense/FixedExpenseDetailView.vue'),
-        meta: { title: '고정지출 상세' },
+        meta: { title: '고정지출 상세', tabBar: 'ledger' },
     },
     // ↓ 계좌 연동(이슈 #12). 단계 순서는 stores/account.js 가 utils/account.js 의 LINK_STEPS 로 결정한다.
     {

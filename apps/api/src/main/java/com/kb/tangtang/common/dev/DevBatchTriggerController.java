@@ -5,8 +5,11 @@ import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderBatchService;
+import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderDevService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,11 +40,17 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
 
     private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
+    private final FixedExpensePaymentReminderBatchService paymentReminderBatchService;
+    private final FixedExpensePaymentReminderDevService paymentReminderDevService;
 
     public DevBatchTriggerController(DevEnvironmentGuard guard,
-                                     ChallengeGroupStatusBatchService challengeGroupStatusBatchService) {
+                                     ChallengeGroupStatusBatchService challengeGroupStatusBatchService,
+                                     FixedExpensePaymentReminderBatchService paymentReminderBatchService,
+                                     FixedExpensePaymentReminderDevService paymentReminderDevService) {
         this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
+        this.paymentReminderBatchService = paymentReminderBatchService;
+        this.paymentReminderDevService = paymentReminderDevService;
     }
 
     /**
@@ -65,10 +74,32 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
 
         int affected = switch (name) {
             case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate);
+            case "fixed-expense-payment-reminders" -> {
+                if (date != null) {
+                    throw new BusinessException("INVALID_REQUEST",
+                            "결제 예정 알림 배치는 현재 날짜 기준으로만 실행할 수 있습니다.");
+                }
+                yield paymentReminderBatchService.sendDuePaymentReminders();
+            }
             default -> throw new BusinessException("DEV_BATCH_NOT_FOUND",
                     "알 수 없는 배치 이름이에요: " + name);
         };
 
         return ApiResponse.ok(Map.of("batch", name, "baseDate", baseDate.toString(), "affected", affected));
+    }
+
+    /** 결제 예정 알림을 같은 결제 주기에 다시 검증할 수 있도록 현재 사용자의 테스트 흔적만 지운다. */
+    @Override
+    @DeleteMapping("/fixed-expense-payment-reminders")
+    public ApiResponse<Map<String, Integer>> resetFixedExpensePaymentReminders(@LoginUser Long userId) {
+        guard.ensureLocal();
+
+        FixedExpensePaymentReminderDevService.ResetResult result =
+                paymentReminderDevService.resetPaymentDueReminders(userId);
+        log.warn("DEV 결제 예정 알림 초기화 userId={} notifications={} history={}", userId,
+                result.deletedNotifications(), result.deletedReminderHistory());
+        return ApiResponse.ok(Map.of(
+                "deletedNotifications", result.deletedNotifications(),
+                "deletedReminderHistory", result.deletedReminderHistory()));
     }
 }
