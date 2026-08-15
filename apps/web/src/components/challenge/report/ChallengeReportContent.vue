@@ -3,7 +3,10 @@ import { ref } from 'vue';
 import { formatPercentage, formatPercentagePoint, formatPeriod } from '@/utils/challengeReport';
 import ChallengeConsumptionHabitDropdown from '@/components/challenge/report/ChallengeConsumptionHabitDropdown.vue';
 
-defineProps({ report: { type: Object, required: true } });
+defineProps({
+    report: { type: Object, required: true },
+    showComparison: { type: Boolean, default: true },
+});
 defineEmits(['change-difficulty', 'open-group-history']);
 
 const isWeeklyResultsOpen = ref(false);
@@ -13,7 +16,7 @@ const isWeeklyResultsOpen = ref(false);
     <div class="report-content">
         <div class="report-context">
             <span>{{ formatPeriod(report.period) }}</span>
-            <strong>{{ report.challengeName }}</strong>
+            <strong>개인 챌린지</strong>
         </div>
 
         <section class="mission-card" aria-labelledby="mission-success-title">
@@ -23,7 +26,7 @@ const isWeeklyResultsOpen = ref(false);
                 <strong class="mission-card__score">
                     {{ report.missionSuccessRate }}<small>%</small>
                 </strong>
-                <p class="mission-card__comparison">
+                <p v-if="showComparison" class="mission-card__comparison">
                     {{ report.successfulDays }}일 성공 · 전월 대비
                     <b>{{ formatPercentagePoint(report.monthOverMonthPercentagePoint) }}</b>
                 </p>
@@ -157,8 +160,9 @@ const isWeeklyResultsOpen = ref(false);
 }
 
 .report-context span {
-    padding: var(--tt-space-1) var(--tt-space-3);
-    font-weight: var(--tt-fw-bold);
+    padding: var(--tt-space-2) var(--tt-space-4);
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-full);

@@ -12,30 +12,20 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'select']);
 const draftPeriod = ref(props.selectedPeriod);
 const selectedYear = ref(Number(props.selectedPeriod.slice(0, 4)));
-const availableYears = computed(() =>
-    [...new Set(props.months.map((month) => month.year))].sort((a, b) => a - b),
-);
 const visibleMonths = computed(() =>
     Array.from({ length: 12 }, (_, index) => {
-        const monthNumber = index + 1;
-        const source = props.months.find(
-            (month) => month.year === selectedYear.value && month.month === monthNumber,
-        );
+        const month = index + 1;
         return (
-            source ?? {
-                value: `${selectedYear.value}-${String(monthNumber).padStart(2, '0')}`,
-                year: selectedYear.value,
-                month: monthNumber,
+            props.months.find(
+                (item) => item.year === selectedYear.value && item.month === month,
+            ) ?? {
+                value: `${selectedYear.value}-${String(month).padStart(2, '0')}`,
+                month,
                 available: false,
-                reason: 'unavailable',
             }
         );
     }),
 );
-const previousYear = computed(() =>
-    [...availableYears.value].reverse().find((year) => year < selectedYear.value),
-);
-const nextYear = computed(() => availableYears.value.find((year) => year > selectedYear.value));
 const draftMonth = computed(() => props.months.find((month) => month.value === draftPeriod.value));
 
 watch(
@@ -54,12 +44,6 @@ function selectMonth(month) {
     }
 }
 
-function moveYear(year) {
-    if (year) {
-        selectedYear.value = year;
-    }
-}
-
 function applyMonth() {
     if (!draftMonth.value?.available) {
         return;
@@ -75,25 +59,7 @@ function applyMonth() {
         title="조회할 달 선택"
         @update:model-value="$emit('update:modelValue', $event)"
     >
-        <div class="month-picker__year-navigation">
-            <button
-                type="button"
-                aria-label="이전 연도"
-                :disabled="!previousYear"
-                @click="moveYear(previousYear)"
-            >
-                ‹
-            </button>
-            <h3>{{ selectedYear }}년</h3>
-            <button
-                type="button"
-                aria-label="다음 연도"
-                :disabled="!nextYear"
-                @click="moveYear(nextYear)"
-            >
-                ›
-            </button>
-        </div>
+        <h3 class="month-picker__year">{{ selectedYear }}년</h3>
         <div class="month-picker__grid">
             <button
                 v-for="month in visibleMonths"
@@ -119,36 +85,16 @@ function applyMonth() {
 </template>
 
 <style scoped>
-.month-picker__year-navigation {
-    display: grid;
-    grid-template-columns: 40px 1fr 40px;
-    align-items: center;
+.month-picker__year {
     margin-bottom: var(--tt-space-4);
     text-align: center;
-}
-
-.month-picker__year-navigation h3 {
     font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-black);
 }
 
-.month-picker__year-navigation button {
-    height: 40px;
-    font-size: var(--tt-fs-title);
-    color: var(--tt-primary);
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-}
-
-.month-picker__year-navigation button:disabled {
-    color: var(--tt-border-strong);
-    cursor: default;
-}
-
 .month-picker__grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: var(--tt-space-3) var(--tt-space-2);
 }
 
@@ -183,11 +129,5 @@ function applyMonth() {
 .month-picker__action :deep(.tt-btn) {
     color: var(--tt-text-inverse);
     background: var(--tt-text);
-}
-
-@media (max-width: 360px) {
-    .month-picker__grid {
-        gap: var(--tt-space-2) var(--tt-space-1);
-    }
 }
 </style>

@@ -89,10 +89,9 @@ test('탐지 후보 상세는 방문 이력을 한 단계씩 되돌린다', () =
 test('월간 소비 리포트와 챌린지 리포트에는 좌상단 뒤로가기를 표시하지 않는다', () => {
     const monthlyReport = source('src/views/report/MonthlyConsumptionReportView.vue');
     const challengeReport = source('src/views/challenge/report/ChallengeReportView.vue');
-    const challengeHeader = source('src/components/challenge/ChallengePageHeader.vue');
 
     assert.ok(!monthlyReport.includes('monthly-report__back'));
     assert.ok(!monthlyReport.includes('@click="router.back()"'));
-    assert.ok(challengeReport.includes(':show-back="false"'));
-    assert.ok(challengeHeader.includes('v-if="showBack"'));
+    assert.ok(challengeReport.includes('<h1>재판 보고서</h1>'));
+    assert.ok(!challengeReport.includes('@click="router.back()"'));
 });
