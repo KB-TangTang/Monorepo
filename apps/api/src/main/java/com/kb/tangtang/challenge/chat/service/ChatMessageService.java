@@ -8,14 +8,19 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.notification.service.NotificationSender;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * 메시지 발송 파이프라인: 저장 → 브로드캐스트 → 안 읽은 수 → 알림.
@@ -29,7 +34,12 @@ import java.util.Set;
 @Service
 public class ChatMessageService {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatMessageService.class);
+
     private static final int MAX_CONTENT_LENGTH = 500;
+
+    /** 닉네임 온보딩을 아직 마치지 않은 발신자(nickname IS NULL)의 알림 문구에 쓰는 표시 문자열 */
+    private static final String UNKNOWN_SENDER_NICKNAME = "이름을 정하지 않은 참여자";
 
     private final ChatMessageStore store;
     private final ChatRoomAccessService access;
@@ -68,7 +78,7 @@ public class ChatMessageService {
         List<Long> outsiders = outsiders(groupId, senderId);
         if (!outsiders.isEmpty()) {
             store.increaseUnread(groupId, outsiders);
-            outsiders.forEach(userId -> pushChatAlert(groupId, userId, dto));
+            forEachSafely(outsiders, userId -> pushChatAlert(groupId, userId, dto), "채팅 알림 전송", groupId);
         }
         return dto;
     }
@@ -79,24 +89,46 @@ public class ChatMessageService {
      * <p>memberIdsOf 를 append 보다 먼저 호출한다. ChatMessageStore#append 는 그 방의 첫 메시지일 때
      * members 키(TTL 앵커)의 잔여 TTL 을 복제하는데, memberIdsOf 가 캐시를 데워 members 키를 만들어
      * 두지 않으면 이 방의 첫 메시지가 하필 시스템 메시지인 경우 TTL 없이 영구 보관된다.
+     *
+     * <p>멤버가 비어 있으면(존재하지 않거나 아직 아무도 캐시되지 않은 groupId) 그대로 반환한다 —
+     * TTL 앵커(members 키) 없이 append 하면 messages·seq 키가 TTL 없이 영구 보관된다.
+     *
+     * <p>지금 방을 보고 있는 사람은 {@code send()} 와 같은 규칙으로 배지·알림 대상에서 뺀다.
+     * 판결 메시지가 도착하는 순간 화면으로 이미 보고 있는데 배지가 올라가면 재입장 트리거가 없어
+     * 영구히 남는다.
      */
     public void postSystemMessage(long groupId, String content, String deepLink, NotificationType type) {
         Set<Long> members = access.memberIdsOf(groupId);
+        if (members.isEmpty()) {
+            return;
+        }
 
         ChatMessage saved = store.append(groupId, ChatMessageType.SYSTEM, null, null, content);
         messagingTemplate.convertAndSend(destination(groupId), ChatMessageDto.from(saved));
 
-        store.increaseUnread(groupId, members);
-        members.forEach(userId -> events.publishEvent(
-                new NotificationRequestedEvent(userId, type, Map.of("content", content), deepLink)));
+        List<Long> outsiders = outsiders(members, groupId, null);
+        if (!outsiders.isEmpty()) {
+            store.increaseUnread(groupId, outsiders);
+            forEachSafely(outsiders, userId -> events.publishEvent(
+                    new NotificationRequestedEvent(userId, type, Map.of("content", content), deepLink)),
+                    "시스템 메시지 알림 발행", groupId);
+        }
     }
 
-    /** 발신자와 지금 방을 열어 둔 사람을 뺀 나머지 */
+    /** send() 가 쓰는 진입점. 매번 memberIdsOf 를 다시 조회한다(발신자 제외분) */
     private List<Long> outsiders(long groupId, long senderId) {
+        return outsiders(access.memberIdsOf(groupId), groupId, senderId);
+    }
+
+    /**
+     * members 중 발신자와 지금 방을 열어 둔 사람을 뺀 나머지.
+     * senderId 가 null 이면(시스템 메시지) 발신자 제외 없이 접속자만 뺀다.
+     */
+    private List<Long> outsiders(Set<Long> members, long groupId, Long senderId) {
         Set<Long> active = sessions.activeUserIds(groupId);
         List<Long> result = new ArrayList<>();
-        access.memberIdsOf(groupId).stream().sorted().forEach(userId -> {
-            if (userId != senderId && !active.contains(userId)) {
+        members.stream().sorted().forEach(userId -> {
+            if (!Objects.equals(userId, senderId) && !active.contains(userId)) {
                 result.add(userId);
             }
         });
@@ -110,9 +142,28 @@ public class ChatMessageService {
         }
         notificationSender.push(userId, "chat", Map.of(
                 "groupId", groupId,
-                "senderNickname", message.getSenderNickname(),
+                "senderNickname", displayNickname(message.getSenderNickname()),
                 "content", message.getContent(),
                 "deepLink", "/challenge/group/" + groupId + "/chat"));
+    }
+
+    /** 닉네임 온보딩 전(null)이어도 알림 문구가 깨지지 않도록 하는 표시 문자열 결정 지점 — 한 곳에만 둔다 */
+    private String displayNickname(String senderNickname) {
+        return senderNickname != null && !senderNickname.isBlank() ? senderNickname : UNKNOWN_SENDER_NICKNAME;
+    }
+
+    /**
+     * 수신자별로 action 을 실행하되, 한 명의 실패(예: Redis 쿨다운 조회 예외)가 나머지 수신자를
+     * 막지 않게 한다. 실패는 삼키지 않고 로그로 남기되 메시지 내용·토큰 등 개인정보는 찍지 않는다.
+     */
+    private void forEachSafely(Collection<Long> userIds, Consumer<Long> action, String actionName, long groupId) {
+        userIds.forEach(userId -> {
+            try {
+                action.accept(userId);
+            } catch (Exception e) {
+                log.error("{} 실패 groupId={} userId={}", actionName, groupId, userId, e);
+            }
+        });
     }
 
     private String destination(long groupId) {

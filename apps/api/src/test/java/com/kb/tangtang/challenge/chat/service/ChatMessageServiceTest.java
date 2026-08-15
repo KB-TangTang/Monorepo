@@ -3,24 +3,30 @@ package com.kb.tangtang.challenge.chat.service;
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.notification.service.NotificationSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +43,7 @@ class ChatMessageServiceTest {
     @Mock private ChatSessionRegistry sessions;
     @Mock private SimpMessagingTemplate messagingTemplate;
     @Mock private NotificationSender notificationSender;
+    @Mock private ApplicationEventPublisher events;
 
     @InjectMocks private ChatMessageService service;
 
@@ -94,12 +101,79 @@ class ChatMessageServiceTest {
     }
 
     @Test
-    @DisplayName("발송 전에 권한을 검증한다")
+    @DisplayName("발송 전에 권한 검증이 저장보다 먼저 실행된다")
     void verifiesAccessBeforeSending() {
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of());
 
         service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕");
 
         verify(access).verifyCanEnter(GROUP_ID, SENDER_ID);
+        InOrder order = inOrder(access, store);
+        order.verify(access).verifyCanEnter(GROUP_ID, SENDER_ID);
+        order.verify(store).append(eq(GROUP_ID), eq(ChatMessageType.TEXT), eq(SENDER_ID), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("시스템 메시지도 회원 조회가 저장보다 먼저 실행된다")
+    void verifiesMemberLookupBeforeAppendForSystemMessage() {
+        when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of());
+
+        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
+                NotificationType.GROUP_TRIAL_OPENED);
+
+        InOrder order = inOrder(access, store);
+        order.verify(access).memberIdsOf(GROUP_ID);
+        order.verify(store).append(eq(GROUP_ID), eq(ChatMessageType.SYSTEM), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("시스템 메시지도 접속 중인 사람의 배지·알림은 건너뛴다")
+    void skipsUnreadAndNotificationForActiveUsersOnSystemMessage() {
+        when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(9L));
+
+        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
+                NotificationType.GROUP_TRIAL_OPENED);
+
+        verify(store).increaseUnread(GROUP_ID, List.of(SENDER_ID, 12L));
+        verify(events, never()).publishEvent(new NotificationRequestedEvent(
+                9L, NotificationType.GROUP_TRIAL_OPENED, Map.of("content", "재판이 열렸어요"),
+                "/challenge/group/7/trial"));
+    }
+
+    @Test
+    @DisplayName("멤버가 없는 방에는 시스템 메시지를 저장하지 않는다")
+    void skipsSystemMessageWhenNoMembers() {
+        when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of());
+
+        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
+                NotificationType.GROUP_TRIAL_OPENED);
+
+        verify(store, never()).append(anyLong(), any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("닉네임이 없어도 알림 루프가 끝까지 돈다")
+    void continuesNotifyingWhenSenderNicknameIsNull() {
+        when(store.append(anyLong(), any(), any(), any(), anyString()))
+                .thenReturn(new ChatMessage(1L, ChatMessageType.TEXT, SENDER_ID, null,
+                        "안녕", LocalDateTime.now()));
+        when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L));
+
+        service.send(GROUP_ID, SENDER_ID, null, "안녕");
+
+        verify(notificationSender).push(eq(12L), eq("chat"), any());
+    }
+
+    @Test
+    @DisplayName("한 수신자 알림 실패가 나머지 수신자를 막지 않는다")
+    void continuesNotifyingOtherRecipientsWhenOneFails() {
+        when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L, 12L, 15L));
+        when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(SENDER_ID));
+        when(store.tryAcquireNotifyCooldown(GROUP_ID, 9L)).thenThrow(new RuntimeException("Redis 장애"));
+
+        service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕");
+
+        verify(notificationSender).push(eq(12L), eq("chat"), any());
+        verify(notificationSender).push(eq(15L), eq("chat"), any());
     }
 }

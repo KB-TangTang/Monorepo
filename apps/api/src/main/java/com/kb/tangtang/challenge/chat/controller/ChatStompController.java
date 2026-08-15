@@ -2,6 +2,8 @@ package com.kb.tangtang.challenge.chat.controller;
 
 import com.kb.tangtang.challenge.chat.dto.ChatSendRequestDto;
 import com.kb.tangtang.challenge.chat.service.ChatMessageService;
+import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.mapper.UserMapper;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -31,7 +33,16 @@ public class ChatStompController {
         chatMessageService.send(groupId, userId, nicknameOf(userId), request.getContent());
     }
 
+    /**
+     * 인증된 세션인데 사용자가 사라진 상황(탈퇴·삭제)은 업무 오류로 처리한다.
+     * 닉네임 자체(null 가능 — 온보딩 미완료)는 그대로 둔다. 빈 값 처리는
+     * ChatMessageService 가 알림 페이로드를 만드는 지점 한 곳에서 맡는다.
+     */
     private String nicknameOf(long userId) {
-        return userMapper.findById(userId).getNickname();
+        UserDto user = userMapper.findById(userId);
+        if (user == null) {
+            throw new BusinessException("CHAT_SENDER_NOT_FOUND", "사용자 정보를 찾을 수 없어요.");
+        }
+        return user.getNickname();
     }
 }
