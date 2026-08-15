@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.GroupMember;
@@ -47,13 +48,16 @@ public class ChallengeGroupStatusTransitionService {
 
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
+    private final ChatMessageStore chatMessageStore;
     private final ApplicationEventPublisher events;
 
     public ChallengeGroupStatusTransitionService(ChallengeGroupMapper challengeGroupMapper,
                                                  GroupMemberMapper groupMemberMapper,
+                                                 ChatMessageStore chatMessageStore,
                                                  ApplicationEventPublisher events) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
+        this.chatMessageStore = chatMessageStore;
         this.events = events;
     }
 
@@ -82,6 +86,13 @@ public class ChallengeGroupStatusTransitionService {
             publishStarted(group, members);
         } else {
             publishCanceled(group);
+            // TTL 만 믿지 않는다. 종료 = 즉시 차단 + 즉시 삭제(이슈 #174)
+            // Redis 장애로 삭제가 실패해도 상태 전이·알림이라는 본업은 이미 끝났다 — 조용히 삼키지 않고 로그만 남긴다.
+            try {
+                chatMessageStore.deleteRoom(group.getId());
+            } catch (Exception e) {
+                log.error("채팅방 삭제 실패 groupId={} — TTL 로 뒤늦게 정리된다", group.getId(), e);
+            }
         }
         log.info("그룹 챌린지 상태 전이 groupId={} {} → {} memberCount={}",
                 group.getId(), ChallengeGroupStatus.RECRUITING, target, members.size());

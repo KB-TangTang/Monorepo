@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
@@ -22,7 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -42,6 +47,7 @@ class ChallengeGroupStatusTransitionServiceTest {
 
     @Mock private ChallengeGroupMapper groupMapper;
     @Mock private GroupMemberMapper memberMapper;
+    @Mock private ChatMessageStore chatMessageStore;
 
     private final List<NotificationRequestedEvent> published = new ArrayList<>();
     private ChallengeGroupStatusTransitionService service;
@@ -50,7 +56,7 @@ class ChallengeGroupStatusTransitionServiceTest {
     void setUp() {
         ApplicationEventPublisher publisher =
                 event -> published.add((NotificationRequestedEvent) event);
-        service = new ChallengeGroupStatusTransitionService(groupMapper, memberMapper, publisher);
+        service = new ChallengeGroupStatusTransitionService(groupMapper, memberMapper, chatMessageStore, publisher);
     }
 
     @Test
@@ -72,6 +78,8 @@ class ChallengeGroupStatusTransitionServiceTest {
         assertEquals("커피값 줄이기", first.params().get("groupName"));
         assertEquals("3", first.params().get("days"), "8/13~8/15 는 양끝을 포함해 3일이다");
         assertEquals("/group-challenges/7", first.deepLinkUrl());
+
+        verify(chatMessageStore, never()).deleteRoom(anyLong());
     }
 
     @Test
@@ -86,6 +94,20 @@ class ChallengeGroupStatusTransitionServiceTest {
         assertEquals(OWNER_ID, published.get(0).userId());
         assertEquals(NotificationType.GROUP_CHALLENGE_CANCELED, published.get(0).type());
         assertEquals("커피값 줄이기", published.get(0).params().get("groupName"));
+
+        verify(chatMessageStore).deleteRoom(GROUP_ID);
+    }
+
+    @Test
+    @DisplayName("채팅방 삭제가 실패해도 상태 전이·알림은 정상 처리된다 — TTL 이 백스톱이다")
+    void closeSucceedsEvenWhenChatRoomDeleteFails() {
+        when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
+        when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "CLOSED")).thenReturn(1);
+        doThrow(new RuntimeException("Redis 연결 실패")).when(chatMessageStore).deleteRoom(GROUP_ID);
+
+        assertTrue(service.startOrCancel(group()));
+
+        assertEquals(1, published.size(), "채팅방 삭제 실패가 알림 발행을 막으면 안 된다");
     }
 
     @Test
@@ -98,6 +120,7 @@ class ChallengeGroupStatusTransitionServiceTest {
         assertFalse(service.startOrCancel(group()));
 
         assertTrue(published.isEmpty(), "compare-and-set 이 0 을 냈으면 알림도 없어야 한다");
+        verifyNoInteractions(chatMessageStore);
     }
 
     private ChallengeGroup group() {
