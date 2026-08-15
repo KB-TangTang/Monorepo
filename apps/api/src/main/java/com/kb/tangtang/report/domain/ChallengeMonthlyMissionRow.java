@@ -5,6 +5,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -17,4 +18,8 @@ public class ChallengeMonthlyMissionRow {
     private String difficultyName;
     private Integer difficultyScore;
     private boolean previousSuccess;
+    private Long categoryId;
+    private String categoryName;
+    private BigDecimal baseAmount;
+    private BigDecimal actualAmount;
 }

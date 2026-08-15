@@ -3,6 +3,7 @@ package com.kb.tangtang.report.domain;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -13,6 +14,9 @@ public class ChallengeMonthlyReportSnapshot {
     private String yearMonth;
     private int totalDays;
     private int successDays;
+    private BigDecimal savedAmount;
+    private BigDecimal overspentAmount;
+    private String categoryEffectsJson;
     private int monthlyLongestStreak;
     private String bestWeekday;
     private int earnedScore;

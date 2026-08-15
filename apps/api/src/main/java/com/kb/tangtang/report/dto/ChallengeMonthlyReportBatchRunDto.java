@@ -9,4 +9,5 @@ public class ChallengeMonthlyReportBatchRunDto {
 
     private String yearMonth;
     private int affected;
+    private boolean forced;
 }

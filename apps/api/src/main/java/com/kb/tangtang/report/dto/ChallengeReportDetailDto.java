@@ -21,6 +21,11 @@ public class ChallengeReportDetailDto {
     private int bestStreakDays;
     private String bestWeekday;
     private int earnedPoints;
+    private BigDecimal savedAmount;
+    private BigDecimal overspentAmount;
+    private BigDecimal netSavings;
+    private BigDecimal annualizedNetSavings;
+    private List<ChallengeCategoryEffectDto> categoryEffects;
     private List<ChallengeWeeklyResultDto> weeklyResults;
     private List<ChallengeDifficultyResultDto> difficulties;
 }

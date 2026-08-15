@@ -47,6 +47,14 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("created_at &lt; #{currentMonthStart}"));
             assertTrue(xml.contains("assignment.result IN ('SUCCESS', 'FAIL')"));
             assertTrue(xml.contains("assignment.base_amount IS NOT NULL"));
+            assertTrue(xml.contains("<if test=\"!includeExisting\">"));
+            assertTrue(xml.contains("mission_transaction.classification = 'CONSUMPTION'"));
+            assertTrue(xml.contains("mission_transaction.is_excluded_from_summary = 0"));
+            assertTrue(xml.contains("saved_amount"));
+            assertTrue(xml.contains("over_amount"));
+            assertTrue(xml.contains("category_results_json"));
+            assertTrue(xml.contains("over_amount AS overspent_amount"));
+            assertTrue(xml.contains("category_results_json AS category_effects_json"));
             assertTrue(xml.contains("SELECT MIN(assign_date)"));
             assertTrue(xml.contains("mission.mission_type"));
             assertFalse(xml.contains("mission_type = 'RELATIVE'"));

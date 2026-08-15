@@ -158,6 +158,12 @@ class ChallengeReportServiceTest {
         assertNull(result.getMonthOverMonthPercentagePoint());
         assertEquals(15, result.getSuccessfulDays());
         assertEquals(20, result.getChallengeDays());
+        assertEquals(42000, result.getSavedAmount().intValue());
+        assertEquals(7000, result.getOverspentAmount().intValue());
+        assertEquals(35000, result.getNetSavings().intValue());
+        assertEquals(420000, result.getAnnualizedNetSavings().intValue());
+        assertEquals("카페", result.getCategoryEffects().get(0).getCategoryName());
+        assertEquals(0, result.getCategoryEffects().get(0).getOverspentAmount().intValue());
         assertEquals(2, result.getWeeklyResults().size());
         assertEquals("EASY", result.getDifficulties().get(0).getDifficultyName());
     }
@@ -187,6 +193,11 @@ class ChallengeReportServiceTest {
         report.setYearMonth(yearMonth);
         report.setTotalDays(totalDays);
         report.setSuccessDays(successDays);
+        report.setSavedAmount(new java.math.BigDecimal("42000"));
+        report.setOverspentAmount(new java.math.BigDecimal("7000"));
+        report.setNetAmount(new java.math.BigDecimal("35000"));
+        report.setCategoryEffectsJson("[{\"categoryId\":1,\"categoryName\":\"카페\",\"successfulDays\":2,"
+                + "\"savedAmount\":42000,\"failedDays\":1,\"overspentAmount\":0}]");
         report.setMonthlyLongestStreak(4);
         report.setBestWeekday("월요일");
         report.setEarnedScore(85);
