@@ -18,6 +18,7 @@ import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { findExpenseParentByName } from '@/utils/category';
+import { useCategoryEdit } from '@/utils/useCategoryEdit';
 import {
     formatDayLabel,
     formatWon,
@@ -44,6 +45,8 @@ const isPaymentSheetOpen = ref(false);
 const isCategoryFilterSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
+const { isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
+    useCategoryEdit(transactions);
 
 const scrollEl = ref(null);
 const groupRefs = ref({});
@@ -151,20 +154,10 @@ function openCategorySheet(tx) {
     isCategorySheetOpen.value = true;
 }
 
-function applyCategory({ transactionId, categoryName, applyToMerchant }) {
-    const tx = transactions.value.find((item) => item.id === transactionId);
-    if (!tx) {
-        return;
-    }
-    if (applyToMerchant) {
-        const merchant = tx.merchant;
-        transactions.value.forEach((item) => {
-            if (item.merchant === merchant) {
-                item.category = categoryName;
-            }
-        });
-    } else {
-        tx.category = categoryName;
+async function applyCategory(payload) {
+    const success = await applyCategoryEdit(payload);
+    if (success) {
+        isCategorySheetOpen.value = false;
     }
 }
 
@@ -188,6 +181,7 @@ onMounted(async () => {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
         loading.value = false;
     }
+    await loadCategories();
 });
 </script>
 
@@ -286,6 +280,8 @@ onMounted(async () => {
         <LedgerCategorySheet
             v-model="isCategorySheetOpen"
             :transaction="selectedTransaction"
+            :error="categoryError"
+            :confirming="isApplyingCategory"
             @select="applyCategory"
         />
     </article>
