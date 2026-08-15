@@ -17,12 +17,18 @@ public interface DevBatchTriggerControllerDocs {
             notes = "**로컬에서만 동작한다.** `DevEnvironmentGuard` 가 `app.env` 로 막는다. 인증은 필요하다.\n\n"
                     + "시연·검증용이다. 그룹 챌린지는 자정 배치 → 평가·기소 → 변론 → 투표 → 판결로 이어지는데, "
                     + "각 단계가 자정이나 수 시간 뒤에 도는 배치에 걸려 있어 **기다려서는 검증할 수 없다.**\n\n"
-                    + "등록된 배치 이름: `group-challenge-status`\n\n"
+                    + "등록된 배치 이름: `group-challenge-status`, `fixed-expense-payment-reminders`\n\n"
                     + "없는 이름을 넣으면 `DEV_BATCH_NOT_FOUND` 로 실패한다.")
     ApiResponse<Map<String, Object>> run(
             @ApiIgnore Long userId,
             @ApiParam(value = "배치 이름", required = true, example = "group-challenge-status") String name,
             @ApiParam(value = "기준일 (YYYY-MM-DD). 없으면 오늘. "
-                    + "미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다", example = "2026-08-20")
+                    + "미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다. "
+                    + "결제 예정 알림 배치는 기준일을 받을 수 없다.", example = "2026-08-20")
             LocalDate date);
+
+    @ApiOperation(value = "[DEV] 결제 예정 알림 초기화",
+            notes = "**로컬에서만 동작한다.** 현재 사용자의 `PAYMENT_DUE` 알림과 고정지출 발송 이력만 "
+                    + "지워 같은 예정일을 다시 검증할 수 있게 한다. 다른 알림은 삭제하지 않는다.")
+    ApiResponse<Map<String, Integer>> resetFixedExpensePaymentReminders(@ApiIgnore Long userId);
 }

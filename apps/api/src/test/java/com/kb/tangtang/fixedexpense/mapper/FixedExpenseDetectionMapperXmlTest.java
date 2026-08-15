@@ -44,6 +44,7 @@ class FixedExpenseDetectionMapperXmlTest {
         assertTrue(xml.contains("t.is_refund = 0"));
         assertTrue(xml.contains("t.is_excluded_from_summary = 0"));
         assertTrue(xml.contains("ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"));
-        assertTrue(xml.contains("status = 'BUFFER'"));
+        assertTrue(xml.contains("AND status = 'ACTIVE'"));
+        assertFalse(xml.contains("reactivateBuffer"));
     }
 }

@@ -18,6 +18,7 @@ public class MissionCategoryRankDto {
     private BigDecimal totalAmount;
     private int transactionCount;
     private BigDecimal spendingRatio;
-    private LocalDate latestMissionAssignDate;
-    private String latestMissionResult;
+    private LocalDate rotationAssignDate;
+    private String rotationResult;
+    private int missionRound;
 }

@@ -102,9 +102,7 @@ export const MOCK_WEEKLY_VERDICT = {
 /* ── 이번 달 누적 점수 ───────────────────────────────── */
 export const MOCK_MONTHLY_SCORE = {
     score: 520,
-    percentile: 15,
-    nextTierGap: 80,
-    tierProgress: 78,
+    topPercent: null,
 };
 
 /* ── 판정 결과 (어제 것) ─────────────────────────────── */

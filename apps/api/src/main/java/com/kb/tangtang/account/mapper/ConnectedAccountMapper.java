@@ -55,4 +55,22 @@ public interface ConnectedAccountMapper {
                      @Param("userId") long userId,
                      @Param("balance") java.math.BigDecimal balance,
                      @Param("lastSyncAt") LocalDateTime lastSyncAt);
+
+    /** 사용자가 명시적으로 해제한(is_active=0) 계좌의 자연키 목록. 동기화가 이 계좌들을 되살리면 안 된다(이슈 #199 최종 리뷰). */
+    List<String> findInactiveKeysByUser(@Param("userId") long userId);
+
+    /**
+     * 배치 스케줄러 대상 사용자 선정(이슈 #199). is_active 계좌가 있는 사용자만, 마지막 동기화
+     * **시도**가 가장 오래된 사용자부터 최대 limit 명. 별도 잠금·작업 테이블 없이 라운드로빈 효과를 낸다.
+     *
+     * ⚠ 정렬 기준은 tbl_connected_account.last_sync_at 이 아니라 tbl_financial_sync_history.finished_at 이다
+     *   (이슈 #199 최종 리뷰). sync() 는 자기가 만든 MOCK-* 계좌의 last_sync_at 만 갱신하므로,
+     *   CODEF 연동(AccountLinkService)으로만 계좌를 만든 사용자는 last_sync_at 이 영원히 갱신되지 않아
+     *   "무한 연체" 상태로 매 틱 큐 맨 앞을 차지하며 다른 사용자를 굶긴다. 반면 이력은 성공(COMPLETED)이든
+     *   실패(FAILED)든 매 시도마다 finished_at 이 찍히므로 실제 시도 이력을 정직하게 반영한다.
+     *
+     * @param thresholdMinutes 쿨다운(분). 마지막 시도가 이보다 최근이면 대상에서 제외한다.
+     */
+    List<Long> findUserIdsDueForSync(@Param("thresholdMinutes") int thresholdMinutes,
+                                     @Param("limit") int limit);
 }

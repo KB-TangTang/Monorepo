@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.account.mapper.InvestmentHoldingMapper">
+
+    <sql id="columns">
+        id, user_id, account_id, symbol, name, market_country, currency, quantity,
+        average_purchase_price, last_price, purchase_amount, market_value,
+        profit_loss_amount, profit_loss_rate
+    </sql>
+
+    <select id="findByAccount" resultType="com.kb.tangtang.account.domain.InvestmentHolding">
+        SELECT <include refid="columns"/>
+        FROM tbl_investment_holding
+        WHERE account_id = #{accountId}
+        ORDER BY id
+    </select>
+
+    <select id="findByUser" resultType="com.kb.tangtang.account.domain.InvestmentHolding">
+        SELECT <include refid="columns"/>
+        FROM tbl_investment_holding
+        WHERE user_id = #{userId}
+        ORDER BY id
+    </select>
+
+    <update id="update" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
+        UPDATE tbl_investment_holding
+        SET name                    = #{name},
+            market_country          = #{marketCountry},
+            currency                = #{currency},
+            quantity                = #{quantity},
+            average_purchase_price  = #{averagePurchasePrice},
+            last_price              = #{lastPrice},
+            purchase_amount         = #{purchaseAmount},
+            market_value            = #{marketValue},
+            profit_loss_amount      = #{profitLossAmount},
+            profit_loss_rate        = #{profitLossRate}
+        WHERE account_id = #{accountId}
+          AND symbol = #{symbol}
+    </update>
+
+    <insert id="insert" parameterType="com.kb.tangtang.account.domain.InvestmentHolding"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_investment_holding
+            (user_id, account_id, symbol, name, market_country, currency, quantity,
+             average_purchase_price, last_price, purchase_amount, market_value,
+             profit_loss_amount, profit_loss_rate)
+        VALUES
+            (#{userId}, #{accountId}, #{symbol}, #{name}, #{marketCountry}, #{currency}, #{quantity},
+             #{averagePurchasePrice}, #{lastPrice}, #{purchaseAmount}, #{marketValue},
+             #{profitLossAmount}, #{profitLossRate})
+    </insert>
+
+</mapper>

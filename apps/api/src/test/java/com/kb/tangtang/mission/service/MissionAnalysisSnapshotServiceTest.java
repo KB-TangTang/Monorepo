@@ -29,6 +29,7 @@ class MissionAnalysisSnapshotServiceTest {
 
     private static class FakeSnapshotMapper implements MissionAnalysisSnapshotMapper {
         List<MissionAnalysisSnapshot> pendingSnapshots = List.of();
+        List<MissionAnalysisSnapshot> latestCycleSnapshots = List.of();
         final List<MissionAnalysisSnapshot> insertedSnapshots = new ArrayList<>();
         LocalDateTime qualifiedAt;
         LocalDateTime markedQualifiedAt;
@@ -36,6 +37,11 @@ class MissionAnalysisSnapshotServiceTest {
         @Override
         public List<MissionAnalysisSnapshot> findPendingSnapshots(long userId) {
             return pendingSnapshots;
+        }
+
+        @Override
+        public List<MissionAnalysisSnapshot> findLatestCycleSnapshots(long userId) {
+            return latestCycleSnapshots;
         }
 
         @Override
@@ -196,6 +202,29 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(2, result.getItems().size());
     }
 
+    @Test
+    @DisplayName("현재 주기 스냅샷을 로테이션 상태와 수사 회차로 변환한다")
+    void returnsCurrentRotationAnalysis() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        mapper.latestCycleSnapshots = List.of(
+                rotationSnapshot(1, "패션", LocalDate.of(2026, 8, 11), "SUCCESS", 3),
+                rotationSnapshot(2, "취미", TODAY, "PENDING", 1),
+                rotationSnapshot(3, "배달앱", null, "WAITING", 2));
+
+        MissionCategoryAnalysisDto result = service(mapper, new StubCategoryAnalysisService())
+                .getCurrentRotationAnalysis(USER_ID);
+
+        assertEquals(LocalDate.of(2026, 7, 14), result.getAnalysisStartDate());
+        assertEquals(LocalDate.of(2026, 8, 10), result.getAnalysisEndDate());
+        assertEquals(3, result.getTopCategories().size());
+        assertEquals("SUCCESS", result.getTopCategories().get(0).getRotationResult());
+        assertEquals(LocalDate.of(2026, 8, 11),
+                result.getTopCategories().get(0).getRotationAssignDate());
+        assertEquals(3, result.getTopCategories().get(0).getMissionRound());
+        assertEquals("WAITING", result.getTopCategories().get(2).getRotationResult());
+        assertNull(result.getTopCategories().get(2).getRotationAssignDate());
+    }
+
     private MissionCategoryAnalysisDto eligibleAnalysis(List<MissionCategoryRankDto> categories) {
         return MissionCategoryAnalysisDto.builder()
                 .relativeEligible(true)
@@ -229,6 +258,25 @@ class MissionAnalysisSnapshotServiceTest {
                 .spendingAmount(new BigDecimal(spendingAmount))
                 .spendingRatio(new BigDecimal(spendingRatio))
                 .transactionCount(rank + 2)
+                .build();
+    }
+
+    private MissionAnalysisSnapshot rotationSnapshot(int rank, String categoryName,
+                                                      LocalDate assignedDate, String rotationResult,
+                                                      int missionRound) {
+        return MissionAnalysisSnapshot.builder()
+                .userId(USER_ID)
+                .cycleStartDate(TODAY)
+                .categoryId((long) rank)
+                .parentCategoryName("테스트")
+                .categoryName(categoryName)
+                .categoryRank(rank)
+                .spendingAmount(new BigDecimal("100000"))
+                .spendingRatio(new BigDecimal("10.00"))
+                .transactionCount(3)
+                .assignedDate(assignedDate)
+                .rotationResult(rotationResult)
+                .missionRound(missionRound)
                 .build();
     }
 }

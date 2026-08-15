@@ -7,7 +7,6 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /** 월간 고정지출 탐지에 필요한 룰·거래·후보 접근. */
@@ -28,9 +27,7 @@ public interface FixedExpenseDetectionMapper {
 
     int upsertCandidate(FixedExpenseCandidate candidate);
 
-    int updateDetectedCandidate(@Param("candidate") FixedExpenseCandidate candidate,
-                                 @Param("reactivateBuffer") boolean reactivateBuffer,
-                                 @Param("relapseDetectedAt") LocalDateTime relapseDetectedAt);
+    int updateDetectedCandidate(@Param("candidate") FixedExpenseCandidate candidate);
 
     int linkTransactionsToCandidate(@Param("userId") long userId,
                                     @Param("merchantNameNormalized") String merchantNameNormalized,

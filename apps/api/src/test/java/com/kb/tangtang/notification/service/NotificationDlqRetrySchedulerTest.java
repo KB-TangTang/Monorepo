@@ -44,6 +44,7 @@ class NotificationDlqRetrySchedulerTest {
         @Override public int countUnreadSame(long u, String t, String d) { return 0; }
         @Override public int markRead(long i, long u) { return 1; }
         @Override public int markAllRead(long u) { return 1; }
+        @Override public int deleteByUserAndType(long u, String t) { return 0; }
         @Override public Notification findById(long id, long userId) {
             return stored != null && stored.getId() == id ? stored : null;
         }
@@ -266,5 +267,24 @@ class NotificationDlqRetrySchedulerTest {
         assertTrue(service.created.isEmpty(), "이미 있는 알림을 또 만들면 중복이 된다");
         assertEquals(List.of(), sender.sent);
         assertEquals(List.of(1L), dlq.deleted, "목적은 달성됐으므로 행은 지운다");
+    }
+
+    @Test
+    @DisplayName("결제 예정 알림 DLQ 재시도는 이전 안 읽음 알림과 무관하게 새 결제 주기 알림을 저장한다")
+    void recreatesPaymentDueWithoutGenericUnreadDuplicateSuppression() {
+        FakeDlqMapper dlq = new FakeDlqMapper();
+        dlq.rows = List.of(row(1L, 0, """
+                {"userId":7,"type":"PAYMENT_DUE","content":"넷플릭스 · 7일 후 결제 예정",\
+                "deepLinkUrl":"/asset/fixed-expenses/101"}"""));
+        RecordingService service = new RecordingService();
+        service.duplicate = true;
+        FakeSender sender = new FakeSender(dlq);
+
+        scheduler(dlq, new FakeNotificationMapper(), service, sender, BASE.plusMinutes(2)).retryDue();
+
+        assertEquals(List.of("7|PAYMENT_DUE|넷플릭스 · 7일 후 결제 예정|/asset/fixed-expenses/101"),
+                service.created);
+        assertEquals(List.of(99L), sender.sent);
+        assertEquals(List.of(1L), dlq.deleted);
     }
 }

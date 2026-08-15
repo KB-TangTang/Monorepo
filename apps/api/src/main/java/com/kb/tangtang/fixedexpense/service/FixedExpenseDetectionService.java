@@ -14,7 +14,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -33,7 +32,6 @@ public class FixedExpenseDetectionService {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal DEFAULT_AMOUNT_TOLERANCE_PCT = BigDecimal.TEN;
     private static final String ACTIVE = "ACTIVE";
-    private static final String BUFFER = "BUFFER";
 
     private final FixedExpenseDetectionMapper mapper;
     private final Clock clock;
@@ -84,13 +82,11 @@ public class FixedExpenseDetectionService {
             FixedExpenseCandidate incoming = toCandidate(userId, entry.getKey(), pattern);
             mapper.upsertCandidate(incoming);
             FixedExpenseCandidate persisted = mapper.findCandidate(userId, entry.getKey());
-            if (persisted == null || persisted.isExcluded()) {
+            if (persisted == null || persisted.isExcluded() || !ACTIVE.equals(persisted.getStatus())) {
                 continue;
             }
 
-            boolean reactivatedBuffer = BUFFER.equals(persisted.getStatus());
-            mapper.updateDetectedCandidate(incomingWithId(incoming, persisted.getId()),
-                    reactivatedBuffer, reactivatedBuffer ? LocalDateTime.now(clock) : null);
+            mapper.updateDetectedCandidate(incomingWithId(incoming, persisted.getId()));
             mapper.linkTransactionsToCandidate(
                     userId,
                     entry.getKey(),

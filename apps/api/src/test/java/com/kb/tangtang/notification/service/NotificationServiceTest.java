@@ -43,6 +43,7 @@ class NotificationServiceTest {
         }
         @Override public int markRead(long id, long userId) { return markReadResult; }
         @Override public int markAllRead(long userId) { return markAllReadResult; }
+        @Override public int deleteByUserAndType(long userId, String type) { return 0; }
     }
 
     private Notification row(long id) {

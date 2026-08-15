@@ -21,7 +21,7 @@
 | `01. 서비스 API` | 정식 엔드포인트 52개 |
 | `02. 개발 전용 API` | `/api/dev/**`. 배치 트리거·미션 재배정. 로컬에서만 동작한다 |
 
-**섹션은 모듈 단위 7개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
+**섹션은 모듈 단위 9개**다. 컨트롤러가 아니라 모듈로 묶여 있어 `01. 회원 · 인증` 안에
 로그인·내 정보·동의·튜토리얼이 함께 들어간다. 태그 이름은 `common/docs/SwaggerTags` 가 소유한다.
 
 | 섹션 | 모듈 |
@@ -33,6 +33,8 @@
 | `04. 그룹 챌린지(지방법원)` | challenge |
 | `05. 알림` | notification |
 | `06. 월간 리포트(판결문)` | report |
+| `07. 고정지출 · 절약` | fixedexpense |
+| `08. 거래내역` | transaction |
 
 - 인증이 필요한 API 를 호출하려면 우측 상단 **Authorize** 에 `Bearer {accessToken}` 을 넣는다.
   (`Bearer ` 접두사까지 포함해야 한다. 인터셉터가 접두사를 직접 잘라낸다)
@@ -47,6 +49,61 @@
 > 이 `API_SPEC.md` 와 산출물 엑셀(`탕탕_API_연동규격_정의서`)을 **대체하지 않는다.**
 > 제출 정본은 엑셀이고, Swagger 는 개발·시연·QA 용이다.
 > 설정 근거는 `.claude/context/DECISIONS.md` 2026-08-13 (4) 참고.
+
+## 고정지출 관리·절약 감정서
+
+모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청으로 받지 않는다. 목록과 절약 감정서는
+`yearMonth`를 생략하면 `Asia/Seoul` 현재월을 사용한다. 값이 있으면 `YYYY-MM` 형식의 현재월만
+허용한다. 고정지출 상태 이력 스냅샷은 아직 없으므로 과거월·미래월 조회는 지원하지 않는다.
+
+| Method | Endpoint | 응답 책임 |
+|---|---|---|
+| GET | `/api/fixedExpenses/candidates?yearMonth=YYYY-MM&categoryId={id}` | 현재 활성 후보·확정 목록과 일관된 관리 요약 |
+| GET | `/api/fixedExpenses/candidates/{candidateId}` | 후보·확정 항목 공통 상세와 최근 6개월 결제 이력 |
+| GET | `/api/fixedExpenses/savingReport?yearMonth=YYYY-MM` | 확정 활성 항목별·월간·연간 절약 가능액 |
+
+- 목록은 페이지네이션 없이 조건에 맞는 전체 배열을 반환한다. `categoryId`는 선택값이며 요약·후보·확정
+  배열에 함께 적용된다.
+- 후보는 `ACTIVE`·미제외·`confirmedAt=null`, 확정 항목은 `ACTIVE`·미제외·`confirmedAt!=null`이다.
+  BUFFER·검증 취소·제외 항목은 목록과 절약 감정서에서 제외한다.
+- `expectedMonthlyAmount`는 목록에 포함된 후보와 확정 항목의 `averageAmount` 합계다. 절약 감정서는
+  확정 항목만 `savingsAmount=averageAmount`로 계산하며, `yearlySavings=monthlySavings*12`다.
+- 상세의 `paymentHistory`는 유효 소비 거래만 최신순으로 최대 6건이며, `sixMonthTotal`은 최근 6개월
+  유효 결제 전체 합계다. 소유하지 않았거나 활성·미제외 상태가 아닌 항목은 `404 NOT_FOUND`다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "yearMonth": "2026-08",
+    "summary": {
+      "expectedMonthlyAmount": 86900,
+      "confirmedCount": 2,
+      "candidateCount": 1
+    },
+    "confirmed": [
+      {
+        "id": 101,
+        "status": "ACTIVE",
+        "isExcluded": false,
+        "isConfirmed": true,
+        "confirmedAt": "2026-08-14T10:02:03",
+        "categoryCode": "subscription",
+        "categoryLabel": "구",
+        "name": "넷플릭스",
+        "averageAmount": 17000,
+        "billingCycle": { "type": "monthly", "day": 17 },
+        "nextPaymentDate": "2026-08-17",
+        "paymentLabel": "월 결제"
+      }
+    ],
+    "candidates": []
+  }
+}
+```
+
+절약 감정서가 비어도 `200 OK`와 `monthlySavings=0`, `yearlySavings=0`, `items=[]`를 반환한다.
+`yearMonth` 형식과 양수 `categoryId` 검증 실패는 `400 INVALID_REQUEST`다.
 
 ## 월간 소비 리포트
 
@@ -511,6 +568,237 @@ AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summar
 > ⚠ `TOKEN_EXPIRED` 는 인증 절의 액세스 토큰 만료와 **이름만 같다.** 이쪽은 HTTP 400 이라
 > 프론트 `http.js` 의 자동 재발급(401 트리거)을 유발하지 않는다.
 
+## 자산 현황 (이슈 #240)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/assets/summary?baseDate=YYYY-MM-DD` | Bearer | 순자산·전월 대비 증감·6개월 추이·구성·종류별 목록 |
+| GET | `/api/assets/trend?baseDate=YYYY-MM-DD` | Bearer | 순자산·부채 6개월 추이만 |
+
+`baseDate` 는 두 엔드포인트 모두 선택값이며 생략하면 오늘 날짜(`Asia/Seoul`)를 기준으로 한다.
+`YYYY-MM-DD` 형식이 아니면 `400 INVALID_REQUEST` 다.
+
+`GET /api/assets/trend` 는 "순자산 추이" 상세 화면(`NetWorthTrendView`) 전용이다. 자산 홈의
+순자산 카드 스파크라인은 이 엔드포인트를 쓰지 않는다 — 그 화면은 어차피 `/assets/summary` 를
+호출하므로 그 응답의 `trend` 를 그대로 재사용한다(중복 호출 없음). 두 엔드포인트의 6개월 추이
+계산은 백엔드에서 `AssetCompositionCalculator`(라이브 순자산 계산)·`AssetNetWorthTrendService`
+(과거월 스냅샷 조회 + null 채움 + 최신월 라이브 값 채움)를 공유해 로직이 갈라지지 않는다.
+
+- `asOf` 는 이 응답을 계산한 단일 기준 시각이다. `netWorth`·`composition`·`assetGroups`·`trend` 의
+  마지막 달 값이 전부 이 시각의 라이브 잔액을 사용해 화면 카드 간 금액이 어긋나지 않는다.
+- `netWorth` = 입출금 + 예적금 + 투자 + 페이머니 − 대출잔액. 연결 해제(`is_active=0`) 계좌는 제외한다.
+  투자 금액은 증권계좌 `balance` 가 아니라 `tbl_investment_holding.market_value` 합계다(보유 종목이
+  없으면 계좌 `balance` 로 대체). 대출은 `tbl_loan.balance` 합계이며 `composition`·`assetGroups` 에서는
+  음수로 내려간다.
+- `composition`(도넛차트용)·`assetGroups`(종류별 목록용)는 항상 `DEMAND_DEPOSIT`·`SAVINGS`·
+  `SECURITIES`·`PAY_MONEY`·`LOAN` 5종을 고정 순서로 반환한다. 연결된 계좌가 없는 종류도
+  `amount=0`·`count=0` 으로 채워 화면이 빈 배열을 따로 처리하지 않게 한다.
+- 전월 비교(`previousMonthNetWorth`·`changeAmount`·`changeRate`)와 `trend`(최근 6개월, `baseDate`가
+  속한 달 포함)의 과거월 값은 `tbl_asset_snapshot.net_worth`·`total_debt` 를 조회해 채운다. 이
+  테이블은 매월 초 자동 배치(`MonthlyReportBatchScheduler`)와 `POST /api/reports/monthly/ai-analysis`
+  호출 시 채워진다. 그래도 가입 첫 달처럼 아직 스냅샷이 없는 달은 있을 수 있고, 그 경우
+  `trend` 항목의 `netWorth`·`totalDebt`는 `null`, 전월 비교 3개 필드도 전부 `null` 이다 — 가입
+  첫 달의 전월 비교를 생략하는 월간 리포트(`hasPreviousComparison=false`)와 같은 "데이터 없음"
+  처리 기준이다. `trend` 의 마지막 항목(= `baseDate` 가 속한 달)만은 스냅샷 유무와 무관하게 방금
+  계산한 라이브 `netWorth`·대출잔액(`totalDebt`)을 그대로 채운다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "asOf": "2026-08-15T10:30:00",
+    "netWorth": 9445500,
+    "previousMonthNetWorth": 9125500,
+    "changeAmount": 320000,
+    "changeRate": 3.51,
+    "trend": [
+      { "yearMonth": "2026-03", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-08", "netWorth": 9445500, "totalDebt": 1500000 }
+    ],
+    "composition": [
+      { "type": "DEMAND_DEPOSIT", "label": "입출금", "amount": 2066800 },
+      { "type": "LOAN", "label": "대출", "amount": -1500000 }
+    ],
+    "assetGroups": [
+      { "type": "DEMAND_DEPOSIT", "label": "입출금 계좌", "count": 2, "amount": 2066800 }
+    ]
+  }
+}
+```
+
+```json
+// GET /api/assets/trend
+{
+  "success": true,
+  "data": {
+    "asOf": "2026-08-15T10:30:00",
+    "trend": [
+      { "yearMonth": "2026-03", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-04", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-05", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-06", "netWorth": null, "totalDebt": null },
+      { "yearMonth": "2026-07", "netWorth": 9125500, "totalDebt": 1600000 },
+      { "yearMonth": "2026-08", "netWorth": 9445500, "totalDebt": 1500000 }
+    ]
+  }
+}
+```
+
+### 자산 상세 목록 (이슈 #240 후속)
+
+자산 홈에서 종류별 카드를 눌렀을 때 진입하는 상세 화면용이다. 세 종류는 응답 모양이 서로 다르다 —
+입출금·예적금·페이머니는 `tbl_connected_account` 한 테이블에서 나와 필드가 같지만, 투자는
+`tbl_investment_holding` 종목별 상세, 대출은 `tbl_loan` 조건이 필요해 엔드포인트를 분리했다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/assets/accounts?type=DEMAND_DEPOSIT\|SAVINGS\|PAY_MONEY` | Bearer | 해당 종류 연결 계좌 목록 + 잔액 합계 |
+| GET | `/api/assets/investments` | Bearer | 보유 종목 목록 + 평가금액·원금 합계 |
+| GET | `/api/assets/loans` | Bearer | 대출 목록 + 잔액 합계 |
+
+- 셋 다 `@LoginUser` 로 식별한 사용자 소유 데이터만 조회한다(`WHERE user_id = ...`). 남의 계좌를
+  가리키는 경로 파라미터 자체가 없어 별도 404 케이스가 없다 — 항상 "내 것"만 나온다.
+- `GET /api/assets/accounts` 의 `type` 은 필수이며 `DEMAND_DEPOSIT`·`SAVINGS`·`PAY_MONEY` 중
+  하나가 아니면 `400 INVALID_REQUEST` 다. `SECURITIES`(투자)·`LOAN`(대출)은 이 엔드포인트가 아니라
+  전용 엔드포인트를 쓴다.
+- `tbl_connected_account.account_type` 의 실제 저장값은 `PAYMONEY`(밑줄 없음)이지만 `type` 쿼리
+  파라미터와 응답의 `accountType` 은 계약값 그대로 나간다 — `/api/assets/summary` 와 동일한
+  정규화 경계를 여기서도 둔다.
+- `GET /api/assets/investments` 의 `profitLossAmount`·`profitLossRate` 는 화면이 다시 계산하지
+  않고 `tbl_investment_holding` 에 동기화된 값을 그대로 옮긴다.
+- `GET /api/assets/loans` 는 `loanNoEncrypted`(내부 upsert 키)를 응답에 포함하지 않는다.
+
+```json
+// GET /api/assets/accounts?type=PAY_MONEY
+{
+  "success": true,
+  "data": {
+    "total": 244500,
+    "accounts": [
+      {
+        "accountId": 7,
+        "bankCode": "0090",
+        "bankName": "카카오뱅크",
+        "shortLabel": "kb",
+        "accountName": "카카오페이머니",
+        "accountNoMasked": null,
+        "accountType": "PAYMONEY",
+        "balance": 150000,
+        "syncStatus": "NORMAL",
+        "lastSyncAt": "2026-08-15T09:00:00",
+        "syncFailReason": null,
+        "expiresAt": "2027-08-15T00:00:00"
+      }
+    ]
+  }
+}
+```
+
+```json
+// GET /api/assets/investments
+{
+  "success": true,
+  "data": {
+    "totalValuation": 2100000,
+    "totalCost": 1980000,
+    "asOf": "2026-08-15T09:41:00",
+    "holdings": [
+      {
+        "accountId": 10,
+        "symbol": "005930",
+        "name": "삼성전자",
+        "marketCountry": "KR",
+        "currency": "KRW",
+        "quantity": 20,
+        "averagePurchasePrice": 75000,
+        "lastPrice": 80000,
+        "purchaseAmount": 1500000,
+        "marketValue": 1600000,
+        "profitLossAmount": 100000,
+        "profitLossRate": 0.0667
+      }
+    ]
+  }
+}
+```
+
+```json
+// GET /api/assets/loans
+{
+  "success": true,
+  "data": {
+    "total": 1500000,
+    "loans": [
+      {
+        "loanId": 3,
+        "bankName": "하나은행",
+        "loanType": "신용대출",
+        "loanAmount": 2000000,
+        "balance": 1500000,
+        "interestRate": 4.5,
+        "startDate": "2025-01-10",
+        "maturityDate": "2027-12-10",
+        "monthlyPayment": 50000,
+        "nextPaymentDate": "2026-09-10"
+      }
+    ]
+  }
+}
+```
+
+### 자산 상세 목록 에러 코드
+
+| 코드 | HTTP | 설명 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | `type` 이 `DEMAND_DEPOSIT`·`SAVINGS`·`PAY_MONEY` 중 하나가 아니거나 누락됨 |
+
+## 금융 데이터 동기화 (이슈 #147)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/financial-syncs` | Bearer | `{ status, syncedSources, syncedAt, collectedTransactionCount, ruleCategorizedCount, llmPendingTransactionCount, llmCategorizationStatus }` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "COMPLETED",
+    "syncedSources": ["BANK", "DEPOSIT", "SECURITIES", "LOAN", "PAY_MONEY", "CARD"],
+    "syncedAt": "2026-08-13T10:00:00+09:00",
+    "collectedTransactionCount": 42,
+    "ruleCategorizedCount": 30,
+    "llmPendingTransactionCount": 12,
+    "llmCategorizationStatus": "PENDING"
+  }
+}
+```
+
+- `collectedTransactionCount`·`ruleCategorizedCount`·`llmPendingTransactionCount` 는 전부 **이번 호출 한 번에서 upsert 된 거래 기준**이다(사용자의 누적 미분류 거래 수가 아니다).
+- 저장이 끝난 뒤 규칙 1~4단계(사용자 가맹점 매핑 → 공용 가맹점 매핑 → MCC/업종명 → 키워드)로 **동기** 카테고리화한다. `ruleCategorizedCount` 는 이 응답 안에서 확정된 값이다.
+- 규칙으로도 분류하지 못한 소비 거래는 이 응답 이후 **비동기**로 LLM 분류 작업(`tbl_llm_categorization_job`, 사용자별 transaction_date 오름차순 최대 20건 배치)에 등록된다. 실제 LLM 호출은 이번 범위에 포함되지 않는다 — 작업 등록까지만 한다.
+- `llmCategorizationStatus`: `PENDING`(LLM 대상 거래가 있음) · `NOT_REQUIRED`(전부 규칙으로 분류됐거나 대상 자체가 없음).
+- 사용자가 직접 지정한 카테고리(`category_source='USER'`)는 재동기화로 자동 분류가 절대 덮어쓰지 않는다(DB 레벨 가드).
+- 환불 거래(`is_refund=1`)는 일반 거래와 동일하게 규칙 1~4단계를 적용하되, 전부 미스하면 LLM 대상에서는 제외한다. 원거래 카테고리를 그대로 물려받는(계승) 처리는 **후속 작업**이다.
+- `tbl_merchant_category_map`(공용 캐시)에 대한 write-back(3·4단계 판정 결과를 다시 채워 넣는 것)은 이번 범위가 아니다 — 비어 있으면 2단계는 항상 미스로 3단계로 넘어간다.
+- 정기 동기화 스케줄러, 연결된 전체 사용자 대상 자동 동기화, 증분 동기화 조회 범위 변경도 이번 범위 밖이다.
+
+### LLM 분류 작업 처리 (후속 구현)
+
+`tbl_llm_categorization_job`에 `PENDING`으로 등록된 작업은 별도 API 호출 없이 서버 내부 스케줄러(`LlmCategorizationScheduler`)가 주기적으로 집어 OpenAI Chat Completions API로 실제 분류를 수행한다.
+
+- 주기: `llm.categorization.poll.fixed-delay-ms`(기본 1분). 한 번에 최대 `llm.categorization.poll.max-jobs-per-tick`(기본 20)개 작업을 처리한다.
+- 분류 결과는 `category_source='LLM'`으로 `tbl_transaction.category_id`에 반영된다. 사용자 지정(`USER`) 카테고리는 기존 DB 가드로 보호된다.
+- 프롬프트에 보내는 카테고리 목록은 `id`·`name`과 함께 `parentId`도 포함한다 — `parentId`가 없으면 대분류, 있으면 그 대분류에 속한 소분류라는 것을 LLM이 구분할 수 있게 한다. LLM은 확신이 서는 가장 구체적인(소분류) 레벨을 고르고, 소분류까지 확신이 안 서면 대분류만 골라도 된다.
+- LLM은 각 판정마다 `confidence`(0.0~1.0)도 함께 반환해야 하며(Structured Outputs 스키마에 필수 필드로 강제), `confidence`가 `llm.categorization.confidence-threshold`(기본 0.8) 미만이거나 아예 없으면 `categoryId`가 있어도 분류 불가(null)로 취급한다(fail-closed).
+- LLM이 제공된 카테고리 목록에 없는 id를 응답하면 그 거래는 반영하지 않고 건너뛴다(환각 방지).
+- LLM이 **그 작업에 속하지 않은 `transactionId`**를 응답해도 반영하지 않고 건너뛴다. `updateCategory`에는 사용자 범위 조건이 없어, 이 검증이 없으면 남의 거래 카테고리를 덮어쓸 수 있다(가맹점명·적요는 외부 유입 자유 텍스트라 프롬프트 주입 통로이기도 하다).
+- 작업에 속한 거래가 하나도 없으면 LLM을 호출하지 않고 즉시 `COMPLETED`로 마감한다.
+- OpenAI가 `refusal`을 돌려주거나 `finish_reason`이 `stop`이 아니면(응답 잘림) 실패로 처리한다 — "0건 분류"가 정상 완료로 기록되는 것을 막는다.
+- 작업 상태는 `PENDING → PROCESSING → COMPLETED`(정상 처리, 개별 거래가 분류 안 됐어도 정상 종료) 또는 `PROCESSING → FAILED`(API 호출 자체가 실패)로 전이한다. **`FAILED` 작업은 이번 범위에서 자동 재시도하지 않는다** — 후속 작업. `PROCESSING` 선점과 `FAILED` 마감은 둘 다 `LlmCategorizationJobStateService`가 `REQUIRES_NEW` 독립 트랜잭션으로 커밋한다(처리 트랜잭션이 롤백돼도 `FAILED`가 살아남아야 재실행 루프에 빠지지 않고, 선점이 먼저 커밋돼 행 잠금을 놓아야 그 `FAILED` 기록이 잠금 대기 없이 즉시 반영된다).
+- `openai.api.key`는 로컬에서는 `application-local.properties`에만 둔다(팀 공용 키는 팀 채널에서 배포). 도커(`APP_ENV=docker`)에서는 `application-docker.properties`가 `${OPENAI_API_KEY}` 환경변수를 참조하며, 실제 값은 `.env` → `docker-compose.yml`을 거쳐 주입된다.
+- OpenAI 호출은 전용 `RestTemplate`(`OpenAiClientConfig.openAiRestTemplate`)을 쓰며 `openai.api.connect-timeout-ms`(기본 10초)·`openai.api.read-timeout-ms`(기본 30초) 타임아웃이 걸려 있다.
+- **토큰 최적화는 이번 범위 밖**(후속 작업, 2026-08-13 논의): 지금은 작업(job) 1건마다 `classify()`를 한 번씩 호출해, 매 호출마다 카테고리 전체 목록을 새로 실어 보낸다. 처리량이 늘어나면 한 틱에서 여러 job의 거래를 모아 한 번의 `classify()` 호출로 묶어(카테고리 목록을 한 번만 전송) 토큰을 아끼는 걸 고려한다 — 단, 지금의 "job 1건 = 호출 1번" 전제로 짜인 스케줄러·작업 단위 구조를 바꿔야 하는 작업이라 별도 설계가 필요하다.
+
 ## 마이페이지 (이슈 #57)
 
 전용 엔드포인트를 새로 만들지 않았다. 아래 기존 API 를 조합해 그린다.
@@ -583,20 +871,62 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 전날 `PENDING` 미션을 자정 배치에서 먼저 판정한 뒤 성공이면 증가하고, 실패면 0으로 초기화한다.
 - 주간 결과의 `SUCCESS`, `FAIL`, `PENDING`을 화면에서 각각 인정, 기각, 오늘 수사 중으로 표시한다.
 
-### 개인 미션 월간 점수 조회 (이슈 #194)
+### 개인 미션 미확인 판정 조회 및 확인 (이슈 #230)
+
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/api/missions/verdicts/pending` | Bearer | 확정됐지만 확인하지 않은 개인 미션 판정 1건 조회 |
+| POST | `/api/missions/verdicts/{assignmentId}/acknowledge` | Bearer | 개인 미션 판정 확인 처리 |
+
+미확인 판정 조회 응답은 `{ assignmentId, result, assignDate, categoryName, currentAmount,
+targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingCount, transactions }`
+형태다. `transactions[]` 항목은 `{ transactionId, merchantName, amount }`이다.
+
+- `Asia/Seoul` 기준 전날 배정됐고 `SUCCESS` 또는 `FAIL`로 확정된 판정만 조회한다.
+- 사용자별 하루 한 건 제약에 따라 `pendingCount`는 현재 범위에서 항상 0이다.
+- 미확인 판정이 없으면 성공 응답의 `data`는 `null`이다.
+- 거래 금액은 판정 배치와 동일하게 소비·출금·요약 포함 거래만 합산하고 환불은 차감한다.
+- 확인 API는 최초 `result_checked_at`을 유지하는 멱등 요청이다.
+- 본인 소유의 확정 판정이 아니면 `NOT_FOUND`를 반환한다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "assignmentId": 123,
+    "result": "SUCCESS",
+    "assignDate": "2026-08-13",
+    "categoryName": "배달앱",
+    "currentAmount": 9800,
+    "targetValue": 12000,
+    "remainAmount": 2200,
+    "overAmount": 0,
+    "points": 35,
+    "bonusPoints": 5,
+    "streakDays": 6,
+    "pendingCount": 0,
+    "transactions": [
+      { "transactionId": 91, "merchantName": "돈까스집 배달주문", "amount": 6300 }
+    ]
+  }
+}
+```
+
+### 개인 미션 월간 점수 및 상위 백분율 조회 (이슈 #194, #226)
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/missions/monthly-score` | Bearer | 로그인 사용자의 이번 달 개인 미션 누적 점수 |
+| GET | `/api/missions/monthly-score` | Bearer | 로그인 사용자의 이번 달 개인 미션 누적 점수와 상위 백분율 |
 
-응답은 `{ yearMonth, totalScore }` 형태다. `yearMonth`는 `Asia/Seoul` 기준 현재 월의 `YYYY-MM` 값이다.
+응답은 `{ yearMonth, totalScore, topPercent }` 형태다. `yearMonth`는 `Asia/Seoul` 기준 현재 월의 `YYYY-MM` 값이다.
 
 ```json
 {
   "success": true,
   "data": {
     "yearMonth": "2026-08",
-    "totalScore": 75
+    "totalScore": 75,
+    "topPercent": 15
   }
 }
 ```
@@ -606,7 +936,8 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 - 전날 미션과 해당일 미션이 모두 `SUCCESS`이면 해당일 점수에 연속 성공 보너스 5점을 더한다.
 - 전날 미션이 `FAIL`이거나 배정 이력이 없으면 연속 성공으로 계산하지 않는다.
 - 월간 점수는 해당 월 확정 미션 이력 전체를 다시 합산해 `tbl_monthly_ranking.total_score`에 갱신하므로 배치 재실행에도 중복 반영되지 않는다.
-- 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0을 반환한다.
+- `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
+- 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
 
 ## 개인 미션 월간 랭킹 조회 (이슈 #209)
 
@@ -625,10 +956,12 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 | GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
 
 응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
-`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, latestMissionAssignDate, latestMissionResult }` 형태다.
+`topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, rotationAssignDate, rotationResult, missionRound }` 형태다.
 
-- `latestMissionAssignDate`, `latestMissionResult`는 해당 카테고리에서 가장 최근에 배정된 개인 미션의 날짜와 결과다.
-- 배정 이력이 없으면 두 값은 `null`이다.
+- 응답의 상위 카테고리는 매일 재산정한 목록이 아니라 아직 소진 중인 현재 분석 주기의 스냅샷이다.
+- `rotationAssignDate`는 현재 주기에서 해당 카테고리가 배정된 날짜다. 아직 배정 전이면 `null`이다.
+- `rotationResult`는 현재 주기의 결과이며 `SUCCESS`, `FAIL`, `PENDING`, `WAITING` 중 하나다. `WAITING`은 현재 주기에 선정됐지만 아직 배정되지 않았다는 뜻이다.
+- `missionRound`는 이번 배정 또는 다음 배정이 해당 카테고리의 몇 번째 수사인지를 나타낸다. 해당 카테고리로 배정된 전체 이력 수를 세고, 현재 주기에서 아직 `WAITING`이면 다음 예정 회차를 위해 1을 더한다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
 - 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
@@ -1011,3 +1344,39 @@ assignmentReason, guideMessage, streakDays }` 형태다.
 저장된 `COMPLETED` JSON이 훼손돼 결과를 안전하게 조립할 수 없는 경우에만
 `503 AI_ANALYSIS_RESULT_UNAVAILABLE`을 반환한다. 이는 월간 총소비·추이·카테고리 조회 실패와
 분리된 부가 데이터 오류이며, 화면은 핵심 리포트를 계속 표시한다.
+
+## 거래 카테고리 수동 수정 (이슈 #237)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| PATCH | `/api/transactions/{transactionId}/category` | Bearer | `{ transactionId, categoryId, categorySource, merchantRuleApplied }` |
+
+요청 본문
+```json
+{
+  "categoryId": 12,
+  "applyToMerchant": false
+}
+```
+
+응답
+```json
+{
+  "success": true,
+  "data": {
+    "transactionId": 501,
+    "categoryId": 12,
+    "categorySource": "USER",
+    "merchantRuleApplied": false
+  }
+}
+```
+
+- 거래 한 건의 카테고리를 사용자가 직접 지정한다. `categorySource`는 항상 `USER`로 바뀐다 — 이미
+  `USER`로 지정된 거래를 다시 고치는 요청도 반영된다(자동 재동기화만 `USER` 값을 보호한다).
+- `applyToMerchant=true`면 같은 요청 안에서 `tbl_user_category_map`에도 가맹점 규칙을 upsert한다.
+  이후 그 가맹점(정규화된 이름 기준)의 새 거래에는 이 카테고리가 최우선 적용된다. **과거 거래는
+  소급 반영되지 않는다.**
+- 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
+  `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
+  `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.

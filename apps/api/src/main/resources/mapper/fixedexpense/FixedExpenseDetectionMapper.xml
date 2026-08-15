@@ -108,22 +108,11 @@
             cycle_days = #{candidate.cycleDays},
             detected_count = #{candidate.detectedCount},
             category_id = #{candidate.categoryId},
-            next_expected_date = #{candidate.nextExpectedDate},
-            confirmed_at = CASE
-                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN NULL
-                ELSE confirmed_at
-            END,
-            relapse_detected_at = CASE
-                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN #{relapseDetectedAt}
-                ELSE relapse_detected_at
-            END,
-            status = CASE
-                WHEN status = 'BUFFER' AND #{reactivateBuffer} = 1 THEN 'ACTIVE'
-                ELSE status
-            END
+            next_expected_date = #{candidate.nextExpectedDate}
         WHERE id = #{candidate.id}
           AND user_id = #{candidate.userId}
           AND is_excluded = 0
+          AND status = 'ACTIVE'
     </update>
 
     <update id="linkTransactionsToCandidate">

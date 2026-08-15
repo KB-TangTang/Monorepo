@@ -65,6 +65,53 @@ public class MissionAnalysisSnapshotService {
         return toDto(newSnapshots);
     }
 
+    @Transactional
+    public MissionCategoryAnalysisDto getCurrentRotationAnalysis(long userId) {
+        List<MissionAnalysisSnapshot> snapshots =
+                missionAnalysisSnapshotMapper.findLatestCycleSnapshots(userId);
+        if (snapshots.isEmpty()) {
+            getOrCreateSnapshot(userId);
+            snapshots = missionAnalysisSnapshotMapper.findLatestCycleSnapshots(userId);
+        }
+        if (snapshots.isEmpty()) {
+            LocalDate today = LocalDate.now(clock);
+            return MissionCategoryAnalysisDto.builder()
+                    .analysisStartDate(today.minusDays(28))
+                    .analysisEndDate(today.minusDays(1))
+                    .transactionCount(0)
+                    .relativeEligible(false)
+                    .topCategories(List.of())
+                    .build();
+        }
+
+        LocalDate cycleStartDate = snapshots.get(0).getCycleStartDate();
+        List<MissionCategoryRankDto> categories = snapshots.stream()
+                .map(snapshot -> MissionCategoryRankDto.builder()
+                        .rank(snapshot.getCategoryRank())
+                        .categoryId(snapshot.getCategoryId())
+                        .parentCategoryName(snapshot.getParentCategoryName())
+                        .categoryName(snapshot.getCategoryName())
+                        .totalAmount(snapshot.getSpendingAmount())
+                        .transactionCount(snapshot.getTransactionCount())
+                        .spendingRatio(snapshot.getSpendingRatio())
+                        .rotationAssignDate(snapshot.getAssignedDate())
+                        .rotationResult(snapshot.getRotationResult())
+                        .missionRound(snapshot.getMissionRound())
+                        .build())
+                .toList();
+        int transactionCount = snapshots.stream()
+                .mapToInt(MissionAnalysisSnapshot::getTransactionCount)
+                .sum();
+
+        return MissionCategoryAnalysisDto.builder()
+                .analysisStartDate(cycleStartDate.minusDays(28))
+                .analysisEndDate(cycleStartDate.minusDays(1))
+                .transactionCount(transactionCount)
+                .relativeEligible(true)
+                .topCategories(categories)
+                .build();
+    }
+
     private MissionAnalysisSnapshot toSnapshot(long userId,
                                                LocalDate cycleStartDate,
                                                MissionCategoryRankDto category) {

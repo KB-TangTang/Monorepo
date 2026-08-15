@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.fixedexpense.mapper.FixedExpensePaymentReminderMapper">
+
+    <select id="findPaymentReminderCandidates"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseCandidate">
+        SELECT id,
+               user_id,
+               merchant_name_normalized,
+               avg_amount,
+               cycle_days,
+               detected_count,
+               category_id,
+               is_excluded,
+               status,
+               next_expected_date,
+               confirmed_at,
+               relapse_detected_at
+        FROM tbl_fixed_expense_candidate
+        WHERE status = 'ACTIVE'
+          AND confirmed_at IS NOT NULL
+          AND is_excluded = 0
+          AND next_expected_date IS NOT NULL
+          AND next_expected_date &gt;= #{startDate}
+          AND next_expected_date &lt;= #{endDate}
+        ORDER BY next_expected_date, id
+    </select>
+
+    <!-- 유니크 키가 같은 후보·예정일·알림 종류의 재실행·동시 실행을 함께 막는다. -->
+    <insert id="registerPaymentReminder">
+        INSERT IGNORE INTO tbl_fixed_expense_payment_reminder (
+            fixed_expense_candidate_id,
+            expected_payment_date,
+            notification_type
+        ) VALUES (
+            #{candidateId},
+            #{expectedPaymentDate},
+            #{notificationType}
+        )
+    </insert>
+
+    <!-- DEV 전용 초기화. 후보 소유자를 조인해 다른 사용자의 발송 이력은 건드리지 않는다. -->
+    <delete id="deletePaymentRemindersByUser">
+        DELETE reminder
+        FROM tbl_fixed_expense_payment_reminder reminder
+        INNER JOIN tbl_fixed_expense_candidate candidate
+            ON candidate.id = reminder.fixed_expense_candidate_id
+        WHERE candidate.user_id = #{userId}
+    </delete>
+</mapper>

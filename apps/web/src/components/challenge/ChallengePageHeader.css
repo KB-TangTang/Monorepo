@@ -48,7 +48,9 @@
 }
 
 @media (max-width: 520px) {
-    .challenge-page-header__title-row h1 {
+    .challenge-page-header:not(.challenge-page-header--title-fixed)
+        .challenge-page-header__title-row
+        h1 {
         font-size: var(--tt-fs-section);
     }
 }
@@ -70,7 +72,9 @@
 }
 
 @media (max-width: 359px) {
-    .challenge-page-header__title-row h1 {
+    .challenge-page-header:not(.challenge-page-header--title-fixed)
+        .challenge-page-header__title-row
+        h1 {
         font-size: var(--tt-fs-body);
     }
 }

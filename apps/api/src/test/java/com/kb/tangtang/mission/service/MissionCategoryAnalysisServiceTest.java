@@ -1,7 +1,6 @@
 package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.mission.domain.CategorySpending;
-import com.kb.tangtang.mission.domain.CategoryMissionStatus;
 import com.kb.tangtang.mission.dto.MissionCategoryAnalysisDto;
 import com.kb.tangtang.mission.mapper.MissionCategoryAnalysisMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -29,7 +28,6 @@ class MissionCategoryAnalysisServiceTest {
         List<CategorySpending> topCategories = List.of();
         int sumConsumptionCallCount;
         int findTopCategoriesCallCount;
-        CategoryMissionStatus latestMissionStatus;
 
         @Override
         public int countAllConsumptionTransactions(long userId) {
@@ -57,10 +55,6 @@ class MissionCategoryAnalysisServiceTest {
             return topCategories;
         }
 
-        @Override
-        public CategoryMissionStatus findLatestMissionStatus(long userId, long categoryId) {
-            return latestMissionStatus;
-        }
     }
 
     private Clock fixedClock() {
@@ -165,7 +159,6 @@ class MissionCategoryAnalysisServiceTest {
                 row(17L, "식비", "배달앱", "150000", 10),
                 row(16L, "식비", "음식점/외식", "100000", 6),
                 row(18L, "식비", "카페/간식", "50000", 8));
-        mapper.latestMissionStatus = missionStatus(LocalDate.of(2026, 8, 10), "SUCCESS");
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
@@ -176,9 +169,6 @@ class MissionCategoryAnalysisServiceTest {
         assertEquals(new BigDecimal("20.00"), result.getTopCategories().get(1).getSpendingRatio());
         assertEquals(3, result.getTopCategories().get(2).getRank());
         assertEquals(new BigDecimal("10.00"), result.getTopCategories().get(2).getSpendingRatio());
-        assertEquals(LocalDate.of(2026, 8, 10),
-                result.getTopCategories().get(0).getLatestMissionAssignDate());
-        assertEquals("SUCCESS", result.getTopCategories().get(0).getLatestMissionResult());
     }
 
     @Test
@@ -203,10 +193,4 @@ class MissionCategoryAnalysisServiceTest {
                 new BigDecimal(totalAmount), transactionCount);
     }
 
-    private CategoryMissionStatus missionStatus(LocalDate assignDate, String result) {
-        CategoryMissionStatus status = new CategoryMissionStatus();
-        status.setAssignDate(assignDate);
-        status.setResult(result);
-        return status;
-    }
 }

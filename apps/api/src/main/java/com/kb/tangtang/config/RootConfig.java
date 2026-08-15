@@ -20,7 +20,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.client.RestTemplate;
 
@@ -118,6 +120,19 @@ public class RootConfig {
         return new DataSourceTransactionManager(dataSource());
     }
 
+    /**
+     * 프로그래밍 방식 트랜잭션 경계.
+     *
+     * ⚠ @Transactional 은 **프록시를 통해 들어온 호출에만** 걸린다. 한 클래스 안에서 자기 메서드를
+     *   부르는 구조(FinancialSyncService: 외부 API 수집은 트랜잭션 밖, 저장만 트랜잭션 안)에서는
+     *   애너테이션이 조용히 무시되고 문장 단위 auto-commit 으로 떨어진다.
+     *   그런 구간은 이 템플릿으로 경계를 명시한다.
+     */
+    @Bean
+    public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+        return new TransactionTemplate(transactionManager);
+    }
+
     /** 외부 API 호출용. 지금은 구글 OAuth 만 쓴다. */
     @Bean
     public RestTemplate restTemplate() {
@@ -132,6 +147,14 @@ public class RootConfig {
      *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
      *   하트비트가 막으려던 바로 그 상황이다.
      *
+     * feature/147-asset-api
+     * poolSize 는 @Scheduled 작업 수(현재 4개: SseHeartbeat.ping · NotificationDlqRetryScheduler.retryDue ·
+     * LlmCategorizationScheduler.pollAndProcess · FinancialSyncBatchScheduler.runBatch)보다 넉넉해야
+     * 한다. 작업 수와 딱 맞추면 여유가 사라져 한 작업이 길어질 때 다른 작업이 밀린다 — LLM 폴링과
+     * 금융 동기화 배치 둘 다 한 tick 에 여러 건의 외부 HTTP 호출을 순차로 수행하므로 실제로 오래
+     * 점유한다(이슈 #199).
+     *
+     * DEV
      * poolSize 는 @Scheduled 개수보다 넉넉해야 한다. 자리가 모자라면 오래 걸리는 배치가 자리를
      * 점유하는 동안 하트비트가 밀린다. 2026-08-13 기준 스케줄러 4개
      * (SseHeartbeat · NotificationDlqRetry · RelativeMissionAssignment · ChallengeGroupStatus)

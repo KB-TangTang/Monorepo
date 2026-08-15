@@ -4,7 +4,9 @@
 -- 선행 조건: db/migration/20260805_add_category_parent.sql 적용 완료
 -- 실행: mysql -u tangtang -p tangtang < db/seed_category.sql
 --
--- 대분류 12개와 소분류 46개를 추가한다. 재실행 시에도 부모 관계를 동일하게 맞춘다.
+-- 대분류 12개와 소분류 44개를 추가한다. 재실행 시에도 부모 관계를 동일하게 맞춘다.
+-- ('기타' 하위 '자동 분류 불가 거래'·'사용자 직접 지정'은 category_id IS NULL / category_source='USER'
+--  로 이미 표현되는 상태라 제외했다 — 2026-08-13, 이슈 #147)
 -- =====================================================================
 
 USE tangtang;
@@ -75,8 +77,9 @@ SELECT category_seed.category_name, parent_category.id
     UNION ALL SELECT '금융/보험', '이자'
     UNION ALL SELECT '금융/보험', '수수료'
     UNION ALL SELECT '금융/보험', '금융상품'
-    UNION ALL SELECT '기타', '자동 분류 불가 거래'
-    UNION ALL SELECT '기타', '사용자 직접 지정'
+    -- '자동 분류 불가 거래'·'사용자 직접 지정'은 여기 없다.
+    -- category_id IS NULL 과 category_source='USER' 로 이미 표현되는 상태라
+    -- tbl_category 에 별도 행을 두면 중복이다 (db/migration/20260813_remove_duplicate_misc_categories.sql 참고)
   ) AS category_seed
   JOIN tbl_category AS parent_category
     ON parent_category.category_name = category_seed.parent_name
@@ -84,7 +87,7 @@ SELECT category_seed.category_name, parent_category.id
 ON DUPLICATE KEY UPDATE
   parent_id = VALUES(parent_id);
 
--- 검증: 대분류 12개, 소분류 46개, 전체 58개가 조회되어야 한다.
+-- 검증: 대분류 12개, 소분류 44개, 전체 56개가 조회되어야 한다.
 SELECT
   SUM(parent_id IS NULL) AS parent_category_count,
   SUM(parent_id IS NOT NULL) AS child_category_count,

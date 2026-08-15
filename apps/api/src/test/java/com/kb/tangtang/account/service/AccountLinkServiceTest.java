@@ -21,6 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,8 @@ class AccountLinkServiceTest {
     private static final long USER_ID = 1L;
     private static final Clock CLOCK =
             Clock.fixed(Instant.parse("2026-08-05T09:00:00Z"), ZoneId.of("Asia/Seoul"));
+    /** 배치 주기 30분 (financial.sync.batch.fixed-delay-ms 의 실제 기본값). */
+    private static final long BATCH_FIXED_DELAY_MS = 1_800_000L;
 
     private FinancialDataClient client;
     private ConnectedAccountMapper mapper;
@@ -62,7 +65,7 @@ class AccountLinkServiceTest {
         consentService = mock(ConsentService.class);
         service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
                 new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), capturingPublisher,
-                consentService, CLOCK);
+                consentService, BATCH_FIXED_DELAY_MS, CLOCK);
         /*
          * 기본은 "제3자 제공 동의를 마친 사용자" 다. 동의 검사는 연결 생성의 전제일 뿐이라
          * 여기 대부분의 테스트가 검증하려는 대상이 아니다. 미동의 경로는 별도 테스트에서 덮어쓴다.
@@ -654,6 +657,19 @@ class AccountLinkServiceTest {
 
         assertEquals("FAILED", result.getInstitutions().get(0).getSyncStatus());
         assertTrue(publishedEvents.isEmpty());
+    }
+
+    @Test
+    @DisplayName("다음 자동 동기화 시각은 배치 주기(fixed-delay)로 계산한다 — '매일 18시' 하드코딩이 아니다")
+    void nextAutoSyncAtFollowsBatchInterval() {
+        /*
+         * 이슈 #199 최종 리뷰 — 예전에는 "매일 18시" 를 하드코딩해 놨는데 그런 배치는 존재한 적이 없다.
+         * 실제 배치는 financial.sync.batch.fixed-delay-ms(30분)마다 돈다.
+         * CLOCK 은 KST 2026-08-05 18:00 에 고정돼 있다 — 옛 코드였다면 하루 뒤 18:00 이 나온다.
+         */
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(LocalDateTime.of(2026, 8, 5, 18, 30).toString(), result.getNextAutoSyncAt());
     }
 
     private FinancialAccountDto balanced(String organization, String no, String balance) {

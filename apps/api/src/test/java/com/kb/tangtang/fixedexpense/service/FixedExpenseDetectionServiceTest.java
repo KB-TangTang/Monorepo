@@ -127,7 +127,7 @@ class FixedExpenseDetectionServiceTest {
     }
 
     @Test
-    void preservesConfirmedCandidateAndReactivatesBufferAsUnconfirmed() {
+    void preservesConfirmedCandidateAndLeavesBufferReactivationToLifecycleBatch() {
         RecordingMapper confirmedMapper = mapperWith(
                 transaction("확정서비스", "2026-05-15", "10000"),
                 transaction("확정서비스", "2026-06-15", "10000"),
@@ -142,17 +142,17 @@ class FixedExpenseDetectionServiceTest {
         bufferMapper.putCandidate(candidate("버퍼서비스", "BUFFER",
                 LocalDateTime.of(2026, 8, 1, 9, 0), null));
 
-        service(confirmedMapper, AUGUST_CLOCK).detectForUser(USER_ID);
-        service(bufferMapper, AUGUST_CLOCK).detectForUser(USER_ID);
+        assertEquals(1, service(confirmedMapper, AUGUST_CLOCK).detectForUser(USER_ID));
+        assertEquals(0, service(bufferMapper, AUGUST_CLOCK).detectForUser(USER_ID));
 
         FixedExpenseCandidate confirmed = confirmedMapper.candidate("확정서비스");
         assertEquals("ACTIVE", confirmed.getStatus());
         assertEquals(LocalDateTime.of(2026, 8, 1, 9, 0), confirmed.getConfirmedAt());
 
-        FixedExpenseCandidate reactivated = bufferMapper.candidate("버퍼서비스");
-        assertEquals("ACTIVE", reactivated.getStatus());
-        assertNull(reactivated.getConfirmedAt());
-        assertEquals(LocalDateTime.of(2026, 8, 14, 9, 0), reactivated.getRelapseDetectedAt());
+        FixedExpenseCandidate buffered = bufferMapper.candidate("버퍼서비스");
+        assertEquals("BUFFER", buffered.getStatus());
+        assertEquals(LocalDateTime.of(2026, 8, 1, 9, 0), buffered.getConfirmedAt());
+        assertNull(buffered.getRelapseDetectedAt());
 
         RecordingMapper excludedMapper = mapperWith(
                 transaction("제외후보", "2026-05-15", "10000"),
@@ -175,17 +175,17 @@ class FixedExpenseDetectionServiceTest {
     }
 
     @Test
-    void keepsVerifiedCancelledStatusWhenAHistoricalPatternAppearsAgain() {
+    void leavesVerifiedCancelledCandidateUntouchedWhenAHistoricalPatternAppearsAgain() {
         RecordingMapper mapper = mapperWith(
                 transaction("해지서비스", "2026-05-15", "10000"),
                 transaction("해지서비스", "2026-06-15", "10000"),
                 transaction("해지서비스", "2026-07-15", "10000"));
         mapper.putCandidate(candidate("해지서비스", "VERIFIED_CANCELLED", null, null));
 
-        service(mapper, AUGUST_CLOCK).detectForUser(USER_ID);
+        assertEquals(0, service(mapper, AUGUST_CLOCK).detectForUser(USER_ID));
 
         assertEquals("VERIFIED_CANCELLED", mapper.candidate("해지서비스").getStatus());
-        assertEquals(1, mapper.linkedCandidateIds.size());
+        assertEquals(0, mapper.linkedCandidateIds.size());
     }
 
     @Test
@@ -318,11 +318,9 @@ class FixedExpenseDetectionServiceTest {
         }
 
         @Override
-        public int updateDetectedCandidate(FixedExpenseCandidate incoming,
-                                            boolean reactivateBuffer,
-                                            LocalDateTime relapseDetectedAt) {
+        public int updateDetectedCandidate(FixedExpenseCandidate incoming) {
             FixedExpenseCandidate existing = candidates.get(incoming.getMerchantNameNormalized());
-            if (existing == null || existing.isExcluded()) {
+            if (existing == null || existing.isExcluded() || !"ACTIVE".equals(existing.getStatus())) {
                 return 0;
             }
             candidates.put(incoming.getMerchantNameNormalized(), FixedExpenseCandidate.builder()
@@ -334,11 +332,10 @@ class FixedExpenseDetectionServiceTest {
                     .detectedCount(incoming.getDetectedCount())
                     .categoryId(incoming.getCategoryId())
                     .isExcluded(existing.isExcluded())
-                    .status(reactivateBuffer ? "ACTIVE" : existing.getStatus())
+                    .status(existing.getStatus())
                     .nextExpectedDate(incoming.getNextExpectedDate())
-                    .confirmedAt(reactivateBuffer ? null : existing.getConfirmedAt())
-                    .relapseDetectedAt(reactivateBuffer
-                            ? relapseDetectedAt : existing.getRelapseDetectedAt())
+                    .confirmedAt(existing.getConfirmedAt())
+                    .relapseDetectedAt(existing.getRelapseDetectedAt())
                     .build());
             return 1;
         }

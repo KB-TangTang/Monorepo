@@ -1,11 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    formatWatchlistMissionRound,
+    formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    toMissionVerdictModel,
     toWatchCategoryModel,
     toTodayMissionBriefing,
     toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('미확인 판정 API 응답을 성공 모달 표시 모델로 변환한다', () => {
+    const model = toMissionVerdictModel(
+        {
+            assignmentId: 123,
+            result: 'SUCCESS',
+            assignDate: '2026-08-13',
+            categoryName: '배달앱',
+            currentAmount: '9800.00',
+            targetValue: '12000.00',
+            remainAmount: '2200.00',
+            overAmount: 0,
+            points: 35,
+            bonusPoints: 5,
+            streakDays: 6,
+            pendingCount: 2,
+            transactions: [
+                { transactionId: 91, merchantName: '돈까스집 배달주문', amount: '6300.00' },
+            ],
+        },
+        { success: '/success.png', fail: '/fail.png' },
+    );
+
+    assert.equal(model.type, 'SUCCESS');
+    assert.equal(model.date, '8월 13일');
+    assert.equal(model.tangiImage, '/success.png');
+    assert.equal(model.limitAmount, 12000);
+    assert.deepEqual(model.transactions[0], {
+        id: 91,
+        name: '돈까스집 배달주문',
+        amount: 6300,
+    });
+});
+
+test('판정 결과가 없으면 모달 표시 모델도 null이다', () => {
+    assert.equal(toMissionVerdictModel(null), null);
+});
 
 test('이번 주 판정을 월요일부터 일요일 순서로 변환한다', () => {
     const model = toWeeklyVerdictModel(
@@ -76,8 +116,9 @@ test('상위 소비 카테고리를 비중과 최근 미션 날짜·결과로 �
                 categoryId: 18,
                 categoryName: '카페/간식',
                 spendingRatio: '18.42',
-                latestMissionAssignDate: '2026-08-10',
-                latestMissionResult: 'SUCCESS',
+                missionRound: 3,
+                rotationAssignDate: '2026-08-10',
+                rotationResult: 'SUCCESS',
             },
         ],
     });
@@ -89,11 +130,47 @@ test('상위 소비 카테고리를 비중과 최근 미션 날짜·결과로 �
                 categoryId: 18,
                 name: '카페/간식',
                 ratio: 18,
-                assignDate: '8/10',
-                result: 'SUCCESS',
+                missionRound: 3,
+                rotationAssignDate: '8/10',
+                rotationResult: 'SUCCESS',
             },
         ],
     });
+});
+
+test('요주의 카테고리의 현재 로테이션 상태를 표시한다', () => {
+    assert.equal(formatWatchlistRotationStatus({ rotationResult: 'PENDING' }), '오늘 수사 중');
+    assert.equal(
+        formatWatchlistRotationStatus({
+            rotationAssignDate: '8/13',
+            rotationResult: 'SUCCESS',
+        }),
+        '8/13 인정',
+    );
+    assert.equal(
+        formatWatchlistRotationStatus({
+            rotationAssignDate: '8/7',
+            rotationResult: 'FAIL',
+        }),
+        '8/7 기각',
+    );
+    assert.equal(formatWatchlistRotationStatus({ rotationResult: 'WAITING' }), '대기');
+});
+
+test('요주의 카테고리의 현재 수사 회차를 별도 표시한다', () => {
+    assert.equal(
+        formatWatchlistMissionRound({ missionRound: 1, rotationResult: 'PENDING' }),
+        '첫 수사',
+    );
+    assert.equal(
+        formatWatchlistMissionRound({ missionRound: 1, rotationResult: 'WAITING' }),
+        '첫 수사 예정',
+    );
+    assert.equal(formatWatchlistMissionRound({ missionRound: 3 }), '수사 3회차');
+    assert.equal(
+        formatWatchlistMissionRound({ missionRound: 3, rotationResult: 'WAITING' }),
+        '수사 3회차 예정',
+    );
 });
 
 test('오늘 지출이 없으면 프로그래스바를 표시할 수 있도록 현재 금액을 0으로 변환한다', () => {

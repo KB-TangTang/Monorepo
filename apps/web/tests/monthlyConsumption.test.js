@@ -8,6 +8,7 @@ import {
     formatChangeRate,
     getPreviousPeriod,
     isAvailableReportMonth,
+    isLatestAvailableCompletedReport,
     MONTHLY_REPORT_STATUS,
     resolveSelectedReportPeriod,
     resolveFixedExpenseStatus,
@@ -52,6 +53,21 @@ test('유효한 요청 월을 유지하고 데이터 없는 월은 최신 리포
     assert.equal(resolveSelectedReportPeriod(months, '2026-06', referenceDate), '2026-06');
     assert.equal(resolveSelectedReportPeriod(months, '2026-05', referenceDate), '2026-05');
     assert.equal(resolveSelectedReportPeriod(months, '2026-03', referenceDate), '2026-07');
+});
+
+test('고정지출 카드는 실제로 열람 가능한 최신 완료 리포트에만 표시한다', () => {
+    const referenceDate = new Date(2026, 7, 14);
+    const months = [
+        { value: '2026-08', hasReport: true, status: MONTHLY_REPORT_STATUS.CURRENT },
+        { value: '2026-07', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+        { value: '2026-06', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+        { value: '2026-02', hasReport: false, status: MONTHLY_REPORT_STATUS.ONBOARDING },
+    ];
+
+    assert.equal(isLatestAvailableCompletedReport(months, '2026-07', referenceDate), true);
+    assert.equal(isLatestAvailableCompletedReport(months, '2026-06', referenceDate), false);
+    assert.equal(isLatestAvailableCompletedReport(months, '2026-08', referenceDate), false);
+    assert.equal(isLatestAvailableCompletedReport(months, '2026-02', referenceDate), false);
 });
 
 test('2월 온보딩과 3~4월 리포트는 월 선택에서 활성화한다', () => {

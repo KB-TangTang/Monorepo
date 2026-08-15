@@ -135,6 +135,16 @@ public class NotificationDlqRetryScheduler {
         }
 
         /*
+         * PAYMENT_DUE 는 고정지출 항목·예정일·알림 유형 이력이 중복을 막는다.
+         * 일반적인 안 읽음 중복 억제를 쓰면 이전 결제 주기의 안 읽음 알림 때문에
+         * 새 예정일의 재시도가 사라질 수 있으므로, 원 요청과 같이 바로 저장한다.
+         */
+        if (type == NotificationType.PAYMENT_DUE) {
+            return sender.trySend(notificationService.create(
+                    payload.userId(), type, payload.content(), payload.deepLinkUrl()));
+        }
+
+        /*
          * 재시도 사이에 같은 알림이 이미 만들어졌을 수 있다(예: 즉시 조회를 다시 눌렀을 때).
          * 그때는 또 만들지 않고 행만 지운다 — 목적은 이미 달성됐다 (이슈 #70).
          */
