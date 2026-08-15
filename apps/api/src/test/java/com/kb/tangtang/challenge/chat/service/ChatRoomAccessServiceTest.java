@@ -19,6 +19,9 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,15 +93,17 @@ class ChatRoomAccessServiceTest {
     }
 
     @Test
-    @DisplayName("참여자 캐시가 비어 있으면 DB 에서 읽어 캐시를 채운다")
+    @DisplayName("참여자 캐시가 비어 있으면 DB 에서 읽어 캐시를 채우고 그룹의 endDate 로 TTL 을 넘긴다")
     void fallsBackToDatabaseAndWarmsCache() {
+        LocalDate endDate = LocalDate.of(2026, 8, 20);
         when(store.memberIds(GROUP_ID)).thenReturn(Set.of());
         when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(3L, 9L));
+        when(groupMapper.findById(GROUP_ID)).thenReturn(groupWith(ChallengeGroupStatus.ACTIVE));
 
         Set<Long> ids = service.memberIdsOf(GROUP_ID);
 
         assertEquals(Set.of(3L, 9L), ids);
-        verify(store).cacheMembers(GROUP_ID, Set.of(3L, 9L));
+        verify(store).cacheMembers(GROUP_ID, Set.of(3L, 9L), endDate);
     }
 
     @Test
@@ -109,5 +114,38 @@ class ChatRoomAccessServiceTest {
         service.memberIdsOf(GROUP_ID);
 
         verify(memberMapper, never()).findUserIdsByGroupId(GROUP_ID);
+        verify(groupMapper, never()).findById(GROUP_ID);
+    }
+
+    @Test
+    @DisplayName("캐시 미스인데 그룹이 없으면 캐시를 데우지 않고 DB 결과만 반환한다")
+    void missWithUnknownGroupSkipsCaching() {
+        when(store.memberIds(GROUP_ID)).thenReturn(Set.of());
+        when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(3L, 9L));
+        when(groupMapper.findById(GROUP_ID)).thenReturn(null);
+
+        Set<Long> ids = service.memberIdsOf(GROUP_ID);
+
+        assertEquals(Set.of(3L, 9L), ids);
+        verify(store, never()).cacheMembers(anyLong(), anySet(), any());
+    }
+
+    @Test
+    @DisplayName("캐시 미스인데 그룹의 endDate 가 없으면 캐시를 데우지 않고 DB 결과만 반환한다")
+    void missWithNullEndDateSkipsCaching() {
+        when(store.memberIds(GROUP_ID)).thenReturn(Set.of());
+        when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(3L, 9L));
+        ChallengeGroup groupWithoutEndDate = ChallengeGroup.builder()
+                .id(GROUP_ID)
+                .groupName("절약단")
+                .status(ChallengeGroupStatus.ACTIVE.name())
+                .endDate(null)
+                .build();
+        when(groupMapper.findById(GROUP_ID)).thenReturn(groupWithoutEndDate);
+
+        Set<Long> ids = service.memberIdsOf(GROUP_ID);
+
+        assertEquals(Set.of(3L, 9L), ids);
+        verify(store, never()).cacheMembers(anyLong(), anySet(), any());
     }
 }

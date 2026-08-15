@@ -46,25 +46,29 @@ public class ChatMessageStore {
         this.redis = redis;
     }
 
-    /** 방 개설. TTL 은 여기서 한 번만 걸고 메시지 추가로 갱신하지 않는다 */
+    /**
+     * 방 개설. TTL 앵커는 members 키다(cacheMembers 참고).
+     * seq·messages 키는 아직 존재하지 않아 여기서 expire 를 걸어도 Redis 가 no-op 으로 무시한다
+     * (EXPIRE 는 없는 키에는 아무 효과가 없다). 두 키는 각자 처음 생성되는 append 에서 TTL 을 받는다.
+     */
     public void initRoom(long groupId, Set<Long> memberIds, LocalDate endDate) {
         if (memberIds.isEmpty()) {
             return;
         }
-        cacheMembers(groupId, memberIds);
-        Duration ttl = ttlUntil(endDate);
-        redis.expire(ChatRedisKeys.members(groupId), ttl);
-        redis.expire(ChatRedisKeys.seq(groupId), ttl);
-        redis.expire(ChatRedisKeys.messages(groupId), ttl);
+        cacheMembers(groupId, memberIds, endDate);
     }
 
-    /** 참여자 캐시만 채운다. TTL 은 방 개설 때 걸린 것을 그대로 쓴다 */
-    public void cacheMembers(long groupId, Set<Long> memberIds) {
+    /**
+     * 참여자 캐시를 채우고 TTL 앵커로 쓴다(members 키). seq·messages 키는 append 에서 이 키의
+     * 잔여 TTL 을 복제해 따라간다.
+     */
+    public void cacheMembers(long groupId, Set<Long> memberIds, LocalDate endDate) {
         if (memberIds.isEmpty()) {
             return;
         }
         String[] ids = memberIds.stream().map(String::valueOf).toArray(String[]::new);
         redis.opsForSet().add(ChatRedisKeys.members(groupId), ids);
+        redis.expire(ChatRedisKeys.members(groupId), ttlUntil(endDate));
     }
 
     /** CLOSED 전이 시 즉시 삭제한다. TTL 은 백스톱일 뿐이다 */
@@ -88,6 +92,16 @@ public class ChatMessageStore {
         ChatMessage message = new ChatMessage(seq, type, senderId, senderNickname,
                 content, LocalDateTime.now());
         redis.opsForList().rightPush(ChatRedisKeys.messages(groupId), toJson(message));
+        if (seq == 1L) {
+            // 이 방의 첫 메시지 — seq·messages 키가 INCR·RPUSH 로 방금 새로 생겼다.
+            // append 는 verifyCanEnter → memberIdsOf 를 거친 뒤에만 호출되므로 members 키(TTL 앵커)는
+            // 항상 살아 있다는 전제 위에서, 그 잔여 TTL 을 그대로 복제한다.
+            Long ttlSeconds = redis.getExpire(ChatRedisKeys.members(groupId), TimeUnit.SECONDS);
+            if (ttlSeconds != null && ttlSeconds > 0) {
+                redis.expire(ChatRedisKeys.messages(groupId), Duration.ofSeconds(ttlSeconds));
+                redis.expire(ChatRedisKeys.seq(groupId), Duration.ofSeconds(ttlSeconds));
+            }
+        }
         return message;
     }
 

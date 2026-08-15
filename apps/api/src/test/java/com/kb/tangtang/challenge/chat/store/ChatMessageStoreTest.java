@@ -9,14 +9,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -32,6 +36,7 @@ class ChatMessageStoreTest {
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ListOperations<String, String> listOps;
     @Mock private ValueOperations<String, String> valueOps;
+    @Mock private SetOperations<String, String> setOps;
 
     private ChatMessageStore store;
 
@@ -39,6 +44,7 @@ class ChatMessageStoreTest {
     void setUp() {
         lenient().when(redisTemplate.opsForList()).thenReturn(listOps);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(redisTemplate.opsForSet()).thenReturn(setOps);
         store = new ChatMessageStore(redisTemplate);
     }
 
@@ -135,6 +141,68 @@ class ChatMessageStoreTest {
 
         store.increaseUnread(GROUP_ID, List.of(3L));
         store.increaseUnread(GROUP_ID, List.of(3L));
+
+        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("cacheMembers 는 SADD 뒤 members 키에 endDate+2일 TTL 을 건다")
+    void cacheMembersSetsTtlFromEndDate() {
+        LocalDate endDate = LocalDate.now().plusDays(3);
+
+        store.cacheMembers(GROUP_ID, Set.of(3L, 9L), endDate);
+
+        verify(setOps).add(eqKey("chat:members:7"), any(String[].class));
+        org.mockito.ArgumentCaptor<Duration> ttlCaptor = org.mockito.ArgumentCaptor.forClass(Duration.class);
+        verify(redisTemplate).expire(eqKey("chat:members:7"), ttlCaptor.capture());
+        Duration ttl = ttlCaptor.getValue();
+        // endDate(+3일) + 2일 백스톱 ≈ 지금부터 5일. 시각 오차를 감안해 넓게 확인한다.
+        assertTrue(ttl.compareTo(Duration.ofDays(4)) > 0 && ttl.compareTo(Duration.ofDays(6)) < 0);
+    }
+
+    @Test
+    @DisplayName("initRoom 은 seq·messages 키에 expire 를 걸지 않고 members 키에만 TTL 을 건다")
+    void initRoomDoesNotExpireSeqAndMessagesKeys() {
+        LocalDate endDate = LocalDate.now().plusDays(2);
+
+        store.initRoom(GROUP_ID, Set.of(3L), endDate);
+
+        verify(redisTemplate, never()).expire(eqKey("chat:seq:7"), any(Duration.class));
+        verify(redisTemplate, never()).expire(eqKey("chat:messages:7"), any(Duration.class));
+        verify(redisTemplate).expire(eqKey("chat:members:7"), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("append 는 INCR 결과가 1이면 members 키의 잔여 TTL 을 messages·seq 키에 복제한다")
+    void appendCopiesMembersTtlOnFirstMessage() {
+        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
+        when(redisTemplate.getExpire("chat:members:7", TimeUnit.SECONDS)).thenReturn(3600L);
+
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
+
+        verify(redisTemplate).expire("chat:messages:7", Duration.ofSeconds(3600L));
+        verify(redisTemplate).expire("chat:seq:7", Duration.ofSeconds(3600L));
+    }
+
+    @Test
+    @DisplayName("append 는 INCR 결과가 2 이상이면 TTL 을 다시 걸지 않는다")
+    void appendSkipsTtlOnSubsequentMessages() {
+        when(valueOps.increment("chat:seq:7")).thenReturn(2L);
+
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
+
+        verify(redisTemplate, never()).getExpire(anyString(), any(TimeUnit.class));
+        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("append 는 members 키 잔여 TTL 이 0 이하면(-1 무기한, -2 키 없음) TTL 을 걸지 않는다")
+    void appendSkipsTtlWhenMembersTtlNotPositive() {
+        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
+        when(redisTemplate.getExpire("chat:members:7", TimeUnit.SECONDS)).thenReturn(-1L, -2L);
+
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕2");
 
         verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
     }

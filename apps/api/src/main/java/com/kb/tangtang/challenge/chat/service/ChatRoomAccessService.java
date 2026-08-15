@@ -55,7 +55,11 @@ public class ChatRoomAccessService {
         return group;
     }
 
-    /** Redis 캐시 우선. 비어 있으면 DB 에서 읽어 캐시를 데운다 */
+    /**
+     * Redis 캐시 우선. 비어 있으면 DB 에서 읽어 캐시를 데운다.
+     * 캐시를 데우려면 TTL 기준(endDate)이 필요해 그룹을 한 번 더 조회한다 — 그룹이 없거나
+     * endDate 가 없으면 캐시는 건드리지 않고 DB 조회 결과만 반환한다.
+     */
     @Transactional(readOnly = true)
     public Set<Long> memberIdsOf(long groupId) {
         Set<Long> cached = store.memberIds(groupId);
@@ -64,7 +68,10 @@ public class ChatRoomAccessService {
         }
         List<Long> fromDb = memberMapper.findUserIdsByGroupId(groupId);
         Set<Long> ids = new HashSet<>(fromDb);
-        store.cacheMembers(groupId, ids);
+        ChallengeGroup group = groupMapper.findById(groupId);
+        if (group != null && group.getEndDate() != null) {
+            store.cacheMembers(groupId, ids, group.getEndDate());
+        }
         return ids;
     }
 }
