@@ -21,6 +21,8 @@ import { formatDayLabel, formatWon } from '@/utils/ledger';
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
     transaction: { type: Object, default: null },
+    error: { type: String, default: '' },
+    confirming: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue', 'select']);
@@ -98,7 +100,6 @@ function confirmSelection() {
         categoryName: pendingCategoryName.value,
         applyToMerchant: applyToMerchant.value,
     });
-    emit('update:modelValue', false);
 }
 </script>
 
@@ -136,7 +137,7 @@ function confirmSelection() {
             <span class="category-sheet__merchant-toggle-text">
                 <span class="category-sheet__merchant-toggle-label">이 가맹점에 항상 적용</span>
                 <span class="category-sheet__merchant-toggle-desc">
-                    같은 가맹점의 다른 거래에도 함께 적용돼요
+                    이후 같은 가맹점의 다른 거래에도 함께 적용돼요
                 </span>
             </span>
             <input
@@ -190,7 +191,10 @@ function confirmSelection() {
         </div>
 
         <template #footer>
-            <BaseButton variant="primary" block @click="confirmSelection">변경하기</BaseButton>
+            <p v-if="error" class="category-sheet__error">{{ error }}</p>
+            <BaseButton variant="primary" block :loading="confirming" @click="confirmSelection">
+                변경하기
+            </BaseButton>
         </template>
     </BaseBottomSheet>
 </template>
@@ -234,6 +238,12 @@ function confirmSelection() {
     padding-bottom: var(--tt-space-4);
     margin-bottom: var(--tt-space-4);
     border-bottom: 1px solid var(--tt-border);
+}
+
+.category-sheet__error {
+    margin-bottom: var(--tt-space-2);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-danger);
 }
 
 .category-sheet__merchant {
