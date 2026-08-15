@@ -3,6 +3,7 @@ package com.kb.tangtang.transaction.service;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Category;
 import com.kb.tangtang.transaction.domain.Transaction;
+import com.kb.tangtang.transaction.dto.CategoryListDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateResultDto;
 import com.kb.tangtang.transaction.mapper.CategoryMapper;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -150,5 +153,22 @@ class TransactionServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatus());
         verify(transactionMapper, never()).updateCategoryByUser(anyLong(), anyLong(), any());
         verify(userCategoryMapMapper, never()).upsert(anyLong(), any(String.class), any());
+    }
+
+    @Test
+    @DisplayName("getAllCategories는 매퍼 결과를 그대로 CategoryDto 리스트로 변환한다")
+    void getAllCategoriesMapsMapperRows() {
+        when(categoryMapper.findAll()).thenReturn(List.of(
+                Category.builder().id(1L).categoryName("식비").parentId(null).build(),
+                Category.builder().id(2L).categoryName("음식점/외식").parentId(1L).build()
+        ));
+
+        CategoryListDto result = service.getAllCategories();
+
+        assertEquals(2, result.getCategories().size());
+        assertEquals(1L, result.getCategories().get(0).getId());
+        assertEquals("식비", result.getCategories().get(0).getName());
+        assertEquals(null, result.getCategories().get(0).getParentId());
+        assertEquals(1L, result.getCategories().get(1).getParentId());
     }
 }

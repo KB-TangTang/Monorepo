@@ -1387,6 +1387,7 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 |---|---|---|---|
 | GET | `/api/transactions/months` | Bearer | `{ months: [{ value, hasData }] }` |
 | GET | `/api/transactions?yearMonth=YYYY-MM` (생략 가능) | Bearer | `{ period, summary, transactions }` |
+| GET | `/api/categories` | Bearer | `{ categories: [{ id, name, parentId }] }` |
 
 `GET /api/transactions/months` 응답
 ```json
@@ -1409,6 +1410,20 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
   > 실계정에도 과거 7개월치 거래를 백필하면서 `tbl_user.created_at`은 그대로 두기 때문에 이 어긋남이
   > 실제로 나타난다. 가입월 기준으로 만들었다가 범위가 "이번 달"뿐이 되어 월 이동 버튼이 전부
   > 비활성화되는 버그가 있었다(2026-08-15 수정).
+
+`GET /api/categories` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      { "id": 1, "name": "식비", "parentId": null },
+      { "id": 2, "name": "음식점/외식", "parentId": 1 }
+    ]
+  }
+}
+```
+- `parentId`가 `null`이면 대분류, 아니면 부모 대분류의 `id`.
 
 `GET /api/transactions?yearMonth=2026-07` 응답
 ```json
