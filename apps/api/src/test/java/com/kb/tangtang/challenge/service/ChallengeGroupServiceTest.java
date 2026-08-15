@@ -427,6 +427,15 @@ class ChallengeGroupServiceTest {
         }
 
         @Override
+        public List<ChallengeGroup> findGroupsToEvaluate(String status, LocalDate today, LocalDate yesterday) {
+            return groups.stream()
+                    .filter(g -> g.getStatus().equals(status))
+                    .filter(g -> !g.getStartDate().isAfter(today))
+                    .filter(g -> !g.getEndDate().isBefore(yesterday))
+                    .toList();
+        }
+
+        @Override
         public int updateStatusIfCurrent(Long groupId, String fromStatus, String toStatus) {
             for (int i = 0; i < groups.size(); i++) {
                 ChallengeGroup group = groups.get(i);

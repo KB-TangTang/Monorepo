@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.IndictmentMapper">
+
+    <!--
+      기소 생성.
+
+      status 외의 판결 컬럼(result · verdict_method · ai_verdict_reason)은 INSERT 하지 않는다.
+      기소 시점에는 값이 없고, DB CHECK(ck_ind_result)가 DEFENSE_WAIT + result IS NULL 조합만 허용한다.
+
+      INSERT ... ON DUPLICATE KEY UPDATE 나 INSERT IGNORE 로 조용히 넘기지 않는다.
+      기소를 실제로 만들었을 때만 알림을 보내야 하는데, 둘 다 "만들었는지" 를 반환값으로
+      구분할 수 없다(IGNORE 는 0을 주지만 다른 오류까지 같이 삼킨다).
+      DuplicateKeyException 을 호출부가 잡는 편이 무엇을 건너뛰었는지 분명하다.
+
+      created_at 은 컬럼 기본값에 맡긴다. 화면·알림이 보여야 하는 것은 기소 생성 시각이 아니라
+      위반 날짜(challenge_date)라 되받아올 이유가 없다.
+    -->
+    <insert id="insertIndictment" parameterType="com.kb.tangtang.challenge.domain.Indictment"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_indictment
+            (result_id, group_id, user_id, status, message)
+        VALUES
+            (#{resultId}, #{groupId}, #{userId}, #{status}, #{message})
+    </insert>
+</mapper>

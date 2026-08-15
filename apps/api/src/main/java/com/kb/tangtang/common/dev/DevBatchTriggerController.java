@@ -2,6 +2,7 @@ package com.kb.tangtang.common.dev;
 
 import com.kb.tangtang.common.docs.DevBatchTriggerControllerDocs;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
+import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -29,9 +30,8 @@ import java.util.Map;
  * <p><b>로컬에서만 동작한다</b> — {@link DevEnvironmentGuard} 가 {@code app.env} 로 막는다.
  * 인증도 필요하다. 인터셉터가 {@code /api/**} 에 걸려 있다.
  *
- * <p>배치가 늘어나면({@code #168} 평가·기소, {@code #170} 변론 마감, {@code #172} 개표)
- * {@code switch} 에 이름을 추가한다. 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라
- * 이름 목록이 한눈에 보이는 편이 낫기 때문이다.
+ * <p>배치가 늘어나면({@code #170} 변론 마감, {@code #172} 개표) {@code switch} 에 이름을 추가한다.
+ * 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라 이름 목록이 한눈에 보이는 편이 낫기 때문이다.
  */
 @RestController
 @RequestMapping("/api/dev/batches")
@@ -40,15 +40,18 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
 
     private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
+    private final GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService;
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService;
     private final FixedExpensePaymentReminderDevService paymentReminderDevService;
 
     public DevBatchTriggerController(DevEnvironmentGuard guard,
                                      ChallengeGroupStatusBatchService challengeGroupStatusBatchService,
+                                     GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService,
                                      FixedExpensePaymentReminderBatchService paymentReminderBatchService,
                                      FixedExpensePaymentReminderDevService paymentReminderDevService) {
         this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
+        this.groupChallengeEvaluationBatchService = groupChallengeEvaluationBatchService;
         this.paymentReminderBatchService = paymentReminderBatchService;
         this.paymentReminderDevService = paymentReminderDevService;
     }
@@ -56,7 +59,7 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
     /**
      * 배치를 즉시 실행한다.
      *
-     * @param name 배치 이름. {@code group-challenge-status}
+     * @param name 배치 이름. {@code group-challenge-status} · {@code group-challenge-evaluation}
      * @param date 기준일. 없으면 오늘. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다
      * @return 배치가 처리한 건수
      */
@@ -74,6 +77,12 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
 
         int affected = switch (name) {
             case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate);
+            /*
+             * 기소가 열리는지 기다리지 않고 확인하는 용도다. date 로 기준일을 바꾸면
+             * "종료 다음 날" 로 넘어가 기간평가(PERIOD) 기소까지 즉시 재현할 수 있다.
+             */
+            case "group-challenge-evaluation" ->
+                    groupChallengeEvaluationBatchService.evaluateActiveGroups(baseDate);
             case "fixed-expense-payment-reminders" -> {
                 if (date != null) {
                     throw new BusinessException("INVALID_REQUEST",

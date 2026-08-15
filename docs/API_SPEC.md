@@ -1167,9 +1167,11 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 별도 on/off 프로퍼티는 두지 않는다 — **배포 환경에서 쓸 계획이 없는 도구**라 스위치를 달면
 로컬에서 쓸 때마다 설정을 고쳐야 하고, 켜진 채 배포될 위험만 새로 생긴다.
 
-- `name` 은 현재 `group-challenge-status` 하나다. 배치가 늘어나면 여기에 추가된다.
+- `name` 은 `group-challenge-status` · `group-challenge-evaluation` · `fixed-expense-payment-reminders`. 배치가 늘어나면 여기에 추가된다.
 - `date` 는 `yyyy-MM-dd`. 생략하면 오늘이다. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다.
-- `affected` 는 실제로 상태가 바뀐 그룹 수다.
+  `group-challenge-evaluation` 은 기준일을 **종료 다음 날**로 넣어야 기간평가(PERIOD) 기소가 재현된다.
+- `affected` 는 배치가 처리한 건수다 (`group-challenge-status` 는 전이된 그룹 수,
+  `group-challenge-evaluation` 은 새로 만든 기소 수).
 
 프론트에서는 `components/dev/DevBatchTriggerFab.vue` 가 이 API 를 부른다.
 **그룹 챌린지 홈**과 **재판 전체보기** 두 화면 우하단에 「챌린지 시작 배치」 버튼으로 붙어 있다
@@ -1218,7 +1220,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | `GROUP_CHALLENGE_STARTED` | 챌린지가 시작됐어요 | challenge — 상태 전이 배치 (#152) |
 | `GROUP_CHALLENGE_CANCELED` | 챌린지가 성립되지 않았어요 | challenge — 상태 전이 배치 (#152). 시작일에 참여자가 방장 1명뿐일 때 |
 | `GROUP_JUDGMENT` | 판결이 확정됐어요 | challenge — 백엔드 미구현 |
-| `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 백엔드 미구현 |
+| `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 평가·기소 배치 (#168). 딥링크는 변론 첫 화면 |
 | `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission — 백엔드 미구현 |
 | `MONTHLY_REPORT` | 판결문이 도착했어요 | report — 백엔드 미구현 |
 | `PAYMENT_DUE` | 결제 예정 알림 | fixedexpense — 백엔드 미구현 |
