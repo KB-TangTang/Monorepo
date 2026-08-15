@@ -41,7 +41,10 @@ test('스크롤-업은 가장 오래된 메시지의 messageId 를 before 로 �
         { messageId: 102, content: '그 다음' },
     ];
     store.hasMore = true;
-    stub.setMessagesResponse({ messages: [{ messageId: 90, content: '더 오래된 것' }], hasMore: false });
+    stub.setMessagesResponse({
+        messages: [{ messageId: 90, content: '더 오래된 것' }],
+        hasMore: false,
+    });
 
     await store.loadOlderMessages(7);
 
@@ -72,4 +75,131 @@ test('hasMore 가 false 면 요청하지 않는다', async () => {
     await store.loadOlderMessages(7);
 
     assert.deepEqual(stub.messagesCalls, []);
+});
+
+/*
+ * 이슈 #174 Task 12: 화면 연결과 목업 제거.
+ * Task 11 이 빌드를 살리려고 넣어 둔 로컬 발송 스텁(local-<timestamp> messageId)을 걷어내고
+ * 실 STOMP 송수신에 맞춰 store 를 다시 짠다. 아래부터는 그 계약을 확인한다.
+ */
+
+test('입장하면 방 정보와 최근 메시지를 불러오고 안 읽은 수를 지운다', async () => {
+    const store = newStore();
+    stub.setRoomInfoResponse({ groupId: 7, challengeName: '절약단', status: 'ACTIVE' });
+    stub.setMessagesResponse({ messages: [{ messageId: 1 }], hasMore: false });
+
+    await store.enterRoom(7);
+
+    assert.equal(store.messages.length, 1);
+    assert.deepEqual(stub.resetUnreadCalls, [7]);
+    assert.equal(store.roomInfo.challengeName, '절약단');
+    assert.equal(store.closed, false);
+    assert.equal(store.error, null);
+});
+
+test('메시지가 없는 새 방도 정상 진입한다', async () => {
+    const store = newStore();
+    stub.setMessagesResponse({ messages: [], hasMore: false });
+
+    await store.enterRoom(7);
+
+    assert.deepEqual(store.messages, []);
+    assert.equal(store.closed, false);
+    assert.equal(store.error, null);
+});
+
+test('수신한 메시지를 뒤에 붙인다', () => {
+    const store = newStore();
+    store.messages = [{ messageId: 1 }];
+
+    store.appendMessage({ messageId: 2 });
+
+    assert.deepEqual(
+        store.messages.map((m) => m.messageId),
+        [1, 2],
+    );
+});
+
+test('이미 있는 messageId 는 중복으로 넣지 않는다', () => {
+    const store = newStore();
+    store.messages = [{ messageId: 1 }];
+
+    store.appendMessage({ messageId: 1 });
+
+    assert.equal(store.messages.length, 1);
+});
+
+test('재연결하면 마지막 messageId 이후를 보충한다', async () => {
+    const store = newStore();
+    store.groupId = 7;
+    store.messages = [{ messageId: 4 }];
+    stub.setMessagesResponse({ messages: [{ messageId: 5 }], hasMore: false });
+
+    await store.catchUp();
+
+    assert.deepEqual(stub.messagesCalls, [[7, { after: 4 }]]);
+    assert.deepEqual(
+        store.messages.map((m) => m.messageId),
+        [4, 5],
+    );
+});
+
+test('재연결 보충으로 받은 메시지도 중복이면 무시한다', async () => {
+    const store = newStore();
+    store.groupId = 7;
+    store.messages = [{ messageId: 4 }];
+    stub.setMessagesResponse({ messages: [{ messageId: 4 }, { messageId: 5 }], hasMore: false });
+
+    await store.catchUp();
+
+    assert.deepEqual(
+        store.messages.map((m) => m.messageId),
+        [4, 5],
+    );
+});
+
+/*
+ * http.js 응답 인터셉터는 실패를 `{ response: { data: { code } } }` 가 아니라
+ * `ApiError(code, message, status)` (code 를 직접 들고 있는 Error) 로 정규화해 던진다
+ * (src/api/http.js 참고, src/stores/personalMission.js 의 error.code 사용도 같은 패턴).
+ * 그래서 store 는 e.code 를 본다.
+ */
+test('종료된 챌린지는 closed 플래그를 세운다', async () => {
+    const store = newStore();
+    const err = new Error('종료된 챌린지의 대화는 볼 수 없어요.');
+    err.code = 'CHAT_ROOM_CLOSED';
+    stub.setRoomInfoError(err);
+
+    await store.enterRoom(7);
+
+    assert.equal(store.closed, true);
+    assert.equal(store.error, null);
+    assert.equal(store.loading, false);
+});
+
+test('참여자가 아니면 error 상태를 세우고 closed 는 세우지 않는다', async () => {
+    const store = newStore();
+    const err = new Error('이 챌린지의 참여자가 아니에요.');
+    err.code = 'CHAT_NOT_MEMBER';
+    stub.setRoomInfoError(err);
+
+    await store.enterRoom(7);
+
+    assert.equal(store.closed, false);
+    assert.equal(store.error.code, 'CHAT_NOT_MEMBER');
+});
+
+test('leaveRoom 은 groupId 를 포함한 모든 상태를 초기화한다', async () => {
+    const store = newStore();
+    stub.setMessagesResponse({ messages: [{ messageId: 1 }], hasMore: true });
+    await store.enterRoom(7);
+
+    store.leaveRoom();
+
+    assert.equal(store.groupId, null);
+    assert.deepEqual(store.messages, []);
+    assert.equal(store.roomInfo, null);
+    assert.equal(store.hasMore, false);
+    assert.equal(store.closed, false);
+    assert.equal(store.error, null);
 });
