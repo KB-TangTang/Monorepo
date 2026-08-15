@@ -23,6 +23,7 @@ import {
     resolveDefaultLedgerPeriod,
     resolveLedgerState,
 } from '@/utils/ledger';
+import { useCategoryEdit } from '@/utils/useCategoryEdit';
 
 const router = useRouter();
 
@@ -38,6 +39,8 @@ const selectedPaymentMethod = ref('');
 const isPaymentSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
+const { categories, isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
+    useCategoryEdit(transactions);
 
 const state = computed(() =>
     resolveLedgerState({ loading: loading.value, error: errorMessage.value, data: summary.value }),
@@ -122,20 +125,10 @@ function openCategorySheet(tx) {
     isCategorySheetOpen.value = true;
 }
 
-function applyCategory({ transactionId, categoryName, applyToMerchant }) {
-    const tx = transactions.value.find((item) => item.id === transactionId);
-    if (!tx) {
-        return;
-    }
-    if (applyToMerchant) {
-        const merchant = tx.merchant;
-        transactions.value.forEach((item) => {
-            if (item.merchant === merchant) {
-                item.category = categoryName;
-            }
-        });
-    } else {
-        tx.category = categoryName;
+async function applyCategory(payload) {
+    const success = await applyCategoryEdit(payload);
+    if (success) {
+        isCategorySheetOpen.value = false;
     }
 }
 
@@ -166,6 +159,7 @@ onMounted(async () => {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
         loading.value = false;
     }
+    await loadCategories();
 });
 </script>
 
@@ -228,6 +222,8 @@ onMounted(async () => {
         <LedgerCategorySheet
             v-model="isCategorySheetOpen"
             :transaction="selectedTransaction"
+            :error="categoryError"
+            :confirming="isApplyingCategory"
             @select="applyCategory"
         />
 
