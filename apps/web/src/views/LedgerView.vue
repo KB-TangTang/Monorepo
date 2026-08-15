@@ -39,7 +39,7 @@ const selectedPaymentMethod = ref('');
 const isPaymentSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
-const { categories, isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
+const { isApplyingCategory, categoryError, loadCategories, applyCategory: applyCategoryEdit } =
     useCategoryEdit(transactions);
 
 const state = computed(() =>
