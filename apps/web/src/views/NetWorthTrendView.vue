@@ -32,12 +32,19 @@ async function load() {
 }
 
 const selectedMonthLabel = computed(() => trendData.value?.months[selectedMonthIndex.value] ?? '');
-const selectedTotalDebt = computed(() => trendData.value?.totalDebt[selectedMonthIndex.value] ?? 0);
+// 선택한 달에 자산 스냅샷이 없으면 netWorth 가 null 로 들어온다 — "0원"이 아니라
+// "데이터 없음"으로 구분해서 보여준다.
+const selectedHasData = computed(
+    () => (trendData.value?.netWorth[selectedMonthIndex.value] ?? null) !== null,
+);
+const selectedTotalDebt = computed(
+    () => trendData.value?.totalDebt[selectedMonthIndex.value] ?? null,
+);
 const selectedTotalAssets = computed(() => {
-    if (!trendData.value) {
-        return 0;
+    if (!selectedHasData.value) {
+        return null;
     }
-    return trendData.value.netWorth[selectedMonthIndex.value] + selectedTotalDebt.value;
+    return trendData.value.netWorth[selectedMonthIndex.value] + (selectedTotalDebt.value ?? 0);
 });
 
 function goBack() {
@@ -75,12 +82,14 @@ onMounted(load);
             <div class="net-worth-trend__totals">
                 <div class="net-worth-trend__totals-card">
                     <p class="net-worth-trend__totals-label">{{ selectedMonthLabel }} 총자산</p>
-                    <p class="net-worth-trend__totals-value">{{ formatWon(selectedTotalAssets) }}</p>
+                    <p class="net-worth-trend__totals-value">
+                        {{ selectedHasData ? formatWon(selectedTotalAssets) : '데이터 없음' }}
+                    </p>
                 </div>
                 <div class="net-worth-trend__totals-card">
                     <p class="net-worth-trend__totals-label">{{ selectedMonthLabel }} 총부채</p>
                     <p class="net-worth-trend__totals-value net-worth-trend__totals-value--debt">
-                        {{ formatWon(selectedTotalDebt) }}
+                        {{ selectedHasData ? formatWon(selectedTotalDebt) : '데이터 없음' }}
                     </p>
                 </div>
             </div>

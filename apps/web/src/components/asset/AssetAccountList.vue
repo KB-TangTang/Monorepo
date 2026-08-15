@@ -89,7 +89,9 @@ function goToDetail(account) {
 }
 
 .asset-accounts__item:hover {
-    border-color: var(--tt-border-strong);
+    /* v1 토큰(--tt-border-strong)은 tokens.css v2 에 없다 — 카드 테두리보다 한 단계 진한
+       중립색인 --tt-text-hint 로 대체한다. */
+    border-color: var(--tt-text-hint);
     box-shadow: var(--tt-elevation-2);
 }
 

@@ -19,6 +19,11 @@ defineEmits(['update:selectedMonthIndex']);
 const MAX_HEIGHT = 160;
 
 const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_HEIGHT));
+// 스냅샷이 없는 달은 netWorth 가 null 로 들어온다 — 막대는 0 높이로 그리되 흐리게 표시해
+// "0원"과 "미집계"를 구분한다.
+const hasData = computed(() =>
+    props.netWorth.map((value) => value !== null && value !== undefined),
+);
 </script>
 
 <template>
@@ -38,11 +43,15 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
                 :key="month"
                 type="button"
                 class="trend-chart__bar"
-                :class="{ 'trend-chart__bar--selected': i === selectedMonthIndex }"
+                :class="{
+                    'trend-chart__bar--selected': i === selectedMonthIndex,
+                    'trend-chart__bar--no-data': !hasData[i],
+                }"
+                :title="hasData[i] ? undefined : '데이터 없음'"
                 @click="$emit('update:selectedMonthIndex', i)"
             >
                 <span class="trend-chart__stack-wrap" :style="{ height: `${MAX_HEIGHT}px` }">
-                    <span class="trend-chart__stack">
+                    <span v-if="hasData[i]" class="trend-chart__stack">
                         <span
                             class="trend-chart__segment trend-chart__segment--debt"
                             :style="{ height: `${bars[i].debtHeight}px` }"
@@ -52,6 +61,7 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
                             :style="{ height: `${bars[i].netWorthHeight}px` }"
                         ></span>
                     </span>
+                    <span v-else class="trend-chart__stack trend-chart__stack--no-data"></span>
                 </span>
                 <span class="trend-chart__month">{{ month }}</span>
             </button>
@@ -83,11 +93,11 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
 }
 
 .trend-chart__dot--net {
-    background: var(--tt-gray-900);
+    background: var(--tt-primary);
 }
 
 .trend-chart__dot--debt {
-    background: var(--tt-guilty-300);
+    background: var(--tt-danger);
 }
 
 .trend-chart__bars {
@@ -125,21 +135,27 @@ const bars = computed(() => getBarHeights(props.netWorth, props.totalDebt, MAX_H
 }
 
 .trend-chart__segment--net {
-    background: var(--tt-gray-900);
+    background: var(--tt-primary);
 }
 
 .trend-chart__segment--debt {
-    background: var(--tt-guilty-300);
+    background: var(--tt-danger);
 }
 
-.trend-chart__bar--selected .trend-chart__segment--debt {
-    background: var(--tt-danger);
+.trend-chart__stack--no-data {
+    height: 4px;
+    background: var(--tt-border);
+    border-radius: var(--tt-radius-xs);
 }
 
 .trend-chart__month {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-medium);
     color: var(--tt-text-muted);
+}
+
+.trend-chart__bar--no-data .trend-chart__month {
+    color: var(--tt-text-hint);
 }
 
 .trend-chart__bar--selected .trend-chart__month {

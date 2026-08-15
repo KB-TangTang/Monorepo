@@ -16,6 +16,13 @@
         ORDER BY id
     </select>
 
+    <select id="findByUser" resultType="com.kb.tangtang.account.domain.InvestmentHolding">
+        SELECT <include refid="columns"/>
+        FROM tbl_investment_holding
+        WHERE user_id = #{userId}
+        ORDER BY id
+    </select>
+
     <update id="update" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
         UPDATE tbl_investment_holding
         SET name                    = #{name},
