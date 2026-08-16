@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toPng } from 'html-to-image';
 import { useRoute, useRouter } from 'vue-router';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
@@ -7,10 +7,7 @@ import PersonalCertificateRatioSelector from '@/components/challenge/personal/ra
 import PersonalCertificateShareSheet from '@/components/challenge/personal/ranking/PersonalCertificateShareSheet.vue';
 import PersonalCertificateTitleSelector from '@/components/challenge/personal/ranking/PersonalCertificateTitleSelector.vue';
 import PersonalHonorCertificate from '@/components/challenge/personal/ranking/PersonalHonorCertificate.vue';
-import {
-    MOCK_PERSONAL_CERTIFICATE_TITLES,
-    MOCK_PERSONAL_RANKINGS,
-} from '@/fixtures/personalRanking';
+import { fetchMissionCertificate } from '@/api/personalMission';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,23 +18,32 @@ const isShareOpen = ref(false);
 const isPreparingShare = ref(false);
 const shareFile = ref(null);
 const shareMessage = ref('');
+const certificate = ref(null);
+const isLoading = ref(true);
+const loadError = ref('');
 
 const period = computed(() => {
     const queryPeriod = typeof route.query.month === 'string' ? route.query.month : '';
-    return MOCK_PERSONAL_RANKINGS[queryPeriod] ? queryPeriod : '2026-07';
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(queryPeriod) ? queryPeriod : '';
 });
 
-const ranking = computed(() => MOCK_PERSONAL_RANKINGS[period.value]);
+const ranking = computed(() => certificate.value);
 const periodLabel = computed(() => period.value.replace('-', '.'));
-const certificateTitles = computed(() => [
-    `상위 ${ranking.value.myRanking.topPercent}%의 판결력`,
-    ...MOCK_PERSONAL_CERTIFICATE_TITLES.slice(1),
-]);
-const selectedTitle = ref(certificateTitles.value[0]);
+const certificateTitles = computed(() => {
+    if (!ranking.value) {
+        return [];
+    }
+    return [
+        `상위 ${ranking.value.myRanking.topPercent}%의 판결력`,
+        '이번 달 진짜 무죄',
+        '절약 판결 갱신',
+    ];
+});
+const selectedTitle = ref('');
 const selectedRatio = ref('portrait');
 
 watch(period, () => {
-    selectedTitle.value = `상위 ${ranking.value.myRanking.topPercent}%의 판결력`;
+    selectedTitle.value = '';
 });
 
 const judgmentDate = computed(() => {
@@ -52,6 +58,27 @@ function goBack() {
         query: { month: period.value },
     });
 }
+
+async function loadCertificate() {
+    if (!period.value) {
+        loadError.value = '조회할 인증서 월이 올바르지 않아요.';
+        isLoading.value = false;
+        return;
+    }
+
+    isLoading.value = true;
+    loadError.value = '';
+    try {
+        certificate.value = await fetchMissionCertificate(period.value);
+        selectedTitle.value = `상위 ${certificate.value.myRanking.topPercent}%의 판결력`;
+    } catch (error) {
+        loadError.value = error.message || '인증서 데이터를 불러오지 못했어요.';
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+onMounted(loadCertificate);
 
 async function createCertificateImage() {
     await nextTick();
@@ -167,38 +194,48 @@ async function copyCertificateLink() {
             @back="goBack"
         />
 
-        <div ref="certificateElement">
-            <PersonalHonorCertificate
-                :ranking="ranking"
-                :period-label="periodLabel"
-                :judgment-date="judgmentDate"
-                :title="selectedTitle"
-                :ratio="selectedRatio"
-            />
-        </div>
-
-        <PersonalCertificateTitleSelector v-model="selectedTitle" :titles="certificateTitles" />
-        <PersonalCertificateRatioSelector v-model="selectedRatio" />
-
-        <div class="personal-certificate__actions">
-            <button type="button" :disabled="isSaving" @click="saveCertificateImage()">
-                {{ isSaving ? '이미지 만드는 중...' : '이미지 저장' }}
-            </button>
-            <button type="button" @click="openShareSheet">공유하기</button>
-        </div>
-
-        <p v-if="saveError" class="personal-certificate__notice" role="alert">
-            {{ saveError }}
+        <p v-if="isLoading" class="personal-certificate__notice" role="status">
+            인증서 데이터를 불러오고 있어요.
         </p>
 
-        <PersonalCertificateShareSheet
-            v-model="isShareOpen"
-            :certificate-title="selectedTitle"
-            :is-preparing="isPreparingShare"
-            :message="shareMessage"
-            @share="shareCertificate"
-            @copy-link="copyCertificateLink"
-        />
+        <p v-else-if="loadError" class="personal-certificate__notice" role="alert">
+            {{ loadError }}
+        </p>
+
+        <template v-else-if="ranking">
+            <div ref="certificateElement">
+                <PersonalHonorCertificate
+                    :ranking="ranking"
+                    :period-label="periodLabel"
+                    :judgment-date="judgmentDate"
+                    :title="selectedTitle"
+                    :ratio="selectedRatio"
+                />
+            </div>
+
+            <PersonalCertificateTitleSelector v-model="selectedTitle" :titles="certificateTitles" />
+            <PersonalCertificateRatioSelector v-model="selectedRatio" />
+
+            <div class="personal-certificate__actions">
+                <button type="button" :disabled="isSaving" @click="saveCertificateImage()">
+                    {{ isSaving ? '이미지 만드는 중...' : '이미지 저장' }}
+                </button>
+                <button type="button" @click="openShareSheet">공유하기</button>
+            </div>
+
+            <p v-if="saveError" class="personal-certificate__notice" role="alert">
+                {{ saveError }}
+            </p>
+
+            <PersonalCertificateShareSheet
+                v-model="isShareOpen"
+                :certificate-title="selectedTitle"
+                :is-preparing="isPreparingShare"
+                :message="shareMessage"
+                @share="shareCertificate"
+                @copy-link="copyCertificateLink"
+            />
+        </template>
     </main>
 </template>
 
