@@ -1176,9 +1176,23 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
   응답 코드가 아니라 **연결 종료**로 나타난다.
 - 수신 메시지 모양은 REST 조회의 `messages[]` 항목과 **완전히 같다**(`ChatMessageDto` 하나를 공유).
 - 프론트는 접속 URL 을 `VITE_API_BASE_URL` 에서 유도한다(`api/chatSocketUrl.js`). 값이 없으면 현재
-  호스트로 폴백하고, 로컬은 `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 :8080 으로 넘긴다.
-  **프로덕션에서는 `VITE_API_BASE_URL` 이 API 서버 절대 URL 로 설정돼 있어야 한다** — Vercel
-  rewrite 는 WebSocket 업그레이드를 넘겨주지 못하므로 상대 경로로는 소켓이 붙지 않는다.
+  호스트로 폴백한다.
+- **로컬 개발은 그대로 붙는다.** `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 업그레이드 요청을
+  :8080 으로 넘긴다. `VITE_API_BASE_URL` 을 따로 설정할 필요가 없다.
+- **프로덕션 소켓은 아직 동작하지 않는다.** `apps/web/vercel.json` 의 rewrite 는 `/api`·`/uploads`
+  만 EC2 로 넘기고 `/(.*)` 는 전부 `index.html` 로 떨어뜨린다. WebSocket 업그레이드 요청도 이
+  catch-all 에 걸려 소켓이 붙지 않는다.
+  - `VITE_API_BASE_URL` 에 `http://<EC2 주소>:8080/api` 같은 값을 넣어 우회하려 하면 안 된다.
+    프론트는 Vercel(https) 에 올라가므로, https 페이지에서 `http://` XHR 과 `ws://` 소켓은 브라우저가
+    mixed content 로 차단한다. 지금은 `/api` 상대경로 + 위 rewrite 로 REST 가 도는데, 이 값을 넣으면
+    소켓뿐 아니라 **REST 요청까지 함께 막힌다.**
+  - 전제 조건은 EC2 앞단에 TLS 종단(nginx 등)을 붙여 `wss` 를 받고 백엔드로 프록시하는 것이다.
+    그 nginx 설정에는 `proxy_set_header Upgrade $http_upgrade;` · `Connection "upgrade"` ·
+    `proxy_read_timeout` 상향이 필요하다. 이 저장소에는 nginx 설정 파일이 없으므로 EC2 를 관리하는
+    팀원에게 별도로 전달해야 한다.
+  - TLS 종단이 준비된 뒤에만 `VITE_API_BASE_URL` 을 `https://` 절대 URL 로 설정한다. 그 전까지는
+    값을 비워 두거나 `/api` 로 둔다.
+  - **그때까지 그룹 채팅 시연은 로컬 개발 환경(`npm run dev`)에서 한다.**
 
 ### 시스템 메시지 (재판 이벤트 수신부, 이슈 #169~#172 인계)
 
