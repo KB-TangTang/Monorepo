@@ -37,6 +37,8 @@ const DIFFICULTY_PRESENTATION = {
     HARD: { level: '상', tone: 'high' },
 };
 
+const GROUP_RECORD_STATES = new Set(['JUDGING', 'READY', 'EMPTY']);
+
 function toCategoryPresentation(categoryName) {
     return categoryName?.trim().slice(0, 1) || '카';
 }
@@ -69,12 +71,27 @@ function resolveCategoryRows(report) {
         : toCategoryRows(report.categoryEffects);
 }
 
+export function resolveGroupRecordState({ groupRecordState, groupRecord }) {
+    if (groupRecordState === 'JUDGING') {
+        return 'JUDGING';
+    }
+    if (groupRecordState === 'READY' && groupRecord) {
+        return 'READY';
+    }
+    if (GROUP_RECORD_STATES.has(groupRecordState) && groupRecordState === 'EMPTY') {
+        return 'EMPTY';
+    }
+    return groupRecord ? 'READY' : 'EMPTY';
+}
+
 export function toChallengeReportModel(report) {
     return {
         ...report,
         challengeName: '메인 챌린지',
         difficultySummary: '난이도별 성과를 확인해 보세요',
         categories: resolveCategoryRows(report),
+        groupRecordState: resolveGroupRecordState(report),
+        ranking: report.ranking ?? null,
         difficulties: (report.difficulties ?? []).map((difficulty) => ({
             ...difficulty,
             ...(DIFFICULTY_PRESENTATION[difficulty.difficultyName] ?? {

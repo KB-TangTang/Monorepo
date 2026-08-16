@@ -6,6 +6,7 @@ import com.kb.tangtang.report.domain.ChallengeMonthlyReportRow;
 import com.kb.tangtang.report.dto.ChallengeReportDetailDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
 import com.kb.tangtang.report.dto.GroupRecordDto;
+import com.kb.tangtang.report.dto.GroupRecordState;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -170,6 +171,7 @@ class ChallengeReportServiceTest {
         assertEquals(0, result.getCategoryEffects().get(0).getOverspentAmount().intValue());
         assertEquals(2, result.getWeeklyResults().size());
         assertEquals("EASY", result.getDifficulties().get(0).getDifficultyName());
+        assertEquals(GroupRecordState.READY, result.getGroupRecordState());
         assertEquals(2, result.getGroupRecord().getParticipatingGroups());
         assertEquals(1, result.getGroupRecord().getSurvivedCount());
         assertEquals(3, result.getGroupRecord().getIndictedCount());
@@ -184,9 +186,28 @@ class ChallengeReportServiceTest {
 
         ChallengeReportDetailDto result = service.getReport(USER_ID, "2026-07");
 
+        assertEquals(GroupRecordState.EMPTY, result.getGroupRecordState());
         assertNull(result.getGroupRecord());
         verify(mapper, never()).findGroupRecord(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any(LocalDate.class), org.mockito.ArgumentMatchers.any(LocalDate.class));
+    }
+
+    @Test
+    @DisplayName("최종 판정 중인 그룹이 있으면 부분 확정 전적보다 재판 진행 상태를 우선한다")
+    void returnsJudgingStateBeforePartiallyFinalizedGroupRecord() {
+        when(mapper.hasActiveChallengeConsent(eq(USER_ID), any())).thenReturn(true);
+        ChallengeMonthlyReportRow monthlyReport = report("2026-07", 20, 15);
+        monthlyReport.setGroupRecordJson("{\"participatingGroups\":1,\"survivedCount\":1,"
+                + "\"eliminatedCount\":0,\"indictedCount\":1,\"acquittedCount\":1,\"convictedCount\":0}");
+        when(mapper.findMonthlyReport(USER_ID, "2026-07")).thenReturn(monthlyReport);
+        when(mapper.findPreviousMonthlyReport(USER_ID, "2026-07")).thenReturn(null);
+        when(mapper.hasJudgingGroupRecord(
+                USER_ID, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31))).thenReturn(true);
+
+        ChallengeReportDetailDto result = service.getReport(USER_ID, "2026-07");
+
+        assertEquals(GroupRecordState.JUDGING, result.getGroupRecordState());
+        assertNull(result.getGroupRecord());
     }
 
     @Test
