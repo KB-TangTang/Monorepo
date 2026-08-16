@@ -24,12 +24,28 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 /*
- * REST 와 같은 값(VITE_API_BASE_URL)에서 유도한다 — 유도 규칙은 chatSocketUrl.js 참고.
+ * 소켓 주소는 **소켓 전용 값을 먼저** 본다 (이슈 #268).
+ *
+ * REST 와 소켓이 배포 환경에서 다른 길로 간다. REST 는 Vercel rewrite 를 거쳐 EC2:8080 으로,
+ * 소켓은 rewrite 가 업그레이드를 프록시하지 못해 EC2:443(nginx) 으로 직행한다.
+ * 그래서 하나의 값에서 둘 다 유도할 수 없다.
+ *
+ *   VITE_WS_BASE_URL  있으면 이 값 → wss://kb-tangtang.duckdns.org/ws/chat
+ *   없으면 VITE_API_BASE_URL 로 폴백 → 로컬 개발이 이 경로다(vite 프록시가 :8080 으로 넘긴다)
+ *
+ * 폴백을 남겨 두는 이유는 롤백 때문이다. Vercel 에서 VITE_WS_BASE_URL 만 지우고 재배포하면
+ * 코드 변경 없이 이전 동작으로 돌아간다.
+ *
+ * ⚠ VITE_WS_BASE_URL 에는 `https://<도메인>` 을 넣는다. `wss://` 를 넣으면 chatSocketUrl.js 의
+ *   `/^https?:\/\//i` 에 걸리지 않아 **조용히 현재 호스트(Vercel)로 폴백**한다. 증상이
+ *   「그냥 안 붙는다」로만 나와 원인을 찾기 어렵다.
+ *
  * 예전에는 무조건 window.location.host 였다. 로컬은 :5173(프록시에 /ws 가 없어 실패),
  * 프로덕션은 Vercel 호스트를 가리켜 dev·prod 어디에도 도달하지 못했다.
  */
 function socketUrl() {
-    return buildChatSocketUrl(import.meta.env?.VITE_API_BASE_URL, window.location);
+    const env = import.meta.env ?? {};
+    return buildChatSocketUrl(env.VITE_WS_BASE_URL || env.VITE_API_BASE_URL, window.location);
 }
 
 export function createChatSocket({ groupId, getToken, onMessage, onReconnect }) {

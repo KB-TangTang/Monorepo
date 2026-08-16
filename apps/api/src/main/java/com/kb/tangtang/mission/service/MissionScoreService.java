@@ -3,6 +3,8 @@ package com.kb.tangtang.mission.service;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.mission.domain.MissionRankingRow;
+import com.kb.tangtang.mission.domain.MissionCertificateStatsRow;
+import com.kb.tangtang.mission.dto.MissionCertificateDto;
 import com.kb.tangtang.mission.dto.MissionMonthlyRankingDto;
 import com.kb.tangtang.mission.dto.MissionMonthlyScoreDto;
 import com.kb.tangtang.mission.dto.MissionMyRankingDto;
@@ -97,6 +99,37 @@ public class MissionScoreService {
     @Transactional(readOnly = true)
     public MissionRankingMonthsDto getRankingMonths() {
         return new MissionRankingMonthsDto(missionScoreMapper.findRankingMonths());
+    }
+
+    @Transactional(readOnly = true)
+    public MissionCertificateDto getCertificate(long userId, String rawYearMonth) {
+        YearMonth yearMonth = parseYearMonth(rawYearMonth);
+        YearMonth currentMonth = YearMonth.now(clock.withZone(SEOUL_ZONE));
+        if (!yearMonth.isBefore(currentMonth)) {
+            throw new BusinessException("CERTIFICATE_NOT_FINALIZED", "인증서는 랭킹이 확정된 전월까지 발급할 수 있습니다.");
+        }
+
+        String period = yearMonth.toString();
+        MissionRankingRow ranking = missionScoreMapper.findUserRanking(userId, period);
+        if (ranking == null) {
+            throw new BusinessException("CERTIFICATE_NOT_FOUND", "해당 월의 인증서 데이터를 찾을 수 없습니다.");
+        }
+
+        MissionCertificateStatsRow stats = missionScoreMapper.findCertificateStats(
+                userId, yearMonth.atDay(1), yearMonth.atEndOfMonth());
+        if (stats == null) {
+            stats = new MissionCertificateStatsRow();
+        }
+        int totalUsers = missionScoreMapper.countRankingUsers(period);
+        return new MissionCertificateDto(
+                period,
+                totalUsers,
+                toMyRanking(ranking, totalUsers),
+                stats.getStreakDays(),
+                stats.getBestStreakDays(),
+                stats.getCompletedMissionCount(),
+                stats.getSuccessMissionCount()
+        );
     }
 
     private YearMonth parseYearMonth(String rawYearMonth) {

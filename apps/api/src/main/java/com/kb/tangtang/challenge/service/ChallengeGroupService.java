@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -386,6 +388,7 @@ public class ChallengeGroupService {
         int totalDays = daysBetweenInclusive(group.getStartDate(), group.getEndDate());
         EvalType evalType = EvalType.valueOf(group.getEvalType());
         GroupMember me = findMember(members, userId);
+        ChatSummary chat = me == null ? ChatSummary.EMPTY : chatSummary(group.getId(), userId);
 
         return ChallengeGroupDto.builder()
                 .id(group.getId())
@@ -416,6 +419,9 @@ public class ChallengeGroupService {
                 .members(members.stream()
                         .map(m -> toMemberDto(m, group.getAdminId()))
                         .toList())
+                .unreadChatCount(chat.unreadCount())
+                .lastChatMessage(chat.lastMessage())
+                .lastChatTime(chat.lastTime())
                 .pendingTrialCount(trial == null ? 0 : trial.getPendingVoteCount())
                 .defendant(trial != null && trial.getMyDefenseNeededCount() > 0)
                 .myVoteStatus(myVoteStatus(trial))
@@ -436,6 +442,36 @@ public class ChallengeGroupService {
             return "PENDING";
         }
         return trial.getCastVoteCount() > 0 ? "DONE" : null;
+    }
+
+    /**
+     * 목록·상세에 함께 실을 채팅 요약. 값은 Redis 에만 있다(채팅은 MySQL 에 저장하지 않는다).
+     *
+     * <p>새 Redis 코드는 필요 없다. 안 읽은 수는 메시지 발행 때 이미 쌓이고 있고,
+     * {@code findRecent(groupId, 1)} 은 내부가 {@code range(-1, -1)} 이라 가장 최근 1건을 준다.
+     *
+     * <p><b>Redis 가 죽어도 그룹 목록은 떠야 한다.</b> 채팅 요약은 부가 정보라 실패를 삼키고
+     * 빈 값을 돌려준다. 여기서 예외를 올리면 채팅과 무관한 재판 목록 화면 전체가 함께 죽는다.
+     */
+    private ChatSummary chatSummary(long groupId, long userId) {
+        try {
+            List<ChatMessage> recent = chatMessageStore.findRecent(groupId, 1);
+            if (recent.isEmpty()) {
+                // 방은 있는데 대화만 없는 경우다. 안 읽은 수는 어차피 0 이라 조회를 아낀다.
+                return ChatSummary.EMPTY;
+            }
+            ChatMessage last = recent.get(recent.size() - 1);
+            return new ChatSummary(chatMessageStore.unreadOf(groupId, userId),
+                    last.getContent(), last.getSentAt());
+        } catch (RuntimeException e) {
+            log.warn("채팅 요약을 읽지 못해 빈 값으로 내린다. groupId={} userId={}", groupId, userId, e);
+            return ChatSummary.EMPTY;
+        }
+    }
+
+    /** {@link #chatSummary} 의 반환 묶음. 세 값이 항상 함께 결정돼서 따로 나르지 않는다. */
+    private record ChatSummary(int unreadCount, String lastMessage, LocalDateTime lastTime) {
+        private static final ChatSummary EMPTY = new ChatSummary(0, null, null);
     }
 
     private GroupMemberDto toMemberDto(GroupMember member, Long adminId) {

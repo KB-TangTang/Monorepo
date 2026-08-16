@@ -45,7 +45,10 @@ function formatMonthDay(isoDate) {
  * 상세·참여·초대 미리보기에서는 서버가 `false` · `null` · `0` 을 준다 —
  * 카드들이 falsy 를 「순항중」으로 처리하므로 그대로 흘려보낸다.
  *
- * `savingsAmount` · `unreadChatCount` 는 아직 근거 데이터가 없다 (이슈 #172 · #174).
+ * 채팅 요약(`unreadChatCount`·`lastChatMessage`·`lastChatTime`)은 서버가 그대로 내려주므로
+ * 스프레드로 통과한다. 여기서 이름을 바꾸지 않는다.
+ *
+ * `savingsAmount` 는 아직 근거 데이터가 없다 (이슈 #172).
  */
 function toViewModel(dto) {
     return {

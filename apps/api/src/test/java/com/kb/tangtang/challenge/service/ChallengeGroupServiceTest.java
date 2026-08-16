@@ -1,5 +1,7 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.domain.ChatMessage;
+import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.GroupMember;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -37,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -497,7 +502,72 @@ class ChallengeGroupServiceTest {
         assertFalse(detail.isJoinable(), "이미 참여 중이면 다시 참여할 수 없다");
     }
 
+    /* ══ 채팅 요약 (이슈 #271) ══════════════════════════════ */
+
+    @Test
+    @DisplayName("목록·상세에 안 읽은 수와 마지막 메시지가 함께 실린다 — 방에 들어가야만 알 수 있던 값이다")
+    void carriesChatSummary() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        LocalDateTime sentAt = LocalDateTime.of(2026, 8, 12, 14, 3);
+        when(chatMessageStore.findRecent(created.getGroupId(), 1))
+                .thenReturn(List.of(chatMessage("나 오늘 진짜 참았다", sentAt)));
+        when(chatMessageStore.unreadOf(created.getGroupId(), OWNER_ID)).thenReturn(3);
+
+        ChallengeGroupDto listed = service.findMyGroups(OWNER_ID, null).get(0);
+        assertEquals(3, listed.getUnreadChatCount());
+        assertEquals("나 오늘 진짜 참았다", listed.getLastChatMessage());
+        assertEquals(sentAt, listed.getLastChatTime());
+
+        ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
+        assertEquals(3, detail.getUnreadChatCount(), "상세 FAB 배지도 같은 필드를 본다");
+    }
+
+    @Test
+    @DisplayName("대화가 없으면 빈 값이고 안 읽은 수는 조회하지도 않는다")
+    void emptyChatSummaryWhenNoMessage() {
+        service.create(OWNER_ID, request(r -> { }));
+
+        ChallengeGroupDto listed = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertEquals(0, listed.getUnreadChatCount());
+        assertNull(listed.getLastChatMessage());
+        assertNull(listed.getLastChatTime());
+        verify(chatMessageStore, never()).unreadOf(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("Redis 가 죽어도 목록은 뜬다 — 채팅 요약만 비운다")
+    void listSurvivesChatStoreFailure() {
+        service.create(OWNER_ID, request(r -> { }));
+        when(chatMessageStore.findRecent(anyLong(), anyInt()))
+                .thenThrow(new RuntimeException("Redis 연결 실패"));
+
+        List<ChallengeGroupDto> groups = service.findMyGroups(OWNER_ID, null);
+
+        assertEquals(1, groups.size(), "채팅은 부가 정보다. 재판 목록 화면 전체가 함께 죽으면 안 된다");
+        assertEquals(0, groups.get(0).getUnreadChatCount());
+        assertNull(groups.get(0).getLastChatMessage());
+    }
+
+    @Test
+    @DisplayName("초대 코드 미리보기에는 마지막 대화가 새어 나가지 않는다 — 비참여자다")
+    void previewHidesChatSummary() {
+        String code = service.create(OWNER_ID, request(r -> { })).getInviteCode();
+        when(chatMessageStore.findRecent(anyLong(), anyInt()))
+                .thenReturn(List.of(chatMessage("우리끼리 하는 얘기", LocalDateTime.of(2026, 8, 12, 9, 0))));
+
+        InviteCodePreviewDto preview = service.previewInviteCode(GUEST_ID, code);
+
+        assertNull(preview.getChallenge().getLastChatMessage());
+        assertEquals(0, preview.getChallenge().getUnreadChatCount());
+        verify(chatMessageStore, never()).unreadOf(anyLong(), anyLong());
+    }
+
     /* ══ 픽스처 ════════════════════════════════════════════ */
+
+    private ChatMessage chatMessage(String content, LocalDateTime sentAt) {
+        return ChatMessage.of(1L, ChatMessageType.TEXT, OWNER_ID, "요롱이", content, sentAt);
+    }
 
     private interface RequestTweak {
         void apply(ChallengeGroupCreateRequestDto request);

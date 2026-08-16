@@ -80,6 +80,35 @@
            AND u.status = 'ACTIVE'
     </select>
 
+    <select id="findCertificateStats" resultType="com.kb.tangtang.mission.domain.MissionCertificateStatsRow">
+        WITH successful_missions AS (
+            SELECT assign_date,
+                   DATE_SUB(assign_date, INTERVAL ROW_NUMBER() OVER (ORDER BY assign_date) DAY) AS streak_group
+              FROM tbl_user_mission_info
+             WHERE user_id = #{userId}
+               AND assign_date BETWEEN #{startDate} AND #{endDate}
+               AND result = 'SUCCESS'
+        ), streaks AS (
+            SELECT MAX(assign_date) AS last_success_date,
+                   COUNT(*) AS streak_length
+              FROM successful_missions
+             GROUP BY streak_group
+        )
+        SELECT COALESCE(MAX(CASE WHEN streaks.last_success_date = #{endDate} THEN streaks.streak_length ELSE 0 END), 0) AS streak_days,
+               COALESCE(MAX(streaks.streak_length), 0) AS best_streak_days,
+               (SELECT COUNT(*)
+                  FROM tbl_user_mission_info
+                 WHERE user_id = #{userId}
+                   AND assign_date BETWEEN #{startDate} AND #{endDate}
+                   AND result IN ('SUCCESS', 'FAIL')) AS completed_mission_count,
+               (SELECT COUNT(*)
+                  FROM tbl_user_mission_info
+                 WHERE user_id = #{userId}
+                   AND assign_date BETWEEN #{startDate} AND #{endDate}
+                   AND result = 'SUCCESS') AS success_mission_count
+          FROM streaks
+    </select>
+
     <select id="findRankingMonths" resultType="java.lang.String">
         SELECT DISTINCT `year_month`
           FROM tbl_monthly_ranking
