@@ -1198,8 +1198,8 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount }` |
-| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt}], hasMore }` |
+| GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount, dayIndex, daysLeft }` |
+| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo}], hasMore }` |
 | POST | `/api/groups/{groupId}/chat/read` | Bearer | 없음 (호출한 사용자의 안 읽은 수를 0으로 초기화) |
 
 - `before`·`after` 는 `messageId` 기준 페이징이다. **둘을 동시에 주면 `INVALID_REQUEST`.** 둘 다 없으면
@@ -1211,7 +1211,18 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - `sentAt` 은 ISO-8601 문자열(`2026-08-16T12:34:56`)이다. **REST 와 STOMP 가 같은 형식**이다
   (`WebSocketConfig#jsonConverter` 가 브로커 컨버터에도 REST 와 같은 ObjectMapper 를 꽂는다).
 - `type` 은 `TEXT`(참여자가 보낸 메시지) 또는 `SYSTEM`(재판 진행 봇 메시지)이다. `SYSTEM` 이면
-  `senderId`·`senderNickname` 이 `null` 이다.
+  `senderId`·`senderNickname` 이 `null` 이고, 대신 아래 세 값이 채워진다.
+  - `systemType` - `VIOLATION_DETECTED` · `TRIAL_OPENED` · `DEFENSE_REGISTERED` · `VERDICT_CONFIRMED`.
+    **화면이 카드 모양을 고르는 기준이다.** 문구를 파싱해 종류를 알아내지 말 것 — 문구가 바뀌면 깨진다.
+  - `deepLink` - "재판 보러가기" 가 여는 라우터 경로(`/challenge/group/{groupId}/trial/{indictmentId}`)
+  - `caseNo` - 표시용 사건번호(`2026-재판-0729`). 서버도 이 값을 다시 파싱하지 않는다
+  - **세 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
+    (프론트는 문구만 있는 pill 로 떨어뜨린다).
+  - `content` 는 **본문만** 담는다. "판결이 확정됐어요" 같은 제목은 넣지 않는다 — 채팅 카드는
+    `systemType` 이, 알림은 `NotificationType` 이 각자 제목을 갖고 있어 같은 문장이 두 번 나온다.
+- `dayIndex` 는 시작일을 1일차로 세는 진행 일차(시작 전이면 `0`), `daysLeft` 는 종료일까지 남은 날
+  (종료일 당일 `0`, 지났으면 음수)이다. **서버(Asia/Seoul)가 계산한다** — 기기 시계·시간대에 따라
+  값이 달라지면 안 되는 값이라 프론트에서 세지 않는다.
 - **`CLOSED`(재판 절차가 끝난) 챌린지는 조회 자체가 막힌다.** `JUDGING`(재판 중)은 대화가 가장
   활발한 구간이라 허용한다.
 

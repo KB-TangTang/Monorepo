@@ -13,6 +13,10 @@ public class ChatMessageDto {
     private final String senderNickname;
     private final String content;
     private final LocalDateTime sentAt;
+    /* 아래 셋은 SYSTEM 메시지에만 있다. TEXT 메시지와 이 필드가 생기기 전에 저장된 메시지는 null 이다 */
+    private final String systemType;
+    private final String deepLink;
+    private final String caseNo;
 
     private ChatMessageDto(ChatMessage m) {
         this.messageId = m.getMessageId();
@@ -21,6 +25,9 @@ public class ChatMessageDto {
         this.senderNickname = m.getSenderNickname();
         this.content = m.getContent();
         this.sentAt = m.getSentAt();
+        this.systemType = m.getSystemType() == null ? null : m.getSystemType().name();
+        this.deepLink = m.getDeepLink();
+        this.caseNo = m.getCaseNo();
     }
 
     public static ChatMessageDto from(ChatMessage m) {
@@ -33,4 +40,7 @@ public class ChatMessageDto {
     public String getSenderNickname() { return senderNickname; }
     public String getContent() { return content; }
     public LocalDateTime getSentAt() { return sentAt; }
+    public String getSystemType() { return systemType; }
+    public String getDeepLink() { return deepLink; }
+    public String getCaseNo() { return caseNo; }
 }

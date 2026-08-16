@@ -1,47 +1,42 @@
 <script setup>
 import { computed } from 'vue';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
 /*
  * message 는 api/groupChatAdapter.js 가 정규화한 모양이다
  * ({ messageId, type, isSystem, senderId, senderName, content, sentAt: Date|null }).
- * 스티커는 서버 계약에 없는 목업 잔재라 이 컴포넌트에서 다루지 않는다.
+ *
+ * 아바타 색은 공용 UserAvatar 가 이름 해시로 정한다. 화면마다 각자 이니셜 원을 그리지 않는다.
  */
 const props = defineProps({
     message: { type: Object, required: true },
     isMine: { type: Boolean, default: false },
+    /* 같은 사람이 연달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
+    grouped: { type: Boolean, default: false },
 });
 
 const timeLabel = computed(() => {
     const d = props.message.sentAt;
     if (!d) return '';
-    const h = d.getHours();
-    const m = String(d.getMinutes()).padStart(2, '0');
-    const period = h < 12 ? '오전' : '오후';
-    const hour12 = h % 12 || 12;
-    return `${period} ${hour12}:${m}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 });
 
 /* 닉네임 온보딩 전(서버가 senderNickname: null)이면 빈 문자열이 온다 */
 const displayName = computed(() => props.message.senderName || '익명');
-const initial = computed(() => displayName.value.charAt(0));
 </script>
 
 <template>
-    <div class="bubble-row" :class="{ 'bubble-row--mine': isMine }">
-        <!-- 상대 아바타 -->
-        <div v-if="!isMine" class="bubble-row__avatar">
-            {{ initial }}
+    <div class="bubble-row" :class="{ 'bubble-row--mine': isMine, 'bubble-row--grouped': grouped }">
+        <div v-if="!isMine" class="bubble-row__avatar-slot">
+            <UserAvatar v-if="!grouped" :name="displayName" :size="34" />
         </div>
 
         <div class="bubble-row__body">
-            <!-- 상대 이름 -->
-            <span v-if="!isMine" class="bubble-row__name">{{ displayName }}</span>
+            <span v-if="!isMine && !grouped" class="bubble-row__name">{{ displayName }}</span>
 
             <div class="bubble-row__content-row">
-                <!-- 내 메시지: 시간이 왼쪽 -->
                 <span v-if="isMine" class="bubble-row__time">{{ timeLabel }}</span>
 
-                <!-- 텍스트 -->
                 <div
                     class="bubble-row__bubble"
                     :class="isMine ? 'bubble-row__bubble--mine' : 'bubble-row__bubble--other'"
@@ -49,7 +44,6 @@ const initial = computed(() => displayName.value.charAt(0));
                     {{ message.content }}
                 </div>
 
-                <!-- 상대 메시지: 시간이 오른쪽 -->
                 <span v-if="!isMine" class="bubble-row__time">{{ timeLabel }}</span>
             </div>
         </div>
@@ -67,31 +61,26 @@ const initial = computed(() => displayName.value.charAt(0));
     flex-direction: row-reverse;
 }
 
-.bubble-row__avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    /* 서버가 사용자별 색을 주지 않는다. 지어내지 않고 주색 하나로 통일한다 */
-    background: var(--tt-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 13px;
-    font-weight: var(--tt-fw-bold);
+/* 연속 메시지는 아바타 자리만 비워 말풍선 왼쪽 선을 맞춘다 */
+.bubble-row__avatar-slot {
+    width: 34px;
     flex: none;
+}
+
+.bubble-row--grouped {
+    margin-top: -6px;
 }
 
 .bubble-row__body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-width: 70%;
+    max-width: 74%;
 }
 
 .bubble-row__name {
     font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-semibold);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     padding-left: 2px;
 }
@@ -102,32 +91,32 @@ const initial = computed(() => displayName.value.charAt(0));
     gap: 6px;
 }
 
-
 .bubble-row__bubble {
     padding: 10px 14px;
-    border-radius: 16px;
+    border-radius: var(--tt-radius-lg);
     font-size: var(--tt-fs-body);
-    line-height: 1.45;
+    line-height: 1.5;
     word-break: break-word;
 }
 
 .bubble-row__bubble--mine {
     background: var(--tt-info);
-    color: #fff;
-    border-bottom-right-radius: 4px;
+    color: var(--tt-text-inverse);
+    border-bottom-right-radius: 6px;
 }
 
 .bubble-row__bubble--other {
     background: var(--tt-bg);
     color: var(--tt-text);
-    border: 1px solid var(--tt-border);
-    border-top-left-radius: 4px;
+    border-top-left-radius: 6px;
+    box-shadow: var(--tt-elevation-1);
 }
 
 .bubble-row__time {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-hint);
     flex: none;
     white-space: nowrap;
+    padding-bottom: 2px;
 }
 </style>

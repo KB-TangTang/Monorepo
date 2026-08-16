@@ -126,6 +126,10 @@ test('GroupChatInput 의 스티커 버튼은 기본적으로 숨겨져 있다', 
  *   - currentDay · daysLeft       → 서버가 주지 않음      ("undefined일차 · D-undefined")
  * 렌더링 하네스가 없으므로 소스 텍스트로 계약을 확인한다.
  */
+/*
+ * 서버 DTO 에 없는 목업 시절 이름들. 화면이 이걸 읽으면 아무것도 그려지지 않는다.
+ * `daysLeft` 는 이 목록에서 뺐다 — 서버가 ChatRoomDto 로 실제로 내려주는 필드가 됐다.
+ */
 const MOCKUP_FIELDS = [
     'messageType',
     'systemSubType',
@@ -133,7 +137,6 @@ const MOCKUP_FIELDS = [
     'challengeName',
     'senderColor',
     'currentDay',
-    'daysLeft',
     'contentType',
 ];
 
@@ -142,6 +145,8 @@ const LIVE_CHAT_FILES = [
     '../src/components/challenge/group/chat/GroupChatHeader.vue',
     '../src/components/challenge/group/chat/GroupChatBubble.vue',
     '../src/components/challenge/group/chat/GroupChatSystemPill.vue',
+    '../src/components/challenge/group/chat/GroupChatRecordCard.vue',
+    '../src/components/challenge/group/chat/GroupChatVerdictCard.vue',
 ];
 
 test('화면에 목업 전용 필드가 남아 있지 않다', () => {

@@ -28,7 +28,7 @@ class ChatControllerTest {
     @DisplayName("방 조회 응답을 ApiResponse 로 감싼다")
     void wrapsRoomInApiResponse() {
         ChatController controller = new ChatController(queryService);
-        ChatRoomDto dto = new ChatRoomDto(GROUP_ID, "절약단", "ACTIVE", 4, 2);
+        ChatRoomDto dto = new ChatRoomDto(GROUP_ID, "절약단", "ACTIVE", 4, 2, 3, 4);
         when(queryService.room(GROUP_ID, USER_ID)).thenReturn(dto);
 
         var response = controller.room(GROUP_ID, USER_ID);

@@ -8,11 +8,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,10 +30,14 @@ class ChatQueryServiceTest {
     private static final long GROUP_ID = 7L;
     private static final long USER_ID = 3L;
 
+    /* 일차·D-day 를 서버가 계산하므로 시계를 고정한다. 챌린지는 08-14 시작 · 08-20 종료다 */
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(Instant.parse("2026-08-16T05:00:00Z"), ZoneId.of("Asia/Seoul"));
+
     @Mock private ChatRoomAccessService access;
     @Mock private ChatMessageStore store;
 
-    @InjectMocks private ChatQueryService service;
+    private ChatQueryService service;
 
     @BeforeEach
     void setUp() {
@@ -41,9 +47,11 @@ class ChatQueryServiceTest {
                 .id(GROUP_ID)
                 .groupName("절약단")
                 .status(ChallengeGroupStatus.ACTIVE.name())
-                .endDate(LocalDate.of(2026, 9, 30))
+                .startDate(LocalDate.of(2026, 8, 14))
+                .endDate(LocalDate.of(2026, 8, 20))
                 .build();
         lenient().when(access.verifyCanEnter(GROUP_ID, USER_ID)).thenReturn(group);
+        service = new ChatQueryService(access, store, FIXED_CLOCK);
     }
 
     @Test
@@ -150,5 +158,29 @@ class ChatQueryServiceTest {
         when(store.unreadOf(GROUP_ID, USER_ID)).thenReturn(4);
 
         assertEquals(4, service.room(GROUP_ID, USER_ID).getUnreadCount());
+    }
+
+    @Test
+    @DisplayName("방 조회는 시작일 기준 며칠째인지와 종료까지 남은 날을 함께 준다")
+    void roomIncludesDayIndexAndDaysLeft() {
+        var room = service.room(GROUP_ID, USER_ID);
+
+        assertEquals(3, room.getDayIndex());   // 08-14 시작 → 08-16 은 3일차
+        assertEquals(4, room.getDaysLeft());   // 08-20 종료 → D-4
+    }
+
+    @Test
+    @DisplayName("시작 전 챌린지의 일차는 0이다 (화면이 일차 표기를 생략한다)")
+    void dayIndexIsZeroBeforeStart() {
+        ChallengeGroup notStarted = ChallengeGroup.builder()
+                .id(GROUP_ID)
+                .groupName("절약단")
+                .status(ChallengeGroupStatus.RECRUITING.name())
+                .startDate(LocalDate.of(2026, 8, 20))
+                .endDate(LocalDate.of(2026, 8, 26))
+                .build();
+        when(access.verifyCanEnter(GROUP_ID, USER_ID)).thenReturn(notStarted);
+
+        assertEquals(0, service.room(GROUP_ID, USER_ID).getDayIndex());
     }
 }
