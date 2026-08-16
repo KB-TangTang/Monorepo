@@ -3,12 +3,14 @@ package com.kb.tangtang.challenge.service;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.GroupMember;
+import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
+import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,13 +30,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class ChallengeGroupServiceTest {
 
@@ -44,6 +49,7 @@ class ChallengeGroupServiceTest {
 
     private FakeGroupMapper groupMapper;
     private FakeMemberMapper memberMapper;
+    private IndictmentMapper indictmentMapper;
     private ChatMessageStore chatMessageStore;
     private ChallengeGroupService service;
 
@@ -51,6 +57,8 @@ class ChallengeGroupServiceTest {
     void setUp() {
         groupMapper = new FakeGroupMapper();
         memberMapper = new FakeMemberMapper();
+        // 배지 집계는 목록 테스트에서만 쓴다. 기본값(빈 목록)이면 재판이 하나도 없는 평시와 같다.
+        indictmentMapper = mock(IndictmentMapper.class);
         chatMessageStore = mock(ChatMessageStore.class);
         service = newService(TODAY);
     }
@@ -58,7 +66,7 @@ class ChallengeGroupServiceTest {
     private ChallengeGroupService newService(LocalDate today) {
         ZoneId zone = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(today.atStartOfDay(zone).toInstant(), zone);
-        return new ChallengeGroupService(groupMapper, memberMapper,
+        return new ChallengeGroupService(groupMapper, memberMapper, indictmentMapper,
                 new InviteCodeGenerator(groupMapper), chatMessageStore, clock);
     }
 
@@ -375,6 +383,96 @@ class ChallengeGroupServiceTest {
         assertEquals(List.of("JUDGING", "CLOSED"), groupMapper.lastStatuses);
     }
 
+    /* ══ 목록 카드의 재판 배지 (이슈 #169) ═════════════════ */
+
+    private void givenTrialSummary(long groupId, int defenseNeeded, int pendingVote, int castVote) {
+        GroupTrialSummaryRow row = new GroupTrialSummaryRow();
+        row.setGroupId(groupId);
+        row.setMyDefenseNeededCount(defenseNeeded);
+        row.setPendingVoteCount(pendingVote);
+        row.setCastVoteCount(castVote);
+        when(indictmentMapper.findTrialSummaryByGroupIds(eq(OWNER_ID), anyList()))
+                .thenReturn(List.of(row));
+    }
+
+    /**
+     * 재판이 없는 그룹은 집계 쿼리가 <b>행을 내려주지 않는다</b>. 이 자리에서 NULL 이 새면
+     * 재판이 하나도 없는 평시에 목록 API 가 통째로 500 이 된다.
+     */
+    @Test
+    @DisplayName("재판이 없으면 배지 없이 기본값으로 내려간다")
+    void listWithoutTrialsFallsBackToDefaults() {
+        service.create(OWNER_ID, request(r -> { }));
+
+        ChallengeGroupDto card = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertEquals(0, card.getPendingTrialCount());
+        assertFalse(card.isDefendant());
+        assertNull(card.getMyVoteStatus());
+    }
+
+    /**
+     * 「변론필요」는 <b>내가 아직 변론을 안 낸</b> 기소만 센다 — 세는 일은 SQL 이 한다.
+     * 여기서는 0 보다 크면 참으로 접히는지만 본다.
+     */
+    @Test
+    @DisplayName("내 변론이 남아 있으면 defendant 가 참이다")
+    void listMarksDefendant() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        givenTrialSummary(created.getGroupId(), 1, 0, 0);
+
+        ChallengeGroupDto card = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertTrue(card.isDefendant());
+    }
+
+    /**
+     * 안 던진 표가 남아 있으면 이미 던진 표가 있어도 {@code PENDING} 이다.
+     * 완료 쪽이 이기면 「투표완료」 배지 뒤로 남은 할 일이 숨는다.
+     */
+    @Test
+    @DisplayName("던질 표가 남아 있으면 이미 던진 표가 있어도 PENDING 이다")
+    void listPrefersPendingOverDone() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        givenTrialSummary(created.getGroupId(), 0, 2, 1);
+
+        ChallengeGroupDto card = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertEquals("PENDING", card.getMyVoteStatus());
+        assertEquals(2, card.getPendingTrialCount());
+    }
+
+    /**
+     * 「투표완료」와 「순항중」은 둘 다 {@code pendingTrialCount == 0} 이다.
+     * 그 하나로 갈음하면 표를 다 던진 그룹이 재판 없는 그룹처럼 보인다.
+     */
+    @Test
+    @DisplayName("표를 다 던졌으면 DONE, 재판 자체가 없으면 NULL 이다")
+    void listSeparatesDoneFromNoTrial() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        givenTrialSummary(created.getGroupId(), 0, 0, 3);
+
+        ChallengeGroupDto card = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertEquals(0, card.getPendingTrialCount());
+        assertEquals("DONE", card.getMyVoteStatus());
+    }
+
+    /**
+     * 상세는 같은 응답의 {@code indictments} 로 배지를 판단한다. 여기서 한 번 더 세면
+     * 화면 하나에 같은 것을 두 번 묻는 쿼리가 생긴다.
+     */
+    @Test
+    @DisplayName("상세는 재판 배지를 세지 않는다")
+    void detailDoesNotCountTrialBadges() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+
+        ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
+
+        assertNull(detail.getMyVoteStatus());
+        verifyNoInteractions(indictmentMapper);
+    }
+
     @Test
     @DisplayName("참여자가 아니면 상세를 볼 수 없다 — 비참여자는 초대 코드 경로를 쓴다")
     void detailRequiresMembership() {
@@ -462,6 +560,14 @@ class ChallengeGroupServiceTest {
             return groups.stream()
                     .filter(g -> g.getStatus().equals(status))
                     .filter(g -> !g.getStartDate().isAfter(today))
+                    .toList();
+        }
+
+        @Override
+        public List<ChallengeGroup> findGroupsToJudge(String status, LocalDate endedBefore) {
+            return groups.stream()
+                    .filter(g -> g.getStatus().equals(status))
+                    .filter(g -> g.getEndDate().isBefore(endedBefore))
                     .toList();
         }
 

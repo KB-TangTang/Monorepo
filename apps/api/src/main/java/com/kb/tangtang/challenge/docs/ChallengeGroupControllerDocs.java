@@ -2,8 +2,10 @@ package com.kb.tangtang.challenge.docs;
 
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
+import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import io.swagger.annotations.Api;
@@ -27,15 +29,45 @@ public interface ChallengeGroupControllerDocs {
     @ApiOperation(value = "내가 참여 중인 그룹 목록",
             notes = "`status` 는 **반복 파라미터 또는 콤마 구분** 둘 다 된다.\n\n"
                     + "「종료됨」 탭은 `JUDGING,CLOSED` 를 함께 보낸다. 개표 중인 그룹도 종료로 묶어 보여주기 때문이다.\n"
-                    + "생략하면 전체를 반환한다.")
+                    + "생략하면 전체를 반환한다.\n\n"
+                    + "카드 배지용 `defendant`·`myVoteStatus`·`pendingTrialCount` 는 **이 목록에서만** 채워진다. "
+                    + "상세·참여·초대 미리보기 응답에서는 `false`·`null`·`0` 이다.\n"
+                    + "셋 다 「재판이 열려 있는지」가 아니라 **내가 지금 해야 할 일**을 가리킨다 — "
+                    + "변론을 이미 냈으면 `defendant` 는 `false` 이고, 표를 다 던졌으면 `myVoteStatus` 가 `DONE` 이다. "
+                    + "배지 우선순위는 `defendant` → `PENDING` → `DONE` 순이다.")
     ApiResponse<List<ChallengeGroupDto>> findMyGroups(
             @ApiIgnore Long userId,
             @ApiParam(value = "상태 필터", allowableValues = "RECRUITING,ONGOING,JUDGING,CLOSED", allowMultiple = true)
             List<String> status);
 
-    @ApiOperation(value = "그룹 챌린지 상세", notes = "**참여자만 볼 수 있다.** 참여자가 아니면 실패한다.")
+    @ApiOperation(value = "내가 처리해야 하는 재판",
+            notes = "홈 「오늘의 할 일」. **변론 대기와 투표 대기를 한 배열로** 마감 임박순 정렬해 내려준다.\n\n"
+                    + "`type` 은 소문자 `accuse`(내가 변론) / `vote`(내가 투표) 다. "
+                    + "`type` 에 따라 비는 필드가 있다 — `accuse` 는 `amount`, "
+                    + "`vote` 는 `defendantNickname`·`voteCount`·`totalVoters` 만 채워진다.\n\n"
+                    + "`deadline` 은 저장된 값이 아니라 `created_at + challenge.trial.*` 계산값이다. "
+                    + "**마감이 지난 건도 그대로 내려간다** — 목록에서 지우는 일은 상태 전이 배치가 한다.")
+    ApiResponse<List<MyTrialDto>> findMyTrials(@ApiIgnore Long userId);
+
+    @ApiOperation(value = "그룹 챌린지 상세", notes = "**참여자만 볼 수 있다.** 참여자가 아니면 실패한다.\n\n"
+            + "그룹 정보만 준다. 상세 화면을 그리려면 아래 `/detail` 을 쓴다.")
     ApiResponse<ChallengeGroupDto> findDetail(@ApiIgnore Long userId,
                                               @ApiParam(value = "그룹 ID", required = true) Long groupId);
+
+    @ApiOperation(value = "그룹 챌린지 상세 화면 한 벌",
+            notes = "위 상세에 **재판 카드(`indictments`)와 참여자 소비 상태(`dailyMembers`)** 를 얹은 것이다. "
+                    + "그룹 필드는 한 겹 없이 같은 높이로 내려간다.\n\n"
+                    + "`dailyMembers` 에는 **내가 빠져 있다** — 내 몫은 `myDailyAmount`·`myUsagePercent`·"
+                    + "`myRemainingAmount` 세 개다. `myRemainingAmount` 는 **초과 시 음수**다.\n\n"
+                    + "`dailyAmount` 는 일일평가면 오늘 하루치, 기간평가면 기간 합계다. "
+                    + "`usagePercent` 는 **100 을 넘을 수 있다**(한도 0원인 무지출 챌린지는 한 푼이라도 쓰면 100).\n\n"
+                    + "`indictments` 는 진행 중(`DEFENSE_WAIT`·`VOTING`)인 기소만 오래된 순으로 준다. "
+                    + "카드 종류(변론 필요/제출됨, 투표 필요/완료)는 `mine`·`status`·`myVote` 로 화면이 정한다. "
+                    + "`defenseDeadline`·`voteDeadline` 은 저장값이 아니라 `created_at + challenge.trial.*` 계산값이며 "
+                    + "**둘 다 채워진다.**\n\n"
+                    + "`settleTime`·`memoAuthor`·`memoDate`·채팅·종료 화면 필드는 아직 NULL 이다.")
+    ApiResponse<ChallengeGroupDetailDto> findFullDetail(@ApiIgnore Long userId,
+                                                        @ApiParam(value = "그룹 ID", required = true) Long groupId);
 
     @ApiOperation(value = "초대 코드 미리보기",
             notes = "참여 확인 화면이 「어떤 그룹인지」 먼저 보여주기 위해 쓴다.\n\n"

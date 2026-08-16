@@ -104,6 +104,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findOverLimitDaily"));
         assertTrue(configuration.hasStatement(namespace + ".findOverLimitPeriod"));
         assertTrue(configuration.hasStatement(namespace + ".findDeductionOverflow"));
+        assertTrue(configuration.hasStatement(namespace + ".findMemberConsumption"));
     }
 
     /**
@@ -136,5 +137,28 @@ class ChallengeMapperXmlTest {
 
         String namespace = IndictmentMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".insertIndictment"));
+        assertTrue(configuration.hasStatement(namespace + ".findDefenseTodos"));
+        assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
+        assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
+    }
+
+    /**
+     * 투표 대기 조회에서 참여자 조인이 빠지면 <b>남의 그룹 재판이 내 할 일 목록에 뜨고</b>
+     * 그 링크로 투표 화면까지 열린다. 조회 결과만 보고는 눈치채기 어려운 권한 구멍이라 못박는다.
+     */
+    @Test
+    @DisplayName("투표 대기 조회는 참여자 조인 없이 실행되지 않는다")
+    void voteTodosKeepMembershipJoin() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = configuration
+                .getMappedStatement(IndictmentMapper.class.getName() + ".findVoteTodos")
+                .getBoundSql(new java.util.HashMap<String, Object>())
+                .getSql()
+                .replaceAll("\\s+", " ");
+
+        assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
+                "조인이 없으면 내가 속하지 않은 그룹의 재판이 할 일 목록에 섞인다");
     }
 }
