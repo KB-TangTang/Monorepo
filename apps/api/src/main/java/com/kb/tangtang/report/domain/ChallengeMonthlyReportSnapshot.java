@@ -22,6 +22,7 @@ public class ChallengeMonthlyReportSnapshot {
     private int earnedScore;
     private String weeklyResultsJson;
     private String difficultyResultsJson;
+    private String groupRecordJson;
     private String calculationVersion;
     private LocalDateTime finalizedAt;
 }

@@ -28,4 +28,12 @@ public class DevChallengeReportController implements DevChallengeReportControlle
             @RequestParam(defaultValue = "false") boolean force) {
         return ApiResponse.ok(devChallengeReportService.runMonthlyBatch(yearMonth, force));
     }
+
+    @Override
+    @PostMapping("/monthly/group-records")
+    public ApiResponse<ChallengeMonthlyReportBatchRunDto> runMonthlyGroupRecordBatch(
+            @LoginUser Long userId,
+            @RequestParam String yearMonth) {
+        return ApiResponse.ok(devChallengeReportService.runMonthlyGroupRecordBatch(yearMonth));
+    }
 }

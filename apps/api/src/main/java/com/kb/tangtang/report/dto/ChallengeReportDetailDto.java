@@ -28,4 +28,5 @@ public class ChallengeReportDetailDto {
     private List<ChallengeCategoryEffectDto> categoryEffects;
     private List<ChallengeWeeklyResultDto> weeklyResults;
     private List<ChallengeDifficultyResultDto> difficulties;
+    private GroupRecordDto groupRecord;
 }

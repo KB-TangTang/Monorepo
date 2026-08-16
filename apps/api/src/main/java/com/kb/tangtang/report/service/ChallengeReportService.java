@@ -10,6 +10,7 @@ import com.kb.tangtang.report.dto.ChallengeReportDetailDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
 import com.kb.tangtang.report.dto.ChallengeWeeklyResultDto;
+import com.kb.tangtang.report.dto.GroupRecordDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -169,6 +170,7 @@ public class ChallengeReportService {
                 ? successRate.subtract(calculateRate(previousReport.getSuccessDays(), previousReport.getTotalDays()))
                 .setScale(2, RoundingMode.HALF_UP)
                 : null;
+        GroupRecordDto groupRecord = readGroupRecord(report.getGroupRecordJson());
 
         return ChallengeReportDetailDto.builder()
                 .period(report.getYearMonth())
@@ -189,7 +191,12 @@ public class ChallengeReportService {
                 .categoryEffects(readCategoryEffects(report.getCategoryEffectsJson()))
                 .weeklyResults(readWeeklyResults(report.getWeeklyResultsJson()))
                 .difficulties(readDifficultyResults(report.getDifficultyResultsJson()))
+                .groupRecord(hasGroupRecord(groupRecord) ? groupRecord : null)
                 .build();
+    }
+
+    private boolean hasGroupRecord(GroupRecordDto groupRecord) {
+        return groupRecord != null && groupRecord.getParticipatingGroups() > 0;
     }
 
     private YearMonth parsePastYearMonth(String rawYearMonth) {
@@ -218,6 +225,18 @@ public class ChallengeReportService {
 
     private List<ChallengeCategoryEffectDto> readCategoryEffects(String rawJson) {
         return readJson(rawJson, new TypeReference<List<ChallengeCategoryEffectDto>>() { });
+    }
+
+    private GroupRecordDto readGroupRecord(String rawJson) {
+        if (rawJson == null || rawJson.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(rawJson, GroupRecordDto.class);
+        } catch (Exception exception) {
+            throw new BusinessException("CHALLENGE_REPORT_UNREADABLE",
+                    "저장된 챌린지 리포트를 읽을 수 없습니다.");
+        }
     }
 
     private <T> List<T> readJson(String rawJson, TypeReference<List<T>> type) {

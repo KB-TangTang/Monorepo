@@ -7,6 +7,7 @@ import com.kb.tangtang.report.domain.ChallengeMonthlyMissionRow;
 import com.kb.tangtang.report.domain.ChallengeMonthlyReportSnapshot;
 import com.kb.tangtang.report.dto.ChallengeCategoryEffectDto;
 import com.kb.tangtang.report.dto.ChallengeDifficultyResultDto;
+import com.kb.tangtang.report.dto.GroupRecordDto;
 import com.kb.tangtang.report.dto.ChallengeWeeklyResultDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import org.springframework.stereotype.Service;
@@ -27,11 +28,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 최종 판정된 개인 미션 원장을 월 단위 확정 스냅샷으로 바꾼다. */
+/** 최종 판정된 개인 미션 원장과 확정 그룹 전적을 월 단위 스냅샷으로 저장한다. */
 @Service
 public class ChallengeMonthlyReportSnapshotService {
 
-    private static final String CALCULATION_VERSION = "v2026-08-15-savings";
+    private static final String CALCULATION_VERSION = "v2026-08-16-group";
     private static final int STREAK_BONUS_POINTS = 5;
     private static final String[] KOREAN_WEEKDAYS = {"월", "화", "수", "목", "금", "토", "일"};
 
@@ -59,6 +60,8 @@ public class ChallengeMonthlyReportSnapshotService {
         List<ChallengeDifficultyResultDto> difficultyResults = calculateDifficultyResults(
                 mapper.findDifficultyPolicies(), rows);
         ChallengeSavingsResult savingsResult = calculateSavings(rows);
+        GroupRecordDto groupRecord = mapper.findGroupRecord(
+                userId, targetMonth.atDay(1), targetMonth.atEndOfMonth());
 
         int successDays = (int) rows.stream().filter(this::isSuccess).count();
         ChallengeMonthlyReportSnapshot snapshot = ChallengeMonthlyReportSnapshot.builder()
@@ -74,10 +77,26 @@ public class ChallengeMonthlyReportSnapshotService {
                 .earnedScore(calculateEarnedScore(rows))
                 .weeklyResultsJson(toJson(weeklyResults))
                 .difficultyResultsJson(toJson(difficultyResults))
+                .groupRecordJson(hasGroupRecord(groupRecord) ? toJson(groupRecord) : null)
                 .calculationVersion(CALCULATION_VERSION)
                 .finalizedAt(finalizedAt)
                 .build();
         mapper.upsertMonthlyReport(snapshot);
+    }
+
+    /**
+     * 월말 종료 그룹이 end_date+2에 CLOSED 된 경우, 이미 확정된 개인 스냅샷을 보존한 채 그룹 전적만 보강한다.
+     */
+    @Transactional
+    public void refreshUserMonthGroupRecord(long userId, YearMonth targetMonth) {
+        GroupRecordDto groupRecord = mapper.findGroupRecord(
+                userId, targetMonth.atDay(1), targetMonth.atEndOfMonth());
+        mapper.updateMonthlyGroupRecord(
+                userId, targetMonth.toString(), hasGroupRecord(groupRecord) ? toJson(groupRecord) : null);
+    }
+
+    private boolean hasGroupRecord(GroupRecordDto groupRecord) {
+        return groupRecord != null && groupRecord.getParticipatingGroups() > 0;
     }
 
     private List<ChallengeWeeklyResultDto> calculateWeeklyResults(

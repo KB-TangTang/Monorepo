@@ -125,21 +125,21 @@ const isWeeklyResultsOpen = ref(false);
                         ><span>참여 그룹</span>
                     </div>
                     <div>
-                        <strong>{{ report.groupRecord.wins }}승</strong><span>생존</span>
+                        <strong>{{ report.groupRecord.survivedCount }}승</strong><span>생존</span>
                     </div>
                     <div>
-                        <strong>{{ report.groupRecord.losses }}패</strong><span>탈락</span>
+                        <strong>{{ report.groupRecord.eliminatedCount }}패</strong><span>탈락</span>
                     </div>
                 </div>
                 <footer>
                     <div>
                         <span class="group-card__stamp group-card__stamp--success"
-                            >무죄 {{ report.groupRecord.acquittals }}</span
+                            >무죄 {{ report.groupRecord.acquittedCount }}</span
                         >
                         <span class="group-card__stamp group-card__stamp--danger"
-                            >유죄 {{ report.groupRecord.convictions }}</span
+                            >유죄 {{ report.groupRecord.convictedCount }}</span
                         >
-                        <span>· 피기소 {{ report.groupRecord.dismissals }}회</span>
+                        <span>· 피기소 {{ report.groupRecord.indictedCount }}회</span>
                     </div>
                     <button type="button" @click="$emit('open-group-history')">이력 ›</button>
                 </footer>

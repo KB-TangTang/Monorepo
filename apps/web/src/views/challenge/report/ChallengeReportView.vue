@@ -27,7 +27,6 @@ import { useChallengeReportStore } from '@/stores/challengeReport';
 
 const emit = defineEmits([
     'change-difficulty',
-    'open-group-history',
     'open-monthly-report',
     'start-challenge',
 ]);
@@ -158,6 +157,10 @@ function openMonthlyReport() {
     });
 }
 
+function openGroupHistory() {
+    router.push({ name: 'groupChallengeList', query: { tab: 'ended' } });
+}
+
 onMounted(initialize);
 </script>
 
@@ -211,7 +214,7 @@ onMounted(initialize);
             :report="report"
             :show-comparison="report.hasPreviousComparison ?? !selectedMonth?.firstReport"
             @change-difficulty="router.push({ name: 'personalMissionChallengeDifficulty' })"
-            @open-group-history="emit('open-group-history')"
+            @open-group-history="openGroupHistory"
         />
 
         <ChallengeReportToggle

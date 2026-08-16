@@ -121,11 +121,12 @@
         INSERT INTO tbl_challenge_monthly_report
             (user_id, `year_month`, total_days, success_days, saved_amount, over_amount,
              category_results_json, monthly_longest_streak, best_weekday, earned_score,
-             weekly_results_json, difficulty_results_json, calculation_version, created_at)
+             weekly_results_json, difficulty_results_json, group_record_json, calculation_version, created_at)
         VALUES
             (#{userId}, #{yearMonth}, #{totalDays}, #{successDays}, #{savedAmount}, #{overspentAmount},
              CAST(#{categoryEffectsJson} AS JSON), #{monthlyLongestStreak}, #{bestWeekday}, #{earnedScore},
-             CAST(#{weeklyResultsJson} AS JSON), CAST(#{difficultyResultsJson} AS JSON), #{calculationVersion},
+             CAST(#{weeklyResultsJson} AS JSON), CAST(#{difficultyResultsJson} AS JSON),
+             CAST(#{groupRecordJson} AS JSON), #{calculationVersion},
              #{finalizedAt})
         ON DUPLICATE KEY UPDATE
             total_days = VALUES(total_days),
@@ -138,14 +139,34 @@
             earned_score = VALUES(earned_score),
             weekly_results_json = VALUES(weekly_results_json),
             difficulty_results_json = VALUES(difficulty_results_json),
+            group_record_json = VALUES(group_record_json),
             calculation_version = VALUES(calculation_version)
     </insert>
+
+    <update id="updateMonthlyGroupRecord">
+        UPDATE tbl_challenge_monthly_report
+           SET group_record_json = CAST(#{groupRecordJson} AS JSON)
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+    </update>
+
+    <select id="findMonthEndClosedGroupReportUserIds" resultType="java.lang.Long">
+        SELECT DISTINCT member.user_id
+          FROM tbl_challenge_group g
+          JOIN tbl_group_member member ON member.group_id = g.id
+          JOIN tbl_challenge_monthly_report report
+            ON report.user_id = member.user_id
+           AND report.`year_month` = #{yearMonth}
+         WHERE g.status = 'CLOSED'
+           AND g.end_date = #{endDate}
+         ORDER BY member.user_id
+    </select>
 
     <select id="findMonthlyReport"
             resultType="com.kb.tangtang.report.domain.ChallengeMonthlyReportRow">
         SELECT `year_month`, total_days, success_days, saved_amount, over_amount AS overspent_amount, net_amount,
                category_results_json AS category_effects_json, monthly_longest_streak, best_weekday, earned_score,
-               weekly_results_json, difficulty_results_json
+               weekly_results_json, difficulty_results_json, group_record_json
           FROM tbl_challenge_monthly_report
          WHERE user_id = #{userId}
            AND `year_month` = #{yearMonth}
@@ -155,11 +176,41 @@
             resultType="com.kb.tangtang.report.domain.ChallengeMonthlyReportRow">
         SELECT `year_month`, total_days, success_days, saved_amount, over_amount AS overspent_amount, net_amount,
                category_results_json AS category_effects_json, monthly_longest_streak, best_weekday, earned_score,
-               weekly_results_json, difficulty_results_json
+               weekly_results_json, difficulty_results_json, group_record_json
           FROM tbl_challenge_monthly_report
          WHERE user_id = #{userId}
            AND `year_month` &lt; #{yearMonth}
          ORDER BY `year_month` DESC
          LIMIT 1
+    </select>
+
+    <!--
+      CLOSED는 challenge 모듈의 단일 트랜잭션에서 전원 final_* 갱신 뒤에만 전이된다.
+      따라서 report는 CLOSED만 읽고, final_charge_amount를 포함한 최종값을 재계산하지 않는다.
+      판결 집계는 공통 계약의 기소 1건당 1결과 규칙에 따라 result 값만 사용한다.
+    -->
+    <select id="findGroupRecord" resultType="com.kb.tangtang.report.dto.GroupRecordDto">
+        SELECT COUNT(*) AS participating_groups,
+               COALESCE(SUM(record.final_outcome = 'SURVIVED'), 0) AS survived_count,
+               COALESCE(SUM(record.final_outcome = 'ELIMINATED'), 0) AS eliminated_count,
+               COALESCE(SUM(record.indicted_count), 0) AS indicted_count,
+               COALESCE(SUM(record.acquitted_count), 0) AS acquitted_count,
+               COALESCE(SUM(record.convicted_count), 0) AS convicted_count
+          FROM (
+              SELECT g.id AS group_id,
+                     member.final_outcome,
+                     SUM(indictment.result IS NOT NULL) AS indicted_count,
+                     SUM(indictment.result = 0) AS acquitted_count,
+                     SUM(indictment.result = 1) AS convicted_count
+                FROM tbl_challenge_group g
+                JOIN tbl_group_member member
+                  ON member.group_id = g.id
+                 AND member.user_id = #{userId}
+                LEFT JOIN tbl_indictment indictment
+                  ON indictment.group_id = g.id
+               WHERE g.status = 'CLOSED'
+                 AND g.end_date BETWEEN #{startDate} AND #{endDate}
+               GROUP BY g.id, member.final_outcome
+          ) record
     </select>
 </mapper>

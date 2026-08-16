@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.report.domain.ChallengeMonthlyDifficultyPolicy;
 import com.kb.tangtang.report.domain.ChallengeMonthlyMissionRow;
 import com.kb.tangtang.report.domain.ChallengeMonthlyReportSnapshot;
+import com.kb.tangtang.report.dto.GroupRecordDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +42,15 @@ class ChallengeMonthlyReportSnapshotServiceTest {
                 ));
         when(mapper.findDifficultyPolicies()).thenReturn(List.of(
                 policy("EASY"), policy("NORMAL"), policy("HARD")));
+        when(mapper.findGroupRecord(7L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)))
+                .thenReturn(GroupRecordDto.builder()
+                        .participatingGroups(2)
+                        .survivedCount(1)
+                        .eliminatedCount(1)
+                        .indictedCount(3)
+                        .acquittedCount(2)
+                        .convictedCount(1)
+                        .build());
 
         ChallengeMonthlyReportSnapshotService service = new ChallengeMonthlyReportSnapshotService(
                 mapper, new ObjectMapper());
@@ -53,6 +63,7 @@ class ChallengeMonthlyReportSnapshotServiceTest {
         ChallengeMonthlyReportSnapshot snapshot = captor.getValue();
         assertEquals(6, snapshot.getTotalDays());
         assertEquals(4, snapshot.getSuccessDays());
+        assertEquals("v2026-08-16-group", snapshot.getCalculationVersion());
         assertEquals(2, snapshot.getMonthlyLongestStreak());
         assertEquals("월요일", snapshot.getBestWeekday());
         assertEquals(80, snapshot.getEarnedScore());
@@ -81,6 +92,11 @@ class ChallengeMonthlyReportSnapshotServiceTest {
         assertEquals("배달", categories.get(1).get("categoryName").asText());
         assertEquals(1, categories.get(1).get("failedDays").asInt());
         assertEquals(5000, categories.get(1).get("overspentAmount").asInt());
+
+        JsonNode groupRecord = objectMapper.readTree(snapshot.getGroupRecordJson());
+        assertEquals(2, groupRecord.get("participatingGroups").asInt());
+        assertEquals(1, groupRecord.get("survivedCount").asInt());
+        assertEquals(3, groupRecord.get("indictedCount").asInt());
     }
 
     @Test
@@ -117,6 +133,42 @@ class ChallengeMonthlyReportSnapshotServiceTest {
         assertEquals(1, weeks.get(0).get("totalDays").asInt());
         assertEquals(1, weeks.get(0).get("successDays").asInt());
         assertEquals(6, weeks.get(3).get("week").asInt());
+    }
+
+    @Test
+    void storesNullGroupRecordWhenThereAreNoFinalizedClosedGroups() {
+        when(mapper.findFinalizedMissionRows(7L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)))
+                .thenReturn(List.of(row("2026-08-01", "SUCCESS", "RELATIVE", "EASY", 10, false,
+                        1L, "카페", 10000, 7000)));
+        when(mapper.findDifficultyPolicies()).thenReturn(List.of(policy("EASY")));
+        when(mapper.findGroupRecord(7L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)))
+                .thenReturn(GroupRecordDto.builder().participatingGroups(0).build());
+        ChallengeMonthlyReportSnapshotService service = new ChallengeMonthlyReportSnapshotService(
+                mapper, new ObjectMapper());
+
+        service.finalizeUserMonth(7L, YearMonth.of(2026, 8), LocalDateTime.of(2026, 9, 1, 0, 20));
+
+        ArgumentCaptor<ChallengeMonthlyReportSnapshot> captor =
+                ArgumentCaptor.forClass(ChallengeMonthlyReportSnapshot.class);
+        verify(mapper).upsertMonthlyReport(captor.capture());
+        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().getGroupRecordJson());
+    }
+
+    @Test
+    void refreshesOnlyStoredGroupRecordWithoutRecalculatingPersonalMissionSnapshot() {
+        when(mapper.findGroupRecord(7L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)))
+                .thenReturn(GroupRecordDto.builder().participatingGroups(1).survivedCount(1).build());
+        ChallengeMonthlyReportSnapshotService service = new ChallengeMonthlyReportSnapshotService(
+                mapper, new ObjectMapper());
+
+        service.refreshUserMonthGroupRecord(7L, YearMonth.of(2026, 8));
+
+        verify(mapper).updateMonthlyGroupRecord(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.eq("2026-08"),
+                org.mockito.ArgumentMatchers.contains("\"participatingGroups\":1"));
+        verify(mapper, org.mockito.Mockito.never()).findFinalizedMissionRows(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     private ChallengeMonthlyMissionRow row(String assignDate, String result, String missionType,

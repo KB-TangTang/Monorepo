@@ -52,4 +52,25 @@ class ChallengeMonthlyReportBatchServiceTest {
         verify(snapshotService).finalizeUserMonth(org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.eq(java.time.YearMonth.of(2026, 8)), any());
     }
+
+    @Test
+    void refreshesOnlyUsersWithClosedGroupsThatEndedOnTheLastDayOfMonth() {
+        ChallengeReportMapper mapper = mock(ChallengeReportMapper.class);
+        ChallengeMonthlyReportSnapshotService snapshotService = mock(ChallengeMonthlyReportSnapshotService.class);
+        when(mapper.findMonthEndClosedGroupReportUserIds(
+                java.time.LocalDate.of(2026, 8, 31), "2026-08")).thenReturn(List.of(7L, 8L));
+        ChallengeMonthlyReportBatchService service = new ChallengeMonthlyReportBatchService(
+                mapper, snapshotService, Clock.systemUTC());
+
+        int completed = service.refreshMonthEndGroupRecords(java.time.YearMonth.of(2026, 8));
+
+        org.junit.jupiter.api.Assertions.assertEquals(2, completed);
+        verify(mapper).findMonthEndClosedGroupReportUserIds(
+                java.time.LocalDate.of(2026, 8, 31), "2026-08");
+        verify(snapshotService).refreshUserMonthGroupRecord(7L, java.time.YearMonth.of(2026, 8));
+        verify(snapshotService).refreshUserMonthGroupRecord(8L, java.time.YearMonth.of(2026, 8));
+        verify(snapshotService, org.mockito.Mockito.never()).finalizeUserMonth(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
 }

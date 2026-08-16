@@ -44,4 +44,20 @@ class DevChallengeReportServiceTest {
 
         assertEquals("CHALLENGE_REPORT_NOT_AVAILABLE", exception.getCode());
     }
+
+    @Test
+    void runsMonthEndGroupRecordRefreshWithoutRecalculatingPersonalSnapshot() {
+        ChallengeMonthlyReportBatchService batchService = mock(ChallengeMonthlyReportBatchService.class);
+        when(batchService.refreshMonthEndGroupRecords(java.time.YearMonth.of(2026, 7))).thenReturn(2);
+        DevChallengeReportService service = new DevChallengeReportService(
+                new DevEnvironmentGuard("local"), batchService,
+                Clock.fixed(Instant.parse("2026-08-15T03:00:00Z"), ZoneId.of("Asia/Seoul")));
+
+        ChallengeMonthlyReportBatchRunDto result = service.runMonthlyGroupRecordBatch("2026-07");
+
+        assertEquals("2026-07", result.getYearMonth());
+        assertEquals(2, result.getAffected());
+        assertEquals(false, result.isForced());
+        verify(batchService).refreshMonthEndGroupRecords(java.time.YearMonth.of(2026, 7));
+    }
 }

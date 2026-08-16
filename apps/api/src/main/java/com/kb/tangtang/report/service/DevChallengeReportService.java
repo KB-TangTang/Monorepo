@@ -46,6 +46,18 @@ public class DevChallengeReportService {
                 yearMonth.toString(), batchService.finalizeReports(yearMonth, force), force);
     }
 
+    /** 로컬 검증 시 기존 개인 스냅샷을 보존하고 월말 종료 그룹 전적만 다시 집계한다. */
+    public ChallengeMonthlyReportBatchRunDto runMonthlyGroupRecordBatch(String rawYearMonth) {
+        guard.ensureLocal();
+        YearMonth yearMonth = parseYearMonth(rawYearMonth);
+        if (!yearMonth.isBefore(YearMonth.now(clock))) {
+            throw new BusinessException("CHALLENGE_REPORT_NOT_AVAILABLE",
+                    "개발용 그룹 전적 보강 배치는 지난달까지 실행할 수 있습니다.");
+        }
+        return new ChallengeMonthlyReportBatchRunDto(
+                yearMonth.toString(), batchService.refreshMonthEndGroupRecords(yearMonth), false);
+    }
+
     private YearMonth parseYearMonth(String rawYearMonth) {
         try {
             return YearMonth.parse(rawYearMonth);

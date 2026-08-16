@@ -3,6 +3,7 @@ package com.kb.tangtang.report.controller;
 import com.kb.tangtang.report.dto.ChallengeReportMonthDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
 import com.kb.tangtang.report.dto.ChallengeReportDetailDto;
+import com.kb.tangtang.report.dto.GroupRecordDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import com.kb.tangtang.report.service.ChallengeReportService;
 import org.junit.jupiter.api.Test;
@@ -72,6 +73,14 @@ class ChallengeReportControllerTest {
                     .bestStreakDays(4)
                     .bestWeekday("월요일")
                     .earnedPoints(85)
+                    .groupRecord(GroupRecordDto.builder()
+                            .participatingGroups(1)
+                            .survivedCount(1)
+                            .eliminatedCount(0)
+                            .indictedCount(2)
+                            .acquittedCount(1)
+                            .convictedCount(1)
+                            .build())
                     .weeklyResults(List.of())
                     .difficulties(List.of())
                     .build();
@@ -104,6 +113,8 @@ class ChallengeReportControllerTest {
                 .andExpect(jsonPath("$.data.period").value("2026-07"))
                 .andExpect(jsonPath("$.data.hasPreviousComparison").value(false))
                 .andExpect(jsonPath("$.data.monthOverMonthPercentagePoint").isEmpty())
-                .andExpect(jsonPath("$.data.earnedPoints").value(85));
+                .andExpect(jsonPath("$.data.earnedPoints").value(85))
+                .andExpect(jsonPath("$.data.groupRecord.participatingGroups").value(1))
+                .andExpect(jsonPath("$.data.groupRecord.indictedCount").value(2));
     }
 }
