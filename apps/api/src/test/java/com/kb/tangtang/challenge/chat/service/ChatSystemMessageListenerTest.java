@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class ChatSystemMessageListenerTest {
 
-    private static final String TRIAL_DEEP_LINK = "/challenge/group/7/trial/55";
+    private static final String TRIAL_DEEP_LINK = "/group-challenges/7/trial/55";
     /* 사건번호에 연도가 들어가므로 시계를 고정한다. 안 그러면 해가 바뀌는 순간 테스트가 깨진다 */
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-08-16T05:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -87,7 +87,7 @@ class ChatSystemMessageListenerTest {
         ArgumentCaptor<ChatSystemMessageSpec> spec = ArgumentCaptor.forClass(ChatSystemMessageSpec.class);
         verify(chatMessageService).postSystemMessage(anyLong(), spec.capture());
         assertTrue(spec.getValue().deepLink().startsWith("/"));
-        assertEquals("/challenge/group/7/trial/55", spec.getValue().deepLink());
+        assertEquals("/group-challenges/7/trial/55", spec.getValue().deepLink());
     }
 
     @Test
