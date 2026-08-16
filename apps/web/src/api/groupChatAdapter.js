@@ -7,12 +7,14 @@
  * senderName · challengeName)를 보는 동안 서버는 {type, sentAt, senderNickname, groupName} 을
  * 보내고 있었고, 그 결과 텍스트 메시지가 한 건도 렌더링되지 않았다.
  *
- * 서버가 주지 않는 값(진행 일차 · D-day · 시스템 메시지 서브타입 · 스티커)은 <b>지어내지 않는다.</b>
- * 화면에서 생략하거나 서버가 주는 값(memberCount · status)으로 대체한다.
+ * 서버가 주지 않는 값(스티커 · 판결 승패)은 <b>지어내지 않는다.</b> 화면에서 생략하거나 서버가
+ * 주는 값으로 대체한다.
  *
  * 서버 계약 (docs/API_SPEC.md 「그룹 채팅」):
- *   메시지 { messageId, type: 'TEXT'|'SYSTEM', senderId, senderNickname, content, sentAt }
- *   방     { groupId, groupName, status: 'RECRUITING'|'ACTIVE'|'JUDGING'|'CLOSED', memberCount, unreadCount }
+ *   메시지 { messageId, type: 'TEXT'|'SYSTEM', senderId, senderNickname, content, sentAt,
+ *            systemType, deepLink, caseNo }   ← 뒤 셋은 SYSTEM 메시지에만 있다
+ *   방     { groupId, groupName, status: 'RECRUITING'|'ACTIVE'|'JUDGING'|'CLOSED', memberCount,
+ *            unreadCount, dayIndex, daysLeft }
  */
 
 /** 대화가 이미 삭제된 상태. 서버도 이 상태의 방은 조회 자체를 막는다(CHAT_ROOM_CLOSED) */
@@ -60,6 +62,13 @@ export function toChatMessage(dto) {
         senderName: dto.senderNickname ?? dto.senderName ?? '',
         content: dto.content ?? '',
         sentAt: parseSentAt(dto.sentAt),
+        /*
+         * 시스템 메시지 전용. systemType 이 화면의 카드 모양을 정한다.
+         * 이 필드들이 생기기 전에 저장된 메시지는 null 이라, 화면은 그때도 그려져야 한다.
+         */
+        systemType: dto.systemType ?? null,
+        deepLink: dto.deepLink ?? null,
+        caseNo: dto.caseNo ?? null,
     };
 }
 
@@ -80,6 +89,9 @@ export function toChatRoom(dto) {
         status,
         memberCount: Number(dto.memberCount ?? 0),
         unreadCount: Number(dto.unreadCount ?? 0),
+        /* 서버(Asia/Seoul)가 계산해 준다. 시작 전이면 dayIndex 0, 종료 후면 daysLeft 가 음수다 */
+        dayIndex: Number(dto.dayIndex ?? 0),
+        daysLeft: Number(dto.daysLeft ?? 0),
         isEnded: status === STATUS_CLOSED,
         isJudging: status === STATUS_JUDGING,
     };

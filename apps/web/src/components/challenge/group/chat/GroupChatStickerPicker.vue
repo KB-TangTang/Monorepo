@@ -24,7 +24,12 @@ const stickers = computed(() => getStickersByCategory(activeTab.value));
             </button>
             <button class="sticker-picker__close" @click="emit('close')">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path
+                        d="M4 4l10 10M14 4L4 14"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                    />
                 </svg>
             </button>
         </div>
@@ -52,8 +57,12 @@ const stickers = computed(() => getStickersByCategory(activeTab.value));
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
 }
 
 .sticker-picker__tabs {

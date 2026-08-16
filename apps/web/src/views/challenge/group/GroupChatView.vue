@@ -6,7 +6,11 @@ import { useAuthStore } from '@/stores/auth';
 import { createChatSocket } from '@/api/chatSocket';
 import GroupChatHeader from '@/components/challenge/group/chat/GroupChatHeader.vue';
 import GroupChatDateDivider from '@/components/challenge/group/chat/GroupChatDateDivider.vue';
+import GroupChatUnreadDivider from '@/components/challenge/group/chat/GroupChatUnreadDivider.vue';
 import GroupChatBubble from '@/components/challenge/group/chat/GroupChatBubble.vue';
+import GroupChatSystemLabel from '@/components/challenge/group/chat/GroupChatSystemLabel.vue';
+import GroupChatRecordCard from '@/components/challenge/group/chat/GroupChatRecordCard.vue';
+import GroupChatVerdictCard from '@/components/challenge/group/chat/GroupChatVerdictCard.vue';
 import GroupChatSystemPill from '@/components/challenge/group/chat/GroupChatSystemPill.vue';
 import GroupChatInput from '@/components/challenge/group/chat/GroupChatInput.vue';
 import GroupChatToast from '@/components/challenge/group/chat/GroupChatToast.vue';
@@ -20,55 +24,89 @@ const groupId = computed(() => route.params.id);
 /* ── refs ──────────────────────────────────────────────── */
 const chatScrollEl = ref(null);
 const toastText = ref('');
+/* 입장 시점의 안 읽은 경계. 이후 새 메시지가 들어와도 선이 따라 내려가지 않게 id 로 고정한다 */
+const unreadBoundaryId = ref(null);
+const unreadCount = ref(0);
 let toastTimer = null;
 let isLoadingOlder = false; // 스크롤-업 페이징 중 scrollToBottom 방지용
 let socket = null;
 let unmounted = false; // enterRoom 대기 중 라우트 이탈 시 소켓을 만들지 않기 위한 가드
 
-/* ── 메시지 그룹핑 (날짜 구분 삽입) ────────────────────── */
+/* ── 시스템 메시지 카드 선택 ───────────────────────────── */
+/*
+ * 서버가 systemType 을 준다(ChatMessageDto). 문구를 파싱해 카드를 고르지 않는다 — 문구가 한 글자만
+ * 바뀌어도 화면이 조용히 깨지던 방식이다. systemType 이 없는 메시지(이 필드가 생기기 전에 저장된 것)는
+ * 문구만 있는 pill 로 떨어진다.
+ */
+const RECORD_TYPES = ['VIOLATION_DETECTED', 'TRIAL_OPENED', 'DEFENSE_REGISTERED'];
+
+function systemView(msg) {
+    if (msg.systemType === 'VERDICT_CONFIRMED') return 'verdict';
+    if (RECORD_TYPES.includes(msg.systemType)) return 'record';
+    return 'pill';
+}
+
+/* ── 메시지 그룹핑 (날짜 · 안 읽은 경계 · 연속 발화) ───── */
 /* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
    그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다. */
+const GROUPING_WINDOW_MS = 5 * 60 * 1000;
+
 const groupedMessages = computed(() => {
     const items = [];
     let lastDateKey = '';
+    let prev = null;
 
     for (const msg of store.messages) {
+        if (msg.messageId === unreadBoundaryId.value) {
+            items.push({ type: 'unread', key: `unread-${msg.messageId}` });
+        }
+
         const d = msg.sentAt;
-        if (!d) {
-            items.push({ type: 'message', data: msg, key: msg.messageId });
-            continue;
-        }
-        const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
-        if (dateKey !== lastDateKey) {
-            lastDateKey = dateKey;
-            const today = new Date();
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            let label;
-            if (
-                d.getFullYear() === today.getFullYear() &&
-                d.getMonth() === today.getMonth() &&
-                d.getDate() === today.getDate()
-            ) {
-                label = '오늘';
-            } else if (
-                d.getFullYear() === yesterday.getFullYear() &&
-                d.getMonth() === yesterday.getMonth() &&
-                d.getDate() === yesterday.getDate()
-            ) {
-                label = '어제';
-            } else {
-                label = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+        if (d) {
+            const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+            if (dateKey !== lastDateKey) {
+                lastDateKey = dateKey;
+                items.push({ type: 'date', label: dateLabel(d), key: `date-${dateKey}` });
+                prev = null; // 날짜가 바뀌면 연속 발화도 끊는다
             }
-            items.push({ type: 'date', label, key: `date-${dateKey}` });
         }
 
-        items.push({ type: 'message', data: msg, key: msg.messageId });
+        items.push({
+            type: 'message',
+            data: msg,
+            key: msg.messageId,
+            grouped: isGrouped(prev, msg),
+        });
+        prev = msg;
     }
     return items;
 });
+
+function dateLabel(d) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (isSameDay(d, today)) return '오늘';
+    if (isSameDay(d, yesterday)) return '어제';
+    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
+function isSameDay(a, b) {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+/** 같은 사람이 5분 안에 잇달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
+function isGrouped(prev, msg) {
+    if (!prev || prev.isSystem || msg.isSystem) return false;
+    if (Number(prev.senderId) !== Number(msg.senderId)) return false;
+    if (!prev.sentAt || !msg.sentAt) return false;
+    return msg.sentAt - prev.sentAt < GROUPING_WINDOW_MS;
+}
 
 /* ── 스크롤 ────────────────────────────────────────────── */
 function scrollToBottom() {
@@ -118,12 +156,6 @@ function handleSendText(text) {
     }
 }
 
-/* ── 메시지 판별 헬퍼 ──────────────────────────────────── */
-/*
- * 서버가 주는 구분은 type: 'TEXT' | 'SYSTEM' 둘뿐이다(ChatMessageDto). 목업에 있던
- * 시스템 서브타입·메타데이터(재판 딥링크 CTA)는 서버 계약에 없으므로 화면에서도 만들지 않는다.
- * 시스템 메시지는 본문 그대로 pill 로 보여준다.
- */
 function isMine(msg) {
     return Number(msg.senderId) === Number(store.currentUserId);
 }
@@ -137,6 +169,8 @@ function retryEnter() {
 onMounted(async () => {
     await store.enterRoom(groupId.value);
     if (unmounted) return; // enterRoom 대기 중 화면을 벗어났으면 소켓을 만들지 않는다
+
+    markUnreadBoundary();
     scrollToBottom();
 
     // 종료된 챌린지(store.closed)·비참여자 등 진입 실패(store.error) 시에는 연결하지 않는다
@@ -150,6 +184,19 @@ onMounted(async () => {
     });
     socket.connect();
 });
+
+/*
+ * 입장과 동시에 서버에서 읽음 처리가 끝나므로, "어디부터 새 메시지였는지" 는 이 순간에만 알 수 있다.
+ * 불러온 메시지 전부가 새 메시지면 선을 그리지 않는다 — 맨 위에 붙어 아무것도 구분해 주지 못한다.
+ */
+function markUnreadBoundary() {
+    const count = store.roomInfo?.unreadCount ?? 0;
+    const list = store.messages;
+    if (count > 0 && count < list.length) {
+        unreadBoundaryId.value = list[list.length - count].messageId;
+        unreadCount.value = count;
+    }
+}
 
 onUnmounted(() => {
     unmounted = true;
@@ -176,7 +223,6 @@ watch(
 
 <template>
     <div class="chat-view">
-        <!-- 헤더 -->
         <GroupChatHeader
             :room-info="store.roomInfo"
             @open-menu="showToast('준비 중인 기능입니다')"
@@ -184,8 +230,8 @@ watch(
 
         <!-- 종료된 챌린지: 대화가 챌린지 종료와 함께 이미 삭제됐다 -->
         <div v-if="store.closed" class="chat-view__closed">
-            <p>종료된 챌린지예요.</p>
-            <p>대화 내용은 챌린지가 끝나면서 사라졌어요.</p>
+            <p class="chat-view__closed-title">종료된 챌린지예요</p>
+            <p class="chat-view__closed-desc">대화 내용은 챌린지가 끝나면서 사라졌어요.</p>
         </div>
 
         <!-- 그 외 진입 실패 (예: 참여자가 아님) -->
@@ -194,26 +240,44 @@ watch(
         </div>
 
         <template v-else>
-            <!-- 대화 영역 -->
             <div ref="chatScrollEl" class="chat-view__scroll" @scroll="handleScroll">
-                <!-- 로딩 -->
                 <div v-if="store.loading && store.messages.length === 0" class="chat-view__loading">
                     메시지를 불러오는 중...
                 </div>
 
                 <template v-for="item in groupedMessages" :key="item.key">
-                    <!-- 날짜 구분 -->
                     <GroupChatDateDivider v-if="item.type === 'date'" :label="item.label" />
 
-                    <!-- 시스템(재판 봇) 메시지 -->
+                    <GroupChatUnreadDivider
+                        v-else-if="item.type === 'unread'"
+                        :count="unreadCount"
+                    />
+
+                    <!-- 재판 기록 (적발 · 개시 · 변론) -->
+                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'record'">
+                        <GroupChatSystemLabel />
+                        <GroupChatRecordCard :message="item.data" />
+                    </template>
+
+                    <!-- 판결 확정 -->
+                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'verdict'">
+                        <GroupChatSystemLabel />
+                        <GroupChatVerdictCard :message="item.data" />
+                    </template>
+
+                    <!-- systemType 이 없는 옛 시스템 메시지 -->
                     <GroupChatSystemPill v-else-if="item.data.isSystem" :message="item.data" />
 
                     <!-- 참여자 메시지. v-else 라 어떤 type 이든 화면에서 사라지지 않는다 -->
-                    <GroupChatBubble v-else :message="item.data" :is-mine="isMine(item.data)" />
+                    <GroupChatBubble
+                        v-else
+                        :message="item.data"
+                        :is-mine="isMine(item.data)"
+                        :grouped="item.grouped"
+                    />
                 </template>
             </div>
 
-            <!-- 토스트 -->
             <GroupChatToast :message="toastText" />
 
             <!-- 입력바 (스티커 버튼은 이번 범위 밖이라 GroupChatInput 기본값으로 숨겨져 있다) -->
@@ -236,7 +300,7 @@ watch(
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 14px var(--tt-space-4) var(--tt-space-4);
+    padding: var(--tt-space-2) var(--tt-screen-padding) var(--tt-space-5);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -264,9 +328,19 @@ watch(
     gap: var(--tt-space-2);
     padding: var(--tt-space-10) var(--tt-space-5);
     text-align: center;
-    color: var(--tt-text-muted);
+}
+
+.chat-view__closed-title {
+    margin: 0;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.chat-view__closed-desc {
+    margin: 0;
     font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-semibold);
+    color: var(--tt-text-muted);
 }
 
 .chat-view__error {

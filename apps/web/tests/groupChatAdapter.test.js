@@ -104,11 +104,45 @@ test('방: CLOSED 만 종료 상태다 (목업의 ENDED 는 서버에 없다)', 
     assert.equal(toChatRoom({ status: 'ACTIVE' }).isEnded, false);
 });
 
-/* 서버가 주지 않는 값을 지어내지 않는다 — 화면은 이 필드들을 읽지 않아야 한다 */
-test('방: 서버가 주지 않는 진행 일차·D-day 를 만들어 내지 않는다', () => {
+/*
+ * 일차·D-day 는 서버(Asia/Seoul)가 계산해 준다. 프론트에서 날짜를 세면 기기 시계·시간대에 따라
+ * 값이 달라진다. 여기서 확인하는 것은 "서버 값을 그대로 옮기는가" 이지 계산 결과가 아니다.
+ */
+test('방: 서버가 준 일차·D-day 를 그대로 옮긴다', () => {
+    const room = toChatRoom({
+        groupId: 7, groupName: '절약단', status: 'ACTIVE', memberCount: 4,
+        dayIndex: 3, daysLeft: 4,
+    });
+
+    assert.equal(room.dayIndex, 3);
+    assert.equal(room.daysLeft, 4);
+    /* 목업 시절 이름은 여전히 서버 계약에 없다 */
+    assert.equal(room.currentDay, undefined);
+    assert.equal(room.challengeName, undefined);
+});
+
+test('방: 일차·D-day 가 없는 응답도 0 으로 받아 화면이 표기를 생략한다', () => {
     const room = toChatRoom({ groupId: 7, groupName: '절약단', status: 'ACTIVE', memberCount: 4 });
 
-    assert.equal(room.currentDay, undefined);
-    assert.equal(room.daysLeft, undefined);
-    assert.equal(room.challengeName, undefined);
+    assert.equal(room.dayIndex, 0);
+    assert.equal(room.daysLeft, 0);
+});
+
+test('메시지: 시스템 필드(종류·딥링크·사건번호)를 그대로 옮긴다', () => {
+    const message = toChatMessage({
+        messageId: 9, type: 'SYSTEM', content: '재판이 열렸어요',
+        systemType: 'TRIAL_OPENED', deepLink: '/challenge/group/7/trial/55', caseNo: '2026-재판-0055',
+    });
+
+    assert.equal(message.systemType, 'TRIAL_OPENED');
+    assert.equal(message.deepLink, '/challenge/group/7/trial/55');
+    assert.equal(message.caseNo, '2026-재판-0055');
+});
+
+test('메시지: 시스템 필드가 없던 시절 메시지는 null 로 복원된다', () => {
+    const message = toChatMessage({ messageId: 1, type: 'SYSTEM', content: '재판이 열렸어요' });
+
+    assert.equal(message.systemType, null);
+    assert.equal(message.deepLink, null);
+    assert.equal(message.caseNo, null);
 });
