@@ -2,6 +2,8 @@
   용도: 거래 상세내역 화면의 검색창을 눌렀을 때 진입하는 조건 검색 화면.
   가맹점(검색어) · 카테고리 · 금액 범위 · 기간 조건을 조합해 데이터가 있는 모든 월의 거래를 훑는다.
   결과는 조건을 바꿀 때마다 이 화면 안에서 즉시 갱신된다 — "이 조건으로 검색" 은 화면을 벗어나지 않는다.
+  금액 슬라이더의 상·하한은 전체 기간 절대값이 아니라 **선택한 기간 안에서의** 최고·최저 금액이다
+  (periodFilteredTransactions 참고). 기간을 바꾸면 슬라이더 범위도 그 기간 기준으로 다시 채워진다.
   언제 쓰는지: router/index.js 의 /ledger/search (name: ledgerSearch) 라우트.
 -->
 <script setup>
@@ -19,12 +21,19 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { findExpenseParentByName } from '@/utils/category';
 import {
+    filterTransactionsByTab,
     formatMonthLabel,
     formatShortDayLabel,
     formatWon,
     resolveAmountBounds,
     resolveLedgerState,
 } from '@/utils/ledger';
+
+const DIRECTION_TABS = [
+    { value: 'ALL', label: '전체' },
+    { value: 'CONSUMPTION', label: '지출' },
+    { value: 'INCOME', label: '입금' },
+];
 
 const router = useRouter();
 
@@ -36,10 +45,8 @@ const errorMessage = ref('');
 const searchText = ref('');
 const category = ref('');
 const isCategorySheetOpen = ref(false);
-const memoActive = ref(false);
-const memoText = ref('');
+const directionTab = ref('ALL');
 
-const amountBounds = computed(() => resolveAmountBounds(allTransactions.value));
 const amountMin = ref(0);
 const amountMax = ref(0);
 
@@ -63,12 +70,27 @@ const periodLabel = computed(() => {
     return `${formatMonthLabel(periodFrom.value)} ~ ${formatMonthLabel(periodTo.value)}`;
 });
 
+/* 기간 조건까지만 적용한 목록. 금액 슬라이더 상·하한을 "선택한 기간 안에서의 최고/최저 금액"으로
+ * 좁히는 데 쓴다 — 전체 기간 절대값이 아니라 실제로 검색 대상인 기간을 기준으로 보여줘야 한다. */
+const periodFilteredTransactions = computed(() => {
+    let list = allTransactions.value;
+    if (periodFrom.value) {
+        list = list.filter((tx) => tx.date.slice(0, 7) >= periodFrom.value);
+    }
+    if (periodTo.value) {
+        list = list.filter((tx) => tx.date.slice(0, 7) <= periodTo.value);
+    }
+    return list;
+});
+
+const amountBounds = computed(() => resolveAmountBounds(periodFilteredTransactions.value));
+
 const filteredResults = computed(() => {
     const term = searchText.value.trim();
-    let list = allTransactions.value;
+    let list = filterTransactionsByTab(periodFilteredTransactions.value, directionTab.value);
 
     if (term !== '') {
-        list = list.filter((tx) => tx.merchant.includes(term));
+        list = list.filter((tx) => (tx.merchant ?? '').includes(term));
     }
     if (category.value) {
         list = list.filter(
@@ -81,18 +103,17 @@ const filteredResults = computed(() => {
         const abs = Math.abs(tx.amount);
         return abs >= amountMin.value && abs <= amountMax.value;
     });
-    if (periodFrom.value) {
-        list = list.filter((tx) => tx.date.slice(0, 7) >= periodFrom.value);
-    }
-    if (periodTo.value) {
-        list = list.filter((tx) => tx.date.slice(0, 7) <= periodTo.value);
-    }
 
     return [...list].sort((a, b) => b.date.localeCompare(a.date));
 });
 
+/* TRANSFER(계좌간 이체)는 지출도 입금도 아니라 합계에서 뺀다 — 백엔드 summary.totalSpent/
+ * totalDeposit과 같은 규칙(TransactionQueryService.resolveSignedAmount 주석 참고). 이걸 빼지
+ * 않으면 "전체" 탭 합계가 "지출" 탭 합계 + "입금" 탭 합계와 안 맞아 보인다(이체만큼 차이 남). */
 const resultsTotal = computed(() =>
-    filteredResults.value.reduce((sum, tx) => sum + tx.amount, 0),
+    filteredResults.value
+        .filter((tx) => tx.classification !== 'TRANSFER')
+        .reduce((sum, tx) => sum + tx.amount, 0),
 );
 
 function resetAmountRange() {
@@ -109,10 +130,11 @@ function resetPeriodRange() {
 function resetAll() {
     searchText.value = '';
     category.value = '';
-    memoActive.value = false;
-    memoText.value = '';
-    resetAmountRange();
+    directionTab.value = 'ALL';
+    /* 기간을 먼저 되돌려야 amountBounds(기간 내 최고·최저 금액)가 새 기간 기준으로 다시 계산된
+     * 뒤에 금액 범위를 그 값으로 채운다 — 순서를 바꾸면 옛 기간의 상한이 잠깐 남는다. */
     resetPeriodRange();
+    resetAmountRange();
 }
 
 function goBack() {
@@ -131,16 +153,19 @@ function removeCategory() {
     category.value = '';
 }
 
-function toggleMemo() {
-    memoActive.value = !memoActive.value;
-    if (!memoActive.value) {
-        memoText.value = '';
-    }
+function selectDirection(tab) {
+    directionTab.value = tab;
+}
+
+function removeDirection() {
+    directionTab.value = 'ALL';
 }
 
 function onPeriodSelect({ from, to }) {
     periodFrom.value = from;
     periodTo.value = to;
+    /* 기간이 바뀌면 그 기간 안의 최고·최저 금액으로 슬라이더를 다시 채운다. */
+    resetAmountRange();
 }
 
 async function confirmSearch() {
@@ -154,8 +179,8 @@ async function loadData() {
     try {
         months.value = await fetchLedgerMonths();
         allTransactions.value = await fetchLedgerSearchTransactions();
-        resetAmountRange();
         resetPeriodRange();
+        resetAmountRange();
     } catch (err) {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
     } finally {
@@ -197,21 +222,32 @@ onMounted(loadData);
                 <LedgerSearchConditionChips
                     :merchant-term="searchText.trim()"
                     :category="category"
-                    :memo-active="memoActive"
+                    :direction="directionTab"
                     @remove-merchant="removeMerchant"
                     @open-category="isCategorySheetOpen = true"
                     @remove-category="removeCategory"
-                    @toggle-memo="toggleMemo"
+                    @remove-direction="removeDirection"
                 />
 
-                <input
-                    v-if="memoActive"
-                    v-model="memoText"
-                    type="text"
-                    class="ledger-search-view__memo-input"
-                    placeholder="메모를 입력해보세요"
-                    aria-label="메모 검색어"
-                />
+                <section class="ledger-search-view__condition">
+                    <h2>구분</h2>
+                    <div class="ledger-search-view__direction" role="tablist" aria-label="수입/지출 구분">
+                        <button
+                            v-for="tab in DIRECTION_TABS"
+                            :key="tab.value"
+                            type="button"
+                            role="tab"
+                            class="ledger-search-view__direction-pill"
+                            :class="{
+                                'ledger-search-view__direction-pill--active': directionTab === tab.value,
+                            }"
+                            :aria-selected="directionTab === tab.value"
+                            @click="selectDirection(tab.value)"
+                        >
+                            {{ tab.label }}
+                        </button>
+                    </div>
+                </section>
 
                 <section class="ledger-search-view__condition">
                     <h2>금액 조건</h2>
@@ -375,18 +411,6 @@ onMounted(loadData);
     border: 0;
 }
 
-.ledger-search-view__memo-input {
-    width: 100%;
-    padding: var(--tt-space-3) var(--tt-space-4);
-    font-family: inherit;
-    font-size: var(--tt-fs-body);
-    color: var(--tt-text);
-    background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-md);
-    outline: none;
-}
-
 .ledger-search-view__condition {
     padding: var(--tt-space-3);
     background: var(--tt-bg);
@@ -399,6 +423,30 @@ onMounted(loadData);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
+}
+
+.ledger-search-view__direction {
+    display: flex;
+    gap: var(--tt-space-2);
+}
+
+.ledger-search-view__direction-pill {
+    flex: 1 1 0;
+    padding: var(--tt-space-2) var(--tt-space-1);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text);
+    text-align: center;
+    cursor: pointer;
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
+    border-radius: var(--tt-radius-full);
+}
+
+.ledger-search-view__direction-pill--active {
+    color: var(--tt-text-inverse);
+    background: var(--tt-primary);
+    border-color: var(--tt-primary);
 }
 
 .ledger-search-view__period {

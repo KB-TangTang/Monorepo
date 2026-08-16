@@ -71,18 +71,27 @@ public class NotificationSender {
      * 두 경로의 필드 이름·형식이 갈라진다.
      */
     private void deliver(Notification notification) {
-        NotificationDto payload = NotificationDto.from(notification);
+        push(notification.getUserId(), "notification", NotificationDto.from(notification));
+    }
 
-        for (SseEmitter emitter : registry.emittersOf(notification.getUserId())) {
+    /**
+     * 저장 없이 접속 중인 연결로 밀기만 한다 (이슈 #174).
+     *
+     * <p>일반 채팅 알림은 tbl_notification 에 남기지 않는다 — 채팅 로그는 채팅방이 담당하므로
+     * 중복 저장을 피한다(DECISIONS.md 2026-08-15). 그래서 저장을 전제로 한 send/trySend 를 쓸 수 없다.
+     *
+     * <p>기존 deliver() 도 이 메서드를 호출한다. 두 경로의 전송 방식이 갈라지지 않게 하기 위함이다.
+     */
+    public void push(long userId, String eventName, Object payload) {
+        for (SseEmitter emitter : registry.emittersOf(userId)) {
             try {
-                emitter.send(SseEmitter.event().name("notification").data(payload));
+                emitter.send(SseEmitter.event().name(eventName).data(payload));
             } catch (IOException | IllegalStateException e) {
-                /*
-                 * 끊긴(혹은 이미 완료된) 연결이다. 실패가 아니라 정리 대상이다 (NT_01_04).
-                 * ⚠ 여기를 catch(Exception) 으로 넓히지 말 것 — 직렬화·변환 실패까지
-                 *   "연결이 끊겼네" 로 삼켜져 DLQ 에 아무것도 남지 않는다.
-                 */
-                registry.remove(notification.getUserId(), emitter);
+                // 끊긴 연결이다. 실패가 아니라 정리 대상이다 (NT_01_04)
+                //
+                // ⚠ 여기를 catch(Exception) 으로 넓히지 말 것. 직렬화·변환 실패까지 "연결이 끊겼네" 로
+                //   삼켜져 DLQ 에 아무것도 안 남는다. 잡을 예외는 이 두 종류뿐이다.
+                registry.remove(userId, emitter);
             }
         }
     }

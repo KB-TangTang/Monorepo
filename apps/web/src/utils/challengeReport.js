@@ -31,6 +31,77 @@ export function getPreviousPeriod(referenceDate = new Date()) {
     return `${year}-${month}`;
 }
 
+const DIFFICULTY_PRESENTATION = {
+    EASY: { level: '하', tone: 'low' },
+    NORMAL: { level: '중', tone: 'middle' },
+    HARD: { level: '상', tone: 'high' },
+};
+
+const GROUP_RECORD_STATES = new Set(['JUDGING', 'READY', 'EMPTY']);
+
+function toCategoryPresentation(categoryName) {
+    return categoryName?.trim().slice(0, 1) || '카';
+}
+
+function toCategoryRows(categoryEffects) {
+    return categoryEffects
+        .flatMap((effect) => [
+            {
+                code: toCategoryPresentation(effect.categoryName),
+                name: effect.categoryName,
+                days: effect.successfulDays,
+                amount: effect.savedAmount,
+                status: 'success',
+            },
+            {
+                code: toCategoryPresentation(effect.categoryName),
+                name: effect.categoryName,
+                days: effect.failedDays,
+                amount: effect.overspentAmount,
+                status: 'failure',
+            },
+        ])
+        .filter((category) => category.days > 0);
+}
+
+function resolveCategoryRows(report) {
+    const categories = Array.isArray(report.categories) ? report.categories : [];
+    return categories.length > 0 || !Array.isArray(report.categoryEffects)
+        ? categories
+        : toCategoryRows(report.categoryEffects);
+}
+
+export function resolveGroupRecordState({ groupRecordState, groupRecord }) {
+    if (groupRecordState === 'JUDGING') {
+        return 'JUDGING';
+    }
+    if (groupRecordState === 'READY' && groupRecord) {
+        return 'READY';
+    }
+    if (GROUP_RECORD_STATES.has(groupRecordState) && groupRecordState === 'EMPTY') {
+        return 'EMPTY';
+    }
+    return groupRecord ? 'READY' : 'EMPTY';
+}
+
+export function toChallengeReportModel(report) {
+    return {
+        ...report,
+        challengeName: '메인 챌린지',
+        difficultySummary: '난이도별 성과를 확인해 보세요',
+        categories: resolveCategoryRows(report),
+        groupRecordState: resolveGroupRecordState(report),
+        ranking: report.ranking ?? null,
+        difficulties: (report.difficulties ?? []).map((difficulty) => ({
+            ...difficulty,
+            ...(DIFFICULTY_PRESENTATION[difficulty.difficultyName] ?? {
+                level: difficulty.difficultyName,
+                tone: 'middle',
+            }),
+        })),
+    };
+}
+
 export function isPublishedPeriod(period, referenceDate = new Date()) {
     return period <= getPreviousPeriod(referenceDate);
 }
@@ -48,7 +119,7 @@ export function resolveChallengeReportState({ loading, error, report, entryState
     if (entryState === 'PREPARING_FIRST_REPORT') {
         return 'preparing';
     }
-    if (!report?.hasChallengeHistory || report?.isFirstServiceMonth) {
+    if (!report?.hasChallengeHistory) {
         return 'empty';
     }
     return 'ready';
@@ -62,12 +133,6 @@ export function getEmptyReportCopy(report, entryState) {
         };
     }
     if (entryState === 'PREPARING_FIRST_REPORT') {
-        return {
-            title: '첫 달의 기록을 모으고 있어요',
-            description: '한 달을 함께 보낸 뒤 첫 챌린지 리포트를 준비해 드릴게요.',
-        };
-    }
-    if (report?.isFirstServiceMonth) {
         return {
             title: '첫 달의 기록을 모으고 있어요',
             description: '한 달을 함께 보낸 뒤 첫 챌린지 리포트를 준비해 드릴게요.',

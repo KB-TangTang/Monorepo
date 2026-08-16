@@ -1,67 +1,119 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useGroupChatStore } from '@/stores/groupChat';
+import { useAuthStore } from '@/stores/auth';
+import { createChatSocket } from '@/api/chatSocket';
 import GroupChatHeader from '@/components/challenge/group/chat/GroupChatHeader.vue';
 import GroupChatDateDivider from '@/components/challenge/group/chat/GroupChatDateDivider.vue';
+import GroupChatUnreadDivider from '@/components/challenge/group/chat/GroupChatUnreadDivider.vue';
 import GroupChatBubble from '@/components/challenge/group/chat/GroupChatBubble.vue';
-import GroupChatSystemCard from '@/components/challenge/group/chat/GroupChatSystemCard.vue';
+import GroupChatSystemLabel from '@/components/challenge/group/chat/GroupChatSystemLabel.vue';
+import GroupChatRecordCard from '@/components/challenge/group/chat/GroupChatRecordCard.vue';
+import GroupChatVerdictCard from '@/components/challenge/group/chat/GroupChatVerdictCard.vue';
 import GroupChatSystemPill from '@/components/challenge/group/chat/GroupChatSystemPill.vue';
 import GroupChatInput from '@/components/challenge/group/chat/GroupChatInput.vue';
-import GroupChatStickerPicker from '@/components/challenge/group/chat/GroupChatStickerPicker.vue';
 import GroupChatToast from '@/components/challenge/group/chat/GroupChatToast.vue';
+import StateError from '@/components/common/StateError.vue';
 
 const route = useRoute();
-const router = useRouter();
 const store = useGroupChatStore();
 
 const groupId = computed(() => route.params.id);
 
 /* ── refs ──────────────────────────────────────────────── */
 const chatScrollEl = ref(null);
-const showSticker = ref(false);
 const toastText = ref('');
+/* 입장 시점의 안 읽은 경계. 이후 새 메시지가 들어와도 선이 따라 내려가지 않게 id 로 고정한다 */
+const unreadBoundaryId = ref(null);
+const unreadCount = ref(0);
 let toastTimer = null;
 let isLoadingOlder = false; // 스크롤-업 페이징 중 scrollToBottom 방지용
+let socket = null;
+let unmounted = false; // enterRoom 대기 중 라우트 이탈 시 소켓을 만들지 않기 위한 가드
 
-/* ── 메시지 그룹핑 (날짜 구분 삽입) ────────────────────── */
+/* ── 시스템 메시지 카드 선택 ───────────────────────────── */
+/*
+ * 서버가 systemType 을 준다(ChatMessageDto). 문구를 파싱해 카드를 고르지 않는다 — 문구가 한 글자만
+ * 바뀌어도 화면이 조용히 깨지던 방식이다. systemType 이 없는 메시지(이 필드가 생기기 전에 저장된 것)는
+ * 문구만 있는 pill 로 떨어진다.
+ */
+const RECORD_TYPES = ['VIOLATION_DETECTED', 'TRIAL_OPENED', 'DEFENSE_REGISTERED'];
+
+function systemView(msg) {
+    if (msg.systemType === 'VERDICT_CONFIRMED') return 'verdict';
+    if (RECORD_TYPES.includes(msg.systemType)) return 'record';
+    return 'pill';
+}
+
+/* 라벨을 붙일 대상은 "카드로 그려지는" 시스템 메시지다. 폴백 pill 은 라벨 없이 조용히 흐른다 */
+function isRecordCard(msg) {
+    return Boolean(msg?.isSystem) && systemView(msg) !== 'pill';
+}
+
+/* ── 메시지 그룹핑 (날짜 · 안 읽은 경계 · 연속 발화) ───── */
+/* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
+   그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다. */
+const GROUPING_WINDOW_MS = 5 * 60 * 1000;
+
 const groupedMessages = computed(() => {
     const items = [];
     let lastDateKey = '';
+    let prev = null;
 
     for (const msg of store.messages) {
-        const d = new Date(msg.createdAt);
-        const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
-        if (dateKey !== lastDateKey) {
-            lastDateKey = dateKey;
-            const today = new Date();
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            let label;
-            if (
-                d.getFullYear() === today.getFullYear() &&
-                d.getMonth() === today.getMonth() &&
-                d.getDate() === today.getDate()
-            ) {
-                label = '오늘';
-            } else if (
-                d.getFullYear() === yesterday.getFullYear() &&
-                d.getMonth() === yesterday.getMonth() &&
-                d.getDate() === yesterday.getDate()
-            ) {
-                label = '어제';
-            } else {
-                label = `${d.getMonth() + 1}월 ${d.getDate()}일`;
-            }
-            items.push({ type: 'date', label, key: `date-${dateKey}` });
+        if (msg.messageId === unreadBoundaryId.value) {
+            items.push({ type: 'unread', key: `unread-${msg.messageId}` });
         }
 
-        items.push({ type: 'message', data: msg, key: msg.messageId });
+        const d = msg.sentAt;
+        if (d) {
+            const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+            if (dateKey !== lastDateKey) {
+                lastDateKey = dateKey;
+                items.push({ type: 'date', label: dateLabel(d), key: `date-${dateKey}` });
+                prev = null; // 날짜가 바뀌면 연속 발화도 끊는다
+            }
+        }
+
+        items.push({
+            type: 'message',
+            data: msg,
+            key: msg.messageId,
+            grouped: isGrouped(prev, msg),
+            /* 재판 기록이 잇달아 오면 "재판 시스템" 라벨은 첫 장에만 붙인다 */
+            showSystemLabel: isRecordCard(msg) && !isRecordCard(prev),
+        });
+        prev = msg;
     }
     return items;
 });
+
+function dateLabel(d) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (isSameDay(d, today)) return '오늘';
+    if (isSameDay(d, yesterday)) return '어제';
+    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
+function isSameDay(a, b) {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+/** 같은 사람이 5분 안에 잇달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
+function isGrouped(prev, msg) {
+    if (!prev || prev.isSystem || msg.isSystem) return false;
+    if (Number(prev.senderId) !== Number(msg.senderId)) return false;
+    if (!prev.sentAt || !msg.sentAt) return false;
+    return msg.sentAt - prev.sentAt < GROUPING_WINDOW_MS;
+}
 
 /* ── 스크롤 ────────────────────────────────────────────── */
 function scrollToBottom() {
@@ -80,8 +132,7 @@ function handleScroll() {
         store.loadOlderMessages(groupId.value).then(() => {
             nextTick(() => {
                 if (chatScrollEl.value) {
-                    chatScrollEl.value.scrollTop =
-                        chatScrollEl.value.scrollHeight - prevHeight;
+                    chatScrollEl.value.scrollTop = chatScrollEl.value.scrollHeight - prevHeight;
                 }
                 isLoadingOlder = false;
             });
@@ -93,76 +144,76 @@ function handleScroll() {
 function showToast(msg) {
     clearTimeout(toastTimer);
     toastText.value = msg;
-    toastTimer = setTimeout(() => { toastText.value = ''; }, 1800);
+    toastTimer = setTimeout(() => {
+        toastText.value = '';
+    }, 1800);
 }
 
 /* ── 전송 ──────────────────────────────────────────────── */
+/*
+ * 실전송은 STOMP(socket.send)가 맡는다(이슈 #174 Task 11). 내가 보낸 메시지도 서버가
+ * /sub/chat/{groupId} 로 다시 내려보내 store.appendMessage 로 들어오므로, 화면에 미리
+ * 낙관적으로 붙이지 않는다 — 아래 watch(messages.length) 가 그때 스크롤을 내린다.
+ */
 function handleSendText(text) {
-    store.sendText(groupId.value, text);
-    showSticker.value = false;
-    scrollToBottom();
+    try {
+        socket?.send(text);
+    } catch {
+        showToast('메시지 전송에 실패했어요. 다시 시도해 주세요.');
+    }
 }
 
-function handleSelectSticker(stickerId) {
-    store.sendSticker(groupId.value, stickerId);
-    showSticker.value = false;
-    scrollToBottom();
-}
-
-function toggleSticker() {
-    showSticker.value = !showSticker.value;
-}
-
-/* ── 시스템 CTA ────────────────────────────────────────── */
-function handleOpenTrial(indictmentId) {
-    router.push({
-        name: 'defenseViolation',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
-function handleVote(indictmentId) {
-    router.push({
-        name: 'voteVerdict',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
-function handleOpenVerdict(indictmentId) {
-    router.push({
-        name: 'groupAiVerdictDetail',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
-/* ── 메시지 판별 헬퍼 ──────────────────────────────────── */
 function isMine(msg) {
     return Number(msg.senderId) === Number(store.currentUserId);
 }
 
-function isSystemCard(msg) {
-    return msg.messageType === 'SYSTEM' && msg.systemSubType === 'TRIAL_STARTED';
-}
-
-function isSystemPill(msg) {
-    return (
-        msg.messageType === 'SYSTEM' &&
-        ['VOTE_OPENED', 'VERDICT_CONFIRMED', 'CONFESSION'].includes(msg.systemSubType)
-    );
-}
-
-function isUserMessage(msg) {
-    return msg.messageType === 'USER';
+/* ── 오류 재시도 ───────────────────────────────────────── */
+function retryEnter() {
+    store.enterRoom(groupId.value);
 }
 
 /* ── 라이프사이클 ──────────────────────────────────────── */
 onMounted(async () => {
     await store.enterRoom(groupId.value);
+    if (unmounted) return; // enterRoom 대기 중 화면을 벗어났으면 소켓을 만들지 않는다
+
+    markUnreadBoundary();
     scrollToBottom();
+
+    // 종료된 챌린지(store.closed)·비참여자 등 진입 실패(store.error) 시에는 연결하지 않는다
+    if (store.closed || store.error) return;
+
+    socket = createChatSocket({
+        groupId: groupId.value,
+        getToken: () => useAuthStore().accessToken,
+        onMessage: (message) => store.appendMessage(message),
+        onReconnect: () => store.catchUp(),
+    });
+    socket.connect();
 });
 
+/*
+ * 입장과 동시에 서버에서 읽음 처리가 끝나므로, "어디부터 새 메시지였는지" 는 이 순간에만 알 수 있다.
+ * 불러온 메시지 전부가 새 메시지면 선을 그리지 않는다 — 맨 위에 붙어 아무것도 구분해 주지 못한다.
+ */
+function markUnreadBoundary() {
+    const count = store.roomInfo?.unreadCount ?? 0;
+    const list = store.messages;
+    if (count > 0 && count < list.length) {
+        unreadBoundaryId.value = list[list.length - count].messageId;
+        unreadCount.value = count;
+    }
+}
+
 onUnmounted(() => {
+    unmounted = true;
     clearTimeout(toastTimer);
+    /*
+     * 구독 해제만으로는 서버의 접속 세션 추적(ChatSessionRegistry)이 UNSUBSCRIBE 를 인식하지
+     * 못해 "방에 접속 중"으로 계속 남고, 그러면 이 사용자에게는 알림이 안 나간다. 그래서 화면을
+     * 벗어날 때는 반드시 STOMP 연결 자체를 끊는다(뒤로가기·탭 전환 전부 이 훅을 탄다).
+     */
+    socket?.disconnect();
     store.leaveRoom();
 });
 
@@ -179,67 +230,66 @@ watch(
 
 <template>
     <div class="chat-view">
-        <!-- 헤더 -->
-        <GroupChatHeader :room-info="store.roomInfo" @open-menu="showToast('준비 중인 기능입니다')" />
+        <GroupChatHeader
+            :room-info="store.roomInfo"
+            @open-menu="showToast('준비 중인 기능입니다')"
+        />
 
-        <!-- 대화 영역 -->
-        <div
-            ref="chatScrollEl"
-            class="chat-view__scroll"
-            @scroll="handleScroll"
-        >
-            <!-- 로딩 -->
-            <div v-if="store.loading && store.messages.length === 0" class="chat-view__loading">
-                메시지를 불러오는 중...
-            </div>
-
-            <template v-for="item in groupedMessages" :key="item.key">
-                <!-- 날짜 구분 -->
-                <GroupChatDateDivider
-                    v-if="item.type === 'date'"
-                    :label="item.label"
-                />
-
-                <!-- 시스템: 재판 게시 (Ink 카드) -->
-                <GroupChatSystemCard
-                    v-else-if="isSystemCard(item.data)"
-                    :message="item.data"
-                    @open-trial="handleOpenTrial"
-                />
-
-                <!-- 시스템: 투표/판결/혐의인정 (pill) -->
-                <GroupChatSystemPill
-                    v-else-if="isSystemPill(item.data)"
-                    :message="item.data"
-                    @vote="handleVote"
-                    @open-verdict="handleOpenVerdict"
-                />
-
-                <!-- 사용자 메시지 -->
-                <GroupChatBubble
-                    v-else-if="isUserMessage(item.data)"
-                    :message="item.data"
-                    :is-mine="isMine(item.data)"
-                />
-            </template>
+        <!-- 종료된 챌린지: 대화가 챌린지 종료와 함께 이미 삭제됐다 -->
+        <div v-if="store.closed" class="chat-view__closed">
+            <p class="chat-view__closed-title">종료된 챌린지예요</p>
+            <p class="chat-view__closed-desc">대화 내용은 챌린지가 끝나면서 사라졌어요.</p>
         </div>
 
-        <!-- 토스트 -->
-        <GroupChatToast :message="toastText" />
+        <!-- 그 외 진입 실패 (예: 참여자가 아님) -->
+        <div v-else-if="store.error" class="chat-view__error">
+            <StateError :message="store.error.message" @retry="retryEnter" />
+        </div>
 
-        <!-- 스티커 패널 -->
-        <GroupChatStickerPicker
-            v-if="showSticker"
-            @select="handleSelectSticker"
-            @close="showSticker = false"
-        />
+        <template v-else>
+            <div ref="chatScrollEl" class="chat-view__scroll" @scroll="handleScroll">
+                <div v-if="store.loading && store.messages.length === 0" class="chat-view__loading">
+                    메시지를 불러오는 중...
+                </div>
 
-        <!-- 입력바 -->
-        <GroupChatInput
-            :disabled="store.isEnded"
-            @send-text="handleSendText"
-            @toggle-sticker="toggleSticker"
-        />
+                <template v-for="item in groupedMessages" :key="item.key">
+                    <GroupChatDateDivider v-if="item.type === 'date'" :label="item.label" />
+
+                    <GroupChatUnreadDivider
+                        v-else-if="item.type === 'unread'"
+                        :count="unreadCount"
+                    />
+
+                    <!-- 재판 기록 (적발 · 개시 · 변론) -->
+                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'record'">
+                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
+                        <GroupChatRecordCard :message="item.data" />
+                    </template>
+
+                    <!-- 판결 확정 -->
+                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'verdict'">
+                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
+                        <GroupChatVerdictCard :message="item.data" />
+                    </template>
+
+                    <!-- systemType 이 없는 옛 시스템 메시지 -->
+                    <GroupChatSystemPill v-else-if="item.data.isSystem" :message="item.data" />
+
+                    <!-- 참여자 메시지. v-else 라 어떤 type 이든 화면에서 사라지지 않는다 -->
+                    <GroupChatBubble
+                        v-else
+                        :message="item.data"
+                        :is-mine="isMine(item.data)"
+                        :grouped="item.grouped"
+                    />
+                </template>
+            </div>
+
+            <GroupChatToast :message="toastText" />
+
+            <!-- 입력바 (스티커 버튼은 이번 범위 밖이라 GroupChatInput 기본값으로 숨겨져 있다) -->
+            <GroupChatInput :disabled="store.isEnded" @send-text="handleSendText" />
+        </template>
     </div>
 </template>
 
@@ -257,7 +307,7 @@ watch(
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 14px var(--tt-space-4) var(--tt-space-4);
+    padding: var(--tt-space-2) var(--tt-screen-padding) var(--tt-space-5);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -268,11 +318,50 @@ watch(
     display: none;
 }
 
+/*
+ * 세로 flex 컨테이너의 자식은 기본적으로 줄어든다. 시스템 카드는 overflow:hidden 이라
+ * 줄어든 만큼 내용이 잘려 나갔다 — 실제로 카드가 30px 높이로 눌린 채 배포됐다.
+ */
+.chat-view__scroll > * {
+    flex: none;
+}
+
 .chat-view__loading {
     text-align: center;
     color: var(--tt-text-muted);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-semibold);
     padding: var(--tt-space-6) 0;
+}
+
+.chat-view__closed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-2);
+    padding: var(--tt-space-10) var(--tt-space-5);
+    text-align: center;
+}
+
+.chat-view__closed-title {
+    margin: 0;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.chat-view__closed-desc {
+    margin: 0;
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text-muted);
+}
+
+.chat-view__error {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 </style>

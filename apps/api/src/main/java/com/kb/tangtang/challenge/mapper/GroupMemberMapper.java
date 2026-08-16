@@ -20,4 +20,7 @@ public interface GroupMemberMapper {
      * 모두 참여자 목록 하나로 결정되므로 조회를 나눌 이유가 없다.
      */
     List<GroupMember> findByGroupIds(@Param("groupIds") List<Long> groupIds);
+
+    /** 채팅 참여자 캐시를 채울 때 쓴다. 캐시가 살아 있으면 호출되지 않는다 */
+    List<Long> findUserIdsByGroupId(@Param("groupId") long groupId);
 }

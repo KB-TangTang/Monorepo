@@ -85,6 +85,28 @@
     </select>
 
     <!--
+      평가·기소 배치(이슈 #168).
+
+      end_date 비교가 오늘이 아니라 #{yesterday} 인 것이 핵심이다. 배치는 매 틱 어제·오늘 두 날짜를
+      집계하는데, end_date &gt;= 오늘 으로 좁히면 챌린지 마지막 날 심야 거래를 처리해야 할 다음 날에
+      그룹이 조회에서 빠져 그 거래가 통째로 누락된다.
+      부수 효과로 이 조건은 end_date + 1일까지 그룹을 남겨 두는데, 기간평가(PERIOD) 기소를
+      판정할 수 있는 마지막 날과 정확히 일치한다.
+
+      idx_cg_status_start (status, start_date) 를 탄다. end_date 는 걸러 낸 뒤 평가되지만
+      ACTIVE 그룹 수 자체가 작아 문제되지 않는다.
+      정렬을 id 로 두는 이유는 findGroupsToStart 와 같다 — 배치 로그 비교를 쉽게 하기 위함.
+    -->
+    <select id="findGroupsToEvaluate" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT <include refid="columns"/>
+        <include refid="fromGroup"/>
+        WHERE g.status = #{status}
+          AND g.start_date &lt;= #{today}
+          AND g.end_date &gt;= #{yesterday}
+        ORDER BY g.id
+    </select>
+
+    <!--
       조건부 상태 변경. WHERE 의 status 비교가 곧 멱등성 장치다 —
       이미 전이된 그룹은 0 행이 바뀌고, 호출부가 그걸 보고 알림을 건너뛴다.
       updated_at 은 ON UPDATE CURRENT_TIMESTAMP 라 따로 쓰지 않는다.
@@ -95,4 +117,17 @@
         WHERE id = #{groupId}
           AND status = #{fromStatus}
     </update>
+
+    <!--
+      모집 미달 그룹 정리(이슈 #261). WHERE 의 status 비교는 여기서 더 중요하다 —
+      조회 시점에 1명이었어도 그 사이 참여가 생겨 다른 실행이 ACTIVE 로 전이시켰을 수 있고,
+      조건이 없으면 방금 시작된 그룹을 CASCADE 로 통째로 지운다. UPDATE 와 달리 되돌릴 수 없다.
+
+      자식 행은 FK 의 ON DELETE CASCADE 가 정리한다 (schema.sql:452,469,497,548).
+    -->
+    <delete id="deleteIfCurrent">
+        DELETE FROM tbl_challenge_group
+        WHERE id = #{groupId}
+          AND status = #{status}
+    </delete>
 </mapper>

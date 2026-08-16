@@ -1,74 +1,52 @@
 /**
- * 그룹 채팅 API 모듈
+ * 그룹 채팅 API (이슈 #174).
  *
- * 현재는 목업 데이터를 반환한다.
- * 추후 WebSocket(STOMP) + Redis 연동 시 실제 HTTP/WS 호출로 교체.
+ * 메시지 원본은 Redis List 에만 있다. 챌린지가 CLOSED 가 되면 즉시 삭제되므로
+ * 종료된 챌린지의 대화는 조회할 수 없다(서버가 CHAT_ROOM_CLOSED 로 막는다).
  *
- * Redis 키 패턴:
- *   chat:messages:{groupId}          → ZSET (score = timestamp)
- *   chat:unread:{groupId}:{userId}   → STRING (count)
+ * 실시간 송수신은 api/chatSocket.js 가 STOMP 로 맡는다. 이 파일은 조회 전용이다.
  */
-import {
-    MOCK_CHAT_ROOMS,
-    MOCK_CHAT_MESSAGES,
-    MOCK_OLDER_MESSAGES,
-} from '@/fixtures/groupChat';
+import http from '@/api/http';
 
-const DELAY = 200; // 네트워크 시뮬레이션 (ms)
-const PAGE_SIZE = 20;
-
-function wait(ms = DELAY) {
-    return new Promise((r) => setTimeout(r, ms));
-}
+const DEFAULT_LIMIT = 50;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 100;
 
 /**
- * 채팅방 메타 정보 조회
- * GET /api/groups/{groupId}/chat/room
+ * 서버가 limit 1~100 밖의 값을 INVALID_REQUEST(400) 로 거절한다.
+ * 화면 쪽 실수(0, 음수, 100 초과)가 그대로 요청으로 나가지 않도록 여기서 보정한다.
  */
+function normalizeLimit(limit) {
+    if (!Number.isFinite(limit)) return DEFAULT_LIMIT;
+    return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.trunc(limit)));
+}
+
+/** 채팅방 메타 정보 (이름 · 상태 · 인원 · 내 안 읽은 수) */
 export async function fetchChatRoomInfo(groupId) {
-    await wait();
-    const room = MOCK_CHAT_ROOMS[groupId];
-    if (!room) throw new Error(`채팅방 없음: groupId=${groupId}`);
-    return { ...room };
+    return http.get(`/groups/${groupId}/chat/room`);
 }
 
 /**
- * 메시지 목록 조회 (페이징)
- * GET /api/groups/{groupId}/chat/messages?offset=&limit=
+ * 메시지 목록.
+ *
+ * before 는 위로 스크롤할 때, after 는 재연결 후 놓친 구간을 메울 때 쓴다.
+ * 둘을 함께 주면 서버가 INVALID_REQUEST 로 막으므로 요청을 보내기 전에 막는다.
  */
-export async function fetchChatMessages(groupId, offset = 0, limit = PAGE_SIZE) {
-    await wait();
-    const all = MOCK_CHAT_MESSAGES[groupId] ?? [];
-
-    if (offset === 0) {
-        // 최초 로드: 최신 limit개
-        const sliced = all.slice(-limit);
-        return { messages: sliced, hasMore: all.length > limit };
+export async function fetchChatMessages(groupId, { before, after, limit } = {}) {
+    const hasBefore = before !== undefined && before !== null;
+    const hasAfter = after !== undefined && after !== null;
+    if (hasBefore && hasAfter) {
+        throw new Error('before 와 after 는 함께 지정할 수 없습니다.');
     }
 
-    // 스크롤-업: 더 오래된 메시지
-    const older = MOCK_OLDER_MESSAGES[groupId] ?? [];
-    return { messages: older, hasMore: false };
+    const params = { limit: normalizeLimit(limit ?? DEFAULT_LIMIT) };
+    if (hasBefore) params.before = before;
+    if (hasAfter) params.after = after;
+
+    return http.get(`/groups/${groupId}/chat/messages`, { params });
 }
 
-/**
- * 메시지 전송
- * POST /api/groups/{groupId}/chat/messages
- * body: { contentType: 'TEXT'|'STICKER', content: string }
- */
-export async function sendChatMessage(groupId, { contentType, content }) {
-    await wait(100);
-    return {
-        messageId: `m-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-    };
-}
-
-/**
- * 안 읽은 메시지 카운트 초기화
- * PUT /api/groups/{groupId}/chat/unread/reset
- */
+/** 안 읽은 수 초기화. 입장·복귀 시 부른다 */
 export async function resetUnreadCount(groupId) {
-    await wait(50);
-    return { success: true };
+    return http.post(`/groups/${groupId}/chat/read`);
 }

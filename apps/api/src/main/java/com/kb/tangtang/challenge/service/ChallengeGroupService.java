@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.EvalType;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -60,22 +62,27 @@ public class ChallengeGroupService {
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final ChatMessageStore chatMessageStore;
     private final Clock clock;
 
     @Autowired
     public ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                                  GroupMemberMapper groupMemberMapper,
-                                 InviteCodeGenerator inviteCodeGenerator) {
-        this(challengeGroupMapper, groupMemberMapper, inviteCodeGenerator, Clock.systemDefaultZone());
+                                 InviteCodeGenerator inviteCodeGenerator,
+                                 ChatMessageStore chatMessageStore) {
+        this(challengeGroupMapper, groupMemberMapper, inviteCodeGenerator, chatMessageStore,
+                Clock.systemDefaultZone());
     }
 
     ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                           GroupMemberMapper groupMemberMapper,
                           InviteCodeGenerator inviteCodeGenerator,
+                          ChatMessageStore chatMessageStore,
                           Clock clock) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.inviteCodeGenerator = inviteCodeGenerator;
+        this.chatMessageStore = chatMessageStore;
         this.clock = clock;
     }
 
@@ -110,6 +117,14 @@ public class ChallengeGroupService {
         groupMemberMapper.insertMember(newMember(group, userId));
         log.info("그룹 챌린지 생성 userId={} groupId={} inviteCode={} startDate={}",
                 userId, group.getId(), group.getInviteCode(), group.getStartDate());
+
+        // 채팅방은 챌린지 생성과 동시에 열린다. 개설·삭제 UI 는 없다(이슈 #174)
+        // Redis 장애로 채팅방을 못 열어도 챌린지 생성이라는 본업은 성공해야 한다 — 조용히 삼키지 않고 로그만 남긴다.
+        try {
+            chatMessageStore.initRoom(group.getId(), Set.of(group.getAdminId()), group.getEndDate());
+        } catch (Exception e) {
+            log.error("채팅방 개설 실패 groupId={} — 챌린지 생성은 계속 진행한다", group.getId(), e);
+        }
 
         return ChallengeGroupCreatedDto.builder()
                 .groupId(group.getId())
@@ -165,6 +180,15 @@ public class ChallengeGroupService {
         groupMemberMapper.insertMember(newMember(group, userId));
         List<GroupMember> joined = findMembers(groupId);
         log.info("그룹 참여 완료 userId={} groupId={} memberCount={}", userId, groupId, joined.size());
+
+        // 참여자 캐시를 갱신하지 않으면 새 멤버에게 안 읽은 수가 쌓이지 않는다
+        // Redis 장애로 캐시 갱신이 실패해도 참여라는 본업은 성공해야 한다 — 조용히 삼키지 않고 로그만 남긴다.
+        try {
+            chatMessageStore.cacheMembers(groupId, Set.of(userId), group.getEndDate());
+        } catch (Exception e) {
+            log.error("채팅방 참여자 캐시 갱신 실패 groupId={} userId={} — 참여 처리는 계속 진행한다",
+                    groupId, userId, e);
+        }
 
         return toDto(userId, group, joined, LocalDate.now(clock));
     }

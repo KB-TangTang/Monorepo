@@ -33,4 +33,11 @@
         </foreach>
         ORDER BY m.group_id, m.user_id
     </select>
+
+    <!-- 채팅 참여자 캐시를 채울 때 쓴다. 캐시가 살아 있으면 호출되지 않는다 -->
+    <select id="findUserIdsByGroupId" resultType="long">
+        SELECT user_id
+          FROM tbl_group_member
+         WHERE group_id = #{groupId}
+    </select>
 </mapper>

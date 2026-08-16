@@ -100,7 +100,7 @@ export const EXPENSE_CATEGORIES = [
     },
     {
         id: 'education',
-        name: '자기계발',
+        name: '교육/자기계발',
         icon: 'AcademicCap',
         children: [
             { id: 'education-academy', name: '학원' },
@@ -124,10 +124,7 @@ export const EXPENSE_CATEGORIES = [
         id: 'etc',
         name: '기타',
         icon: 'EllipsisHorizontalCircle',
-        children: [
-            { id: 'etc-uncategorized', name: '자동 분류 불가 거래' },
-            { id: 'etc-custom', name: '사용자 직접 지정' },
-        ],
+        children: [],
     },
 ];
 
@@ -138,5 +135,5 @@ export const INCOME_CATEGORIES = [
     { id: 'income-side', name: '부수입', icon: 'Sparkles' },
     { id: 'income-interest', name: '이자/배당', icon: 'BuildingLibrary' },
     { id: 'income-refund', name: '환급/캐시백', icon: 'ReceiptRefund' },
-    { id: 'income-etc', name: '기타', icon: 'EllipsisHorizontalCircle' },
+    { id: 'income-etc', name: '수입 기타', icon: 'EllipsisHorizontalCircle' },
 ];

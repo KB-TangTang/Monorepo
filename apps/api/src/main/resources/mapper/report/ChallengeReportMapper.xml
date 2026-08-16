@@ -39,4 +39,190 @@
           AND withdrawn_at IS NULL
           AND created_at &lt; #{currentMonthStart}
     </select>
+
+    <select id="findFinalizedReportUserIds" resultType="java.lang.Long">
+        SELECT DISTINCT assignment.user_id
+          FROM tbl_user_mission_info assignment
+         WHERE assignment.assign_date BETWEEN #{startDate} AND #{endDate}
+           AND assignment.result IN ('SUCCESS', 'FAIL')
+           AND assignment.evaluated_at IS NOT NULL
+           AND assignment.base_amount IS NOT NULL
+        <if test="!includeExisting">
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM tbl_challenge_monthly_report monthly_report
+                WHERE monthly_report.user_id = assignment.user_id
+                  AND monthly_report.year_month = #{yearMonth}
+           )
+        </if>
+         ORDER BY assignment.user_id
+    </select>
+
+    <select id="findFinalizedMissionRows"
+            resultType="com.kb.tangtang.report.domain.ChallengeMonthlyMissionRow">
+        SELECT assignment.assign_date,
+               assignment.result,
+               mission.mission_type,
+               mission.category_id,
+               category.category_name,
+               difficulty.difficulty_name,
+               difficulty.score AS difficulty_score,
+               assignment.base_amount,
+               COALESCE((
+                   SELECT SUM(
+                       CASE WHEN mission_transaction.is_refund = 1
+                            THEN -COALESCE(mission_transaction.refunded_amount, mission_transaction.amount)
+                            ELSE mission_transaction.amount
+                       END
+                   )
+                     FROM tbl_transaction mission_transaction
+                    WHERE mission_transaction.user_id = assignment.user_id
+                      AND mission_transaction.category_id = mission.category_id
+                      AND mission_transaction.tr_date = assignment.assign_date
+                      AND mission_transaction.classification = 'CONSUMPTION'
+                      AND mission_transaction.direction = 'OUT'
+                      AND mission_transaction.is_excluded_from_summary = 0
+               ), 0) AS actual_amount,
+               EXISTS (
+                   SELECT 1
+                     FROM tbl_user_mission_info previous_assignment
+                    WHERE previous_assignment.user_id = assignment.user_id
+                      AND previous_assignment.assign_date = DATE_SUB(assignment.assign_date, INTERVAL 1 DAY)
+                      AND previous_assignment.result = 'SUCCESS'
+               ) AS previous_success
+          FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
+          LEFT JOIN tbl_category category ON category.id = mission.category_id
+          LEFT JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
+         WHERE assignment.user_id = #{userId}
+           AND assignment.assign_date BETWEEN #{startDate} AND #{endDate}
+           AND assignment.result IN ('SUCCESS', 'FAIL')
+           AND assignment.evaluated_at IS NOT NULL
+           AND assignment.base_amount IS NOT NULL
+         ORDER BY assignment.assign_date, assignment.id
+    </select>
+
+    <select id="findFirstMissionDate" resultType="java.time.LocalDate">
+        SELECT MIN(assign_date)
+          FROM tbl_user_mission_info
+         WHERE user_id = #{userId}
+           AND assign_date &lt;= #{endDate}
+    </select>
+
+    <select id="findDifficultyPolicies"
+            resultType="com.kb.tangtang.report.domain.ChallengeMonthlyDifficultyPolicy">
+        SELECT difficulty_name
+          FROM tbl_mission_difficulty
+         ORDER BY id
+    </select>
+
+    <insert id="upsertMonthlyReport"
+            parameterType="com.kb.tangtang.report.domain.ChallengeMonthlyReportSnapshot">
+        INSERT INTO tbl_challenge_monthly_report
+            (user_id, `year_month`, total_days, success_days, saved_amount, over_amount,
+             category_results_json, monthly_longest_streak, best_weekday, earned_score,
+             weekly_results_json, difficulty_results_json, group_record_json, calculation_version, created_at)
+        VALUES
+            (#{userId}, #{yearMonth}, #{totalDays}, #{successDays}, #{savedAmount}, #{overspentAmount},
+             CAST(#{categoryEffectsJson} AS JSON), #{monthlyLongestStreak}, #{bestWeekday}, #{earnedScore},
+             CAST(#{weeklyResultsJson} AS JSON), CAST(#{difficultyResultsJson} AS JSON),
+             CAST(#{groupRecordJson} AS JSON), #{calculationVersion},
+             #{finalizedAt})
+        ON DUPLICATE KEY UPDATE
+            total_days = VALUES(total_days),
+            success_days = VALUES(success_days),
+            saved_amount = VALUES(saved_amount),
+            over_amount = VALUES(over_amount),
+            category_results_json = VALUES(category_results_json),
+            monthly_longest_streak = VALUES(monthly_longest_streak),
+            best_weekday = VALUES(best_weekday),
+            earned_score = VALUES(earned_score),
+            weekly_results_json = VALUES(weekly_results_json),
+            difficulty_results_json = VALUES(difficulty_results_json),
+            group_record_json = VALUES(group_record_json),
+            calculation_version = VALUES(calculation_version)
+    </insert>
+
+    <update id="updateMonthlyGroupRecord">
+        UPDATE tbl_challenge_monthly_report
+           SET group_record_json = CAST(#{groupRecordJson} AS JSON)
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+    </update>
+
+    <select id="findMonthEndClosedGroupReportUserIds" resultType="java.lang.Long">
+        SELECT DISTINCT member.user_id
+          FROM tbl_challenge_group g
+          JOIN tbl_group_member member ON member.group_id = g.id
+          JOIN tbl_challenge_monthly_report report
+            ON report.user_id = member.user_id
+           AND report.`year_month` = #{yearMonth}
+         WHERE g.status = 'CLOSED'
+           AND g.end_date = #{endDate}
+         ORDER BY member.user_id
+    </select>
+
+    <select id="findMonthlyReport"
+            resultType="com.kb.tangtang.report.domain.ChallengeMonthlyReportRow">
+        SELECT `year_month`, total_days, success_days, saved_amount, over_amount AS overspent_amount, net_amount,
+               category_results_json AS category_effects_json, monthly_longest_streak, best_weekday, earned_score,
+               weekly_results_json, difficulty_results_json, group_record_json
+          FROM tbl_challenge_monthly_report
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+    </select>
+
+    <select id="findPreviousMonthlyReport"
+            resultType="com.kb.tangtang.report.domain.ChallengeMonthlyReportRow">
+        SELECT `year_month`, total_days, success_days, saved_amount, over_amount AS overspent_amount, net_amount,
+               category_results_json AS category_effects_json, monthly_longest_streak, best_weekday, earned_score,
+               weekly_results_json, difficulty_results_json, group_record_json
+          FROM tbl_challenge_monthly_report
+         WHERE user_id = #{userId}
+           AND `year_month` &lt; #{yearMonth}
+         ORDER BY `year_month` DESC
+         LIMIT 1
+    </select>
+
+    <select id="hasJudgingGroupRecord" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+              FROM tbl_challenge_group g
+              JOIN tbl_group_member member
+                ON member.group_id = g.id
+             WHERE member.user_id = #{userId}
+               AND g.end_date BETWEEN #{startDate} AND #{endDate}
+               AND g.status = 'JUDGING'
+        )
+    </select>
+
+    <!--
+      CLOSED는 challenge 모듈의 단일 트랜잭션에서 전원 final_* 갱신 뒤에만 전이된다.
+      따라서 report는 CLOSED만 읽고, final_charge_amount를 포함한 최종값을 재계산하지 않는다.
+      판결 집계는 공통 계약의 기소 1건당 1결과 규칙에 따라 result 값만 사용한다.
+    -->
+    <select id="findGroupRecord" resultType="com.kb.tangtang.report.dto.GroupRecordDto">
+        SELECT COUNT(*) AS participating_groups,
+               COALESCE(SUM(record.final_outcome = 'SURVIVED'), 0) AS survived_count,
+               COALESCE(SUM(record.final_outcome = 'ELIMINATED'), 0) AS eliminated_count,
+               COALESCE(SUM(record.indicted_count), 0) AS indicted_count,
+               COALESCE(SUM(record.acquitted_count), 0) AS acquitted_count,
+               COALESCE(SUM(record.convicted_count), 0) AS convicted_count
+          FROM (
+              SELECT g.id AS group_id,
+                     member.final_outcome,
+                     SUM(indictment.result IS NOT NULL) AS indicted_count,
+                     SUM(indictment.result = 0) AS acquitted_count,
+                     SUM(indictment.result = 1) AS convicted_count
+                FROM tbl_challenge_group g
+                JOIN tbl_group_member member
+                  ON member.group_id = g.id
+                 AND member.user_id = #{userId}
+                LEFT JOIN tbl_indictment indictment
+                  ON indictment.group_id = g.id
+               WHERE g.status = 'CLOSED'
+                 AND g.end_date BETWEEN #{startDate} AND #{endDate}
+               GROUP BY g.id, member.final_outcome
+          ) record
+    </select>
 </mapper>

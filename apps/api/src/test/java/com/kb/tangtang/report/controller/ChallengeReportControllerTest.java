@@ -2,6 +2,8 @@ package com.kb.tangtang.report.controller;
 
 import com.kb.tangtang.report.dto.ChallengeReportMonthDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
+import com.kb.tangtang.report.dto.ChallengeReportDetailDto;
+import com.kb.tangtang.report.dto.GroupRecordDto;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import com.kb.tangtang.report.service.ChallengeReportService;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,31 @@ class ChallengeReportControllerTest {
                             .build()))
                     .build();
         }
+
+        @Override
+        public ChallengeReportDetailDto getReport(long userId, String yearMonth) {
+            return ChallengeReportDetailDto.builder()
+                    .period(yearMonth)
+                    .hasChallengeHistory(true)
+                    .hasPreviousComparison(false)
+                    .missionSuccessRate(new java.math.BigDecimal("75.00"))
+                    .successfulDays(15)
+                    .challengeDays(20)
+                    .bestStreakDays(4)
+                    .bestWeekday("월요일")
+                    .earnedPoints(85)
+                    .groupRecord(GroupRecordDto.builder()
+                            .participatingGroups(1)
+                            .survivedCount(1)
+                            .eliminatedCount(0)
+                            .indictedCount(2)
+                            .acquittedCount(1)
+                            .convictedCount(1)
+                            .build())
+                    .weeklyResults(List.of())
+                    .difficulties(List.of())
+                    .build();
+        }
     }
 
     @Test
@@ -72,5 +99,22 @@ class ChallengeReportControllerTest {
                 .andExpect(jsonPath("$.data.entryState").value("READY"))
                 .andExpect(jsonPath("$.data.months[0].value").value("2026-07"))
                 .andExpect(jsonPath("$.data.months[0].firstReport").value(true));
+    }
+
+    @Test
+    void returnsConfirmedChallengeReportDetailInApiResponse() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new ChallengeReportController(new StubService()))
+                .setCustomArgumentResolvers(loginUserResolver())
+                .build();
+
+        mockMvc.perform(get("/api/reports/challenge").param("yearMonth", "2026-07"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.period").value("2026-07"))
+                .andExpect(jsonPath("$.data.hasPreviousComparison").value(false))
+                .andExpect(jsonPath("$.data.monthOverMonthPercentagePoint").isEmpty())
+                .andExpect(jsonPath("$.data.earnedPoints").value(85))
+                .andExpect(jsonPath("$.data.groupRecord.participatingGroups").value(1))
+                .andExpect(jsonPath("$.data.groupRecord.indictedCount").value(2));
     }
 }

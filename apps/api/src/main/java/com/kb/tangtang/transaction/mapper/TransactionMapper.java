@@ -1,9 +1,12 @@
 package com.kb.tangtang.transaction.mapper;
 
 import com.kb.tangtang.transaction.domain.Transaction;
+import com.kb.tangtang.transaction.domain.TransactionListRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Mapper
@@ -57,4 +60,29 @@ public interface TransactionMapper {
      */
     int updateCategoryByUser(@Param("id") Long id, @Param("userId") Long userId,
                               @Param("categoryId") Long categoryId);
+
+    /**
+     * 집계 제외분(is_excluded_from_summary=1)을 뺀 채 거래가 1건이라도 있는 월 목록.
+     * "YYYY-MM" 문자열로 반환 — TransactionQueryService 가 월 이동 범위의 시작점(가장 이른 데이터월)과
+     * hasData 판정에 쓴다.
+     */
+    List<String> findDistinctDataMonths(@Param("userId") long userId);
+
+    /**
+     * 순 소비 합계. 환불(is_refund=1)은 refunded_amount(없으면 amount)만큼 상계한다.
+     * report 모듈 MonthlyReportMapper.sumNetSpending 과 동일한 계산이라 결과가 리포트 화면과 어긋나지 않는다.
+     */
+    BigDecimal sumNetConsumption(@Param("userId") long userId, @Param("startDate") LocalDate startDate,
+                                  @Param("endDate") LocalDate endDate);
+
+    BigDecimal sumIncome(@Param("userId") long userId, @Param("startDate") LocalDate startDate,
+                          @Param("endDate") LocalDate endDate);
+
+    /**
+     * 장부 화면 표시용 조회. startDate/endDate 가 둘 다 null 이면 기간 제한 없이 전체를 반환한다
+     * (검색 화면 — 데이터 있는 모든 월을 훑는다). is_excluded_from_summary=1 인 행은 항상 제외한다.
+     */
+    List<TransactionListRow> findTransactionRows(@Param("userId") long userId,
+                                                  @Param("startDate") LocalDate startDate,
+                                                  @Param("endDate") LocalDate endDate);
 }
