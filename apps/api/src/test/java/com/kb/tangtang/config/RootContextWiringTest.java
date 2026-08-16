@@ -72,6 +72,37 @@ class RootContextWiringTest {
         }
     }
 
+    /**
+     * 스테레오타입 빈이 생성자를 둘 이상 두면 스프링은 어느 것을 쓸지 고르지 못하고 기본 생성자를
+     * 찾다가 실패한다. {@code ChatQueryService} 에 Clock 을 받는 테스트용 생성자를 추가하면서
+     * 실제로 배포가 깨졌다 — 단위 테스트는 생성자를 직접 호출하니 전부 통과했다.
+     */
+    @Test
+    @DisplayName("생성자가 둘 이상인 스프링 빈은 하나에 @Autowired 를 붙인다")
+    void multipleConstructorBeansMarkOneAsAutowired() {
+        List<String> offenders = new ArrayList<>();
+        for (Path java : mainSources()) {
+            String source = read(java);
+            if (!ROOT_STEREOTYPE.matcher(source).find()) {
+                continue;
+            }
+            String className = java.getFileName().toString().replace(".java", "");
+            long constructors = Pattern
+                    .compile("(?m)^\\s*(public\\s+|protected\\s+|private\\s+)?" + className + "\\s*\\(")
+                    .matcher(source)
+                    .results()
+                    .count();
+            if (constructors >= 2 && !source.contains("@Autowired")) {
+                offenders.add(java.getFileName().toString());
+            }
+        }
+
+        if (!offenders.isEmpty()) {
+            fail("생성자가 둘 이상인데 @Autowired 표시가 없는 빈이 있다 " + offenders
+                    + " — 스프링이 기본 생성자를 찾다가 NoSuchMethodException 으로 기동에 실패한다.");
+        }
+    }
+
     @Test
     @DisplayName("WebSocketConfig 는 서블릿 컨텍스트에만 등록된다")
     void webSocketConfigStaysInServletContext() {

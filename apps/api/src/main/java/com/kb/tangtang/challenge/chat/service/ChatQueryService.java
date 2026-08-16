@@ -7,6 +7,7 @@ import com.kb.tangtang.challenge.chat.dto.ChatRoomDto;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.common.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,11 @@ public class ChatQueryService {
     private final ChatMessageStore store;
     private final Clock clock;
 
+    /*
+     * 생성자가 둘이면 스프링이 어느 쪽을 쓸지 스스로 고르지 못한다 — 표시가 없으면 기본 생성자를
+     * 찾다가 NoSuchMethodException 으로 루트 컨텍스트 전체가 죽는다. 실제로 그렇게 배포가 깨졌다.
+     */
+    @Autowired
     public ChatQueryService(ChatRoomAccessService access, ChatMessageStore store) {
         this(access, store, Clock.system(ZoneId.of("Asia/Seoul")));
     }

@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.chat.domain.ChatSystemMessageSpec;
 import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
 import com.kb.tangtang.challenge.domain.GroupTrialEvents;
 import com.kb.tangtang.notification.domain.NotificationType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,8 @@ public class ChatSystemMessageListener {
     private final ChatMessageService chatMessageService;
     private final Clock clock;
 
+    /* 생성자가 둘이면 표시가 없는 한 스프링이 고르지 못한다 (ChatQueryService 주석 참고) */
+    @Autowired
     public ChatSystemMessageListener(ChatMessageService chatMessageService) {
         this(chatMessageService, Clock.system(ZoneId.of("Asia/Seoul")));
     }
