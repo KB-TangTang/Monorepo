@@ -225,6 +225,21 @@ class MissionAnalysisSnapshotServiceTest {
         assertNull(result.getTopCategories().get(2).getRotationAssignDate());
     }
 
+    @Test
+    void doesNotCreateSnapshotWhileReadingRotationAnalysis() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+
+        MissionCategoryAnalysisDto result = service(mapper, analysisService)
+                .getCurrentRotationAnalysis(USER_ID);
+
+        assertFalse(result.isRelativeEligible());
+        assertTrue(result.getTopCategories().isEmpty());
+        assertTrue(mapper.insertedSnapshots.isEmpty());
+        assertEquals(0, analysisService.callCount);
+        assertEquals(0, analysisService.qualifiedCallCount);
+    }
+
     private MissionCategoryAnalysisDto eligibleAnalysis(List<MissionCategoryRankDto> categories) {
         return MissionCategoryAnalysisDto.builder()
                 .relativeEligible(true)

@@ -70,10 +70,6 @@ public class MissionAnalysisSnapshotService {
         List<MissionAnalysisSnapshot> snapshots =
                 missionAnalysisSnapshotMapper.findLatestCycleSnapshots(userId);
         if (snapshots.isEmpty()) {
-            getOrCreateSnapshot(userId);
-            snapshots = missionAnalysisSnapshotMapper.findLatestCycleSnapshots(userId);
-        }
-        if (snapshots.isEmpty()) {
             LocalDate today = LocalDate.now(clock);
             return MissionCategoryAnalysisDto.builder()
                     .analysisStartDate(today.minusDays(28))
