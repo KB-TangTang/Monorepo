@@ -41,6 +41,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".countByInviteCode"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToEvaluate"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupsToJudge"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
         assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
     }
@@ -61,6 +62,26 @@ class ChallengeMapperXmlTest {
 
         assertTrue(sql.replaceAll("\\s+", " ").contains("status = ?"),
                 "조건절이 없으면 그 사이 ACTIVE 로 전이된 그룹을 통째로 지운다");
+    }
+
+    /**
+     * 부등호가 {@code <=} 로 느슨해지면 종료 다음 날 자정에 JUDGING 으로 넘어가고,
+     * 평가·기소 배치(이슈 #168)가 {@code status = 'ACTIVE'} 로 조회하는 그 그룹이 사라져
+     * <b>챌린지 마지막 날치 기소가 통째로 안 생긴다.</b> 화면에는 아무 오류도 안 뜬다.
+     */
+    @Test
+    @DisplayName("재판 전이 조회는 end_date 를 등호 없이 비교한다")
+    void findGroupsToJudgeExcludesTheBoundaryDay() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = configuration
+                .getMappedStatement(ChallengeGroupMapper.class.getName() + ".findGroupsToJudge")
+                .getBoundSql(new java.util.HashMap<String, Object>())
+                .getSql()
+                .replaceAll("\\s+", " ");
+
+        assertTrue(sql.contains("g.end_date < ?"),
+                "<= 로 바꾸면 평가 배치가 마지막 날 기소를 만들기 전에 그룹이 JUDGING 으로 빠진다");
     }
 
     @Test

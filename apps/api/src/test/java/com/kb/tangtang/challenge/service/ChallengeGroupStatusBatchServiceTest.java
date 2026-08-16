@@ -14,6 +14,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -77,6 +80,57 @@ class ChallengeGroupStatusBatchServiceTest {
         when(transitionService.startOrCancel(alreadyDone)).thenReturn(false);
 
         assertEquals(1, batch().startDueGroups(TODAY));
+    }
+
+    @Test
+    @DisplayName("재판 전이는 종료 다음다음 날부터 본다 — 기준일이 아니라 기준일 전날을 넘긴다")
+    void judgeQueriesActiveGroupsEndedBeforeYesterday() {
+        when(groupMapper.findGroupsToJudge("ACTIVE", TODAY.minusDays(1))).thenReturn(List.of());
+
+        assertEquals(0, batch().judgeEndedGroups(TODAY));
+
+        /*
+         * 이 한 줄이 이 테스트의 전부다. TODAY 를 그대로 넘기면 종료 다음 날 자정에 JUDGING 이 되고,
+         * 평가·기소 배치(#168)가 그날 봐야 할 그룹이 status 조건에서 빠져 마지막 날치 기소가 사라진다.
+         */
+        verify(groupMapper).findGroupsToJudge("ACTIVE", TODAY.minusDays(1));
+        verify(groupMapper, never()).updateStatusIfCurrent(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("ACTIVE 일 때만 JUDGING 으로 바꾼다 — 0 행이면 세지 않는다(멱등)")
+    void judgeCountsOnlyRowsActuallyChanged() {
+        when(groupMapper.findGroupsToJudge("ACTIVE", TODAY.minusDays(1)))
+                .thenReturn(List.of(group(1L), group(2L)));
+        when(groupMapper.updateStatusIfCurrent(1L, "ACTIVE", "JUDGING")).thenReturn(1);
+        when(groupMapper.updateStatusIfCurrent(2L, "ACTIVE", "JUDGING")).thenReturn(0);
+
+        assertEquals(1, batch().judgeEndedGroups(TODAY), "이미 전이된 그룹은 세지 않는다");
+    }
+
+    @Test
+    @DisplayName("재판 전이도 한 그룹이 터지면 나머지를 계속 처리한다")
+    void judgeOneGroupFailureDoesNotStopTheRest() {
+        when(groupMapper.findGroupsToJudge("ACTIVE", TODAY.minusDays(1)))
+                .thenReturn(List.of(group(1L), group(2L), group(3L)));
+        when(groupMapper.updateStatusIfCurrent(anyLong(), anyString(), anyString())).thenReturn(1);
+        when(groupMapper.updateStatusIfCurrent(2L, "ACTIVE", "JUDGING"))
+                .thenThrow(new BusinessException("BOOM", "전이 실패"));
+
+        assertEquals(2, batch().judgeEndedGroups(TODAY));
+
+        verify(groupMapper).updateStatusIfCurrent(3L, "ACTIVE", "JUDGING");
+    }
+
+    @Test
+    @DisplayName("재판 전이는 알림을 발행하지 않는다 — 전이 서비스를 거치지 않는다")
+    void judgePublishesNoNotification() {
+        when(groupMapper.findGroupsToJudge("ACTIVE", TODAY.minusDays(1))).thenReturn(List.of(group(1L)));
+        when(groupMapper.updateStatusIfCurrent(1L, "ACTIVE", "JUDGING")).thenReturn(1);
+
+        batch().judgeEndedGroups(TODAY);
+
+        verifyNoInteractions(transitionService);
     }
 
     private ChallengeGroupStatusBatchService batch() {

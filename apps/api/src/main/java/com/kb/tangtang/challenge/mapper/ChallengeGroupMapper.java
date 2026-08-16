@@ -79,6 +79,24 @@ public interface ChallengeGroupMapper {
                                               @Param("yesterday") LocalDate yesterday);
 
     /**
+     * 평가가 끝나 재판(JUDGING)으로 넘길 그룹 (이슈 #169).
+     *
+     * <b>{@code end_date} 가 지났다고 바로 넘기면 안 된다.</b> 평가·기소 배치는
+     * {@link #findGroupsToEvaluate} 조건대로 <b>종료 다음 날까지</b> 그 그룹을 본다 —
+     * 마지막 날 심야 거래와 기간평가(PERIOD) 기소가 그날 판정되기 때문이다. 그런데 그 조회는
+     * {@code status = 'ACTIVE'} 를 함께 걸고 있어, 종료 다음 날 자정에 JUDGING 으로 바꿔 버리면
+     * <b>마지막 날치 기소가 통째로 생기지 않는다.</b>
+     *
+     * 그래서 호출부가 {@code today - 1일} 을 넘기고 여기서 {@code end_date < 그 날짜} 로 거른다.
+     * 결과적으로 전이는 <b>종료 다음다음 날</b> 자정에 일어난다.
+     *
+     * @param status      찾을 상태. 보통 {@code ACTIVE}
+     * @param endedBefore 이 날짜보다 앞서 끝난 그룹만. 호출부가 {@code today.minusDays(1)} 을 넘긴다
+     */
+    List<ChallengeGroup> findGroupsToJudge(@Param("status") String status,
+                                           @Param("endedBefore") LocalDate endedBefore);
+
+    /**
      * 기대한 상태일 때만 상태를 바꾼다(compare-and-set).
      *
      * <b>배치 멱등성의 근거가 이 반환값이다.</b> 두 번째 실행이나 동시에 도는 인스턴스는 0 을 받고,
