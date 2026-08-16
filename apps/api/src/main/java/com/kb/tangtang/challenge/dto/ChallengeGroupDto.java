@@ -5,6 +5,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -21,8 +22,8 @@ import java.util.List;
  *   <li>종료됨: {@code finalOutcome} · {@code finalRank} · {@code finalChargeAmount}</li>
  * </ul>
  *
- * <p>표시용 이니셜 · 절감액 · 채팅 필드는 없다. 이니셜은 닉네임에서 프론트가 만들고,
- * 나머지 둘은 아직 근거 데이터가 없다.
+ * <p>표시용 이니셜 · 절감액은 없다. 이니셜은 닉네임에서 프론트가 만들고,
+ * 절감액은 아직 근거 데이터가 없다.
  */
 @Getter
 @Builder
@@ -70,6 +71,21 @@ public class ChallengeGroupDto {
     private boolean joinable;
 
     private List<GroupMemberDto> members;
+
+    /* ── 채팅 요약 (Redis 파생) ───────────────────────
+     *
+     * 목록 카드와 상세 FAB 배지가 함께 쓴다. 중첩 {@code chat} 객체를 만들지 않고 평평하게 둔 것은
+     * 목록 카드가 이미 이 세 이름을 읽고 있어서다.
+     *
+     * <p><b>참여자에게만 채운다.</b> 초대 코드 미리보기도 이 DTO 를 쓰기 때문에, 무조건 채우면
+     * 코드만 아는 비참여자에게 방의 마지막 대화가 새어 나간다.
+     */
+    /** 내가 아직 안 읽은 메시지 수. 비참여자 · 대화 없음 · Redis 실패는 모두 0. */
+    private int unreadChatCount;
+    /** 가장 최근 메시지 본문. 시스템 메시지도 그대로 보여준다(카카오톡과 같은 방식). 없으면 NULL. */
+    private String lastChatMessage;
+    /** 가장 최근 메시지 시각. 표시 형식은 프론트가 정한다. 없으면 NULL. */
+    private LocalDateTime lastChatTime;
 
     /* ── 재판 (tbl_indictment 구현 전까지 고정값) ────── */
     /** 내가 투표해야 할 재판 수. 항상 0. */
