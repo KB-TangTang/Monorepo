@@ -6,12 +6,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 
+import java.util.Map;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +57,13 @@ class CommonExceptionAdviceTest {
         @ResponseBody
         String multipartBroken() {
             throw new MultipartException("파트 파싱 실패");
+        }
+
+        /* 본문이 깨져 Jackson 이 못 읽는 경우 — 실제로는 인코딩이 어긋난 한글 JSON 등 */
+        @PostMapping("/api/dummy/body")
+        @ResponseBody
+        String body(@RequestBody Map<String, String> payload) {
+            return payload.toString();
         }
     }
 
@@ -95,5 +108,16 @@ class CommonExceptionAdviceTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("IMAGE_REQUIRED"))
                 .andExpect(jsonPath("$.message").value("올릴 이미지를 선택해주세요."));
+    }
+
+    @Test
+    @DisplayName("읽을 수 없는 요청 본문은 500 이 아니라 400 INVALID_REQUEST 를 준다")
+    void unreadableBodyReturns400() throws Exception {
+        mockMvc.perform(post("/api/dummy/body")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": 깨진값}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 }
