@@ -1151,6 +1151,8 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
   - `after` - 그 메시지보다 뒤 구간 (재연결 후 놓친 구간 보충)
 - `limit` 은 **1~100, 기본값 50** 이다. 범위를 벗어나면 `INVALID_REQUEST` 다(`ChatQueryService`).
 - `hasMore` 는 "위로 더 있는가" 다. 반환된 메시지 중 가장 오래된 `messageId` 가 1보다 크면 `true`.
+- `sentAt` 은 ISO-8601 문자열(`2026-08-16T12:34:56`)이다. **REST 와 STOMP 가 같은 형식**이다
+  (`WebSocketConfig#jsonConverter` 가 브로커 컨버터에도 REST 와 같은 ObjectMapper 를 꽂는다).
 - `type` 은 `TEXT`(참여자가 보낸 메시지) 또는 `SYSTEM`(재판 진행 봇 메시지)이다. `SYSTEM` 이면
   `senderId`·`senderNickname` 이 `null` 이다.
 - **`CLOSED`(재판 절차가 끝난) 챌린지는 조회 자체가 막힌다.** `JUDGING`(재판 중)은 대화가 가장
@@ -1173,6 +1175,10 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
   `NOT_FOUND`·`CHAT_NOT_MEMBER`·`CHAT_ROOM_CLOSED` 가 그대로 발생할 수 있다. STOMP 에서는
   응답 코드가 아니라 **연결 종료**로 나타난다.
 - 수신 메시지 모양은 REST 조회의 `messages[]` 항목과 **완전히 같다**(`ChatMessageDto` 하나를 공유).
+- 프론트는 접속 URL 을 `VITE_API_BASE_URL` 에서 유도한다(`api/chatSocketUrl.js`). 값이 없으면 현재
+  호스트로 폴백하고, 로컬은 `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 :8080 으로 넘긴다.
+  **프로덕션에서는 `VITE_API_BASE_URL` 이 API 서버 절대 URL 로 설정돼 있어야 한다** — Vercel
+  rewrite 는 WebSocket 업그레이드를 넘겨주지 못하므로 상대 경로로는 소켓이 붙지 않는다.
 
 ### 시스템 메시지 (재판 이벤트 수신부, 이슈 #169~#172 인계)
 
@@ -1224,6 +1230,7 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 | `CHAT_ROOM_CLOSED` | 400 | 종료(`CLOSED`)된 챌린지의 대화 조회·발행 시도 |
 | `INVALID_REQUEST` | 400 | `before`·`after` 동시 지정, `limit` 범위(1~100) 밖, 메시지 내용이 비었거나 500자 초과 |
 | `CHAT_SENDER_NOT_FOUND` | 400 | STOMP 발행 - 인증된 세션인데 발신자가 탈퇴 등으로 사라짐 |
+| `CHAT_BROADCAST_UNAVAILABLE` | 500 | STOMP 브로커가 아직 바인딩되지 않아 전달 불가 (서버 기동 이상) |
 
 ## 알림 (이슈 #58)
 

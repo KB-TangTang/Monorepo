@@ -5,6 +5,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
 import com.kb.tangtang.common.exception.BusinessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -32,8 +34,23 @@ import java.util.stream.Collectors;
 @Component
 public class ChatMessageStore {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatMessageStore.class);
+
     /** 판결 확정 배치가 챌린지 종료 다음날 돈다. 그 메시지가 도착할 방이 남아 있어야 한다 */
     private static final int TTL_DAYS_AFTER_END = 2;
+
+    /**
+     * TTL 하한.
+     *
+     * <p>종료일 + 2일이 이미 지난 방은 계산 결과가 <b>음수</b>가 되는데, 음수 TTL 로 EXPIRE 를 걸면
+     * Redis 가 키를 즉시 지운다. TTL 앵커(members 키)가 사라지면 그 뒤의 append 가 messages·seq 에
+     * TTL 을 복제하지 못해 <b>만료 없는 키가 영구히 쌓인다.</b> 이 브랜치에는 ACTIVE/JUDGING→CLOSED
+     * 전이가 없어 종료일 지난 방이 계속 ACTIVE 로 남으므로 희귀 케이스가 아니다.
+     *
+     * <p>그래서 계산값이 0 이하이거나 앵커의 잔여 TTL 을 읽지 못한 경우 이 값으로 클램프한다.
+     * "지금부터 하루 뒤 만료" 는 방을 쓰는 동안 대화가 사라지지 않으면서도 반드시 만료되는 값이다.
+     */
+    private static final Duration MIN_TTL = Duration.ofDays(1);
 
     /** 같은 방·같은 사용자에게 이 간격 안에서는 알림을 한 번만 보낸다 */
     private static final Duration NOTIFY_COOLDOWN = Duration.ofSeconds(30);
@@ -96,11 +113,10 @@ public class ChatMessageStore {
             // 이 방의 첫 메시지 — seq·messages 키가 INCR·RPUSH 로 방금 새로 생겼다.
             // append 는 verifyCanEnter → memberIdsOf 를 거친 뒤에만 호출되므로 members 키(TTL 앵커)는
             // 항상 살아 있다는 전제 위에서, 그 잔여 TTL 을 그대로 복제한다.
-            Long ttlSeconds = redis.getExpire(ChatRedisKeys.members(groupId), TimeUnit.SECONDS);
-            if (ttlSeconds != null && ttlSeconds > 0) {
-                redis.expire(ChatRedisKeys.messages(groupId), Duration.ofSeconds(ttlSeconds));
-                redis.expire(ChatRedisKeys.seq(groupId), Duration.ofSeconds(ttlSeconds));
-            }
+            // 앵커가 없거나(-2) 무기한(-1)이면 하한으로 대신 건다 — 여기서 건너뛰면 영구 키가 된다.
+            Duration ttl = ttlFrom(ChatRedisKeys.members(groupId), groupId);
+            redis.expire(ChatRedisKeys.messages(groupId), ttl);
+            redis.expire(ChatRedisKeys.seq(groupId), ttl);
         }
         return message;
     }
@@ -129,16 +145,15 @@ public class ChatMessageStore {
      * INCR 결과가 1일 때(=이 방·이 사용자 키가 방금 새로 생겼을 때)만 만료 시각을 맞춘다.
      * 기준은 messages 키의 잔여 TTL 이다. initRoom 에서 받은 endDate 를 여기까지 다시 끌고 오지
      * 않기 위해서다 — 방이 살아 있는 한 messages 키가 이미 그 만료 시각을 알고 있으니 그것을 그대로
-     * 복제하면 된다. 잔여 TTL 이 -1(무기한)·-2(키 없음)면 아무것도 하지 않는다.
+     * 복제하면 된다. 잔여 TTL 이 -1(무기한)·-2(키 없음)면 하한({@link #MIN_TTL})으로 대신 건다 —
+     * 걸지 않고 넘어가면 안 읽은 수 키가 영구히 남는다.
      */
     public void increaseUnread(long groupId, Collection<Long> userIds) {
         userIds.forEach(userId -> {
             Long count = redis.opsForValue().increment(ChatRedisKeys.unread(groupId, userId));
             if (count != null && count == 1L) {
-                Long ttlSeconds = redis.getExpire(ChatRedisKeys.messages(groupId), TimeUnit.SECONDS);
-                if (ttlSeconds != null && ttlSeconds > 0) {
-                    redis.expire(ChatRedisKeys.unread(groupId, userId), Duration.ofSeconds(ttlSeconds));
-                }
+                redis.expire(ChatRedisKeys.unread(groupId, userId),
+                        ttlFrom(ChatRedisKeys.messages(groupId), groupId));
             }
         });
     }
@@ -175,10 +190,35 @@ public class ChatMessageStore {
         return raw.stream().map(this::fromJson).collect(Collectors.toList());
     }
 
-    /** 종료 다음날 판결 메시지가 들어올 수 있도록 이틀을 더 준다 */
+    /**
+     * 앵커 키의 잔여 TTL 을 그대로 쓰되, 읽지 못했거나(-2 키 없음) 무기한(-1)이면 하한으로 대체한다.
+     * 이 메서드는 <b>항상 양수 Duration</b> 을 돌려준다 — 호출부가 "TTL 을 안 거는" 분기를 갖지
+     * 않게 하기 위함이다(만료 없는 키가 생기는 경로를 없앤다).
+     */
+    private Duration ttlFrom(String anchorKey, long groupId) {
+        Long ttlSeconds = redis.getExpire(anchorKey, TimeUnit.SECONDS);
+        if (ttlSeconds != null && ttlSeconds > 0) {
+            return Duration.ofSeconds(ttlSeconds);
+        }
+        log.warn("채팅 TTL 앵커의 잔여 시간을 쓸 수 없어 하한({})으로 만료를 건다. groupId={} key={} ttl={}",
+                MIN_TTL, groupId, anchorKey, ttlSeconds);
+        return MIN_TTL;
+    }
+
+    /**
+     * 종료 다음날 판결 메시지가 들어올 수 있도록 이틀을 더 준다.
+     *
+     * <p>이미 지난 종료일이면 음수가 나오는데, 그대로 EXPIRE 에 넘기면 키가 즉시 삭제된다
+     * ({@link #MIN_TTL} 참고). 0 이하는 하한으로 올린다.
+     */
     private Duration ttlUntil(LocalDate endDate) {
-        return Duration.between(LocalDateTime.now(),
+        Duration ttl = Duration.between(LocalDateTime.now(),
                 endDate.plusDays(TTL_DAYS_AFTER_END).atTime(LocalTime.MAX));
+        if (ttl.isZero() || ttl.isNegative()) {
+            log.warn("종료일이 지난 채팅방의 TTL 이 {} 라 하한({})으로 올린다. endDate={}", ttl, MIN_TTL, endDate);
+            return MIN_TTL;
+        }
+        return ttl;
     }
 
     private String toJson(ChatMessage message) {

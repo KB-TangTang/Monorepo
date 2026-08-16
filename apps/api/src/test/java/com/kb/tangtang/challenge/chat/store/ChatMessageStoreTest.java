@@ -133,16 +133,21 @@ class ChatMessageStoreTest {
         verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
     }
 
+    /*
+     * 리뷰 I1: 예전에는 여기서 expire 를 "걸지 않고" 넘어갔다. 그러면 안 읽은 수 키가 만료 없이
+     * 영구히 남는다. 앵커의 TTL 을 못 읽으면 하한(1일)으로라도 반드시 만료를 건다.
+     */
     @Test
-    @DisplayName("messages 키에 잔여 TTL 이 없으면(-1 무기한, -2 키 없음) expire 를 걸지 않는다")
-    void increaseUnreadSkipsTtlWhenMessagesTtlMissing() {
+    @DisplayName("messages 키에 잔여 TTL 이 없으면(-1 무기한, -2 키 없음) 하한 TTL 로 만료를 건다")
+    void increaseUnreadFallsBackToMinimumTtlWhenMessagesTtlMissing() {
         when(valueOps.increment("chat:unread:7:3")).thenReturn(1L);
         when(redisTemplate.getExpire("chat:messages:7", TimeUnit.SECONDS)).thenReturn(-1L, -2L);
 
         store.increaseUnread(GROUP_ID, List.of(3L));
         store.increaseUnread(GROUP_ID, List.of(3L));
 
-        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+        verify(redisTemplate, org.mockito.Mockito.times(2))
+                .expire("chat:unread:7:3", Duration.ofDays(1));
     }
 
     @Test
@@ -195,16 +200,53 @@ class ChatMessageStoreTest {
         verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
     }
 
+    /*
+     * 리뷰 I1: 예전에는 TTL 을 걸지 않고 넘어가 messages·seq 키가 영구히 남았다.
+     * ttlUntil 이 음수를 돌려주면 members 키가 EXPIRE 로 즉시 삭제돼(-2) 실제로 밟히는 경로다.
+     */
     @Test
-    @DisplayName("append 는 members 키 잔여 TTL 이 0 이하면(-1 무기한, -2 키 없음) TTL 을 걸지 않는다")
-    void appendSkipsTtlWhenMembersTtlNotPositive() {
+    @DisplayName("append 는 members 키 잔여 TTL 이 0 이하면(-1 무기한, -2 키 없음) 하한 TTL 로 만료를 건다")
+    void appendFallsBackToMinimumTtlWhenMembersTtlNotPositive() {
         when(valueOps.increment("chat:seq:7")).thenReturn(1L);
         when(redisTemplate.getExpire("chat:members:7", TimeUnit.SECONDS)).thenReturn(-1L, -2L);
 
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕2");
 
-        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+        verify(redisTemplate, org.mockito.Mockito.times(2))
+                .expire("chat:messages:7", Duration.ofDays(1));
+        verify(redisTemplate, org.mockito.Mockito.times(2))
+                .expire("chat:seq:7", Duration.ofDays(1));
+    }
+
+    /*
+     * 리뷰 I1 (경계 케이스): 종료일 + 2일이 이미 지난 방.
+     * 예전에는 Duration 이 음수로 나가 EXPIRE 가 members 키를 즉시 지웠고, 그 직후 append 가
+     * TTL 앵커를 잃어 messages·seq 를 영구 키로 만들었다. 이 브랜치엔 ACTIVE→CLOSED 전이가 없어
+     * 종료일 지난 그룹이 계속 ACTIVE 로 남으므로 흔한 경로다.
+     */
+    @Test
+    @DisplayName("종료일이 이미 지난 방도 음수가 아닌 TTL 을 건다")
+    void cacheMembersClampsExpiredRoomTtlToPositive() {
+        LocalDate longGone = LocalDate.now().minusDays(30);
+
+        store.cacheMembers(GROUP_ID, Set.of(3L), longGone);
+
+        org.mockito.ArgumentCaptor<Duration> ttlCaptor = org.mockito.ArgumentCaptor.forClass(Duration.class);
+        verify(redisTemplate).expire(eqKey("chat:members:7"), ttlCaptor.capture());
+        Duration ttl = ttlCaptor.getValue();
+        assertTrue(!ttl.isNegative() && !ttl.isZero(), "음수·0 TTL 은 키를 즉시 삭제한다. 실제: " + ttl);
+        assertEquals(Duration.ofDays(1), ttl);
+    }
+
+    @Test
+    @DisplayName("종료일이 오늘이어도(하루도 안 남아도) 양수 TTL 을 건다")
+    void cacheMembersKeepsPositiveTtlOnLastDay() {
+        store.cacheMembers(GROUP_ID, Set.of(3L), LocalDate.now());
+
+        org.mockito.ArgumentCaptor<Duration> ttlCaptor = org.mockito.ArgumentCaptor.forClass(Duration.class);
+        verify(redisTemplate).expire(eqKey("chat:members:7"), ttlCaptor.capture());
+        assertTrue(ttlCaptor.getValue().compareTo(Duration.ZERO) > 0);
     }
 
     private static String eqKey(String key) {

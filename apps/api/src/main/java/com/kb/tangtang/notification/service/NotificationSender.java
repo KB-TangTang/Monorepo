@@ -88,6 +88,9 @@ public class NotificationSender {
                 emitter.send(SseEmitter.event().name(eventName).data(payload));
             } catch (IOException | IllegalStateException e) {
                 // 끊긴 연결이다. 실패가 아니라 정리 대상이다 (NT_01_04)
+                //
+                // ⚠ 여기를 catch(Exception) 으로 넓히지 말 것. 직렬화·변환 실패까지 "연결이 끊겼네" 로
+                //   삼켜져 DLQ 에 아무것도 안 남는다. 잡을 예외는 이 두 종류뿐이다.
                 registry.remove(userId, emitter);
             }
         }

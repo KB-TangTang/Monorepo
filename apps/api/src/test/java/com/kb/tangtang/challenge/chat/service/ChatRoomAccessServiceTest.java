@@ -70,15 +70,60 @@ class ChatRoomAccessServiceTest {
     }
 
     @Test
-    @DisplayName("참여자가 아니면 막는다")
+    @DisplayName("캐시에도 DB 에도 없으면 막는다")
     void rejectsNonMember() {
         when(groupMapper.findById(GROUP_ID)).thenReturn(groupWith(ChallengeGroupStatus.ACTIVE));
         when(store.memberIds(GROUP_ID)).thenReturn(Set.of(99L));
+        when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(99L));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.verifyCanEnter(GROUP_ID, USER_ID));
 
         assertEquals("CHAT_NOT_MEMBER", ex.getCode());
+    }
+
+    /*
+     * 리뷰 I2: ChallengeGroupService.join 의 cacheMembers 는 실패를 삼키고 로그만 남긴다
+     * (참여 자체를 되돌리지 않는 옳은 설계다). 그래서 Redis 가 잠깐 흔들리면 캐시는
+     * "비어 있지 않은데 이 사용자만 빠진" 상태로 굳고, 예전 코드는 그것만 보고 곧바로
+     * CHAT_NOT_MEMBER 를 던져 members 키가 만료될 때까지(최대 end_date+2일) 영구 차단했다.
+     */
+    @Test
+    @DisplayName("캐시가 낡아 빠져 있어도 DB 에 있으면 입장시키고 캐시를 다시 데운다")
+    void fallsBackToDatabaseWhenCacheIsStale() {
+        when(groupMapper.findById(GROUP_ID)).thenReturn(groupWith(ChallengeGroupStatus.ACTIVE));
+        when(store.memberIds(GROUP_ID)).thenReturn(Set.of(99L));
+        when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(99L, USER_ID));
+
+        assertEquals(ChallengeGroupStatus.ACTIVE.name(),
+                service.verifyCanEnter(GROUP_ID, USER_ID).getStatus());
+
+        verify(store).cacheMembers(GROUP_ID, Set.of(99L, USER_ID), LocalDate.of(2026, 8, 20));
+    }
+
+    @Test
+    @DisplayName("캐시 갱신이 실패해도 입장 자체는 막지 않는다")
+    void staleCacheFallbackSurvivesCacheWriteFailure() {
+        when(groupMapper.findById(GROUP_ID)).thenReturn(groupWith(ChallengeGroupStatus.ACTIVE));
+        when(store.memberIds(GROUP_ID)).thenReturn(Set.of(99L));
+        when(memberMapper.findUserIdsByGroupId(GROUP_ID)).thenReturn(List.of(99L, USER_ID));
+        org.mockito.Mockito.doThrow(new RuntimeException("Redis 장애"))
+                .when(store).cacheMembers(anyLong(), anySet(), any());
+
+        assertEquals(ChallengeGroupStatus.ACTIVE.name(),
+                service.verifyCanEnter(GROUP_ID, USER_ID).getStatus());
+    }
+
+    @Test
+    @DisplayName("입장 검증은 캐시 히트면 DB 를 건드리지 않는다")
+    void verifyCanEnterUsesCacheWhenPresent() {
+        when(groupMapper.findById(GROUP_ID)).thenReturn(groupWith(ChallengeGroupStatus.ACTIVE));
+        when(store.memberIds(GROUP_ID)).thenReturn(Set.of(USER_ID, 99L));
+
+        service.verifyCanEnter(GROUP_ID, USER_ID);
+
+        verify(memberMapper, never()).findUserIdsByGroupId(GROUP_ID);
+        verify(store, never()).cacheMembers(anyLong(), anySet(), any());
     }
 
     @Test
