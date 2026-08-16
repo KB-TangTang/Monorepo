@@ -1094,7 +1094,8 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.
 - 방장도 `tbl_group_member` 에 들어간다. 정원·목숨·랭킹이 전부 이 테이블을 세기 때문이다.
 - 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
-- `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
+- 재판 배지(`pendingTrialCount`·`defendant`·`myVoteStatus`)는 **목록에서만** 채워진다 (이슈 #169).
+  상세·참여·초대 미리보기에서는 `0`·`false`·`null` 이다.
   절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
 - 상태 전이(`RECRUITING` → `ACTIVE`, 모집 미달 시 삭제)와 시작 알림은 이 API 가 하지 않는다 —
   별도 배치(이슈 #152, 아래 참고). **참여 가능 판정은 날짜가 아니라 `status` 하나를 기준으로 한다.**
@@ -1158,11 +1159,27 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
   자식 행(참여자·결산·기소·투표)은 FK 의 `ON DELETE CASCADE` 가 정리한다.
 - 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED` (딥링크 `/group-challenges/{groupId}`),
   삭제면 방장에게 `GROUP_CHALLENGE_CANCELED` (딥링크 `/group-challenges` — 그룹이 사라져 상세로 보내면 404 다).
+배치는 두 전이를 **순서대로** 돌린다. 아래는 첫 번째(`RECRUITING → ACTIVE`/삭제) 이야기다.
+두 번째 `ACTIVE → JUDGING` 은 이슈 #169 에서 붙었다 — 같은 절 끝에 따로 적었다.
+
 - 트랜잭션은 **그룹 한 건 단위**다. 한 그룹이 실패해도 나머지는 처리되고, 실패분은 다음 실행이 다시 집는다.
 - 멱등하다. `status = 'RECRUITING'` 인 행만 골라 UPDATE·DELETE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
   같은 날 두 번 돌려도 알림이 두 번 나가지 않는다.
   DELETE 쪽 조건절은 중복 알림보다 **오삭제**를 막는 장치다 — 조회 시점엔 혼자였어도 그 사이 참여가 생겨
   다른 실행이 `ACTIVE` 로 전이시켰을 수 있고, 조건이 없으면 방금 시작된 그룹이 통째로 사라진다.
+
+### 종료 전이 `ACTIVE → JUDGING` (이슈 #169)
+
+같은 배치의 두 번째 단계다. **`JUDGING` 을 쓰는 코드가 저장소에 한 곳도 없었다** — 종료일이 지난
+그룹이 영영 `ACTIVE` 로 남아 「진행 중」 탭에 쌓이고 「종료됨」 탭(`JUDGING,CLOSED`)은 비어 있었다.
+시드 SQL 이 `JUDGING` 행을 직접 넣고 있어 화면상으로만 가려져 있었다.
+
+- 대상은 `status=ACTIVE` 이면서 **`end_date < 기준일`** 인 그룹이다.
+  기준일은 `today` 가 아니라 **`today - 1일`** 이다. 평가·기소 배치가 종료 다음 날까지 `ACTIVE`
+  그룹을 봐야 마지막 날 소비가 평가된다 — 종료 당일 자정에 `JUDGING` 으로 넘기면 그 하루가 통째로 빠진다.
+- **알림도 트랜잭션도 없다.** UPDATE 한 문장이라 그 자체가 원자적이고, 함께 묶을 다른 쓰기가 없다.
+  멱등성은 `WHERE status = 'ACTIVE'` 비교가 그대로 보장한다.
+- `JUDGING → CLOSED`(최종 결과 확정)는 이 배치가 하지 않는다. 이슈 #172 · #173 범위다.
 
 ### 배치 수동 트리거 (DEV 전용)
 
@@ -1200,6 +1217,89 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|
 | `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
+
+## 그룹 챌린지 — 재판 진입로 (이슈 #169)
+
+홈 「오늘의 할 일」과 그룹 상세 화면이 쓰는 조회 2종이다. **쓰기(변론 제출·투표)는 여기 없다** —
+이슈 #170 · #171 범위다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/group-challenges/my-trials` | Bearer | `MyTrial[]` |
+| GET | `/api/group-challenges/{groupId}/detail` | Bearer | `ChallengeGroupDetail` |
+
+> `/my-trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다 먼저 매칭한다.
+> 순서를 바꿔도 같다.
+
+### 마감 시각은 저장값이 아니라 계산값이다
+
+`tbl_indictment` 에 마감 컬럼이 없다(`schema.sql` 의 `[0803]` 주석). 응답의 모든 마감은
+`created_at` 에서 파생한다.
+
+```
+변론 마감 = created_at + challenge.trial.defense-hours   (기본 6시간)
+투표 마감 = created_at + defense-hours + vote-hours       (기본 6 + 24 = 30시간)
+```
+
+- 프로퍼티를 줄이면 **이미 생성된 기소의 마감도 함께 앞당겨진다.** 시연 때 코드를 고칠 필요가 없다.
+- **마감이 지난 건도 목록에서 그대로 내려간다.** 지우는 일은 상태 전이 배치가 한다 —
+  조회가 마감을 판단해 숨기면 배치가 아직 안 돈 사이 화면과 DB 가 어긋난다.
+- 응답은 **ISO-8601 절대시각**(`2026-08-16T15:00:00`)이다. 남은 분 수로 주지 않는다 —
+  화면을 열어 둔 채 몇 시간이 지나면 카운트다운이 응답 받은 시점 기준으로 굳는다.
+
+### `MyTrial` — 오늘의 할 일
+
+`{ indictmentId, type, challengeId, challengeName, defendantNickname, amount, voteCount, totalVoters, deadline }`
+
+- 변론 대기와 투표 대기를 **한 배열로** 마감 임박순 정렬해 내려준다. 화면이 하나의 목록으로 보여주고
+  필터 칩으로만 나누기 때문이다. 두 배열로 나눠 주면 프론트가 다시 합쳐 정렬해야 하는데
+  그 기준이 서버와 어긋나면 카드와 시트의 순서가 달라진다.
+- `type` 은 **소문자 고정** `accuse`(내가 변론) · `vote`(내가 투표). `GroupTodoItem.vue` 가
+  소문자 리터럴로 비교한다.
+- `type` 에 따라 비는 필드가 있다 — `accuse` 는 `amount` 만, `vote` 는
+  `defendantNickname`·`voteCount`·`totalVoters` 만 채워진다.
+- **「3/5 투표」 같은 표시 문구는 담지 않는다.** 문구를 서버가 만들면 디자인을 고칠 때마다
+  war 를 다시 올려야 한다. 서버는 재료만 주고 `api/groupChallenge.js` 가 조립한다.
+
+### `ChallengeGroupDetail` — 상세 화면 한 벌
+
+목록과 같은 `ChallengeGroup` 에 상세 전용 필드를 얹은 것이다. **그룹 필드는 한 겹 없이 같은
+높이로 펼쳐진다**(`@JsonUnwrapped`) — 프론트가 응답을 `{...dto}` 로 펼쳐 쓰기 때문에
+`challenge.groupName` 처럼 접히면 화면 전체가 빈칸이 된다.
+
+추가 필드: `myDailyAmount`, `myUsagePercent`, `myRemainingAmount`, `indictments[]`, `dailyMembers[]`.
+
+- `dailyMembers` 에는 **내가 빠져 있다.** 내 몫은 위의 `my*` 세 개다.
+- `myRemainingAmount` 는 **초과 시 음수**다. 0 으로 깎으면 얼마나 넘겼는지 화면이 알 수 없다.
+- `dailyAmount` 는 일일평가면 오늘 하루치, 기간평가면 기간 합계다. 이름은 하나로 뒀다 —
+  둘로 나누면 화면이 매번 둘 중 하나를 골라야 한다.
+- `usagePercent` 는 **100 을 넘을 수 있다**(화면이 막대만 100% 에서 자른다).
+  한도 0원인 무지출 챌린지는 한 푼이라도 쓰면 100 이다.
+
+`indictments[]` = `{ id, userId, nickname, profileImageUrl, status, settlementDate, exceededAmount,
+mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
+
+- 진행 중(`DEFENSE_WAIT`·`VOTING`)인 기소만 **오래된 순**(= 마감이 급한 순)으로 준다.
+  확정된 기소는 카드가 아니라 전적으로 간다.
+- **카드 종류는 서버가 정하지 않는다.** 프론트가 `mine`·`status`·`myVote` 를 조합해
+  「변론 필요 / 변론 제출됨 / 투표 필요 / 투표 완료」를 만든다.
+- **마감 두 개를 둘 다 채운다.** 상태별로 한 쪽만 채우면 상태 전이가 도는 순간 화면에서
+  마감이 잠깐 사라진다.
+- `settlementDate` 는 기소 생성일이 아니라 **위반한 날짜**다. 심야 거래를 다음 날 배치가 잡아
+  하루 어긋난다.
+- `mine`·`defended`·`exceeded` 는 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 접두어 없는
+  `mine`·`defended`·`exceeded`** 다.
+
+### 아직 NULL 인 필드
+
+`settleTime` · `memoAuthor` · `memoDate` 는 근거 컬럼이 없다.
+채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #172 · #173 이다.
+화면이 이미 NULL 을 견디도록 만들어져 있다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
 
 ## 그룹 채팅 (이슈 #174)
 

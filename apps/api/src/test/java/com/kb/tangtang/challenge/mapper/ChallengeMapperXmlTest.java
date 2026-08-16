@@ -41,6 +41,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".countByInviteCode"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToEvaluate"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupsToJudge"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
         assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
     }
@@ -63,6 +64,26 @@ class ChallengeMapperXmlTest {
                 "조건절이 없으면 그 사이 ACTIVE 로 전이된 그룹을 통째로 지운다");
     }
 
+    /**
+     * 부등호가 {@code <=} 로 느슨해지면 종료 다음 날 자정에 JUDGING 으로 넘어가고,
+     * 평가·기소 배치(이슈 #168)가 {@code status = 'ACTIVE'} 로 조회하는 그 그룹이 사라져
+     * <b>챌린지 마지막 날치 기소가 통째로 안 생긴다.</b> 화면에는 아무 오류도 안 뜬다.
+     */
+    @Test
+    @DisplayName("재판 전이 조회는 end_date 를 등호 없이 비교한다")
+    void findGroupsToJudgeExcludesTheBoundaryDay() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = configuration
+                .getMappedStatement(ChallengeGroupMapper.class.getName() + ".findGroupsToJudge")
+                .getBoundSql(new java.util.HashMap<String, Object>())
+                .getSql()
+                .replaceAll("\\s+", " ");
+
+        assertTrue(sql.contains("g.end_date < ?"),
+                "<= 로 바꾸면 평가 배치가 마지막 날 기소를 만들기 전에 그룹이 JUDGING 으로 빠진다");
+    }
+
     @Test
     @DisplayName("GroupMemberMapper XML 이 파싱되고 모든 구문이 등록된다")
     void parsesGroupMemberMapper() throws Exception {
@@ -83,6 +104,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findOverLimitDaily"));
         assertTrue(configuration.hasStatement(namespace + ".findOverLimitPeriod"));
         assertTrue(configuration.hasStatement(namespace + ".findDeductionOverflow"));
+        assertTrue(configuration.hasStatement(namespace + ".findMemberConsumption"));
     }
 
     /**
@@ -115,5 +137,28 @@ class ChallengeMapperXmlTest {
 
         String namespace = IndictmentMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".insertIndictment"));
+        assertTrue(configuration.hasStatement(namespace + ".findDefenseTodos"));
+        assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
+        assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
+    }
+
+    /**
+     * 투표 대기 조회에서 참여자 조인이 빠지면 <b>남의 그룹 재판이 내 할 일 목록에 뜨고</b>
+     * 그 링크로 투표 화면까지 열린다. 조회 결과만 보고는 눈치채기 어려운 권한 구멍이라 못박는다.
+     */
+    @Test
+    @DisplayName("투표 대기 조회는 참여자 조인 없이 실행되지 않는다")
+    void voteTodosKeepMembershipJoin() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = configuration
+                .getMappedStatement(IndictmentMapper.class.getName() + ".findVoteTodos")
+                .getBoundSql(new java.util.HashMap<String, Object>())
+                .getSql()
+                .replaceAll("\\s+", " ");
+
+        assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
+                "조인이 없으면 내가 속하지 않은 그룹의 재판이 할 일 목록에 섞인다");
     }
 }

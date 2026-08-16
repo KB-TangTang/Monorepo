@@ -87,9 +87,27 @@ public class ChallengeGroupDto {
     /** 가장 최근 메시지 시각. 표시 형식은 프론트가 정한다. 없으면 NULL. */
     private LocalDateTime lastChatTime;
 
-    /* ── 재판 (tbl_indictment 구현 전까지 고정값) ────── */
-    /** 내가 투표해야 할 재판 수. 항상 0. */
+    /* ── 재판 배지 (목록 전용) ───────────────────────── */
+    /*
+     * 세 필드는 「내가 지금 해야 할 일」을 가리킨다. 재판이 열려 있는지가 아니다.
+     * 남의 재판이 진행 중이어도 내가 이미 투표했으면 「투표완료」다 (GroupActiveCard.vue).
+     *
+     * ⚠ 목록(GC_01_01)에서만 채워진다. 상세·참여·초대 미리보기 응답에서는 0 · false · null 이다 —
+     *   상세 화면은 같은 응답의 indictments 로 판단하므로 같은 것을 두 번 세지 않는다.
+     */
+
+    /** 투표 중인데 내가 아직 안 던진 기소 수. 0 보다 크면 「투표중」. */
     private int pendingTrialCount;
-    /** 내가 피고인인 기소가 있는지. 항상 false. */
+
+    /** 내가 피고이고 아직 변론을 안 낸 기소가 있는지. 참이면 「변론필요」 — 배지 중 가장 급하다. */
     private boolean defendant;
+
+    /**
+     * 내 투표 진행 상태. {@code PENDING}(아직 안 던진 표가 있음) · {@code DONE}(던졌고 개표 대기) ·
+     * NULL(투표할 재판 없음).
+     *
+     * <p>{@code pendingTrialCount} 로 갈음할 수 없다. 둘 다 0 이어도 <b>투표를 마쳐서</b> 0 인 것과
+     * <b>재판이 없어서</b> 0 인 것은 화면에서 「투표완료」와 「순항중」으로 갈린다.
+     */
+    private String myVoteStatus;
 }

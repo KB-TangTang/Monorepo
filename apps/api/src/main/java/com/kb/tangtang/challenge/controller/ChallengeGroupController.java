@@ -3,9 +3,13 @@ package com.kb.tangtang.challenge.controller;
 import com.kb.tangtang.challenge.docs.ChallengeGroupControllerDocs;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
+import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
+import com.kb.tangtang.challenge.dto.MyTrialDto;
+import com.kb.tangtang.challenge.service.ChallengeGroupDetailService;
 import com.kb.tangtang.challenge.service.ChallengeGroupService;
+import com.kb.tangtang.challenge.service.GroupTrialService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +30,15 @@ import java.util.List;
 public class ChallengeGroupController implements ChallengeGroupControllerDocs {
 
     private final ChallengeGroupService challengeGroupService;
+    private final GroupTrialService groupTrialService;
+    private final ChallengeGroupDetailService challengeGroupDetailService;
 
-    public ChallengeGroupController(ChallengeGroupService challengeGroupService) {
+    public ChallengeGroupController(ChallengeGroupService challengeGroupService,
+                                    GroupTrialService groupTrialService,
+                                    ChallengeGroupDetailService challengeGroupDetailService) {
         this.challengeGroupService = challengeGroupService;
+        this.groupTrialService = groupTrialService;
+        this.challengeGroupDetailService = challengeGroupDetailService;
     }
 
     /** 생성 (GC_01_02 ~ GC_01_04). 방장은 자동으로 참여자가 된다. */
@@ -50,11 +60,35 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
         return ApiResponse.ok(challengeGroupService.findMyGroups(userId, status));
     }
 
+    /**
+     * 내가 처리해야 하는 재판 (GC_06_01). 홈 「오늘의 할 일」.
+     *
+     * <p>경로가 {@code /{groupId}} 와 겹쳐 보이지만 Spring 은 리터럴 경로를 변수 경로보다 먼저
+     * 매칭한다. 순서를 바꿔도 결과는 같다 — 다만 <b>{@code my-trials} 를 그룹 ID 로 파싱하려다
+     * 400 이 나는 것</b>처럼 보이는 사고가 흔해서 여기 적어 둔다.
+     */
+    @GetMapping("/my-trials")
+    public ApiResponse<List<MyTrialDto>> findMyTrials(@LoginUser Long userId) {
+        return ApiResponse.ok(groupTrialService.findMyTrials(userId));
+    }
+
     /** 상세 (GC_01_09). 참여자만 볼 수 있다. */
     @GetMapping("/{groupId}")
     public ApiResponse<ChallengeGroupDto> findDetail(@LoginUser Long userId,
                                                            @PathVariable Long groupId) {
         return ApiResponse.ok(challengeGroupService.findDetail(userId, groupId));
+    }
+
+    /**
+     * 상세 화면 한 벌 (GC_01_09). 위의 {@code /{groupId}} 에 재판 카드와 소비 상태를 얹은 것이다.
+     *
+     * <p>가벼운 쪽을 지우지 않고 둘을 함께 둔다. 참여 직후 응답({@code join})처럼 그룹 정보만
+     * 필요한 자리가 있는데, 거기서 재판·소비 집계까지 읽으면 값을 쓰지도 않고 쿼리만 늘어난다.
+     */
+    @GetMapping("/{groupId}/detail")
+    public ApiResponse<ChallengeGroupDetailDto> findFullDetail(@LoginUser Long userId,
+                                                               @PathVariable Long groupId) {
+        return ApiResponse.ok(challengeGroupDetailService.findDetail(userId, groupId));
     }
 
     /**

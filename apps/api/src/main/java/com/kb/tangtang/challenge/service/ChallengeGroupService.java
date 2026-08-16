@@ -6,6 +6,7 @@ import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupMember;
+import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
@@ -13,6 +14,7 @@ import com.kb.tangtang.challenge.dto.GroupMemberDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
+import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +65,7 @@ public class ChallengeGroupService {
 
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
+    private final IndictmentMapper indictmentMapper;
     private final InviteCodeGenerator inviteCodeGenerator;
     private final ChatMessageStore chatMessageStore;
     private final Clock clock;
@@ -70,19 +73,22 @@ public class ChallengeGroupService {
     @Autowired
     public ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                                  GroupMemberMapper groupMemberMapper,
+                                 IndictmentMapper indictmentMapper,
                                  InviteCodeGenerator inviteCodeGenerator,
                                  ChatMessageStore chatMessageStore) {
-        this(challengeGroupMapper, groupMemberMapper, inviteCodeGenerator, chatMessageStore,
-                Clock.systemDefaultZone());
+        this(challengeGroupMapper, groupMemberMapper, indictmentMapper, inviteCodeGenerator,
+                chatMessageStore, Clock.systemDefaultZone());
     }
 
     ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                           GroupMemberMapper groupMemberMapper,
+                          IndictmentMapper indictmentMapper,
                           InviteCodeGenerator inviteCodeGenerator,
                           ChatMessageStore chatMessageStore,
                           Clock clock) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
+        this.indictmentMapper = indictmentMapper;
         this.inviteCodeGenerator = inviteCodeGenerator;
         this.chatMessageStore = chatMessageStore;
         this.clock = clock;
@@ -214,11 +220,16 @@ public class ChallengeGroupService {
         Map<Long, List<GroupMember>> membersByGroup = groupMemberMapper.findByGroupIds(groupIds).stream()
                 .collect(Collectors.groupingBy(GroupMember::getGroupId));
 
+        // 재판 배지도 같은 이유로 한 번에 센다. 재판이 없는 그룹은 행 자체가 안 나오므로 없으면 null 이다.
+        Map<Long, GroupTrialSummaryRow> trialByGroup =
+                indictmentMapper.findTrialSummaryByGroupIds(userId, groupIds).stream()
+                        .collect(Collectors.toMap(GroupTrialSummaryRow::getGroupId, row -> row));
+
         LocalDate today = LocalDate.now(clock);
         List<ChallengeGroupDto> result = new ArrayList<>(groups.size());
         for (ChallengeGroup group : groups) {
             List<GroupMember> members = membersByGroup.getOrDefault(group.getId(), List.of());
-            result.add(toDto(userId, group, members, today));
+            result.add(toDto(userId, group, members, today, trialByGroup.get(group.getId())));
         }
         return result;
     }
@@ -360,10 +371,20 @@ public class ChallengeGroupService {
 
     /* ══ 조립 ══════════════════════════════════════════════ */
 
+    /** 재판 배지가 없는 자리(상세 · 참여 · 초대 미리보기)용. */
     private ChallengeGroupDto toDto(long userId,
                                     ChallengeGroup group,
                                     List<GroupMember> members,
                                     LocalDate today) {
+        return toDto(userId, group, members, today, null);
+    }
+
+    /** @param trial 재판 배지 집계. 목록에서만 채워지고 그 외에는 NULL 이다 */
+    private ChallengeGroupDto toDto(long userId,
+                                    ChallengeGroup group,
+                                    List<GroupMember> members,
+                                    LocalDate today,
+                                    GroupTrialSummaryRow trial) {
         int totalDays = daysBetweenInclusive(group.getStartDate(), group.getEndDate());
         EvalType evalType = EvalType.valueOf(group.getEvalType());
         GroupMember me = findMember(members, userId);
@@ -401,7 +422,26 @@ public class ChallengeGroupService {
                 .unreadChatCount(chat.unreadCount())
                 .lastChatMessage(chat.lastMessage())
                 .lastChatTime(chat.lastTime())
+                .pendingTrialCount(trial == null ? 0 : trial.getPendingVoteCount())
+                .defendant(trial != null && trial.getMyDefenseNeededCount() > 0)
+                .myVoteStatus(myVoteStatus(trial))
                 .build();
+    }
+
+    /**
+     * 「투표중」 · 「투표완료」 · 배지 없음을 가른다.
+     *
+     * <p>안 던진 표가 하나라도 남아 있으면 이미 던진 표가 있어도 {@code PENDING} 이다 —
+     * 배지는 남은 할 일을 가리키므로 완료 쪽이 이기면 할 일이 숨는다.
+     */
+    private String myVoteStatus(GroupTrialSummaryRow trial) {
+        if (trial == null) {
+            return null;
+        }
+        if (trial.getPendingVoteCount() > 0) {
+            return "PENDING";
+        }
+        return trial.getCastVoteCount() > 0 ? "DONE" : null;
     }
 
     /**

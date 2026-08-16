@@ -151,22 +151,28 @@ public class RootConfig {
      * 점유하는 동안 하트비트가 밀린다. LLM 폴링과 금융 동기화 배치는 한 tick 에 여러 건의 외부 HTTP
      * 호출을 순차로 수행하므로 실제로 오래 점유한다(이슈 #199).
      *
-     * 2026-08-15 기준 @Scheduled 13개 → 14 로 둔다.
+     * 2026-08-16 기준 @Scheduled 14개 → poolSize 18 로 둔다.
      *   15초  SseHeartbeat.ping
      *   60초  NotificationDlqRetryScheduler.retryDue
      *   60초  LlmCategorizationScheduler.pollAndProcess
      *   5분   GroupChallengeEvaluationScheduler.evaluateActiveGroups   (#168)
      *   20분  FinancialSyncBatchScheduler.runBatch
-     *   일별  ChallengeGroupStatusScheduler.startDueGroups
+     *   일별  ChallengeGroupStatusScheduler.runDailyTransitions
      *   일별  RelativeMissionAssignmentScheduler.assignDailyMissions · recoverMissingDailyMissions
      *   일별  FixedExpenseDetectionScheduler.runDailyFixedExpenseBatch
      *   일별  FixedExpensePaymentReminderScheduler.sendDuePaymentReminders
      *   월별  MonthlyReportBatchScheduler.generatePreviousMonthReports · recoverPreviousMonthReports
      *   월별  ChallengeMonthlyReportScheduler.finalizePreviousMonthReports
+     *                                     · refreshPreviousMonthEndGroupRecords   (#256)
      *
      * ⚠ 스케줄러를 추가하면 이 목록과 poolSize 를 같이 갱신한다. 과거에 목록이 "4개" 로 멈춰 있어
      *   실제 개수를 세어 보기 전에는 여유가 있는지 판단할 수 없었다.
-     *   그룹챌린지 배치가 2개 더 붙을 예정이다(#170 · #172).
+     *   2026-08-16 에도 같은 일이 반복됐다 — #256 이 refreshPreviousMonthEndGroupRecords 를
+     *   추가하면서 목록을 갱신하지 않아 "13개 / poolSize 14" 로 적혀 있었지만 실제로는
+     *   14개 / 14 (여유 0) 였다. #169 에서 세어 정정하고 18 로 올렸다.
+     *   그룹챌린지 배치가 3개 더 붙을 예정이다(#170 변론 마감 1개 · #172 개표·최종확정 2개).
+     *   #169 의 ACTIVE → JUDGING 전이는 새 @Scheduled 를 만들지 않고
+     *   ChallengeGroupStatusScheduler.runDailyTransitions 안에 붙였다.
      *
      * 일별·월별 cron 은 자정 직후(00:01·00:10·00:15·00:30·00:40)와 18:30 에 몰린다.
      * 특히 고정지출 배치 둘은 같은 프로퍼티(${fixed.expense.detection.cron})를 써서 반드시 겹친다.
@@ -174,7 +180,7 @@ public class RootConfig {
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(14);
+        scheduler.setPoolSize(18);
         scheduler.setThreadNamePrefix("tt-sched-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);

@@ -4,6 +4,8 @@
 <!--
   typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
   파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &gt; · &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨진다.
 -->
 <mapper namespace="com.kb.tangtang.challenge.mapper.IndictmentMapper">
 
@@ -28,4 +30,150 @@
         VALUES
             (#{resultId}, #{groupId}, #{userId}, #{status}, #{message})
     </insert>
+
+    <!--
+      ── 이하 조회 (이슈 #169) ─────────────────────────────────────────────
+
+      별칭은 i(기소) · g(그룹) · r(기소 대상 일별 결과) 로 고정한다. 아래 조각들이 그 별칭을 쓴다.
+    -->
+    <sql id="fromIndictment">
+        FROM tbl_indictment i
+        JOIN tbl_challenge_group g ON g.id = i.group_id
+        JOIN tbl_group_challenge_daily_result r ON r.id = i.result_id
+    </sql>
+
+    <!--
+      한도 초과액. tbl_indictment 에 금액 컬럼이 없어 매번 다시 계산한다.
+
+      ⚠ 이 CASE 는 GroupChallengeResultMapper 의 findOverLimitDaily · findOverLimitPeriod 와
+        같은 계산을 되풀이한 것이다. 한쪽만 고치면 "기소는 됐는데 초과액이 0원" 처럼 보인다.
+        기소 판정과 화면 표시가 같은 값을 써야 해서 감수한 중복이다 —
+        금액을 기소 시점에 박아 두면 환불·재분류로 집계가 줄어도 옛 금액이 화면에 남는다.
+
+      일일평가는 위반한 그 날의 effective_amount(무죄 감액 반영값),
+      기간평가는 기간 전체의 daily_amount 합계가 기준이다.
+    -->
+    <sql id="exceededAmount">
+        CASE WHEN g.eval_type = 'PERIOD'
+             THEN COALESCE((SELECT SUM(rp.daily_amount)
+                              FROM tbl_group_challenge_daily_result rp
+                             WHERE rp.group_id = g.id
+                               AND rp.user_id = i.user_id
+                               AND rp.challenge_date BETWEEN g.start_date AND g.end_date), 0)
+             ELSE r.effective_amount
+        END - g.limit_amount
+    </sql>
+
+    <!-- 표시용 닉네임. 소셜 로그인만 하고 닉네임을 안 정한 사용자가 빈칸으로 보이지 않게 한다 -->
+    <sql id="displayNickname">
+        COALESCE(NULLIF(TRIM(u.nickname), ''), u.social_name)
+    </sql>
+
+    <!-- 투표할 수 있는 사람 수. 피고 본인은 자기 재판에 투표할 수 없어 1 을 뺀다 -->
+    <sql id="totalVoters">
+        (SELECT COUNT(*) FROM tbl_group_member gm WHERE gm.group_id = i.group_id) - 1
+    </sql>
+
+    <!--
+      내가 변론해야 하는 기소.
+
+      마감이 지났는지는 거르지 않는다 — 이유는 IndictmentMapper#findDefenseTodos 주석 참고.
+      idx_ind_user_status (user_id, status) 를 탄다.
+    -->
+    <select id="findDefenseTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">
+        SELECT i.id            AS indictment_id,
+               g.id            AS challenge_id,
+               g.group_name    AS challenge_name,
+               <include refid="exceededAmount"/> AS amount,
+               i.created_at    AS created_at
+        <include refid="fromIndictment"/>
+        WHERE i.user_id = #{userId}
+          AND i.status = 'DEFENSE_WAIT'
+          AND NOT EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id)
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      내가 투표해야 하는 기소.
+
+      tbl_group_member 조인이 "내가 그 그룹 사람인가" 를 겸한다. 남의 그룹 재판이 섞이면
+      투표 화면까지 열리므로 조인을 지우면 안 된다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findVoteTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">
+        SELECT i.id         AS indictment_id,
+               g.id         AS challenge_id,
+               g.group_name AS challenge_name,
+               <include refid="displayNickname"/> AS defendant_nickname,
+               <include refid="exceededAmount"/>  AS amount,
+               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               <include refid="totalVoters"/> AS total_voters,
+               i.created_at AS created_at
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.status = 'VOTING'
+          AND i.user_id &lt;&gt; #{userId}
+          AND NOT EXISTS (SELECT 1 FROM tbl_vote v
+                           WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      그룹 상세의 재판 카드. 확정된 기소(GUILTY · INNOCENT)는 카드가 아니라 전적으로 가므로 뺀다.
+
+      정렬은 오래된 순이다 — 캐러셀 첫 장이 마감이 가장 급한 재판이어야 한다.
+    -->
+    <select id="findOpenByGroupId" resultType="com.kb.tangtang.challenge.domain.GroupIndictmentRow">
+        SELECT i.id     AS id,
+               i.user_id AS user_id,
+               <include refid="displayNickname"/> AS nickname,
+               u.profile_image_key AS profile_image_key,
+               i.status AS status,
+               r.challenge_date    AS challenge_date,
+               <include refid="exceededAmount"/> AS exceeded_amount,
+               EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id) AS defended,
+               (SELECT v.verdict FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               <include refid="totalVoters"/> AS total_voters,
+               i.created_at AS created_at
+        <include refid="fromIndictment"/>
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.group_id = #{groupId}
+          AND i.status IN ('DEFENSE_WAIT', 'VOTING')
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      목록 카드 배지 3개를 그룹 단위로 한 번에 센다.
+
+      GROUP BY 라 재판이 없는 그룹은 행 자체가 안 나온다. 호출부가 기본값으로 채운다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findTrialSummaryByGroupIds"
+            resultType="com.kb.tangtang.challenge.domain.GroupTrialSummaryRow">
+        SELECT i.group_id AS group_id,
+               SUM(CASE WHEN i.user_id = #{userId}
+                         AND i.status = 'DEFENSE_WAIT'
+                         AND NOT EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id)
+                        THEN 1 ELSE 0 END) AS my_defense_needed_count,
+               SUM(CASE WHEN i.user_id &lt;&gt; #{userId}
+                         AND i.status = 'VOTING'
+                         AND NOT EXISTS (SELECT 1 FROM tbl_vote v
+                                          WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+                        THEN 1 ELSE 0 END) AS pending_vote_count,
+               SUM(CASE WHEN i.user_id &lt;&gt; #{userId}
+                         AND i.status = 'VOTING'
+                         AND EXISTS (SELECT 1 FROM tbl_vote v
+                                      WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+                        THEN 1 ELSE 0 END) AS cast_vote_count
+        FROM tbl_indictment i
+        WHERE i.status IN ('DEFENSE_WAIT', 'VOTING')
+          AND i.group_id IN
+          <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+              #{groupId}
+          </foreach>
+        GROUP BY i.group_id
+    </select>
 </mapper>

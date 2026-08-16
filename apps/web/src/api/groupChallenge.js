@@ -14,11 +14,24 @@ import {
     MOCK_PRE_START_CHALLENGES,
     MOCK_ACTIVE_LIST_CHALLENGES,
     MOCK_ENDED_CHALLENGES,
+    MOCK_TODO_ITEMS,
 } from '@/fixtures/groupChallenge';
 import { MOCK_CHALLENGE_DETAILS, MOCK_CHALLENGE_RANKINGS } from '@/fixtures/groupChallengeDetail';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+/** 지금부터 `ms` 뒤의 절대시각. 목데이터의 상대 마감을 실데이터 모양으로 맞출 때 쓴다. */
+function afterNow(ms) {
+    return new Date(Date.now() + ms).toISOString();
+}
+
+/** `2026-08-05` → `8월 5일`. 화면은 「8월 5일 결산」으로 읽는다. */
+function formatMonthDay(isoDate) {
+    if (!isoDate) return '';
+    const [, month, day] = isoDate.split('-');
+    return `${Number(month)}월 ${Number(day)}일`;
 }
 
 /**
@@ -28,9 +41,14 @@ function clone(value) {
  * 이름(`rules`, `isOwner`, `isDefendant`)을 쓴다. 아바타 이니셜은 표시 전용이라
  * 서버가 내려주지 않고 닉네임에서 만든다.
  *
+ * 배지 값(`defendant` · `myVoteStatus` · `pendingTrialCount`)은 **목록 응답에서만** 채워진다.
+ * 상세·참여·초대 미리보기에서는 서버가 `false` · `null` · `0` 을 준다 —
+ * 카드들이 falsy 를 「순항중」으로 처리하므로 그대로 흘려보낸다.
+ *
  * 채팅 요약(`unreadChatCount`·`lastChatMessage`·`lastChatTime`)은 서버가 그대로 내려주므로
- * 스프레드로 통과한다. 여기서 채우지 않는 필드(`myVoteStatus`, `savingsAmount` …)는
- * 근거 데이터가 아직 없다. 카드들이 falsy 를 기본 상태로 처리하므로 비워둔다.
+ * 스프레드로 통과한다. 여기서 이름을 바꾸지 않는다.
+ *
+ * `savingsAmount` 는 아직 근거 데이터가 없다 (이슈 #172).
  */
 function toViewModel(dto) {
     return {
@@ -150,18 +168,105 @@ export async function joinGroup(groupId) {
 }
 
 /**
- * 그룹 챌린지 상세 (재판 현황·랭킹 포함).
- * 서버 미구현 — 기소/투표(tbl_indictment)가 들어와야 만들 수 있다.
+ * 홈 「오늘의 할 일」 — 내가 변론하거나 투표해야 하는 재판. 마감 임박순이다.
+ *
+ * 변론 대기와 투표 대기가 **한 배열로** 섞여 온다. 화면이 하나의 목록으로 보여주고
+ * 필터 칩으로만 나누기 때문이다.
+ */
+export async function fetchMyTrials() {
+    if (isMockMode.value) {
+        return MOCK_TODO_ITEMS.map((item) => ({
+            ...item,
+            deadline: afterNow(item.deadlineMinutes * 60000),
+        }));
+    }
+    const list = await http.get('/group-challenges/my-trials');
+    return list.map(toTrialViewModel);
+}
+
+/**
+ * 서버 DTO → TO-DO 아이템.
+ *
+ * 서버는 재료(`type` · `defendantNickname` · `voteCount`)만 주고 **문구는 여기서 만든다.**
+ * 문구를 서버가 만들면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ */
+function toTrialViewModel(dto) {
+    const isAccuse = dto.type === 'accuse';
+    return {
+        ...dto,
+        /* 목록 key 이자 카운트다운 키. 기소 ID 는 그룹을 넘어 유일하다. */
+        id: dto.indictmentId,
+        title: isAccuse
+            ? '기소 되어 변론이 필요해요!'
+            : `${dto.defendantNickname}님의 변론에 투표하세요`,
+        tally: isAccuse ? null : `${dto.voteCount}/${dto.totalVoters} 투표`,
+    };
+}
+
+/**
+ * 그룹 챌린지 상세 (재판 카드 · 참여자 소비 상태 포함).
+ *
+ * 그룹 정보는 한 겹 없이 평평하게 내려온다(`@JsonUnwrapped`). 그래서 목록과 같은
+ * `toViewModel` 을 그대로 태울 수 있다.
  */
 export async function fetchGroupChallengeDetail(groupId) {
-    if (!isMockMode.value) {
-        throw notImplementedYet('그룹 챌린지 상세');
+    if (isMockMode.value) {
+        const detail = MOCK_CHALLENGE_DETAILS[Number(groupId)];
+        if (!detail) {
+            throw new Error('챌린지를 찾을 수 없습니다.');
+        }
+        return withMockDeadlines(clone(detail));
     }
-    const detail = MOCK_CHALLENGE_DETAILS[Number(groupId)];
-    if (!detail) {
-        throw new Error('챌린지를 찾을 수 없습니다.');
-    }
-    return clone(detail);
+    return toDetailViewModel(await http.get(`/group-challenges/${groupId}/detail`));
+}
+
+/**
+ * 상세 응답 → 화면이 쓰는 모양.
+ *
+ * 서버는 ERD·Lombok 이 정한 이름(`mine`, `defended`, `exceeded`, `profileImageUrl`)을 준다.
+ * 화면은 목데이터 시절의 이름을 쓴다. 아바타 이니셜·색은 `UserAvatar` 가 닉네임에서 만들므로
+ * 서버가 내려주지 않는다.
+ */
+function toDetailViewModel(dto) {
+    return {
+        ...toViewModel(dto),
+        indictments: (dto.indictments ?? []).map((item) => ({
+            ...item,
+            profileImage: item.profileImageUrl,
+            isMine: item.mine,
+            hasDefended: item.defended,
+            settlementDate: formatMonthDay(item.settlementDate),
+            /* 서버는 마감 두 개를 다 주지만 카드는 하나만 그린다. 고르는 일을 여기서 끝낸다. */
+            deadline: item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline,
+        })),
+        dailyMembers: (dto.dailyMembers ?? []).map((member) => ({
+            ...member,
+            profileImage: member.profileImageUrl,
+            isExceeded: member.exceeded,
+        })),
+    };
+}
+
+/**
+ * 목데이터의 마감은 `'02:14:03'` 같은 **남은 시간 문자열**이라 카운트다운이 돌지 않는다.
+ * 호출 시점 기준 절대시각으로 바꿔 실데이터와 같은 모양으로 맞춘다.
+ * (픽스처에 절대시각을 박아 두면 하루만 지나도 전부 「마감됨」이 된다)
+ */
+function withMockDeadlines(detail) {
+    return {
+        ...detail,
+        indictments: (detail.indictments ?? []).map((item) => {
+            const remaining =
+                item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline;
+            return { ...item, deadline: remainingToDeadline(remaining) };
+        }),
+    };
+}
+
+function remainingToDeadline(text) {
+    if (!text) return null;
+    const [h = 0, m = 0, s = 0] = text.split(':').map(Number);
+    return afterNow(((h * 60 + m) * 60 + s) * 1000);
 }
 
 /**

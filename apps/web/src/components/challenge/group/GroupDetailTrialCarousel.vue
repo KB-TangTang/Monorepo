@@ -6,10 +6,14 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
+import { useCountdown } from '@/utils/useCountdown';
 
 const props = defineProps({
     indictments: { type: Array, required: true },
 });
+
+/* 마감은 절대시각으로 온다. 문자열을 그대로 찍으면 화면을 열어 둔 채로 굳는다. */
+const { countdowns } = useCountdown(computed(() => props.indictments));
 
 const emit = defineEmits(['defend', 'vote', 'trial']);
 
@@ -67,8 +71,7 @@ function stampLabel(item) {
 }
 
 function deadline(item) {
-    if (item.status === 'DEFENSE_WAIT') return `마감 ${item.defenseDeadline}`;
-    return `마감 ${item.voteDeadline}`;
+    return `마감 ${countdowns.value[item.id]?.text ?? '--:--:--'}`;
 }
 </script>
 

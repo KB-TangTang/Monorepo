@@ -1,6 +1,7 @@
 package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupChallengeDailyResult;
+import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
 import com.kb.tangtang.challenge.domain.IndictmentTarget;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -73,4 +74,19 @@ public interface GroupChallengeResultMapper {
      * 배치가 판결 컬럼을 손대는 순간 위의 소유권 분리가 깨진다.
      */
     List<GroupChallengeDailyResult> findDeductionOverflow(@Param("groupId") Long groupId);
+
+    /**
+     * 그룹 상세 화면이 쓰는 참여자별 소비액 (이슈 #169). 배치가 아니라 조회용이다.
+     *
+     * <p>평가 주기에 맞춰 기준이 갈린다 — 일일평가는 {@code challengeDate} 하루치
+     * {@code effective_amount}, 기간평가는 기간 전체 {@code SUM(daily_amount)} 다.
+     * 이 두 갈래는 {@code IndictmentMapper.xml} 의 {@code exceededAmount} 조각과 같은 계산이어야
+     * 한다. 어긋나면 <b>「초과 아님」으로 보이는 참여자가 재판에 올라가 있는</b> 화면이 나온다.
+     *
+     * <p>집계 행이 없는 참여자도 0원으로 나온다. 카드가 통째로 빠지면 인원이 모자라 보인다.
+     *
+     * @param challengeDate 일일평가의 기준 날짜(보통 오늘). 기간평가에서는 쓰이지 않는다
+     */
+    List<GroupMemberConsumptionRow> findMemberConsumption(@Param("groupId") Long groupId,
+                                                          @Param("challengeDate") LocalDate challengeDate);
 }

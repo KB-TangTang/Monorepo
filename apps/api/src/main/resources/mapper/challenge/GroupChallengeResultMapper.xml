@@ -150,4 +150,40 @@
            AND verdict_deduction_amount &gt; daily_amount
          ORDER BY user_id, challenge_date
     </select>
+
+    <!--
+      그룹 상세의 참여자별 소비액 (이슈 #169). 여기부터는 배치가 아니라 화면용 조회다.
+
+      ⚠ CASE 두 갈래는 IndictmentMapper.xml 의 exceededAmount 조각과 같은 계산이다.
+        한쪽만 고치면 "화면엔 한도 이하인데 재판에 올라가 있는" 참여자가 생긴다.
+        일일평가는 그 날의 effective_amount(무죄 감액 반영값), 기간평가는 기간 전체 daily_amount 합.
+
+      tbl_group_member 를 기준으로 LEFT 하지 않고 스칼라 서브쿼리 + COALESCE 로 0 을 채운다.
+      집계 행이 아직 없는 참여자(첫날 오전 등)의 카드가 통째로 빠지면 인원이 모자라 보인다.
+
+      정렬을 user_id 로 고정해야 화면의 카드 순서가 요청마다 흔들리지 않는다.
+    -->
+    <select id="findMemberConsumption"
+            resultType="com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow">
+        SELECT m.user_id AS user_id,
+               COALESCE(NULLIF(TRIM(u.nickname), ''), u.social_name) AS nickname,
+               u.profile_image_key AS profile_image_key,
+               CASE WHEN g.eval_type = 'PERIOD'
+                    THEN COALESCE((SELECT SUM(rp.daily_amount)
+                                     FROM tbl_group_challenge_daily_result rp
+                                    WHERE rp.group_id = g.id
+                                      AND rp.user_id = m.user_id
+                                      AND rp.challenge_date BETWEEN g.start_date AND g.end_date), 0)
+                    ELSE COALESCE((SELECT rd.effective_amount
+                                     FROM tbl_group_challenge_daily_result rd
+                                    WHERE rd.group_id = g.id
+                                      AND rd.user_id = m.user_id
+                                      AND rd.challenge_date = #{challengeDate}), 0)
+               END AS amount
+          FROM tbl_group_member m
+          JOIN tbl_challenge_group g ON g.id = m.group_id
+          JOIN tbl_user u ON u.id = m.user_id
+         WHERE m.group_id = #{groupId}
+         ORDER BY m.user_id
+    </select>
 </mapper>

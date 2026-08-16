@@ -76,7 +76,13 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
         log.warn("DEV 배치 수동 실행 name={} baseDate={} userId={}", name, baseDate, userId);
 
         int affected = switch (name) {
-            case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate);
+            /*
+             * 스케줄러와 같은 순서로 두 전이를 모두 돌린다(이슈 #169). 하나만 돌리는 이름을 따로 두면
+             * 수동 실행과 실제 배치의 동작이 갈라져, 여기서 통과한 시나리오가 자정에 재현되지 않는다.
+             * 반환값은 두 전이의 합이다.
+             */
+            case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate)
+                    + challengeGroupStatusBatchService.judgeEndedGroups(baseDate);
             /*
              * 기소가 열리는지 기다리지 않고 확인하는 용도다. date 로 기준일을 바꾸면
              * "종료 다음 날" 로 넘어가 기간평가(PERIOD) 기소까지 즉시 재현할 수 있다.
