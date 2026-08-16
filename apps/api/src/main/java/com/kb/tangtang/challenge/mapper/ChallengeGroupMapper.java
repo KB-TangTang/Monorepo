@@ -90,4 +90,24 @@ public interface ChallengeGroupMapper {
     int updateStatusIfCurrent(@Param("groupId") Long groupId,
                               @Param("fromStatus") String fromStatus,
                               @Param("toStatus") String toStatus);
+
+    /**
+     * 기대한 상태일 때만 그룹을 지운다. 모집 미달로 시작하지 못한 그룹을 정리한다(이슈 #261).
+     *
+     * <b>{@code status} 조건이 없으면 정상 시작한 그룹을 지울 수 있다.</b> 배치는 조회와 처리가
+     * 두 단계라, 조회 시점에는 참여자가 1명이었지만 그 사이 누가 들어와 다른 실행이 이미
+     * {@code ACTIVE} 로 전이시켜 놓았을 수 있다. 그때 조건 없이 지우면 방금 시작된 멀쩡한 그룹이
+     * 참여자·결산·재판까지 {@code ON DELETE CASCADE} 로 통째로 사라진다.
+     * {@code updateStatusIfCurrent} 와 같은 compare-and-set 장치다.
+     *
+     * <p>중복 알림은 조건이 없어도 막힌다 — 행이 사라지므로 두 번째 실행은 어차피 0 을 받는다.
+     * 조건절이 막는 것은 <b>되돌릴 수 없는 오삭제</b> 쪽이다.
+     *
+     * <p>자식 행({@code tbl_group_member} · {@code tbl_group_challenge_daily_result} ·
+     * {@code tbl_indictment} · {@code tbl_vote})은 FK 의 {@code ON DELETE CASCADE} 가 정리한다.
+     *
+     * @return 지운 행 수. 0 이면 이미 다른 쪽이 처리했거나 그룹이 그 상태가 아니라는 뜻이다
+     */
+    int deleteIfCurrent(@Param("groupId") Long groupId,
+                        @Param("status") String status);
 }

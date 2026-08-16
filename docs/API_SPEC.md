@@ -1093,7 +1093,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
 - `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
   절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
-- 상태 전이(`RECRUITING` → `ACTIVE`/`CLOSED`)와 시작 알림은 이 API 가 하지 않는다 —
+- 상태 전이(`RECRUITING` → `ACTIVE`, 모집 미달 시 삭제)와 시작 알림은 이 API 가 하지 않는다 —
   별도 배치(이슈 #152, 아래 참고). **참여 가능 판정은 날짜가 아니라 `status` 하나를 기준으로 한다.**
   그래서 배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있을 수 있다.
 
@@ -1147,12 +1147,19 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 
 - 대상은 `status=RECRUITING` 이면서 `start_date <= 기준일` 인 그룹이다.
   **등호가 아니라 부등호다** — 서버가 내려가 배치를 건너뛰었어도 다음 실행이 밀린 그룹을 주워 담는다.
-- 참여자 **2명 이상**이면 `ACTIVE`, **1명(방장뿐)**이면 `CLOSED` 로 간다. 혼자서는 재판이 성립하지 않는다.
-- 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED`,
-  `CLOSED` 면 방장에게 `GROUP_CHALLENGE_CANCELED`. 딥링크는 `/group-challenges/{groupId}` 다.
+- 참여자 **2명 이상**이면 `ACTIVE` 로 간다. **1명(방장뿐)**이면 그룹을 **삭제한다**(이슈 #261).
+  혼자서는 재판이 성립하지 않는다.
+- **미성립 그룹을 `CLOSED` 로 두지 않는 이유**는 `CLOSED` 가 「정상 종료 + 최종 결과 확정 완료」를
+  뜻하는 상태이기 때문이다. 시작조차 못 한 그룹은 `final_*` 가 영원히 NULL 이고 결산 행도 없으며
+  `end_date` 가 미래라, 종료 연월로 월 귀속을 잡는 그룹 전적·월간 리포트가 이 그룹을 미래 달에 끌어다 놓는다.
+  자식 행(참여자·결산·기소·투표)은 FK 의 `ON DELETE CASCADE` 가 정리한다.
+- 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED` (딥링크 `/group-challenges/{groupId}`),
+  삭제면 방장에게 `GROUP_CHALLENGE_CANCELED` (딥링크 `/group-challenges` — 그룹이 사라져 상세로 보내면 404 다).
 - 트랜잭션은 **그룹 한 건 단위**다. 한 그룹이 실패해도 나머지는 처리되고, 실패분은 다음 실행이 다시 집는다.
-- 멱등하다. 상태를 `RECRUITING` 인 행만 골라 UPDATE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
+- 멱등하다. `status = 'RECRUITING'` 인 행만 골라 UPDATE·DELETE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
   같은 날 두 번 돌려도 알림이 두 번 나가지 않는다.
+  DELETE 쪽 조건절은 중복 알림보다 **오삭제**를 막는 장치다 — 조회 시점엔 혼자였어도 그 사이 참여가 생겨
+  다른 실행이 `ACTIVE` 로 전이시켰을 수 있고, 조건이 없으면 방금 시작된 그룹이 통째로 사라진다.
 
 ### 배치 수동 트리거 (DEV 전용)
 
@@ -1300,7 +1307,8 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 
 - TTL 은 **챌린지 `end_date` + 2일**이다. 종료 다음날 도는 판결 확정 배치가 도착할 방이 남아
   있어야 해서다.
-- 챌린지가 `CLOSED` 로 전이되면 **TTL 을 기다리지 않고 방을 즉시 삭제한다.** TTL 은 백스톱일 뿐이다.
+- 챌린지가 `CLOSED` 로 전이되거나 모집 미달로 삭제되면 **TTL 을 기다리지 않고 방을 즉시 삭제한다.**
+  TTL 은 백스톱일 뿐이다.
 - 안 읽은 수(`unreadCount`)도 같은 Redis 인스턴스에 저장하며 같은 TTL 규칙을 따른다.
 
 ### 그룹 채팅 에러 코드
