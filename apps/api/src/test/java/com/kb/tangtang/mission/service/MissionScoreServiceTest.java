@@ -4,6 +4,8 @@ import com.kb.tangtang.mission.dto.MissionMonthlyScoreDto;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.mission.domain.MissionRankingRow;
+import com.kb.tangtang.mission.domain.MissionCertificateStatsRow;
+import com.kb.tangtang.mission.dto.MissionCertificateDto;
 import com.kb.tangtang.mission.dto.MissionMonthlyRankingDto;
 import com.kb.tangtang.mission.mapper.MissionScoreMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -116,6 +118,37 @@ class MissionScoreServiceTest {
                 List.of("2026-08", "2026-07", "2025-12"),
                 service.getRankingMonths().getYearMonths()
         );
+    }
+
+    @Test
+    void returnsCertificateForFinalizedMonth() {
+        MissionRankingRow ranking = rankingRow(USER_ID, "나", null, 480, 12);
+        MissionCertificateStatsRow stats = new MissionCertificateStatsRow();
+        stats.setStreakDays(5);
+        stats.setBestStreakDays(9);
+        stats.setCompletedMissionCount(31);
+        stats.setSuccessMissionCount(25);
+        when(missionScoreMapper.findUserRanking(USER_ID, "2026-07")).thenReturn(ranking);
+        when(missionScoreMapper.countRankingUsers("2026-07")).thenReturn(100);
+        when(missionScoreMapper.findCertificateStats(
+                USER_ID, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31))).thenReturn(stats);
+
+        MissionCertificateDto result = service.getCertificate(USER_ID, "2026-07");
+
+        assertEquals(12, result.getMyRanking().getRank());
+        assertEquals(5, result.getStreakDays());
+        assertEquals(9, result.getBestStreakDays());
+        assertEquals(25, result.getSuccessMissionCount());
+    }
+
+    @Test
+    void rejectsCertificateForCurrentMonth() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getCertificate(USER_ID, "2026-08")
+        );
+
+        assertEquals("CERTIFICATE_NOT_FINALIZED", exception.getCode());
     }
 
     private MissionRankingRow rankingRow(long userId, String nickname, String imageKey,

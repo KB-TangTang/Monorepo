@@ -46,6 +46,7 @@ const selectedMonth = computed(() =>
 const availablePeriods = computed(() => rankingMonths.value.map((month) => month.value));
 
 const currentPeriodIndex = computed(() => availablePeriods.value.indexOf(selectedPeriod.value));
+const isCertificateAvailable = computed(() => selectedPeriod.value < currentPeriod);
 
 const previousPeriod = computed(() => availablePeriods.value[currentPeriodIndex.value - 1]);
 const nextPeriod = computed(() => availablePeriods.value[currentPeriodIndex.value + 1]);
@@ -184,7 +185,9 @@ onMounted(async () => {
             <section class="personal-ranking__podium-section">
                 <header class="personal-ranking__podium-header">
                     <h2>이번 달 명예의 전당</h2>
-                    <button type="button" @click="openCertificate">♙ 인증서 발급</button>
+                    <button v-if="isCertificateAvailable" type="button" @click="openCertificate">
+                        ♙ 인증서 발급
+                    </button>
                 </header>
                 <div class="personal-ranking__podium">
                     <article

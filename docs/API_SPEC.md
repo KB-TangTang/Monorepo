@@ -945,9 +945,12 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 |---|---|---|---|
 | GET | `/api/missions/rankings?yearMonth=YYYY-MM` | Bearer | 해당 월 상위 10명과 내 순위 |
 | GET | `/api/missions/rankings/months` | Bearer | 전체 랭킹 데이터가 있는 `YYYY-MM` 목록 |
+| GET | `/api/missions/rankings/certificate?yearMonth=YYYY-MM` | Bearer | 확정 월 명예 인증서 데이터 |
 
 - 월 목록 응답은 `{ "yearMonths": ["2026-08", "2026-07"] }` 형식이다.
 - 프론트에서 이 목록을 기준으로 월 선택 버튼과 연도 이동을 활성화한다.
+- 인증서는 서울 시간 기준 전월 이전만 발급할 수 있다. 당월·미래 월 요청은 `CERTIFICATE_NOT_FINALIZED` 오류를 반환한다.
+- 인증서 응답은 `{ yearMonth, totalUsers, myRanking, streakDays, bestStreakDays, completedMissionCount, successMissionCount }` 형식이다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 

@@ -3,6 +3,7 @@ package com.kb.tangtang.mission.controller;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.mission.dto.MissionMonthlyRankingDto;
+import com.kb.tangtang.mission.dto.MissionCertificateDto;
 import com.kb.tangtang.mission.dto.MissionMonthlyScoreDto;
 import com.kb.tangtang.mission.dto.MissionRankingMonthsDto;
 import com.kb.tangtang.mission.docs.MissionScoreControllerDocs;
@@ -32,6 +33,13 @@ public class MissionScoreController implements MissionScoreControllerDocs {
             @LoginUser Long userId,
             @RequestParam(required = false) String yearMonth) {
         return ApiResponse.ok(missionScoreService.getMonthlyRanking(userId, yearMonth));
+    }
+
+    @GetMapping("/rankings/certificate")
+    public ApiResponse<MissionCertificateDto> getCertificate(
+            @LoginUser Long userId,
+            @RequestParam String yearMonth) {
+        return ApiResponse.ok(missionScoreService.getCertificate(userId, yearMonth));
     }
 
     @GetMapping("/rankings/months")
