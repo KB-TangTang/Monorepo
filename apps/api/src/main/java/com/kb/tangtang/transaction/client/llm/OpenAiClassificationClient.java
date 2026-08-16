@@ -54,7 +54,7 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
     @Autowired
     public OpenAiClassificationClient(@Qualifier("openAiRestTemplate") RestTemplate restTemplate,
                                       ObjectMapper objectMapper,
-                                      @Value("${openai.api.key}") String apiKey,
+                                      @Value("${openai.api-key:}") String apiKey,
                                       @Value("${openai.api.base-url}") String baseUrl,
                                       @Value("${openai.api.model}") String model,
                                       @Value("${llm.categorization.confidence-threshold}") double confidenceThreshold) {
@@ -68,6 +68,13 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
 
     @Override
     public List<CategoryAssignmentDto> classify(List<Transaction> transactions, List<Category> categories) {
+        // 키가 없으면 기동을 막지 않고 이 기능만 실패시킨다. 예전에는 프로퍼티가 없으면
+        // 컨텍스트 로딩 자체가 깨져 서비스 전체가 뜨지 못했다(신규 설치자가 매번 걸렸다).
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new BusinessException("EXTERNAL_API_ERROR",
+                    "OpenAI API 키가 설정되지 않아 자동 카테고리화를 할 수 없습니다.");
+        }
+
         ObjectNode requestBody = buildRequestBody(transactions, categories);
 
         HttpHeaders headers = new HttpHeaders();
