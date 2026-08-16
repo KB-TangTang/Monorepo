@@ -36,9 +36,13 @@
 -- ⚠ 배치는 INSERT 실패(DuplicateKeyException)를 **정상 흐름으로 삼켜야** 한다.
 --   이 제약은 "이미 기소된 건" 을 걸러 내는 정상 경로지 오류가 아니다.
 --
--- ⚠ tbl_indictment 에는 아직 시드도 운영 데이터도 없다(2026-08-15 확인).
---   그래서 중복 정리 없이 바로 UNIQUE 를 건다. 만약 수동으로 넣어 둔 테스트 행 때문에
---   Duplicate entry 로 실패하면, 아래 조회로 중복을 확인한 뒤 직접 지우고 다시 실행한다.
+-- ⚠ tbl_indictment 에 미리 넣어 둔 중복 행이 없어야 이 ALTER 가 통과한다.
+--   현재 이 테이블에 행을 넣는 것은 seed_closed_group_challenge_demo.sql 하나뿐이고,
+--   그 시드는 daily_result 1행당 기소 1건만 만들어(DAILY 는 r.id 당 1행, PERIOD 는 GROUP BY r.id)
+--   이 제약과 충돌하지 않는다. 오히려 그 시드의 `JOIN ... ON t.result_id = i.result_id` 가
+--   result_id 유일성을 전제로 하므로 이 UNIQUE 가 그 전제를 보장해 준다.
+--   수동으로 넣어 둔 테스트 행 때문에 Duplicate entry 로 실패하면,
+--   아래 조회로 중복을 확인한 뒤 직접 지우고 다시 실행한다.
 --     SELECT result_id, COUNT(*) c FROM tbl_indictment GROUP BY result_id HAVING c > 1;
 
 -- ── 1. 중복 기소 방지 ───────────────────────────────────────────────────
