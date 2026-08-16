@@ -88,9 +88,16 @@ public class ChatSystemMessageListener {
                 content, systemType, trialLink(groupId, indictmentId), caseNo(indictmentId), notificationType));
     }
 
-    /** app:// 형식을 쓰지 않는다. 이 서비스는 웹앱이고 딥링크는 라우터 경로다 */
+    /**
+     * app:// 형식을 쓰지 않는다. 이 서비스는 웹앱이고 딥링크는 라우터 경로다.
+     *
+     * <p>경로는 {@code router/index.js} 의 {@code trialProgress} 와 <b>글자 그대로 같아야 한다.</b>
+     * 예전 값 {@code /challenge/group/...} 은 어느 라우트에도 맞지 않아, 카드의 「재판 보러가기」를
+     * 눌러도 URL 만 바뀌고 화면이 빈 채로 남았다. 라우터는 매칭 실패를 예외로 알리지 않아
+     * 콘솔에도 아무것도 남지 않는다 — 경로를 고칠 때 라우터 정의를 함께 확인할 것.
+     */
     private String trialLink(long groupId, long indictmentId) {
-        return "/challenge/group/" + groupId + "/trial/" + indictmentId;
+        return "/group-challenges/" + groupId + "/trial/" + indictmentId;
     }
 
     /**

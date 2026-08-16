@@ -76,11 +76,9 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        /* 채팅 (그룹 채팅방 요약) */
-        chat: {
-            unreadCount: 3,
-            lastMessage: { sender: '유현', text: '나 오늘 진짜 참았다' },
-        },
+        /* 채팅 (그룹 채팅방 요약) — 서버 DTO 와 같은 평평한 이름을 쓴다 */
+        unreadChatCount: 3,
+        lastChatMessage: '나 오늘 진짜 참았다',
 
         /*
          * 재판 캐러셀 (tbl_indictment + tbl_defense + tbl_vote)
@@ -291,10 +289,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        chat: {
-            unreadCount: 1,
-            lastMessage: { sender: '세영', text: '오늘 택시 안 탔다!' },
-        },
+        unreadChatCount: 1,
+        lastChatMessage: '오늘 택시 안 탔다!',
 
         indictments: [
             {
@@ -380,10 +376,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        chat: {
-            unreadCount: 5,
-            lastMessage: { sender: '세영', text: '편의점 들렸는데 참았다 ㅋㅋ' },
-        },
+        unreadChatCount: 5,
+        lastChatMessage: '편의점 들렸는데 참았다 ㅋㅋ',
 
         dailyMembers: [
             {
@@ -668,10 +662,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(5),
         ],
 
-        chat: {
-            unreadCount: 0,
-            lastMessage: { sender: '민지', text: '배달 시켜먹고 싶다...' },
-        },
+        unreadChatCount: 0,
+        lastChatMessage: '배달 시켜먹고 싶다...',
 
         dailyMembers: [
             {

@@ -28,7 +28,8 @@ function clone(value) {
  * 이름(`rules`, `isOwner`, `isDefendant`)을 쓴다. 아바타 이니셜은 표시 전용이라
  * 서버가 내려주지 않고 닉네임에서 만든다.
  *
- * 여기서 채우지 않는 필드(`myVoteStatus`, `savingsAmount`, `unreadChatCount` …)는
+ * 채팅 요약(`unreadChatCount`·`lastChatMessage`·`lastChatTime`)은 서버가 그대로 내려주므로
+ * 스프레드로 통과한다. 여기서 채우지 않는 필드(`myVoteStatus`, `savingsAmount` …)는
  * 근거 데이터가 아직 없다. 카드들이 falsy 를 기본 상태로 처리하므로 비워둔다.
  */
 function toViewModel(dto) {

@@ -150,7 +150,9 @@ public class ChatMessageService {
                 "groupId", groupId,
                 "senderNickname", displayNickname(message.getSenderNickname()),
                 "content", message.getContent(),
-                "deepLink", "/challenge/group/" + groupId + "/chat"));
+                // router/index.js 의 groupChallengeChat 경로와 글자 그대로 같아야 한다.
+                // 예전 값 /challenge/group/... 은 어느 라우트에도 안 맞아 알림을 눌러도 빈 화면이었다.
+                "deepLink", "/group-challenges/" + groupId + "/chat"));
     }
 
     /** 닉네임 온보딩 전(null)이어도 알림 문구가 깨지지 않도록 하는 표시 문자열 결정 지점 — 한 곳에만 둔다 */

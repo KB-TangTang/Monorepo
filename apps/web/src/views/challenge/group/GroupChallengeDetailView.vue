@@ -32,6 +32,12 @@ onMounted(async () => {
     try {
         challenge.value = await fetchGroupChallengeDetail(route.params.id);
     } catch (e) {
+        /*
+         * 이 catch 가 조용하면 화면이 「클릭이 씹힌 것」처럼 보인다 — replace 라 히스토리도 안 남아
+         * 목록에서 카드를 눌러도 아무 일이 없는 것과 구분되지 않는다.
+         * 실제로 이것 때문에 원인 추적이 오래 걸렸다(이슈 #271). 되돌리기 전에 반드시 남긴다.
+         */
+        console.error('[GroupChallengeDetail] 상세를 불러오지 못해 목록으로 되돌린다.', e);
         router.replace({ name: 'groupChallengeList' });
     } finally {
         loading.value = false;
@@ -143,7 +149,11 @@ function goToTrialProgress(item) {
     });
 }
 
-const unreadCount = computed(() => ch.value?.chat?.unreadCount ?? 0);
+/*
+ * 목록 카드와 같은 평평한 필드를 본다. 서버 DTO 에 중첩 chat 객체는 없다 —
+ * 예전 목데이터가 쓰던 `chat.unreadCount` 를 보고 있어서 배지가 항상 0 이었다(이슈 #271).
+ */
+const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
 </script>
 
 <template>

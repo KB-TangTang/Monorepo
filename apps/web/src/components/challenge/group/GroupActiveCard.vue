@@ -7,6 +7,13 @@ const props = defineProps({
 });
 
 /*
+ * 카드 전체 클릭은 상세로 가고, 하단 채팅 영역만 채팅방으로 간다.
+ * 목록 → 채팅방은 이 경로가 유일하다 — 상세 화면이 아직 실서버에 붙지 않아
+ * 상세의 채팅 FAB 로는 방에 들어갈 수 없다(이슈 #271).
+ */
+defineEmits(['open-chat']);
+
+/*
  * 뱃지 상태 — "나"의 행동 기준으로 결정한다.
  *   isDefendant        → 변론필요 (내가 피고인)
  *   myVoteStatus='PENDING' → 투표중 (아직 투표 안 함)
@@ -56,6 +63,27 @@ const chatLabel = computed(() => {
     if (count > 0) return String(count);
     return null;
 });
+
+/*
+ * 마지막 대화 시각 — 오늘이면 시:분, 그 전이면 날짜(카카오톡과 같은 방식).
+ * 서버는 ISO 문자열만 내려주고 표시 형식은 여기서 정한다.
+ * 챌린지 기간이 최대 7일이라 「8/14」 같은 표기도 실제로 나온다.
+ */
+const chatTimeLabel = computed(() => {
+    const raw = props.challenge.lastChatTime;
+    if (!raw) return '';
+    const d = new Date(raw);
+    /* 목데이터는 「오후 2:03」·「어제」 같은 표시용 문자열을 그대로 담고 있다. 그건 손대지 않고 통과시킨다 */
+    if (Number.isNaN(d.getTime())) return raw;
+
+    const now = new Date();
+    const isToday =
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+    if (!isToday) return `${d.getMonth() + 1}/${d.getDate()}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+});
 </script>
 
 <template>
@@ -99,10 +127,11 @@ const chatLabel = computed(() => {
                 </div>
                 <span class="gac-card__member-count">{{ challenge.memberCount }}</span>
             </div>
-            <div class="gac-card__chat">
+            <!-- .stop 이 없으면 카드 전체의 @click(=상세 이동)까지 함께 타서 상세로 새어 나간다 -->
+            <div class="gac-card__chat" @click.stop="$emit('open-chat')">
                 <div class="gac-card__chat-top">
                     <span class="gac-card__chat-time">
-                        {{ challenge.lastChatTime || '' }}
+                        {{ chatTimeLabel }}
                     </span>
                     <span v-if="chatLabel" class="gac-card__chat-badge">
                         {{ chatLabel }}
