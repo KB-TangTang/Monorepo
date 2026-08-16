@@ -2,6 +2,8 @@
   용도: 거래내역 카테고리를 재분류하는 바텀시트. 지출은 대분류 아이콘 그리드 → 소분류 아코디언,
   수입은 소분류 없는 단일 그리드로 보여준다. 거래 방향(수입/지출)은 amount 부호로 정해지며
   사용자가 바꿀 수 없다(은행 데이터와 모순 방지).
+  선택지는 categories prop(= GET /api/categories 로 받은 tbl_category 원본)에서만 만든다.
+  프론트 목업(fixtures/category.js)을 쓰면 DB와 어긋난 이름이 생겨 저장이 실패한다.
   언제 쓰는지: LedgerView, LedgerMonthTransactionsView 두 화면에서 렌더한다.
 -->
 <script setup>
@@ -9,23 +11,29 @@ import { computed, ref, watch } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/fixtures/category';
 import {
     TONES,
     chunkCategories,
-    findExpenseParentByName,
     resolveCategoryDirection,
+    resolveCategoryIcon,
 } from '@/utils/category';
 import { formatDayLabel, formatWon } from '@/utils/ledger';
+
+/* DB의 '수입' 대분류(부모 카테고리) 이름. 이 이름의 자식들이 수입 카테고리 그리드가 되고,
+ * 이 대분류 자신은 지출 대분류 목록에서 제외된다(db/migration/20260816_add_income_categories.sql). */
+const INCOME_PARENT_NAME = '수입';
 
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
     transaction: { type: Object, default: null },
+    categories: { type: Array, default: () => [] },
+    error: { type: String, default: '' },
+    confirming: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue', 'select']);
 
-const expandedParentId = ref('');
+const expandedParentId = ref(null);
 const applyToMerchant = ref(false);
 /* 탭으로 고른(아직 확정 전) 카테고리. '변경하기'를 눌러야 select 이벤트로 나간다. */
 const pendingCategoryName = ref('');
@@ -34,24 +42,47 @@ const direction = computed(() =>
     props.transaction ? resolveCategoryDirection(props.transaction.amount) : 'expense',
 );
 const isExpense = computed(() => direction.value === 'expense');
-const categories = computed(() => (isExpense.value ? EXPENSE_CATEGORIES : INCOME_CATEGORIES));
-const rows = computed(() => chunkCategories(categories.value, 4));
 
-const currentExpenseParent = computed(() =>
-    props.transaction && isExpense.value
-        ? findExpenseParentByName(props.transaction.category)
-        : null,
+const incomeParent = computed(
+    () =>
+        props.categories.find((c) => c.parentId === null && c.name === INCOME_PARENT_NAME) ?? null,
 );
 
-const expandedParent = computed(
-    () => EXPENSE_CATEGORIES.find((parent) => parent.id === expandedParentId.value) ?? null,
+/* 지출: '수입' 대분류를 뺀 나머지 대분류(눌러서 소분류를 펼치는 아코디언).
+ * 수입: '수입' 대분류의 소분류만 평평한 그리드로(대분류 자체는 화면에 안 보인다). */
+const displayCategories = computed(() => {
+    if (isExpense.value) {
+        return props.categories.filter((c) => c.parentId === null && c.name !== INCOME_PARENT_NAME);
+    }
+    if (!incomeParent.value) {
+        return [];
+    }
+    return props.categories.filter((c) => c.parentId === incomeParent.value.id);
+});
+const rows = computed(() => chunkCategories(displayCategories.value, 4));
+
+const currentExpenseParent = computed(() => {
+    if (!props.transaction || !isExpense.value) {
+        return null;
+    }
+    const currentChild = props.categories.find((c) => c.name === props.transaction.category);
+    if (!currentChild) {
+        return null;
+    }
+    return currentChild.parentId === null
+        ? currentChild
+        : (props.categories.find((c) => c.id === currentChild.parentId) ?? null);
+});
+
+const expandedParentChildren = computed(() =>
+    props.categories.filter((c) => c.parentId === expandedParentId.value),
 );
 
 watch(
     () => props.modelValue,
     (open) => {
         if (open) {
-            expandedParentId.value = currentExpenseParent.value?.id ?? '';
+            expandedParentId.value = currentExpenseParent.value?.id ?? null;
             pendingCategoryName.value = props.transaction?.category ?? '';
             applyToMerchant.value = false;
         }
@@ -71,7 +102,7 @@ function isActiveTile(item) {
 }
 
 function toggleParent(parent) {
-    expandedParentId.value = expandedParentId.value === parent.id ? '' : parent.id;
+    expandedParentId.value = expandedParentId.value === parent.id ? null : parent.id;
 }
 
 function handleTileClick(item) {
@@ -98,7 +129,6 @@ function confirmSelection() {
         categoryName: pendingCategoryName.value,
         applyToMerchant: applyToMerchant.value,
     });
-    emit('update:modelValue', false);
 }
 </script>
 
@@ -136,7 +166,7 @@ function confirmSelection() {
             <span class="category-sheet__merchant-toggle-text">
                 <span class="category-sheet__merchant-toggle-label">이 가맹점에 항상 적용</span>
                 <span class="category-sheet__merchant-toggle-desc">
-                    같은 가맹점의 다른 거래에도 함께 적용돼요
+                    이후 같은 가맹점의 다른 거래에도 함께 적용돼요
                 </span>
             </span>
             <input
@@ -163,7 +193,7 @@ function confirmSelection() {
                         :aria-pressed="!isExpense ? isActiveTile(item) : undefined"
                         @click="handleTileClick(item)"
                     >
-                        <CategoryIcon :icon="item.icon" />
+                        <CategoryIcon :icon="resolveCategoryIcon(item.name)" />
                         <span>{{ item.name }}</span>
                     </button>
                 </div>
@@ -173,7 +203,7 @@ function confirmSelection() {
                     class="category-sheet__children"
                 >
                     <button
-                        v-for="child in expandedParent?.children ?? []"
+                        v-for="child in expandedParentChildren"
                         :key="child.id"
                         type="button"
                         class="category-sheet__chip"
@@ -190,7 +220,10 @@ function confirmSelection() {
         </div>
 
         <template #footer>
-            <BaseButton variant="primary" block @click="confirmSelection">변경하기</BaseButton>
+            <p v-if="error" class="category-sheet__error">{{ error }}</p>
+            <BaseButton variant="primary" block :loading="confirming" @click="confirmSelection">
+                변경하기
+            </BaseButton>
         </template>
     </BaseBottomSheet>
 </template>
@@ -234,6 +267,12 @@ function confirmSelection() {
     padding-bottom: var(--tt-space-4);
     margin-bottom: var(--tt-space-4);
     border-bottom: 1px solid var(--tt-border);
+}
+
+.category-sheet__error {
+    margin-bottom: var(--tt-space-2);
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-danger);
 }
 
 .category-sheet__merchant {

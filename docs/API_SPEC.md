@@ -939,6 +939,61 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
 
+## 개인 챌린지 월간 성과 리포트 (이슈 #244)
+
+모든 엔드포인트는 Bearer 인증이 필요하며, 사용자 ID를 요청 파라미터로 받지 않는다. 리포트는
+익월 1일 00:20 KST 배치가 전월의 최종 판정 개인 미션을 확정한 뒤에만 조회할 수 있다.
+
+| 메서드 | 경로 | 응답 |
+|---|---|---|
+| GET | `/api/reports/challenge/months` | 진입 상태와 조회 가능한 확정 월 목록 |
+| GET | `/api/reports/challenge?yearMonth=YYYY-MM` | 선택한 확정 월의 개인 챌린지 성과 |
+
+집계 대상은 대상 월에 배정되고 `SUCCESS` 또는 `FAIL`로 최종 판정됐으며 배정 시점 기준금액
+`base_amount(B)`가 저장된 개인 미션이다. 상대형과 절대형을 구분하지 않으며, `PENDING`과 B가 없는
+과거 이력은 제외한다. 결과는 `tbl_challenge_monthly_report`에 사용자·월별로 확정 저장한다.
+API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해당 사용자·전월만 보정 생성하며,
+이미 행이 있으면 다시 계산하지 않는다.
+
+`weeklyResults`는 월요일 시작 달력 주 순서다. 각 주의 `totalDays`·`successDays`·`successRate`는
+선택 월의 날짜만 세므로, 이전 달과 다음 달에 걸친 날짜는 분자·분모에서 모두 제외한다.
+첫 확정 리포트가 시작된 달에는 사용자의 최초 개인 미션 배정일부터 계산한다.
+`week`는 시작 전 주를 생략해도 다시 번호를 매기지 않으며, 해당 월의 달력 주차를 유지한다.
+
+상세 응답은 다음 형태다.
+
+```json
+{
+  "period": "2026-07",
+  "hasChallengeHistory": true,
+  "isFirstServiceMonth": false,
+  "hasPreviousComparison": true,
+  "missionSuccessRate": 82.76,
+  "monthOverMonthPercentagePoint": 9.43,
+  "successfulDays": 24,
+  "challengeDays": 29,
+  "bestStreakDays": 8,
+  "bestWeekday": "화요일",
+  "earnedPoints": 245,
+  "weeklyResults": [
+    { "week": 1, "successDays": 4, "totalDays": 5, "successRate": 80.00 }
+  ],
+  "difficulties": [
+    { "difficultyName": "EASY", "attempts": 12, "successDays": 11, "successRate": 91.67 }
+  ]
+}
+```
+
+첫 챌린지 리포트는 일반 리포트로 반환하되 `isFirstServiceMonth=true`,
+`hasPreviousComparison=false`, `monthOverMonthPercentagePoint=null`이다. 프론트는 이 필드로
+전월 비교 영역만 숨긴다.
+현재 월·미래 월은 `CHALLENGE_REPORT_NOT_AVAILABLE`, 확정 스냅샷이 없는 과거 월은
+`CHALLENGE_REPORT_NOT_FOUND`, 형식 오류는 `INVALID_YEAR_MONTH`로 반환한다.
+
+로컬 시연에서는 `POST /api/dev/reports/challenge/monthly?yearMonth=YYYY-MM`로 선택한 과거 월의
+확정 배치를 즉시 실행할 수 있다. 응답은 `{ yearMonth, affected }`이며, `affected`는 실제로
+스냅샷을 계산한 사용자 수다. `app.env=local`에서만 동작하고 인증이 필요하다.
+
 ## 개인 미션 월간 랭킹 조회 (이슈 #209)
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -1492,3 +1547,88 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 - 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
   `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
   `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.
+
+## 거래내역 월별 조회 (장부)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/transactions/months` | Bearer | `{ months: [{ value, hasData }] }` |
+| GET | `/api/transactions?yearMonth=YYYY-MM` (생략 가능) | Bearer | `{ period, summary, transactions }` |
+| GET | `/api/categories` | Bearer | `{ categories: [{ id, name, parentId }] }` |
+
+`GET /api/transactions/months` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "months": [
+      { "value": "2026-06", "hasData": false },
+      { "value": "2026-07", "hasData": true },
+      { "value": "2026-08", "hasData": false }
+    ]
+  }
+}
+```
+- **데이터가 있는 가장 이른 달**(거래가 하나도 없으면 이번 달)~현재월 범위를 **오름차순**으로
+  반환한다. `hasData`는 그 달에 집계 제외(`is_excluded_from_summary=1`)가 아닌 거래가 1건이라도
+  있는지다.
+  > 가입월(`tbl_user.created_at`) 기준이 **아니다.** CODEF 동기화는 계좌 연동 시점부터 과거
+  > 거래를 끌어오므로 데이터가 가입일보다 앞설 수 있다 — 로컬 데모 시드(`seed_local_demo.sql`)가
+  > 실계정에도 과거 7개월치 거래를 백필하면서 `tbl_user.created_at`은 그대로 두기 때문에 이 어긋남이
+  > 실제로 나타난다. 가입월 기준으로 만들었다가 범위가 "이번 달"뿐이 되어 월 이동 버튼이 전부
+  > 비활성화되는 버그가 있었다(2026-08-15 수정).
+
+`GET /api/categories` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      { "id": 1, "name": "식비", "parentId": null },
+      { "id": 2, "name": "음식점/외식", "parentId": 1 }
+    ]
+  }
+}
+```
+- `parentId`가 `null`이면 대분류, 아니면 부모 대분류의 `id`.
+
+`GET /api/transactions?yearMonth=2026-07` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "period": "2026-07",
+    "summary": {
+      "period": "2026-07",
+      "totalSpent": 420900,
+      "totalDeposit": 3420000,
+      "monthOverMonthRate": 12.50,
+      "paymentMethods": ["신한카드", "KB국민 체크카드", "입금"]
+    },
+    "transactions": [
+      {
+        "id": 501,
+        "date": "2026-07-29",
+        "merchant": "오늘의집",
+        "category": "온라인쇼핑",
+        "paymentMethod": "신한카드",
+        "classification": "CONSUMPTION",
+        "amount": -48900,
+        "isRefund": false
+      }
+    ]
+  }
+}
+```
+- `amount`는 부호 있는 값이다 — `CONSUMPTION`은 음수, `INCOME`은 양수, 환불(`is_refund=1`)은
+  지출을 상계하는 양수. `TRANSFER`(이체)도 목록에는 포함되지만 `summary.totalSpent`/
+  `totalDeposit`/`monthOverMonthRate` 계산에서는 제외된다.
+- `isRefund`: 이 거래가 환불 행인지. `true`면 `amount`가 양수여도 실제로는 이전 소비를 상계하는
+  것이지 새로운 입금이 아니다 — 프론트가 "(환불)" 같은 별도 표기를 붙이는 근거로 쓴다.
+- `paymentMethod`: 신용카드는 `{카드사명}카드`, 체크카드는 `{카드사명} 체크카드`, 계좌 입금은
+  `입금`이다. `tbl_transaction.card_id`/`account_id`로 `tbl_card`/`tbl_connected_account`를
+  조인해 만든다 — DB에 결제수단 컬럼이 따로 있는 게 아니다.
+- `yearMonth`를 생략하면 `period: null`, `summary: null`이고 `transactions`는 기간 제한 없이
+  데이터가 있는 전체 월을 합쳐서 반환한다(검색 화면 전용).
+- `yearMonth`가 `YYYY-MM` 형식이 아니면 `400 INVALID_REQUEST`, 데이터가 있는 가장 이른 달보다
+  이전이면 `400 LEDGER_NOT_AVAILABLE`.

@@ -28,7 +28,10 @@ defineEmits(['click']);
                 <CategoryIcon :icon="resolveCategoryIcon(transaction.category)" />
             </span>
             <div class="ledger-row__info">
-                <p class="ledger-row__name">{{ transaction.merchant }}</p>
+                <p class="ledger-row__name">
+                    {{ transaction.merchant }}
+                    <span v-if="transaction.isRefund" class="ledger-row__refund-tag">(환불)</span>
+                </p>
                 <p class="ledger-row__meta">
                     {{ subtitle || `${transaction.category} · ${transaction.paymentMethod}` }}
                 </p>
@@ -98,6 +101,12 @@ defineEmits(['click']);
 .ledger-row__name {
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
+}
+
+.ledger-row__refund-tag {
+    margin-left: 2px;
+    font-weight: var(--tt-fw-regular);
+    color: var(--tt-text-muted);
 }
 
 .ledger-row__meta {

@@ -8,6 +8,7 @@ import {
     findExpenseParentByName,
     resolveCategoryDirection,
     resolveCategoryIcon,
+    resolveCategoryId,
     resolveCategoryTone,
 } from '../src/utils/category.js';
 
@@ -15,9 +16,11 @@ test('지출 카테고리는 대분류 12개를 갖는다', () => {
     assert.equal(EXPENSE_CATEGORIES.length, 12);
 });
 
-test('지출 카테고리는 소분류 46개를 갖는다', () => {
+/* db/seed_category.sql 의 소분류 44개와 같은 수다. '기타' 하위 두 항목('자동 분류 불가 거래'·
+ * '사용자 직접 지정')은 tbl_category 에서 이미 걷어냈으므로 이 목업에도 없다. */
+test('지출 카테고리는 소분류 44개를 갖는다', () => {
     const total = EXPENSE_CATEGORIES.reduce((sum, parent) => sum + parent.children.length, 0);
-    assert.equal(total, 46);
+    assert.equal(total, 44);
 });
 
 test('지출 카테고리 id 는 대분류·소분류 통틀어 중복이 없다', () => {
@@ -106,4 +109,16 @@ test('resolveCategoryIcon 은 수입 카테고리 아이콘을 반환한다', ()
 
 test('resolveCategoryIcon 은 못 찾으면 기타 아이콘으로 폴백한다', () => {
     assert.equal(resolveCategoryIcon('존재하지않음'), 'EllipsisHorizontalCircle');
+});
+
+test('resolveCategoryId: 이름으로 id를 찾는다', () => {
+    const categories = [
+        { id: 1, name: '식비', parentId: null },
+        { id: 2, name: '음식점/외식', parentId: 1 },
+    ];
+    assert.equal(resolveCategoryId(categories, '음식점/외식'), 2);
+});
+
+test('resolveCategoryId: 없는 이름이면 null이다', () => {
+    assert.equal(resolveCategoryId([], '없는카테고리'), null);
 });

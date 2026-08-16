@@ -35,6 +35,12 @@ test('리포트 상태 우선순위를 판정한다', () => {
     assert.equal(resolveChallengeReportState({ error: '오류', report: ready }), 'error');
     assert.equal(resolveChallengeReportState({ report: { hasChallengeHistory: false } }), 'empty');
     assert.equal(resolveChallengeReportState({ report: ready }), 'ready');
+    assert.equal(
+        resolveChallengeReportState({
+            report: { hasChallengeHistory: true, isFirstServiceMonth: true },
+        }),
+        'ready',
+    );
 });
 
 test('API 진입 상태를 리포트 빈 상태와 구분한다', () => {
