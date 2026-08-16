@@ -249,6 +249,34 @@ class ChatMessageStoreTest {
         assertTrue(ttlCaptor.getValue().compareTo(Duration.ZERO) > 0);
     }
 
+    @Test
+    @DisplayName("저장 JSON 의 sentAt 은 숫자 배열이 아니라 ISO-8601 문자열이다")
+    void appendStoresIsoTimestamp() {
+        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
+        org.mockito.ArgumentCaptor<String> jsonCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
+
+        verify(listOps).rightPush(eqKey("chat:messages:7"), jsonCaptor.capture());
+        String json = jsonCaptor.getValue();
+        assertTrue(json.matches(".*\"sentAt\":\"\\d{4}-\\d{2}-\\d{2}T[0-9:.]+\".*"),
+                "sentAt 이 ISO 문자열이 아니다: " + json);
+    }
+
+    @Test
+    @DisplayName("예전에 저장된 숫자 배열 형식의 sentAt 도 그대로 읽힌다")
+    void readsLegacyArrayTimestamp() {
+        String legacy = "{\"messageId\":1,\"type\":\"TEXT\",\"senderId\":3,\"senderNickname\":\"절약왕\","
+                + "\"content\":\"안녕\",\"sentAt\":[2026,8,16,14,43,11,138088000]}";
+        when(listOps.range("chat:messages:7", -50L, -1L)).thenReturn(List.of(legacy));
+
+        List<ChatMessage> messages = store.findRecent(GROUP_ID, 50);
+
+        assertEquals(1, messages.size());
+        assertEquals(2026, messages.get(0).getSentAt().getYear());
+        assertEquals(43, messages.get(0).getSentAt().getMinute());
+    }
+
     private static String eqKey(String key) {
         return org.mockito.ArgumentMatchers.eq(key);
     }

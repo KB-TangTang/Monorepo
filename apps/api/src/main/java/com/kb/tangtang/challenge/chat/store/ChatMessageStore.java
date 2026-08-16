@@ -1,6 +1,7 @@
 package com.kb.tangtang.challenge.chat.store;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
@@ -55,7 +56,16 @@ public class ChatMessageStore {
     /** 같은 방·같은 사용자에게 이 간격 안에서는 알림을 한 번만 보낸다 */
     private static final Duration NOTIFY_COOLDOWN = Duration.ofSeconds(30);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
+    /**
+     * 타임스탬프를 숫자 배열이 아니라 ISO-8601 문자열로 저장한다.
+     * 기본 설정이면 {@code sentAt} 이 {@code [2026,8,16,14,43,11,138088000]} 로 들어가
+     * redis-cli 로 들여다볼 때 읽을 수 없고, 다른 언어에서 이 키를 읽을 때도 걸린다.
+     * REST·STOMP 응답이 모두 ISO 문자열이라 저장 형식도 거기에 맞춘다.
+     * 읽기는 배열 형식도 그대로 복원되므로 이미 저장된 메시지와 호환된다.
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     private final StringRedisTemplate redis;
 
