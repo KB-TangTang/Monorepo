@@ -1254,6 +1254,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
   호스트로 폴백한다.
 - **로컬 개발은 그대로 붙는다.** `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 업그레이드 요청을
   :8080 으로 넘긴다. `VITE_API_BASE_URL` 을 따로 설정할 필요가 없다.
+- **프로덕션 소켓을 붙이는 절차는 `docs/DEPLOY_WEBSOCKET.md` 에 있다** (nginx 설정 · 확인 명령 · 프론트 환경변수).
 - **프로덕션 소켓은 아직 동작하지 않는다.** `apps/web/vercel.json` 의 rewrite 는 `/api`·`/uploads`
   만 EC2 로 넘기고 `/(.*)` 는 전부 `index.html` 로 떨어뜨린다. WebSocket 업그레이드 요청도 이
   catch-all 에 걸려 소켓이 붙지 않는다.
