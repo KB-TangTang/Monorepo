@@ -22,9 +22,14 @@ import java.util.Map;
  *
  * <p>시작일이 도래한 그룹을 참여 인원에 따라 갈라 보낸다.
  * <pre>
- *   참여자 2명 이상 → ACTIVE  + 참여자 전원에게 시작 알림
- *   참여자 1명      → CLOSED  + 방장에게만 미성립 알림
+ *   참여자 2명 이상 → ACTIVE + 참여자 전원에게 시작 알림
+ *   참여자 1명      → 삭제   + 방장에게만 미성립 알림
  * </pre>
+ *
+ * <p><b>미성립 그룹을 CLOSED 로 두지 않고 지우는 이유</b>는 {@code CLOSED} 가 「정상 종료 +
+ * 최종 결과 확정 완료」를 뜻하는 상태이기 때문이다(이슈 #261). 시작조차 못 한 그룹은
+ * {@code final_*} 가 영원히 NULL 이고 결산 행도 없으며 무엇보다 {@code end_date} 가 미래라,
+ * 종료 연월로 월 귀속을 잡는 그룹 전적·월간 리포트가 이 그룹을 미래 달에 끌어다 놓는다.
  *
  * <p><b>배치 본체(ChallengeGroupStatusBatchService)와 클래스를 나눈 이유</b>는 트랜잭션을
  * 그룹 하나마다 끊기 위해서다. 한 클래스 안에서 부르면 자기호출이라 프록시를 타지 않아
@@ -46,6 +51,12 @@ public class ChallengeGroupStatusTransitionService {
      */
     static final int MIN_MEMBERS = 2;
 
+    /**
+     * 그룹 챌린지 홈. 미성립 알림의 딥링크다 — 그룹이 삭제돼 상세 화면으로 보내면 404 가 된다
+     * (프론트 라우트 {@code /group-challenges/:id}). 시작 알림은 뒤에 groupId 를 붙여 상세로 보낸다.
+     */
+    private static final String GROUP_CHALLENGE_HOME = "/group-challenges";
+
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
     private final ChatMessageStore chatMessageStore;
@@ -64,38 +75,53 @@ public class ChallengeGroupStatusTransitionService {
     /**
      * 모집 중인 그룹 하나를 시작시키거나 미성립 처리한다.
      *
-     * @return 상태를 실제로 바꿨으면 {@code true}. 이미 다른 실행이 바꿔놨으면 {@code false}
+     * @return 실제로 처리했으면 {@code true}. 이미 다른 실행이 처리했으면 {@code false}
      */
     @Transactional
     public boolean startOrCancel(ChallengeGroup group) {
         List<GroupMember> members = groupMemberMapper.findByGroupIds(List.of(group.getId()));
-        boolean established = members.size() >= MIN_MEMBERS;
-        ChallengeGroupStatus target = established
-                ? ChallengeGroupStatus.ACTIVE
-                : ChallengeGroupStatus.CLOSED;
+        return members.size() >= MIN_MEMBERS ? start(group, members) : cancel(group);
+    }
 
+    private boolean start(ChallengeGroup group, List<GroupMember> members) {
         int changed = challengeGroupMapper.updateStatusIfCurrent(
-                group.getId(), ChallengeGroupStatus.RECRUITING.name(), target.name());
+                group.getId(),
+                ChallengeGroupStatus.RECRUITING.name(),
+                ChallengeGroupStatus.ACTIVE.name());
         if (changed == 0) {
             /* 이 배치가 조회한 뒤 다른 실행이 먼저 바꿨다. 알림까지 가면 중복 발송이 된다. */
-            log.info("그룹 챌린지 상태 전이 건너뜀 groupId={} — 이미 RECRUITING 이 아니다", group.getId());
+            log.info("그룹 챌린지 시작 건너뜀 groupId={} — 이미 RECRUITING 이 아니다", group.getId());
             return false;
         }
+        publishStarted(group, members);
+        log.info("그룹 챌린지 시작 groupId={} RECRUITING → ACTIVE memberCount={}",
+                group.getId(), members.size());
+        return true;
+    }
 
-        if (established) {
-            publishStarted(group, members);
-        } else {
-            publishCanceled(group);
-            // TTL 만 믿지 않는다. 종료 = 즉시 차단 + 즉시 삭제(이슈 #174)
-            // Redis 장애로 삭제가 실패해도 상태 전이·알림이라는 본업은 이미 끝났다 — 조용히 삼키지 않고 로그만 남긴다.
-            try {
-                chatMessageStore.deleteRoom(group.getId());
-            } catch (Exception e) {
-                log.error("채팅방 삭제 실패 groupId={} — TTL 로 뒤늦게 정리된다", group.getId(), e);
-            }
+    /**
+     * 모집 미달 그룹을 지운다.
+     *
+     * <p>알림을 삭제 뒤에 발행하는 것은 의도적이다. {@code deleteIfCurrent} 가 0 을 내면
+     * 다른 실행이 이미 처리했다는 뜻이라 알림을 보내면 안 된다. 그룹 정보는 파라미터로 이미
+     * 손에 있으므로 행이 사라진 뒤에도 문구를 만들 수 있다.
+     */
+    private boolean cancel(ChallengeGroup group) {
+        int deleted = challengeGroupMapper.deleteIfCurrent(
+                group.getId(), ChallengeGroupStatus.RECRUITING.name());
+        if (deleted == 0) {
+            log.info("그룹 챌린지 미성립 처리 건너뜀 groupId={} — 이미 RECRUITING 이 아니다", group.getId());
+            return false;
         }
-        log.info("그룹 챌린지 상태 전이 groupId={} {} → {} memberCount={}",
-                group.getId(), ChallengeGroupStatus.RECRUITING, target, members.size());
+        publishCanceled(group);
+        // TTL 만 믿지 않는다. 종료 = 즉시 차단 + 즉시 삭제(이슈 #174)
+        // Redis 장애로 삭제가 실패해도 그룹 삭제·알림이라는 본업은 이미 끝났다 — 조용히 삼키지 않고 로그만 남긴다.
+        try {
+            chatMessageStore.deleteRoom(group.getId());
+        } catch (Exception e) {
+            log.error("채팅방 삭제 실패 groupId={} — TTL 로 뒤늦게 정리된다", group.getId(), e);
+        }
+        log.info("그룹 챌린지 미성립 삭제 groupId={} groupName={}", group.getId(), group.getGroupName());
         return true;
     }
 
@@ -122,11 +148,11 @@ public class ChallengeGroupStatusTransitionService {
                 group.getAdminId(),
                 NotificationType.GROUP_CHALLENGE_CANCELED,
                 Map.of("groupName", group.getGroupName()),
-                deepLink(group)));
+                GROUP_CHALLENGE_HOME));
     }
 
     private String deepLink(ChallengeGroup group) {
-        return "/group-challenges/" + group.getId();
+        return GROUP_CHALLENGE_HOME + "/" + group.getId();
     }
 
     /** 시작일·종료일을 모두 포함한 일수. 같은 날이면 1. */

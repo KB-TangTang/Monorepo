@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -83,26 +84,31 @@ class ChallengeGroupStatusTransitionServiceTest {
     }
 
     @Test
-    @DisplayName("참여자가 방장 1명뿐이면 CLOSED 로 바뀌고 방장에게만 미성립 알림이 간다")
+    @DisplayName("참여자가 방장 1명뿐이면 그룹이 삭제되고 방장에게만 미성립 알림이 간다")
     void cancelsWhenAloneAndNotifiesOwnerOnly() {
         when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
-        when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "CLOSED")).thenReturn(1);
+        when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(1);
 
         assertTrue(service.startOrCancel(group()));
+
+        verify(groupMapper).deleteIfCurrent(GROUP_ID, "RECRUITING");
+        verify(groupMapper, never()).updateStatusIfCurrent(anyLong(), anyString(), anyString());
 
         assertEquals(1, published.size());
         assertEquals(OWNER_ID, published.get(0).userId());
         assertEquals(NotificationType.GROUP_CHALLENGE_CANCELED, published.get(0).type());
         assertEquals("커피값 줄이기", published.get(0).params().get("groupName"));
+        assertEquals("/group-challenges", published.get(0).deepLinkUrl(),
+                "그룹이 사라졌으므로 상세가 아니라 홈으로 보낸다");
 
         verify(chatMessageStore).deleteRoom(GROUP_ID);
     }
 
     @Test
-    @DisplayName("채팅방 삭제가 실패해도 상태 전이·알림은 정상 처리된다 — TTL 이 백스톱이다")
-    void closeSucceedsEvenWhenChatRoomDeleteFails() {
+    @DisplayName("채팅방 삭제가 실패해도 그룹 삭제·알림은 정상 처리된다 — TTL 이 백스톱이다")
+    void cancelSucceedsEvenWhenChatRoomDeleteFails() {
         when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
-        when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "CLOSED")).thenReturn(1);
+        when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(1);
         doThrow(new RuntimeException("Redis 연결 실패")).when(chatMessageStore).deleteRoom(GROUP_ID);
 
         assertTrue(service.startOrCancel(group()));
@@ -120,6 +126,22 @@ class ChallengeGroupStatusTransitionServiceTest {
         assertFalse(service.startOrCancel(group()));
 
         assertTrue(published.isEmpty(), "compare-and-set 이 0 을 냈으면 알림도 없어야 한다");
+        verifyNoInteractions(chatMessageStore);
+    }
+
+    /**
+     * 조회 시점에는 혼자였지만 그 사이 누가 들어와 다른 실행이 ACTIVE 로 전이시킨 경우.
+     * DELETE 의 {@code status = 'RECRUITING'} 조건이 없으면 방금 시작된 그룹이 CASCADE 로 통째로 사라진다.
+     */
+    @Test
+    @DisplayName("삭제 대상이 이미 RECRUITING 이 아니면 아무 일도 하지 않는다 — 정상 시작한 그룹 오삭제 방지")
+    void skipsCancelWhenGroupAlreadyStarted() {
+        when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
+        when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(0);
+
+        assertFalse(service.startOrCancel(group()));
+
+        assertTrue(published.isEmpty(), "0 행이면 이미 다른 쪽이 처리한 것이라 알림도 없어야 한다");
         verifyNoInteractions(chatMessageStore);
     }
 

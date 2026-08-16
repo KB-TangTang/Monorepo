@@ -117,4 +117,17 @@
         WHERE id = #{groupId}
           AND status = #{fromStatus}
     </update>
+
+    <!--
+      모집 미달 그룹 정리(이슈 #261). WHERE 의 status 비교는 여기서 더 중요하다 —
+      조회 시점에 1명이었어도 그 사이 참여가 생겨 다른 실행이 ACTIVE 로 전이시켰을 수 있고,
+      조건이 없으면 방금 시작된 그룹을 CASCADE 로 통째로 지운다. UPDATE 와 달리 되돌릴 수 없다.
+
+      자식 행은 FK 의 ON DELETE CASCADE 가 정리한다 (schema.sql:452,469,497,548).
+    -->
+    <delete id="deleteIfCurrent">
+        DELETE FROM tbl_challenge_group
+        WHERE id = #{groupId}
+          AND status = #{status}
+    </delete>
 </mapper>

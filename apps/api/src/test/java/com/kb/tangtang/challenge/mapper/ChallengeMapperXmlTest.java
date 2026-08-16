@@ -42,6 +42,25 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToEvaluate"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
+        assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
+    }
+
+    /**
+     * DELETE 에서 조건절이 빠지면 정상 시작한 그룹까지 CASCADE 로 지워진다(이슈 #261).
+     * 되돌릴 수 없는 사고라 SQL 모양 자체를 못박는다.
+     */
+    @Test
+    @DisplayName("미성립 그룹 삭제는 status 조건 없이 실행되지 않는다")
+    void deleteIfCurrentKeepsStatusGuard() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = configuration
+                .getMappedStatement(ChallengeGroupMapper.class.getName() + ".deleteIfCurrent")
+                .getBoundSql(new java.util.HashMap<String, Object>())
+                .getSql();
+
+        assertTrue(sql.replaceAll("\\s+", " ").contains("status = ?"),
+                "조건절이 없으면 그 사이 ACTIVE 로 전이된 그룹을 통째로 지운다");
     }
 
     @Test

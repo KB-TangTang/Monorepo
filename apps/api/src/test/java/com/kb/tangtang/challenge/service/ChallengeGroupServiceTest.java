@@ -500,6 +500,11 @@ class ChallengeGroupServiceTest {
             }
             return 0;   // compare-and-set 실패 — 배치 멱등성이 이 0 에 걸려 있다
         }
+
+        @Override
+        public int deleteIfCurrent(Long groupId, String status) {
+            return groups.removeIf(g -> g.getId().equals(groupId) && g.getStatus().equals(status)) ? 1 : 0;
+        }
     }
 
     private static class FakeMemberMapper implements GroupMemberMapper {
