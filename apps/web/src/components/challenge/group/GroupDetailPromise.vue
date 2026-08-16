@@ -15,6 +15,13 @@ const props = defineProps({
 const isOpen = ref(false);
 const hasMemo = computed(() => !!props.memo);
 
+/* 둘 중 하나만 있어도 보여준다 — 있는 정보를 감출 이유는 없다. 구분점은 둘 다 있을 때만 찍는다. */
+const hasMeta = computed(() => !!props.memoDate || !!props.memoAuthor);
+const metaLabel = computed(() => {
+    if (props.memoDate && props.memoAuthor) return `${props.memoDate} · ${props.memoAuthor} 작성`;
+    return `${props.memoDate || props.memoAuthor} 작성`;
+});
+
 function toggle() {
     if (hasMemo.value) isOpen.value = !isOpen.value;
 }
@@ -48,7 +55,11 @@ function toggle() {
             <div v-if="isOpen" class="promise__body">
                 <div class="promise__divider"></div>
                 <p class="promise__text">{{ memo }}</p>
-                <div class="promise__meta">{{ memoDate }} · {{ memoAuthor }} 작성</div>
+                <!--
+                  작성자·작성일은 근거 컬럼이 없어 실서버에서 NULL 로 온다(ChallengeGroupDetailDto 주석).
+                  그대로 두면 화면에 「· 작성」만 남으므로 값이 하나도 없으면 줄째로 감춘다.
+                -->
+                <div v-if="hasMeta" class="promise__meta">{{ metaLabel }}</div>
             </div>
         </Transition>
     </div>
