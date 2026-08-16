@@ -184,6 +184,18 @@
          LIMIT 1
     </select>
 
+    <select id="hasJudgingGroupRecord" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+              FROM tbl_challenge_group g
+              JOIN tbl_group_member member
+                ON member.group_id = g.id
+             WHERE member.user_id = #{userId}
+               AND g.end_date BETWEEN #{startDate} AND #{endDate}
+               AND g.status = 'JUDGING'
+        )
+    </select>
+
     <!--
       CLOSED는 challenge 모듈의 단일 트랜잭션에서 전원 final_* 갱신 뒤에만 전이된다.
       따라서 report는 CLOSED만 읽고, final_charge_amount를 포함한 최종값을 재계산하지 않는다.

@@ -2,6 +2,8 @@
 import { ref } from 'vue';
 import { formatPercentage, formatPercentagePoint, formatPeriod } from '@/utils/challengeReport';
 import ChallengeConsumptionHabitDropdown from '@/components/challenge/report/ChallengeConsumptionHabitDropdown.vue';
+import ChallengeGroupRecordCard from '@/components/challenge/report/ChallengeGroupRecordCard.vue';
+import ChallengeRankingSummaryCard from '@/components/challenge/report/ChallengeRankingSummaryCard.vue';
 
 defineProps({
     report: { type: Object, required: true },
@@ -20,7 +22,7 @@ const isWeeklyResultsOpen = ref(false);
         </div>
 
         <section class="mission-card" aria-labelledby="mission-success-title">
-            <header>{{ report.challengeName }} 월간 판결문</header>
+            <header>탕탕 대법원 월간 판결문</header>
             <div class="mission-card__body">
                 <p id="mission-success-title">미션 성공률</p>
                 <strong class="mission-card__score">
@@ -68,23 +70,14 @@ const isWeeklyResultsOpen = ref(false);
             </Transition>
         </section>
 
-        <ChallengeConsumptionHabitDropdown v-if="report.netSavings != null" :report="report" />
+        <ChallengeRankingSummaryCard
+            :ranking="report.ranking"
+            :challenge-days="report.challengeDays"
+            :best-streak-days="report.bestStreakDays"
+            :best-weekday="report.bestWeekday"
+        />
 
-        <section class="challenge-summary" aria-label="챌린지 요약">
-            <div>
-                <span>최고 연속 성공</span>
-                <strong>{{ report.bestStreakDays }}일</strong>
-                <small>가장 잘 지킨 요일 · {{ report.bestWeekday }}</small>
-            </div>
-            <div>
-                <span>도전 일수</span>
-                <strong>{{ report.challengeDays }}일</strong>
-            </div>
-            <div>
-                <span>획득 점수</span>
-                <strong>{{ report.earnedPoints }}점</strong>
-            </div>
-        </section>
+        <ChallengeConsumptionHabitDropdown v-if="report.netSavings != null" :report="report" />
 
         <section class="performance-section" aria-labelledby="performance-title">
             <h2 id="performance-title">난이도별 성과</h2>
@@ -116,34 +109,13 @@ const isWeeklyResultsOpen = ref(false);
             </div>
         </section>
 
-        <section v-if="report.groupRecord" class="group-section" aria-labelledby="group-title">
-            <h2 id="group-title">그룹 전적</h2>
-            <div class="group-card">
-                <div class="group-card__stats">
-                    <div>
-                        <strong>{{ report.groupRecord.participatingGroups }}개</strong
-                        ><span>참여 그룹</span>
-                    </div>
-                    <div>
-                        <strong>{{ report.groupRecord.survivedCount }}승</strong><span>생존</span>
-                    </div>
-                    <div>
-                        <strong>{{ report.groupRecord.eliminatedCount }}패</strong><span>탈락</span>
-                    </div>
-                </div>
-                <footer>
-                    <div>
-                        <span class="group-card__stamp group-card__stamp--success"
-                            >무죄 {{ report.groupRecord.acquittedCount }}</span
-                        >
-                        <span class="group-card__stamp group-card__stamp--danger"
-                            >유죄 {{ report.groupRecord.convictedCount }}</span
-                        >
-                        <span>· 피기소 {{ report.groupRecord.indictedCount }}회</span>
-                    </div>
-                    <button type="button" @click="$emit('open-group-history')">이력 ›</button>
-                </footer>
-            </div>
+        <section class="group-section" aria-labelledby="group-title">
+            <h2 id="group-title">지방법원 법정 기록</h2>
+            <ChallengeGroupRecordCard
+                :state="report.groupRecordState"
+                :group-record="report.groupRecord"
+                @open-group-history="$emit('open-group-history')"
+            />
         </section>
     </div>
 </template>
@@ -370,56 +342,6 @@ const isWeeklyResultsOpen = ref(false);
     }
 }
 
-.challenge-summary {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr;
-    overflow: hidden;
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
-}
-
-.challenge-summary > div {
-    min-width: 0;
-    padding: var(--tt-space-4);
-    background: var(--tt-bg);
-}
-
-.challenge-summary > div + div {
-    border-left: 1px solid var(--tt-border);
-}
-
-.challenge-summary span,
-.challenge-summary strong,
-.challenge-summary small {
-    display: block;
-}
-
-.challenge-summary span,
-.challenge-summary small {
-    font-size: var(--tt-fs-caption);
-    color: var(--tt-text-muted);
-}
-
-.challenge-summary strong {
-    margin-top: var(--tt-space-1);
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-numeric);
-    font-weight: var(--tt-fw-black);
-    letter-spacing: -0.04em;
-}
-
-.challenge-summary > div:first-child strong {
-    color: var(--tt-success);
-}
-
-.challenge-summary > div:nth-child(2) strong {
-    color: var(--tt-brand-700);
-}
-
-.challenge-summary > div:last-child strong {
-    color: var(--tt-text);
-}
-
 .performance-section {
     padding-top: var(--tt-space-8);
 }
@@ -479,8 +401,7 @@ const isWeeklyResultsOpen = ref(false);
     text-align: right;
 }
 
-.difficulty-card footer,
-.group-card footer {
+.difficulty-card footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -490,8 +411,7 @@ const isWeeklyResultsOpen = ref(false);
     border-top: 1px solid var(--tt-border);
 }
 
-.difficulty-card footer button,
-.group-card footer button {
+.difficulty-card footer button {
     flex-shrink: 0;
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
@@ -506,80 +426,7 @@ const isWeeklyResultsOpen = ref(false);
     font-size: var(--tt-fs-section);
 }
 
-.group-card {
-    padding: var(--tt-space-5);
-    background: var(--tt-primary-subtle);
-    border-radius: var(--tt-radius-lg);
-}
-
-.group-card__stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    text-align: center;
-}
-
-.group-card__stats > div + div {
-    border-left: 1px solid color-mix(in srgb, var(--tt-primary) 20%, var(--tt-primary-subtle));
-}
-
-.group-card__stats strong,
-.group-card__stats span {
-    display: block;
-}
-
-.group-card__stats strong {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
-}
-
-.group-card__stats > div:nth-child(2) strong {
-    color: var(--tt-success);
-}
-
-.group-card__stats > div:nth-child(3) strong {
-    color: var(--tt-danger);
-}
-
-.group-card__stats span,
-.group-card footer span {
-    font-size: var(--tt-fs-caption);
-    color: var(--tt-text-muted);
-}
-
-.group-card footer > div {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tt-space-2);
-}
-
-.group-card__stamp {
-    padding: var(--tt-space-1) var(--tt-space-2);
-    font-weight: var(--tt-fw-bold);
-    background: var(--tt-bg-subtle);
-    border: 1px solid currentColor;
-    border-radius: var(--tt-radius-sm);
-    transform: rotate(-3deg);
-}
-
-.group-card__stamp--success {
-    color: var(--tt-success) !important;
-}
-
-.group-card__stamp--danger {
-    color: var(--tt-danger) !important;
-    transform: rotate(3deg);
-}
-
 @media (max-width: 360px) {
-    .challenge-summary {
-        grid-template-columns: 1.3fr 1fr 1fr;
-    }
-
-    .challenge-summary > div {
-        padding: var(--tt-space-3);
-    }
-
     .difficulty-card {
         padding: var(--tt-space-4);
     }
@@ -589,8 +436,7 @@ const isWeeklyResultsOpen = ref(false);
         gap: var(--tt-space-1);
     }
 
-    .difficulty-card footer,
-    .group-card footer {
+    .difficulty-card footer {
         align-items: flex-start;
         flex-direction: column;
     }

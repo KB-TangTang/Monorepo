@@ -61,7 +61,7 @@ test('빈 기존 categories가 있어도 API 카테고리 효과를 화면 행�
     ]);
 });
 
-test('확정 그룹 전적은 API 필드명을 유지하고 전적 부재는 null로 보존한다', () => {
+test('그룹 전적 상태와 확정 전적을 API 필드명으로 보존한다', () => {
     const groupRecord = {
         participatingGroups: 2,
         survivedCount: 1,
@@ -71,6 +71,21 @@ test('확정 그룹 전적은 API 필드명을 유지하고 전적 부재는 nul
         convictedCount: 1,
     };
 
-    assert.deepEqual(toChallengeReportModel({ groupRecord }).groupRecord, groupRecord);
-    assert.equal(toChallengeReportModel({ groupRecord: null }).groupRecord, null);
+    const ready = toChallengeReportModel({ groupRecordState: 'READY', groupRecord });
+    const empty = toChallengeReportModel({ groupRecordState: 'EMPTY', groupRecord: null });
+
+    assert.equal(ready.groupRecordState, 'READY');
+    assert.deepEqual(ready.groupRecord, groupRecord);
+    assert.equal(empty.groupRecordState, 'EMPTY');
+    assert.equal(empty.groupRecord, null);
+});
+
+test('재판 진행 상태는 부분 확정 전적이 있어도 그대로 보존한다', () => {
+    const report = toChallengeReportModel({
+        groupRecordState: 'JUDGING',
+        groupRecord: { participatingGroups: 1 },
+    });
+
+    assert.equal(report.groupRecordState, 'JUDGING');
+    assert.deepEqual(report.groupRecord, { participatingGroups: 1 });
 });

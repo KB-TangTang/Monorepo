@@ -36,6 +36,7 @@ class ChallengeReportMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findMonthEndClosedGroupReportUserIds"));
         assertTrue(configuration.hasStatement(namespace + ".findMonthlyReport"));
         assertTrue(configuration.hasStatement(namespace + ".findPreviousMonthlyReport"));
+        assertTrue(configuration.hasStatement(namespace + ".hasJudgingGroupRecord"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupRecord"));
 
         try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
@@ -69,6 +70,7 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("g.end_date = #{endDate}"));
             assertTrue(xml.contains("g.end_date BETWEEN #{startDate} AND #{endDate}"));
             assertTrue(xml.contains("g.status = 'CLOSED'"));
+            assertTrue(xml.contains("g.status = 'JUDGING'"));
             assertFalse(xml.contains("finalized_member.final_outcome IS NULL"));
             assertFalse(xml.contains("pending_indictment.status IN ('DEFENSE_WAIT', 'VOTING')"));
             assertTrue(xml.contains("indictment.result IS NOT NULL"));
