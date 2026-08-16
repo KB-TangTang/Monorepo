@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.chat.service;
 
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
+import com.kb.tangtang.challenge.chat.dto.ChatMessageDto;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import com.kb.tangtang.notification.domain.NotificationType;
@@ -15,7 +16,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,7 +41,7 @@ class ChatMessageServiceTest {
     @Mock private ChatMessageStore store;
     @Mock private ChatRoomAccessService access;
     @Mock private ChatSessionRegistry sessions;
-    @Mock private SimpMessagingTemplate messagingTemplate;
+    @Mock private ChatBroadcaster broadcaster;
     @Mock private NotificationSender notificationSender;
     @Mock private ApplicationEventPublisher events;
 
@@ -63,7 +63,7 @@ class ChatMessageServiceTest {
 
         service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕");
 
-        verify(messagingTemplate).convertAndSend(eq("/sub/chat/7"), any(Object.class));
+        verify(broadcaster).broadcast(eq(GROUP_ID), any(ChatMessageDto.class));
     }
 
     @Test

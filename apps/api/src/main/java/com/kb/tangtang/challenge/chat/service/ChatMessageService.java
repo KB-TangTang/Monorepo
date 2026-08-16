@@ -11,7 +11,6 @@ import com.kb.tangtang.notification.service.NotificationSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -30,6 +29,10 @@ import java.util.function.Consumer;
  *   <li>일반 채팅: 저장하지 않고 전달만 한다. 알림함에 남기지 않는다</li>
  *   <li>재판 시스템 메시지: NotificationRequestedEvent 로 저장까지 한다. 딥링크는 재판 상세다</li>
  * </ul>
+ *
+ * <p>⚠ <b>여기에 {@code SimpMessagingTemplate} 을 주입하지 마라.</b> 이 클래스는 루트 컨텍스트 빈이고
+ * 그 템플릿은 서블릿(자식) 컨텍스트에만 있다 — 주입하면 루트 컨텍스트 refresh 가 실패해 war 가
+ * 아예 뜨지 않는다. 전송은 {@link ChatBroadcaster} 를 통해서만 한다({@link ChatBroadcaster} 주석 참고).
  */
 @Service
 public class ChatMessageService {
@@ -44,20 +47,20 @@ public class ChatMessageService {
     private final ChatMessageStore store;
     private final ChatRoomAccessService access;
     private final ChatSessionRegistry sessions;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ChatBroadcaster broadcaster;
     private final NotificationSender notificationSender;
     private final ApplicationEventPublisher events;
 
     public ChatMessageService(ChatMessageStore store,
                               ChatRoomAccessService access,
                               ChatSessionRegistry sessions,
-                              SimpMessagingTemplate messagingTemplate,
+                              ChatBroadcaster broadcaster,
                               NotificationSender notificationSender,
                               ApplicationEventPublisher events) {
         this.store = store;
         this.access = access;
         this.sessions = sessions;
-        this.messagingTemplate = messagingTemplate;
+        this.broadcaster = broadcaster;
         this.notificationSender = notificationSender;
         this.events = events;
     }
@@ -73,7 +76,7 @@ public class ChatMessageService {
 
         ChatMessage saved = store.append(groupId, ChatMessageType.TEXT, senderId, senderNickname, content);
         ChatMessageDto dto = ChatMessageDto.from(saved);
-        messagingTemplate.convertAndSend(destination(groupId), dto);
+        broadcaster.broadcast(groupId, dto);
 
         List<Long> outsiders = outsiders(groupId, senderId);
         if (!outsiders.isEmpty()) {
@@ -104,7 +107,7 @@ public class ChatMessageService {
         }
 
         ChatMessage saved = store.append(groupId, ChatMessageType.SYSTEM, null, null, content);
-        messagingTemplate.convertAndSend(destination(groupId), ChatMessageDto.from(saved));
+        broadcaster.broadcast(groupId, ChatMessageDto.from(saved));
 
         List<Long> outsiders = outsiders(members, groupId, null);
         if (!outsiders.isEmpty()) {
@@ -164,9 +167,5 @@ public class ChatMessageService {
                 log.error("{} 실패 groupId={} userId={}", actionName, groupId, userId, e);
             }
         });
-    }
-
-    private String destination(long groupId) {
-        return "/sub/chat/" + groupId;
     }
 }
