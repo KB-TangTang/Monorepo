@@ -2,6 +2,8 @@ package com.kb.tangtang.challenge.chat.service;
 
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
+import com.kb.tangtang.challenge.chat.domain.ChatSystemMessageSpec;
+import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
 import com.kb.tangtang.challenge.chat.dto.ChatMessageDto;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
@@ -50,8 +52,13 @@ class ChatMessageServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(store.append(anyLong(), any(), any(), any(), anyString()))
-                .thenReturn(new ChatMessage(1L, ChatMessageType.TEXT, SENDER_ID, "절약왕",
+                .thenReturn(ChatMessage.of(1L, ChatMessageType.TEXT, SENDER_ID, "절약왕",
                         "안녕", LocalDateTime.now()));
+        /* 시스템 메시지는 시스템 필드까지 받는 8인자 오버로드를 탄다 — 목이라 5인자 스텁이 대신 응답하지 않는다 */
+        lenient().when(store.append(anyLong(), any(), any(), any(), anyString(), any(), any(), any()))
+                .thenReturn(new ChatMessage(2L, ChatMessageType.SYSTEM, null, null,
+                        "재판이 열렸어요", LocalDateTime.now(), ChatSystemType.TRIAL_OPENED,
+                        "/challenge/group/7/trial", "2026-재판-0001"));
         lenient().when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L, 12L));
         lenient().when(store.tryAcquireNotifyCooldown(anyLong(), anyLong())).thenReturn(true);
     }
@@ -118,12 +125,12 @@ class ChatMessageServiceTest {
     void verifiesMemberLookupBeforeAppendForSystemMessage() {
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of());
 
-        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
-                NotificationType.GROUP_TRIAL_OPENED);
+        service.postSystemMessage(GROUP_ID, trialSpec());
 
         InOrder order = inOrder(access, store);
         order.verify(access).memberIdsOf(GROUP_ID);
-        order.verify(store).append(eq(GROUP_ID), eq(ChatMessageType.SYSTEM), any(), any(), anyString());
+        order.verify(store).append(eq(GROUP_ID), eq(ChatMessageType.SYSTEM), any(), any(), anyString(),
+                eq(ChatSystemType.TRIAL_OPENED), anyString(), anyString());
     }
 
     @Test
@@ -131,8 +138,7 @@ class ChatMessageServiceTest {
     void skipsUnreadAndNotificationForActiveUsersOnSystemMessage() {
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(9L));
 
-        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
-                NotificationType.GROUP_TRIAL_OPENED);
+        service.postSystemMessage(GROUP_ID, trialSpec());
 
         verify(store).increaseUnread(GROUP_ID, List.of(SENDER_ID, 12L));
         verify(events, never()).publishEvent(new NotificationRequestedEvent(
@@ -145,17 +151,16 @@ class ChatMessageServiceTest {
     void skipsSystemMessageWhenNoMembers() {
         when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of());
 
-        service.postSystemMessage(GROUP_ID, "재판이 열렸어요", "/challenge/group/7/trial",
-                NotificationType.GROUP_TRIAL_OPENED);
+        service.postSystemMessage(GROUP_ID, trialSpec());
 
-        verify(store, never()).append(anyLong(), any(), any(), any(), anyString());
+        verify(store, never()).append(anyLong(), any(), any(), any(), anyString(), any(), any(), any());
     }
 
     @Test
     @DisplayName("닉네임이 없어도 알림 루프가 끝까지 돈다")
     void continuesNotifyingWhenSenderNicknameIsNull() {
         when(store.append(anyLong(), any(), any(), any(), anyString()))
-                .thenReturn(new ChatMessage(1L, ChatMessageType.TEXT, SENDER_ID, null,
+                .thenReturn(ChatMessage.of(1L, ChatMessageType.TEXT, SENDER_ID, null,
                         "안녕", LocalDateTime.now()));
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L));
 
@@ -175,5 +180,11 @@ class ChatMessageServiceTest {
 
         verify(notificationSender).push(eq(12L), eq("chat"), any());
         verify(notificationSender).push(eq(15L), eq("chat"), any());
+    }
+
+    /** 시스템 메시지 스펙 — 값 자체는 이 테스트의 관심사가 아니라 한 곳에 모아 둔다 */
+    private static ChatSystemMessageSpec trialSpec() {
+        return new ChatSystemMessageSpec("재판이 열렸어요", ChatSystemType.TRIAL_OPENED,
+                "/challenge/group/7/trial", "2026-재판-0001", NotificationType.GROUP_TRIAL_OPENED);
     }
 }

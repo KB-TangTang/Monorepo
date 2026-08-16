@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.chat.service;
 
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
+import com.kb.tangtang.challenge.chat.domain.ChatSystemMessageSpec;
 import com.kb.tangtang.challenge.chat.dto.ChatMessageDto;
 import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -100,20 +101,22 @@ public class ChatMessageService {
      * 판결 메시지가 도착하는 순간 화면으로 이미 보고 있는데 배지가 올라가면 재입장 트리거가 없어
      * 영구히 남는다.
      */
-    public void postSystemMessage(long groupId, String content, String deepLink, NotificationType type) {
+    public void postSystemMessage(long groupId, ChatSystemMessageSpec spec) {
         Set<Long> members = access.memberIdsOf(groupId);
         if (members.isEmpty()) {
             return;
         }
 
-        ChatMessage saved = store.append(groupId, ChatMessageType.SYSTEM, null, null, content);
+        ChatMessage saved = store.append(groupId, ChatMessageType.SYSTEM, null, null,
+                spec.content(), spec.systemType(), spec.deepLink(), spec.caseNo());
         broadcaster.broadcast(groupId, ChatMessageDto.from(saved));
 
         List<Long> outsiders = outsiders(members, groupId, null);
         if (!outsiders.isEmpty()) {
             store.increaseUnread(groupId, outsiders);
             forEachSafely(outsiders, userId -> events.publishEvent(
-                    new NotificationRequestedEvent(userId, type, Map.of("content", content), deepLink)),
+                    new NotificationRequestedEvent(userId, spec.notificationType(),
+                            Map.of("content", spec.content()), spec.deepLink())),
                     "시스템 메시지 알림 발행", groupId);
         }
     }

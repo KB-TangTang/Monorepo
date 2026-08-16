@@ -29,7 +29,7 @@ class StompChatBroadcasterTest {
     private final StompChatBroadcaster broadcaster = new StompChatBroadcaster();
 
     private ChatMessageDto message() {
-        return ChatMessageDto.from(new ChatMessage(1L, ChatMessageType.TEXT, 3L, "절약왕",
+        return ChatMessageDto.from(ChatMessage.of(1L, ChatMessageType.TEXT, 3L, "절약왕",
                 "안녕", LocalDateTime.of(2026, 8, 16, 12, 34, 56)));
     }
 
