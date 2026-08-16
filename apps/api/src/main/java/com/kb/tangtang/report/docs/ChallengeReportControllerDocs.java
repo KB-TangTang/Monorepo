@@ -20,6 +20,8 @@ public interface ChallengeReportControllerDocs {
                     + "monthOverMonthPercentagePoint=null로 전월 비교 없음 상태를 구분한다. "
                     + "savedAmount, overspentAmount, netSavings, annualizedNetSavings와 categoryEffects는 미션 배정 시점의 "
                     + "기준금액(B) 및 실제 지출(S)을 사용해 성공일 B-S, 실패일 max(S-B, 0)으로 계산한다. "
+                    + "groupRecord는 월 확정 또는 익월 2일 보강 배치 시점에 선택 월 종료·CLOSED 조건을 만족해 저장된 그룹이 있을 때만 반환하며, "
+                    + "개인 미션 성과 집계에는 포함하지 않는다. "
                     + "INVALID_YEAR_MONTH, CHALLENGE_REPORT_NOT_AVAILABLE, CHALLENGE_REPORT_NOT_FOUND 오류가 발생할 수 있다.")
     ApiResponse<ChallengeReportDetailDto> getReport(@ApiIgnore Long userId, String yearMonth);
 }

@@ -60,3 +60,17 @@ test('빈 기존 categories가 있어도 API 카테고리 효과를 화면 행�
         { code: '카', name: '카페', days: 2, amount: 12000, status: 'success' },
     ]);
 });
+
+test('확정 그룹 전적은 API 필드명을 유지하고 전적 부재는 null로 보존한다', () => {
+    const groupRecord = {
+        participatingGroups: 2,
+        survivedCount: 1,
+        eliminatedCount: 1,
+        indictedCount: 3,
+        acquittedCount: 2,
+        convictedCount: 1,
+    };
+
+    assert.deepEqual(toChallengeReportModel({ groupRecord }).groupRecord, groupRecord);
+    assert.equal(toChallengeReportModel({ groupRecord: null }).groupRecord, null);
+});

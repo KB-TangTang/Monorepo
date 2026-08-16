@@ -3,7 +3,7 @@ package com.kb.tangtang.report.service;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** 일일 미션 판정 뒤에 지난달 개인 챌린지 성과를 확정한다. */
+/** 일일 미션 판정 뒤에 지난달 개인 챌린지 성과와 확정 그룹 전적을 저장한다. */
 @Component
 public class ChallengeMonthlyReportScheduler {
 
@@ -17,5 +17,11 @@ public class ChallengeMonthlyReportScheduler {
             zone = "${challenge.report.monthly.zone}")
     public void finalizePreviousMonthReports() {
         batchService.finalizePreviousMonthReports();
+    }
+
+    @Scheduled(cron = "${challenge.report.monthly.group-record-recovery.cron}",
+            zone = "${challenge.report.monthly.zone}")
+    public void refreshPreviousMonthEndGroupRecords() {
+        batchService.refreshPreviousMonthEndGroupRecords();
     }
 }

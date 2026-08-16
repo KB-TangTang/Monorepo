@@ -278,7 +278,6 @@ SELECT cc.group_id,
 ON DUPLICATE KEY UPDATE
     daily_amount = VALUES(daily_amount),
     target_count = VALUES(target_count),
-    verdict_deduction_amount = 0,
     updated_at = VALUES(updated_at);
 
 -- ---------------------------------------------------------------------
@@ -388,7 +387,7 @@ SELECT i.id,
   JOIN tmp_closed_seed_trial t ON t.result_id = i.result_id
   JOIN tbl_group_challenge_daily_result r ON r.id = i.result_id
   JOIN tbl_challenge_group g ON g.id = i.group_id
- WHERE i.status = 'INNOCENT';
+ WHERE i.result = 0;
 
 -- 피고인을 제외한 같은 그룹 참여자가 모두 같은 결론으로 투표한다.
 INSERT INTO tbl_vote
@@ -413,26 +412,15 @@ JOIN tbl_defense d ON d.indictment_id = i.id
 JOIN tmp_closed_seed_trial t ON t.result_id = i.result_id
    SET r.verdict_deduction_amount = d.deduction_amount,
        r.updated_at = i.updated_at
- WHERE i.status = 'INNOCENT';
+ WHERE i.result = 0;
 
 -- ---------------------------------------------------------------------
 -- 6. 최종 목숨·부담금·순위·상태 확정
+--    참여자 전원의 final_* 및 lives_count 갱신과 CLOSED 전이는 하나의 트랜잭션이다.
+--    CLOSED 는 참여자 전원의 final_* 값이 모두 기록된 완료 상태만 뜻한다.
+--    final_charge_amount 는 기간 전체 effective_amount 합계이며, DAILY/PERIOD의
+--    생존·순위 규칙도 그 확정값을 기준으로 만든다.
 -- ---------------------------------------------------------------------
-UPDATE tbl_group_member m
-JOIN tbl_challenge_group g ON g.id = m.group_id
-LEFT JOIN (
-    SELECT i.group_id, i.user_id, COUNT(*) AS guilty_count
-      FROM tbl_indictment i
-      JOIN tmp_closed_seed_trial t ON t.result_id = i.result_id
-     WHERE i.status = 'GUILTY'
-     GROUP BY i.group_id, i.user_id
-) guilty ON guilty.group_id = m.group_id AND guilty.user_id = m.user_id
-   SET m.lives_count = CASE g.eval_type
-       WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(guilty.guilty_count, 0), 0)
-       ELSE CASE WHEN COALESCE(guilty.guilty_count, 0) > 0 THEN 0 ELSE 1 END
-   END
- WHERE g.id IN (@closed_seed_group_1, @closed_seed_group_2, @closed_seed_group_3);
-
 DROP TEMPORARY TABLE IF EXISTS tmp_closed_seed_final;
 CREATE TEMPORARY TABLE tmp_closed_seed_final (
     group_id             BIGINT        NOT NULL,
@@ -443,35 +431,76 @@ CREATE TEMPORARY TABLE tmp_closed_seed_final (
     PRIMARY KEY (group_id, user_id)
 );
 
+START TRANSACTION;
+
+UPDATE tbl_group_member m
+JOIN tbl_challenge_group g ON g.id = m.group_id
+LEFT JOIN (
+    SELECT i.group_id, i.user_id, COUNT(*) AS guilty_count
+      FROM tbl_indictment i
+      JOIN tmp_closed_seed_trial t ON t.result_id = i.result_id
+     WHERE i.result = 1
+     GROUP BY i.group_id, i.user_id
+) guilty ON guilty.group_id = m.group_id AND guilty.user_id = m.user_id
+   SET m.lives_count = CASE g.eval_type
+       WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(guilty.guilty_count, 0), 0)
+       ELSE CASE WHEN COALESCE(guilty.guilty_count, 0) > 0 THEN 0 ELSE 1 END
+   END
+ WHERE g.id IN (@closed_seed_group_1, @closed_seed_group_2, @closed_seed_group_3);
+
 INSERT INTO tmp_closed_seed_final
   (group_id, user_id, final_charge_amount, final_outcome, final_rank)
-SELECT x.group_id,
-       x.user_id,
-       x.final_charge_amount,
-       x.final_outcome,
+SELECT ranked.group_id,
+       ranked.user_id,
+       ranked.final_charge_amount,
+       ranked.final_outcome,
        CASE
            -- 탈락자는 스키마 정책대로 공동 최하위다.
-           WHEN x.final_outcome = 'ELIMINATED' THEN x.member_count
+           WHEN ranked.final_outcome = 'ELIMINATED' THEN ranked.member_count
+           -- DAILY: 남은 목숨 내림차순, 누적 실효 소비액 오름차순.
+           WHEN ranked.eval_type = 'DAILY' THEN RANK() OVER (
+               PARTITION BY ranked.group_id
+               ORDER BY CASE WHEN ranked.final_outcome = 'SURVIVED'
+                             THEN ranked.lives_count ELSE -1 END DESC,
+                        CASE WHEN ranked.final_outcome = 'SURVIVED'
+                             THEN ranked.final_charge_amount ELSE 9999999999999 END ASC
+           )
+           -- PERIOD: 누적 실효 소비액 오름차순, 동률은 공동 순위다.
            ELSE RANK() OVER (
-               PARTITION BY x.group_id
-               ORDER BY CASE WHEN x.final_outcome = 'SURVIVED'
-                             THEN x.final_charge_amount ELSE 9999999999999 END,
-                        x.user_id
+               PARTITION BY ranked.group_id
+               ORDER BY CASE WHEN ranked.final_outcome = 'SURVIVED'
+                             THEN ranked.final_charge_amount ELSE 9999999999999 END ASC
            )
        END
   FROM (
-      SELECT m.group_id,
-             m.user_id,
-             COALESCE(SUM(r.effective_amount), 0) AS final_charge_amount,
-             CASE WHEN m.lives_count = 0 THEN 'ELIMINATED' ELSE 'SURVIVED' END AS final_outcome,
-             COUNT(*) OVER (PARTITION BY m.group_id) AS member_count
-        FROM tbl_group_member m
-        JOIN tbl_group_challenge_daily_result r
-          ON r.group_id = m.group_id
-         AND r.user_id = m.user_id
-       WHERE m.group_id IN (@closed_seed_group_1, @closed_seed_group_2, @closed_seed_group_3)
-       GROUP BY m.group_id, m.user_id, m.lives_count
-  ) x;
+      SELECT finalized.group_id,
+             finalized.user_id,
+             finalized.eval_type,
+             finalized.lives_count,
+             finalized.final_charge_amount,
+             CASE
+                 WHEN finalized.eval_type = 'DAILY' AND finalized.lives_count = 0 THEN 'ELIMINATED'
+                 WHEN finalized.eval_type = 'PERIOD'
+                      AND finalized.final_charge_amount > finalized.limit_amount THEN 'ELIMINATED'
+                 ELSE 'SURVIVED'
+             END AS final_outcome,
+             COUNT(*) OVER (PARTITION BY finalized.group_id) AS member_count
+        FROM (
+            SELECT m.group_id,
+                   m.user_id,
+                   g.eval_type,
+                   g.limit_amount,
+                   m.lives_count,
+                   COALESCE(SUM(r.effective_amount), 0) AS final_charge_amount
+              FROM tbl_group_member m
+              JOIN tbl_challenge_group g ON g.id = m.group_id
+              JOIN tbl_group_challenge_daily_result r
+                ON r.group_id = m.group_id
+               AND r.user_id = m.user_id
+             WHERE m.group_id IN (@closed_seed_group_1, @closed_seed_group_2, @closed_seed_group_3)
+             GROUP BY m.group_id, m.user_id, g.eval_type, g.limit_amount, m.lives_count
+        ) finalized
+  ) ranked;
 
 UPDATE tbl_group_member m
 JOIN tmp_closed_seed_final f
@@ -495,6 +524,8 @@ UPDATE tbl_challenge_group
            ELSE '2026-07-07 12:00:00'
        END
  WHERE id IN (@closed_seed_group_1, @closed_seed_group_2, @closed_seed_group_3);
+
+COMMIT;
 
 DROP TEMPORARY TABLE IF EXISTS tmp_closed_seed_final;
 DROP TEMPORARY TABLE IF EXISTS tmp_closed_seed_trial;
@@ -548,8 +579,8 @@ SELECT m.group_id,
        m.user_id,
        m.lives_count AS stored_lives,
        CASE g.eval_type
-           WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(SUM(i.status = 'GUILTY'), 0), 0)
-           ELSE CASE WHEN COALESCE(SUM(i.status = 'GUILTY'), 0) > 0 THEN 0 ELSE 1 END
+           WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(SUM(i.result = 1), 0), 0)
+           ELSE CASE WHEN COALESCE(SUM(i.result = 1), 0) > 0 THEN 0 ELSE 1 END
        END AS calculated_lives,
        m.final_charge_amount AS stored_final_charge_amount,
        COALESCE(SUM(r.effective_amount), 0) AS calculated_final_charge_amount,
@@ -561,15 +592,40 @@ SELECT m.group_id,
    AND r.user_id = m.user_id
   LEFT JOIN tbl_indictment i ON i.result_id = r.id
  WHERE g.invite_code IN ('ENDG2', 'ENDG3', 'ENDG4')
- GROUP BY m.group_id, m.user_id, m.lives_count, m.final_charge_amount, m.final_outcome, g.eval_type, g.start_date, g.end_date
+ GROUP BY m.group_id, m.user_id, m.lives_count, m.final_charge_amount, m.final_outcome,
+          g.eval_type, g.limit_amount, g.start_date, g.end_date
 HAVING m.lives_count <> CASE g.eval_type
-           WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(SUM(i.status = 'GUILTY'), 0), 0)
-           ELSE CASE WHEN COALESCE(SUM(i.status = 'GUILTY'), 0) > 0 THEN 0 ELSE 1 END
+           WHEN 'DAILY' THEN GREATEST(DATEDIFF(g.end_date, g.start_date) + 1 - COALESCE(SUM(i.result = 1), 0), 0)
+           ELSE CASE WHEN COALESCE(SUM(i.result = 1), 0) > 0 THEN 0 ELSE 1 END
        END
     OR m.final_charge_amount <> COALESCE(SUM(r.effective_amount), 0)
-    OR m.final_outcome <> CASE WHEN m.lives_count = 0 THEN 'ELIMINATED' ELSE 'SURVIVED' END;
+    OR m.final_outcome <> CASE
+           WHEN g.eval_type = 'DAILY' AND m.lives_count = 0 THEN 'ELIMINATED'
+           WHEN g.eval_type = 'PERIOD'
+                AND COALESCE(SUM(r.effective_amount), 0) > g.limit_amount THEN 'ELIMINATED'
+           ELSE 'SURVIVED'
+       END;
 
--- 7-5. 최종 확인용 요약.
+-- 7-5. CLOSED 그룹은 전 참여자의 final_* 값이 채워졌고 미확정 재판이 없어야 한다.
+SELECT g.id AS group_id,
+       g.group_name,
+       g.status,
+       SUM(m.final_outcome IS NULL
+           OR m.final_rank IS NULL
+           OR m.final_charge_amount IS NULL) AS incomplete_final_member_count,
+       SUM(i.result IS NULL) AS pending_indictment_count
+  FROM tbl_challenge_group g
+  JOIN tbl_group_member m ON m.group_id = g.id
+  LEFT JOIN tbl_indictment i ON i.group_id = g.id
+ WHERE g.invite_code IN ('ENDG2', 'ENDG3', 'ENDG4')
+ GROUP BY g.id, g.group_name, g.status
+HAVING g.status <> 'CLOSED'
+    OR SUM(m.final_outcome IS NULL
+           OR m.final_rank IS NULL
+           OR m.final_charge_amount IS NULL) > 0
+    OR SUM(i.result IS NULL) > 0;
+
+-- 7-6. 최종 확인용 요약.
 SELECT g.group_name,
        g.status,
        g.eval_type,
@@ -578,8 +634,8 @@ SELECT g.group_name,
        COUNT(DISTINCT m.user_id) AS member_count,
        MAX(m.user_id = 1) AS contains_user_1,
        COUNT(DISTINCT CASE WHEN m.final_outcome = 'ELIMINATED' THEN m.user_id END) AS eliminated_count,
-       COUNT(DISTINCT CASE WHEN i.status = 'GUILTY' THEN i.id END) AS guilty_count,
-       COUNT(DISTINCT CASE WHEN i.status = 'INNOCENT' THEN i.id END) AS innocent_count
+       COUNT(DISTINCT CASE WHEN i.result = 1 THEN i.id END) AS guilty_count,
+       COUNT(DISTINCT CASE WHEN i.result = 0 THEN i.id END) AS innocent_count
   FROM tbl_challenge_group g
   JOIN tbl_group_member m ON m.group_id = g.id
   LEFT JOIN tbl_indictment i ON i.group_id = g.id

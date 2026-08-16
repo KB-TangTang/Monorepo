@@ -23,4 +23,5 @@ public class ChallengeMonthlyReportRow {
     private int earnedScore;
     private String weeklyResultsJson;
     private String difficultyResultsJson;
+    private String groupRecordJson;
 }

@@ -32,8 +32,11 @@ class ChallengeReportMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findFirstMissionDate"));
         assertTrue(configuration.hasStatement(namespace + ".findDifficultyPolicies"));
         assertTrue(configuration.hasStatement(namespace + ".upsertMonthlyReport"));
+        assertTrue(configuration.hasStatement(namespace + ".updateMonthlyGroupRecord"));
+        assertTrue(configuration.hasStatement(namespace + ".findMonthEndClosedGroupReportUserIds"));
         assertTrue(configuration.hasStatement(namespace + ".findMonthlyReport"));
         assertTrue(configuration.hasStatement(namespace + ".findPreviousMonthlyReport"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupRecord"));
 
         try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
             String xml = new String(inputStream.readAllBytes());
@@ -59,7 +62,18 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("mission.mission_type"));
             assertFalse(xml.contains("mission_type = 'RELATIVE'"));
             assertTrue(xml.contains("CAST(#{weeklyResultsJson} AS JSON)"));
+            assertTrue(xml.contains("CAST(#{groupRecordJson} AS JSON)"));
+            assertTrue(xml.contains("group_record_json"));
             assertTrue(xml.contains("ON DUPLICATE KEY UPDATE"));
+            assertTrue(xml.contains("UPDATE tbl_challenge_monthly_report"));
+            assertTrue(xml.contains("g.end_date = #{endDate}"));
+            assertTrue(xml.contains("g.end_date BETWEEN #{startDate} AND #{endDate}"));
+            assertTrue(xml.contains("g.status = 'CLOSED'"));
+            assertFalse(xml.contains("finalized_member.final_outcome IS NULL"));
+            assertFalse(xml.contains("pending_indictment.status IN ('DEFENSE_WAIT', 'VOTING')"));
+            assertTrue(xml.contains("indictment.result IS NOT NULL"));
+            assertTrue(xml.contains("indictment.result = 0"));
+            assertTrue(xml.contains("indictment.result = 1"));
         }
     }
 }
