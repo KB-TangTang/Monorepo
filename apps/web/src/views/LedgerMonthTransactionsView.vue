@@ -6,7 +6,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchLedgerMonths, fetchLedgerTransactions } from '@/api/ledger';
+import { fetchLedgerMonths, fetchLedgerPeriod } from '@/api/ledger';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import LedgerCategoryFilterSheet from '@/components/ledger/LedgerCategoryFilterSheet.vue';
 import LedgerCategorySheet from '@/components/ledger/LedgerCategorySheet.vue';
@@ -18,6 +18,7 @@ import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { findExpenseParentByName } from '@/utils/category';
+import { useCategoryEdit } from '@/utils/useCategoryEdit';
 import {
     formatDayLabel,
     formatWon,
@@ -44,6 +45,13 @@ const isPaymentSheetOpen = ref(false);
 const isCategoryFilterSheetOpen = ref(false);
 const selectedTransaction = ref(null);
 const isCategorySheetOpen = ref(false);
+const {
+    categories,
+    isApplyingCategory,
+    categoryError,
+    loadCategories,
+    applyCategory: applyCategoryEdit,
+} = useCategoryEdit(transactions);
 
 const scrollEl = ref(null);
 const groupRefs = ref({});
@@ -106,7 +114,8 @@ async function loadPeriod({ resetScroll } = { resetScroll: false }) {
     loading.value = true;
     errorMessage.value = '';
     try {
-        transactions.value = await fetchLedgerTransactions(period.value);
+        const { transactions: transactionData } = await fetchLedgerPeriod(period.value);
+        transactions.value = transactionData;
     } catch (err) {
         errorMessage.value = err.message ?? '거래내역을 불러오지 못했습니다.';
         loading.value = false;
@@ -147,23 +156,14 @@ function selectCategoryFilter(category) {
 
 function openCategorySheet(tx) {
     selectedTransaction.value = tx;
+    categoryError.value = '';
     isCategorySheetOpen.value = true;
 }
 
-function applyCategory({ transactionId, categoryName, applyToMerchant }) {
-    const tx = transactions.value.find((item) => item.id === transactionId);
-    if (!tx) {
-        return;
-    }
-    if (applyToMerchant) {
-        const merchant = tx.merchant;
-        transactions.value.forEach((item) => {
-            if (item.merchant === merchant) {
-                item.category = categoryName;
-            }
-        });
-    } else {
-        tx.category = categoryName;
+async function applyCategory(payload) {
+    const success = await applyCategoryEdit(payload);
+    if (success) {
+        isCategorySheetOpen.value = false;
     }
 }
 
@@ -172,6 +172,8 @@ function goToSearch() {
 }
 
 onMounted(async () => {
+    /* 아래 try 안에는 이른 return 이 있어서, 카테고리 로드는 항상 돌도록 앞에 둔다. */
+    await loadCategories();
     try {
         months.value = await fetchLedgerMonths();
         if (period.value && !months.value.some((m) => m.value === period.value)) {
@@ -285,6 +287,9 @@ onMounted(async () => {
         <LedgerCategorySheet
             v-model="isCategorySheetOpen"
             :transaction="selectedTransaction"
+            :categories="categories"
+            :error="categoryError"
+            :confirming="isApplyingCategory"
             @select="applyCategory"
         />
     </article>

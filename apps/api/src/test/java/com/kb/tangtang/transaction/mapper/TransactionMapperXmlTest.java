@@ -34,6 +34,33 @@ class TransactionMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".linkByCorrelation"));
         assertTrue(configuration.hasStatement(namespace + ".findByIdAndUser"));
         assertTrue(configuration.hasStatement(namespace + ".updateCategoryByUser"));
+        assertTrue(configuration.hasStatement(namespace + ".findDistinctDataMonths"));
+        assertTrue(configuration.hasStatement(namespace + ".sumNetConsumption"));
+        assertTrue(configuration.hasStatement(namespace + ".sumIncome"));
+        assertTrue(configuration.hasStatement(namespace + ".findTransactionRows"));
+    }
+
+    @Test
+    @DisplayName("findTransactionRows는 startDate/endDate가 없으면 기간 조건 없이 전체를 조회한다(검색 화면용)")
+    void findTransactionRowsSkipsDateFilterWhenBothDatesAreNull() throws Exception {
+        Configuration configuration = new Configuration();
+
+        try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
+            new XMLMapperBuilder(inputStream, configuration, RESOURCE,
+                    configuration.getSqlFragments()).parse();
+        }
+
+        String namespace = TransactionMapper.class.getName();
+        MappedStatement statement = configuration.getMappedStatement(namespace + ".findTransactionRows");
+        BoundSql boundSql = statement.getBoundSql(
+                new java.util.HashMap<String, Object>() {{
+                    put("userId", 1L);
+                    put("startDate", null);
+                    put("endDate", null);
+                }});
+        String sql = boundSql.getSql().replaceAll("\\s+", " ");
+
+        assertFalse(sql.contains("tr_date >="), "startDate/endDate가 null인데 기간 조건이 붙었다: " + sql);
     }
 
     @Test

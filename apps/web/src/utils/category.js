@@ -49,3 +49,8 @@ export function resolveCategoryIcon(categoryName) {
     const incomeMatch = INCOME_CATEGORIES.find((item) => item.name === categoryName);
     return incomeMatch?.icon ?? 'EllipsisHorizontalCircle';
 }
+
+/** 카테고리 이름으로 숫자 id를 찾는다. 없으면 null. */
+export function resolveCategoryId(categories, categoryName) {
+    return categories.find((c) => c.name === categoryName)?.id ?? null;
+}
