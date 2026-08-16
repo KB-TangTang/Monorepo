@@ -56,6 +56,11 @@ public interface ChallengeReportMapper {
     ChallengeMonthlyReportRow findPreviousMonthlyReport(@Param("userId") long userId,
                                                         @Param("yearMonth") String yearMonth);
 
+    /** 선택 월에 종료됐지만 최종 판정이 아직 끝나지 않은 참여 그룹이 있는지 확인한다. */
+    boolean hasJudgingGroupRecord(@Param("userId") long userId,
+                                  @Param("startDate") LocalDate startDate,
+                                  @Param("endDate") LocalDate endDate);
+
     /** CLOSED 그룹의 종료월 기준 전적만 집계한다. final_*와 CLOSED 전이는 challenge 모듈의 단일 트랜잭션이 보장한다. */
     GroupRecordDto findGroupRecord(@Param("userId") long userId,
                                    @Param("startDate") LocalDate startDate,

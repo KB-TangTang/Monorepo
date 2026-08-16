@@ -16,6 +16,7 @@ import BaseButton from '@/components/common/BaseButton.vue';
 import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
+import { fetchMissionRankings } from '@/api/personalMission';
 import {
     formatPeriod,
     getPreviousPeriod,
@@ -76,11 +77,18 @@ async function loadReport() {
     isGuideOpen.value = false;
 
     try {
-        const fetcher =
-            challengeReportStore.reportSource === 'mock'
-                ? fetchMockChallengeReport
-                : fetchChallengeReport;
-        report.value = await fetcher(selectedPeriod.value);
+        if (challengeReportStore.reportSource === 'mock') {
+            report.value = await fetchMockChallengeReport(selectedPeriod.value);
+        } else {
+            const [challengeReport, ranking] = await Promise.all([
+                fetchChallengeReport(selectedPeriod.value),
+                fetchMissionRankings(selectedPeriod.value),
+            ]);
+            report.value = {
+                ...challengeReport,
+                ranking: ranking?.myRanking ?? null,
+            };
+        }
         if (
             resolveChallengeReportState({ report: report.value }) === 'ready' &&
             report.value.netSavings != null

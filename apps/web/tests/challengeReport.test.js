@@ -7,6 +7,7 @@ import {
     formatWon,
     getPreviousPeriod,
     isPublishedPeriod,
+    resolveGroupRecordState,
     resolveChallengeReportState,
 } from '../src/utils/challengeReport.js';
 
@@ -49,4 +50,16 @@ test('API 진입 상태를 리포트 빈 상태와 구분한다', () => {
         resolveChallengeReportState({ entryState: 'PREPARING_FIRST_REPORT' }),
         'preparing',
     );
+});
+
+test('그룹 전적 카드는 재판 진행 상태를 확정 전적보다 우선한다', () => {
+    const groupRecord = { participatingGroups: 1 };
+
+    assert.equal(resolveGroupRecordState({ groupRecordState: 'JUDGING', groupRecord }), 'JUDGING');
+    assert.equal(resolveGroupRecordState({ groupRecordState: 'READY', groupRecord }), 'READY');
+    assert.equal(
+        resolveGroupRecordState({ groupRecordState: 'EMPTY', groupRecord: null }),
+        'EMPTY',
+    );
+    assert.equal(resolveGroupRecordState({ groupRecord: null }), 'EMPTY');
 });

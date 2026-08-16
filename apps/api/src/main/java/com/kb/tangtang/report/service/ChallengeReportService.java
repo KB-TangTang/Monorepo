@@ -11,6 +11,7 @@ import com.kb.tangtang.report.dto.ChallengeReportMonthDto;
 import com.kb.tangtang.report.dto.ChallengeReportMonthsDto;
 import com.kb.tangtang.report.dto.ChallengeWeeklyResultDto;
 import com.kb.tangtang.report.dto.GroupRecordDto;
+import com.kb.tangtang.report.dto.GroupRecordState;
 import com.kb.tangtang.report.mapper.ChallengeReportMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -171,6 +172,10 @@ public class ChallengeReportService {
                 .setScale(2, RoundingMode.HALF_UP)
                 : null;
         GroupRecordDto groupRecord = readGroupRecord(report.getGroupRecordJson());
+        GroupRecordState groupRecordState = resolveGroupRecordState(
+                groupRecord,
+                challengeReportMapper.hasJudgingGroupRecord(
+                        userId, yearMonth.atDay(1), yearMonth.atEndOfMonth()));
 
         return ChallengeReportDetailDto.builder()
                 .period(report.getYearMonth())
@@ -191,8 +196,17 @@ public class ChallengeReportService {
                 .categoryEffects(readCategoryEffects(report.getCategoryEffectsJson()))
                 .weeklyResults(readWeeklyResults(report.getWeeklyResultsJson()))
                 .difficulties(readDifficultyResults(report.getDifficultyResultsJson()))
-                .groupRecord(hasGroupRecord(groupRecord) ? groupRecord : null)
+                .groupRecordState(groupRecordState)
+                .groupRecord(groupRecordState == GroupRecordState.READY ? groupRecord : null)
                 .build();
+    }
+
+    private GroupRecordState resolveGroupRecordState(GroupRecordDto groupRecord,
+                                                     boolean hasJudgingGroupRecord) {
+        if (hasJudgingGroupRecord) {
+            return GroupRecordState.JUDGING;
+        }
+        return hasGroupRecord(groupRecord) ? GroupRecordState.READY : GroupRecordState.EMPTY;
     }
 
     private boolean hasGroupRecord(GroupRecordDto groupRecord) {
