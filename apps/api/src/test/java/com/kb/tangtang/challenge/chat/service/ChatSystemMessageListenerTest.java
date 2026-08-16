@@ -45,7 +45,7 @@ class ChatSystemMessageListenerTest {
         listener.onViolationDetected(new GroupTrialEvents.ViolationDetected(7L, 55L, "절약왕"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
-                "절약왕님의 소비가 적발됐어요.", ChatSystemType.VIOLATION_DETECTED,
+                "절약왕님의 소비가 한도를 넘었어요.", ChatSystemType.VIOLATION_DETECTED,
                 TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_OPENED)));
     }
 
@@ -55,7 +55,7 @@ class ChatSystemMessageListenerTest {
         listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
-                "절약왕님에 대한 재판이 열렸어요.", ChatSystemType.TRIAL_OPENED,
+                "절약왕님이 피고인이에요. 변론이 시작됩니다.", ChatSystemType.TRIAL_OPENED,
                 TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_OPENED)));
     }
 
@@ -65,7 +65,7 @@ class ChatSystemMessageListenerTest {
         listener.onDefenseRegistered(new GroupTrialEvents.DefenseRegistered(7L, 55L, "절약왕"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
-                "절약왕님이 변론을 등록했어요.", ChatSystemType.DEFENSE_REGISTERED,
+                "절약왕님이 변론을 냈어요.", ChatSystemType.DEFENSE_REGISTERED,
                 TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_DEFENSE_REGISTERED)));
     }
 
@@ -75,7 +75,7 @@ class ChatSystemMessageListenerTest {
         listener.onVerdictConfirmed(new GroupTrialEvents.VerdictConfirmed(7L, 55L, "3만원 감액"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
-                "판결이 확정됐어요. 3만원 감액", ChatSystemType.VERDICT_CONFIRMED,
+                "3만원 감액", ChatSystemType.VERDICT_CONFIRMED,
                 TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_JUDGMENT)));
     }
 

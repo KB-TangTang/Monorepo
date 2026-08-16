@@ -44,11 +44,17 @@ public class ChatSystemMessageListener {
         this.clock = clock;
     }
 
+    /*
+     * 문구는 "무슨 일이 일어났는지" 를 반복하지 않고 "누구에게 · 얼마나" 만 담는다.
+     * 제목은 두 곳이 각자 갖고 있다 — 채팅 카드는 systemType 이, 알림은 NotificationType 이
+     * (예: GROUP_JUDGMENT 의 제목이 이미 "판결이 확정됐어요" 다). 여기서 같은 문장을 다시 쓰면
+     * 카드에도 알림에도 제목이 두 번 나온다.
+     */
     @Async
     @EventListener
     public void onViolationDetected(GroupTrialEvents.ViolationDetected event) {
         post(event.getGroupId(), event.getIndictmentId(),
-                event.getTargetNickname() + "님의 소비가 적발됐어요.",
+                event.getTargetNickname() + "님의 소비가 한도를 넘었어요.",
                 ChatSystemType.VIOLATION_DETECTED, NotificationType.GROUP_TRIAL_OPENED);
     }
 
@@ -56,7 +62,7 @@ public class ChatSystemMessageListener {
     @EventListener
     public void onTrialOpened(GroupTrialEvents.TrialOpened event) {
         post(event.getGroupId(), event.getIndictmentId(),
-                event.getTargetNickname() + "님에 대한 재판이 열렸어요.",
+                event.getTargetNickname() + "님이 피고인이에요. 변론이 시작됩니다.",
                 ChatSystemType.TRIAL_OPENED, NotificationType.GROUP_TRIAL_OPENED);
     }
 
@@ -64,7 +70,7 @@ public class ChatSystemMessageListener {
     @EventListener
     public void onDefenseRegistered(GroupTrialEvents.DefenseRegistered event) {
         post(event.getGroupId(), event.getIndictmentId(),
-                event.getTargetNickname() + "님이 변론을 등록했어요.",
+                event.getTargetNickname() + "님이 변론을 냈어요.",
                 ChatSystemType.DEFENSE_REGISTERED, NotificationType.GROUP_DEFENSE_REGISTERED);
     }
 
@@ -72,7 +78,7 @@ public class ChatSystemMessageListener {
     @EventListener
     public void onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed event) {
         post(event.getGroupId(), event.getIndictmentId(),
-                "판결이 확정됐어요. " + event.getSummary(),
+                event.getSummary(),
                 ChatSystemType.VERDICT_CONFIRMED, NotificationType.GROUP_JUDGMENT);
     }
 

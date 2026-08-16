@@ -43,8 +43,6 @@ function openTrial() {
 
 <template>
     <article class="record-card">
-        <div class="record-card__halo" aria-hidden="true"></div>
-
         <div class="record-card__head">
             <span class="record-card__badge" aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
@@ -76,26 +74,11 @@ function openTrial() {
 
 <style scoped>
 .record-card {
-    position: relative;
-    overflow: hidden;
     background: var(--tt-surface-inverse);
     border-radius: var(--tt-radius-xl);
     padding: var(--tt-space-4) var(--tt-space-4) var(--tt-space-3);
     box-shadow: var(--tt-elevation-4);
     animation: record-enter 0.28s ease-out both;
-}
-
-/* 판사봉 후광. 카드 밖으로 흘러 문서에 찍힌 자국처럼 보이게 한다 */
-.record-card__halo {
-    position: absolute;
-    top: -46px;
-    right: -34px;
-    width: 132px;
-    height: 132px;
-    border: 1px solid var(--tt-accent);
-    border-radius: 50%;
-    opacity: 0.22;
-    pointer-events: none;
 }
 
 .record-card__head {

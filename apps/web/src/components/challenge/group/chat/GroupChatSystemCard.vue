@@ -23,11 +23,13 @@ const overAmountLabel = computed(() => {
             <div class="sys-card__body">
                 <p class="sys-card__title">재판이 게시됐어요</p>
                 <p class="sys-card__desc">
-                    {{ meta.defendantName }}님 ·
-                    <strong class="sys-card__amount">{{ overAmountLabel }}</strong> 초과
+                    {{ meta.defendantName }}님 · <strong class="sys-card__amount">{{ overAmountLabel }}</strong> 초과
                 </p>
             </div>
-            <button class="sys-card__cta" @click="emit('open-trial', meta.indictmentId)">
+            <button
+                class="sys-card__cta"
+                @click="emit('open-trial', meta.indictmentId)"
+            >
                 변론 확인
             </button>
         </div>
@@ -79,14 +81,14 @@ const overAmountLabel = computed(() => {
 
 .sys-card__desc {
     font-size: 11px;
-    color: #c7cbdb;
+    color: #C7CBDB;
     font-weight: var(--tt-fw-semibold);
     line-height: 1.4;
     margin: 2px 0 0;
 }
 
 .sys-card__amount {
-    color: #ff9e86;
+    color: #FF9E86;
     font-weight: var(--tt-fw-black);
 }
 

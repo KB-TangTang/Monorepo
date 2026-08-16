@@ -46,6 +46,11 @@ function systemView(msg) {
     return 'pill';
 }
 
+/* 라벨을 붙일 대상은 "카드로 그려지는" 시스템 메시지다. 폴백 pill 은 라벨 없이 조용히 흐른다 */
+function isRecordCard(msg) {
+    return Boolean(msg?.isSystem) && systemView(msg) !== 'pill';
+}
+
 /* ── 메시지 그룹핑 (날짜 · 안 읽은 경계 · 연속 발화) ───── */
 /* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
    그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다. */
@@ -76,6 +81,8 @@ const groupedMessages = computed(() => {
             data: msg,
             key: msg.messageId,
             grouped: isGrouped(prev, msg),
+            /* 재판 기록이 잇달아 오면 "재판 시스템" 라벨은 첫 장에만 붙인다 */
+            showSystemLabel: isRecordCard(msg) && !isRecordCard(prev),
         });
         prev = msg;
     }
@@ -255,13 +262,13 @@ watch(
 
                     <!-- 재판 기록 (적발 · 개시 · 변론) -->
                     <template v-else-if="item.data.isSystem && systemView(item.data) === 'record'">
-                        <GroupChatSystemLabel />
+                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
                         <GroupChatRecordCard :message="item.data" />
                     </template>
 
                     <!-- 판결 확정 -->
                     <template v-else-if="item.data.isSystem && systemView(item.data) === 'verdict'">
-                        <GroupChatSystemLabel />
+                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
                         <GroupChatVerdictCard :message="item.data" />
                     </template>
 
@@ -309,6 +316,14 @@ watch(
 
 .chat-view__scroll::-webkit-scrollbar {
     display: none;
+}
+
+/*
+ * 세로 flex 컨테이너의 자식은 기본적으로 줄어든다. 시스템 카드는 overflow:hidden 이라
+ * 줄어든 만큼 내용이 잘려 나갔다 — 실제로 카드가 30px 높이로 눌린 채 배포됐다.
+ */
+.chat-view__scroll > * {
+    flex: none;
 }
 
 .chat-view__loading {
