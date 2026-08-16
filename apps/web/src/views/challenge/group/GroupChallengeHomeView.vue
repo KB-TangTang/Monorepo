@@ -10,10 +10,9 @@ import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
-import { fetchMyGroupChallenges } from '@/api/groupChallenge';
+import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
-import { MOCK_TODO_ITEMS } from '@/fixtures/groupChallenge';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
@@ -44,13 +43,24 @@ async function loadActiveChallenges() {
     }
 }
 
-/* ── TO-DO 는 아직 목데이터 (tbl_indictment 미구현) ── */
+/* ── TO-DO (내가 변론·투표해야 하는 재판) ── */
+const myTrials = ref([]);
+
+/* 처리한 건을 화면에서만 지운다. DEV 토글이 「전부 완료」를 흉내낼 때도 쓴다. */
 const doneIds = ref([]);
 
+async function loadMyTrials() {
+    try {
+        /* 서버가 마감 임박순으로 정렬해 준다. 여기서 다시 정렬하면 기준이 갈린다. */
+        myTrials.value = await fetchMyTrials();
+    } catch {
+        /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비면 판사 탕이가 다른 말을 한다. */
+        myTrials.value = [];
+    }
+}
+
 const todoItems = computed(() =>
-    MOCK_TODO_ITEMS
-        .filter(i => !doneIds.value.includes(i.id))
-        .sort((a, b) => a.deadlineMinutes - b.deadlineMinutes)
+    myTrials.value.filter((item) => !doneIds.value.includes(item.id)),
 );
 
 const hasTodo = computed(() => todoItems.value.length > 0);
@@ -92,9 +102,13 @@ onMounted(() => {
         showTutorial.value = true;
     }
     loadActiveChallenges();
+    loadMyTrials();
 });
 
-watch(dataSource, loadActiveChallenges);
+watch(dataSource, () => {
+    loadActiveChallenges();
+    loadMyTrials();
+});
 
 /*
  * 완료 저장은 서버(tbl_user.group_tutorial_seen_at)로 나간다 — 비동기다.
@@ -113,7 +127,7 @@ const devStateLabel = computed(() => DEV_STATES[devStateIndex.value]);
 function cycleDevState() {
     devStateIndex.value = (devStateIndex.value + 1) % DEV_STATES.length;
     if (devStateIndex.value === 1) {
-        doneIds.value = MOCK_TODO_ITEMS.map(i => i.id);
+        doneIds.value = myTrials.value.map(i => i.id);
     } else if (devStateIndex.value === 2) {
         doneIds.value = [];
         devStateIndex.value = 0;
