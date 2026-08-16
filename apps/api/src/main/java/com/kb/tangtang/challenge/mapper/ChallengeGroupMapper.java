@@ -49,6 +49,36 @@ public interface ChallengeGroupMapper {
                                            @Param("today") LocalDate today);
 
     /**
+     * 평가·기소 배치(이슈 #168)가 이번 틱에 볼 그룹.
+     *
+     * <b>어제가 조건에 들어가는 이유가 이 메서드의 핵심이다.</b> 배치는 매 틱 어제·오늘 두 날짜를
+     * 집계한다. 거래 동기화가 뒤늦게 도착하기 때문이다 — 23:57 결제는 그 시각의 배치가 볼 때
+     * 아직 DB 에 없고, 동기화가 끝난 00:10 시점의 배치는 이미 기준일이 오늘로 넘어가 있다.
+     * 어제를 같이 보지 않으면 <b>그 결제가 어제 집계에 영원히 반영되지 않는다.</b>
+     * ({@code tbl_transaction.tr_date} 는 거래 발생일이라 수집 시각과 무관하게 어제로 남는다)
+     *
+     * 그래서 종료 조건도 {@code end_date >= 어제} 다. {@code end_date >= 오늘} 로 좁히면
+     * <b>챌린지 마지막 날의 심야 거래가 통째로 누락된다</b> — 그 거래를 처리해야 할 다음 날에는
+     * 그룹이 조회에서 빠져 버리기 때문이다.
+     *
+     * 부수 효과로 이 조건은 {@code end_date + 1일} 까지만 그룹을 잡아 준다. 기간평가(PERIOD)
+     * 기소를 판정할 수 있는 마지막 날과 정확히 일치한다.
+     *
+     * {@code idx_cg_status_start (status, start_date)} 를 탄다 — 선행 컬럼이 상등 비교,
+     * 후행 컬럼이 범위 비교라 인덱스 순서와 조건 모양이 맞는다. {@code end_date} 는 걸러 낸 뒤
+     * 평가하며, ACTIVE 그룹 수 자체가 작아 문제되지 않는다.
+     *
+     * @param status    찾을 상태. 보통 {@code ACTIVE}
+     * @param today     배치 기준일
+     * @param yesterday {@code today} 의 전날. 호출부가 계산해 넘긴다 —
+     *                  SQL 안에서 {@code DATE_SUB(CURDATE(), ...)} 로 만들면
+     *                  테스트가 날짜를 고정할 수 없다
+     */
+    List<ChallengeGroup> findGroupsToEvaluate(@Param("status") String status,
+                                              @Param("today") LocalDate today,
+                                              @Param("yesterday") LocalDate yesterday);
+
+    /**
      * 기대한 상태일 때만 상태를 바꾼다(compare-and-set).
      *
      * <b>배치 멱등성의 근거가 이 반환값이다.</b> 두 번째 실행이나 동시에 도는 인스턴스는 0 을 받고,
