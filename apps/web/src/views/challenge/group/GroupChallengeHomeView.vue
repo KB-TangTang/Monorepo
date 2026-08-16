@@ -168,6 +168,17 @@ function goToAllChallenges() {
     router.push({ name: 'groupChallengeList' });
 }
 
+/*
+ * 홈의 진행 중 카드에는 클릭이 아예 없었다. 목록의 GroupActiveCard 와 달리 그 자리에서 만든
+ * 별도 마크업이라 진입로가 함께 붙지 않았다 — 눌러도 반응이 없어 「전체보기 ›」로 목록까지
+ * 들어가야만 상세에 갈 수 있었다.
+ *
+ * 목록 카드처럼 채팅 영역을 따로 두지는 않는다. 홈 카드에는 대화 미리보기가 없어 나눌 자리가 없다.
+ */
+function goToDetail(challenge) {
+    router.push({ name: 'groupChallengeDetail', params: { id: challenge.id } });
+}
+
 function progressPercent(challenge) {
     if (!challenge.totalDays) return 0;
     return Math.round((challenge.currentDay / challenge.totalDays) * 100);
@@ -239,6 +250,7 @@ function livesColor(challenge) {
                     v-for="ch in activeChallenges"
                     :key="ch.id"
                     class="gc-challenge-card"
+                    @click="goToDetail(ch)"
                 >
                     <div class="gc-challenge-card__top">
                         <span class="gc-challenge-card__name">{{ ch.groupName }}</span>
@@ -543,6 +555,13 @@ function livesColor(challenge) {
     border-radius: 18px;
     box-shadow: 0 8px 22px rgba(35, 40, 66, 0.05);
     padding: 14px 16px;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+}
+
+/* 누를 수 있다는 신호. 목록의 카드도 같은 방식으로 눌린 느낌을 준다 */
+.gc-challenge-card:active {
+    box-shadow: 0 4px 12px rgba(35, 40, 66, 0.12);
 }
 
 .gc-challenge-card__top {
