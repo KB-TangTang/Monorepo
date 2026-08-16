@@ -1,20 +1,19 @@
 <script setup>
 import { computed } from 'vue';
-import { STICKER_MAP } from '@/constants/stickerCatalog';
 
+/*
+ * message 는 api/groupChatAdapter.js 가 정규화한 모양이다
+ * ({ messageId, type, isSystem, senderId, senderName, content, sentAt: Date|null }).
+ * 스티커는 서버 계약에 없는 목업 잔재라 이 컴포넌트에서 다루지 않는다.
+ */
 const props = defineProps({
     message: { type: Object, required: true },
     isMine: { type: Boolean, default: false },
 });
 
-const isSticker = computed(() => props.message.contentType === 'STICKER');
-const stickerSrc = computed(() => {
-    if (!isSticker.value) return null;
-    return STICKER_MAP[props.message.content]?.src ?? null;
-});
-
 const timeLabel = computed(() => {
-    const d = new Date(props.message.createdAt);
+    const d = props.message.sentAt;
+    if (!d) return '';
     const h = d.getHours();
     const m = String(d.getMinutes()).padStart(2, '0');
     const period = h < 12 ? '오전' : '오후';
@@ -22,43 +21,28 @@ const timeLabel = computed(() => {
     return `${period} ${hour12}:${m}`;
 });
 
-const initial = computed(() => {
-    const name = props.message.senderName ?? '';
-    return name.charAt(0);
-});
+/* 닉네임 온보딩 전(서버가 senderNickname: null)이면 빈 문자열이 온다 */
+const displayName = computed(() => props.message.senderName || '익명');
+const initial = computed(() => displayName.value.charAt(0));
 </script>
 
 <template>
     <div class="bubble-row" :class="{ 'bubble-row--mine': isMine }">
         <!-- 상대 아바타 -->
-        <div v-if="!isMine" class="bubble-row__avatar" :style="{ background: message.senderColor }">
+        <div v-if="!isMine" class="bubble-row__avatar">
             {{ initial }}
         </div>
 
         <div class="bubble-row__body">
             <!-- 상대 이름 -->
-            <span v-if="!isMine" class="bubble-row__name">{{ message.senderName }}</span>
+            <span v-if="!isMine" class="bubble-row__name">{{ displayName }}</span>
 
             <div class="bubble-row__content-row">
                 <!-- 내 메시지: 시간이 왼쪽 -->
                 <span v-if="isMine" class="bubble-row__time">{{ timeLabel }}</span>
 
-                <!-- 스티커 -->
-                <img
-                    v-if="isSticker && stickerSrc"
-                    :src="stickerSrc"
-                    :alt="message.content"
-                    class="bubble-row__sticker"
-                />
-
-                <!-- 스티커 로드 실패 -->
-                <div v-else-if="isSticker" class="bubble-row__sticker-fallback">
-                    스티커
-                </div>
-
                 <!-- 텍스트 -->
                 <div
-                    v-else
                     class="bubble-row__bubble"
                     :class="isMine ? 'bubble-row__bubble--mine' : 'bubble-row__bubble--other'"
                 >
@@ -87,6 +71,8 @@ const initial = computed(() => {
     width: 36px;
     height: 36px;
     border-radius: 50%;
+    /* 서버가 사용자별 색을 주지 않는다. 지어내지 않고 주색 하나로 통일한다 */
+    background: var(--tt-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -136,24 +122,6 @@ const initial = computed(() => {
     color: var(--tt-text);
     border: 1px solid var(--tt-border);
     border-top-left-radius: 4px;
-}
-
-.bubble-row__sticker {
-    width: 100px;
-    height: 100px;
-    object-fit: contain;
-}
-
-.bubble-row__sticker-fallback {
-    width: 100px;
-    height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--tt-bg-fill);
-    border-radius: var(--tt-radius-md);
-    color: var(--tt-text-hint);
-    font-size: var(--tt-fs-caption);
 }
 
 .bubble-row__time {

@@ -4,11 +4,15 @@
  * 채팅방 진입 → 메시지 로드 → 실시간 송수신 → 퇴장 흐름을 관리한다.
  * 실전송·실수신은 STOMP(api/chatSocket.js)가 맡는다 — 이 스토어는 REST 로 읽은
  * 상태(방 정보 · 메시지 목록)와 소켓이 넘겨주는 메시지를 합치는 역할만 한다.
+ *
+ * **서버 DTO → 화면 모델 정규화는 이 스토어의 진입점에서만 한다**(api/groupChatAdapter.js).
+ * REST 로 받은 것과 소켓으로 받은 것이 같은 어댑터를 지나야 두 경로가 갈라지지 않는다.
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { fetchChatRoomInfo, fetchChatMessages, resetUnreadCount } from '@/api/groupChat';
+import { toChatMessage, toChatMessagePage, toChatRoom } from '@/api/groupChatAdapter';
 
 export const useGroupChatStore = defineStore('groupChat', () => {
     /* ── 상태 ──────────────────────────────────────────── */
@@ -28,7 +32,8 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         return auth.user?.id ?? 1; // 목업 기본값 = 유저 1
     });
 
-    const isEnded = computed(() => roomInfo.value?.status === 'ENDED');
+    /* 서버 상태값은 RECRUITING · ACTIVE · JUDGING · CLOSED 다 (목업의 'ENDED' 는 없다) */
+    const isEnded = computed(() => roomInfo.value?.isEnded === true);
 
     /* ── 액션 ──────────────────────────────────────────── */
 
@@ -39,8 +44,8 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         closed.value = false;
         error.value = null;
         try {
-            roomInfo.value = await fetchChatRoomInfo(id);
-            const page = await fetchChatMessages(id, {});
+            roomInfo.value = toChatRoom(await fetchChatRoomInfo(id));
+            const page = toChatMessagePage(await fetchChatMessages(id, {}));
             messages.value = page.messages;
             hasMore.value = page.hasMore;
             await resetUnreadCount(id);
@@ -72,7 +77,9 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         loading.value = true;
         try {
             const oldest = messages.value[0];
-            const page = await fetchChatMessages(id, oldest ? { before: oldest.messageId } : {});
+            const page = toChatMessagePage(
+                await fetchChatMessages(id, oldest ? { before: oldest.messageId } : {}),
+            );
             messages.value = [...page.messages, ...messages.value];
             hasMore.value = page.hasMore;
         } finally {
@@ -80,8 +87,12 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         }
     }
 
-    /** 소켓으로 수신한 메시지를 뒤에 붙인다. 이미 있는 messageId 는 무시한다(중복 수신 방지) */
-    function appendMessage(message) {
+    /**
+     * 소켓으로 수신한 메시지를 뒤에 붙인다. 이미 있는 messageId 는 무시한다(중복 수신 방지).
+     * REST 경로와 같은 어댑터를 통과시켜 두 경로의 모양을 일치시킨다.
+     */
+    function appendMessage(raw) {
+        const message = toChatMessage(raw);
         if (messages.value.some((m) => m.messageId === message.messageId)) return;
         messages.value.push(message);
     }

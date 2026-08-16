@@ -1,20 +1,18 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useGroupChatStore } from '@/stores/groupChat';
 import { useAuthStore } from '@/stores/auth';
 import { createChatSocket } from '@/api/chatSocket';
 import GroupChatHeader from '@/components/challenge/group/chat/GroupChatHeader.vue';
 import GroupChatDateDivider from '@/components/challenge/group/chat/GroupChatDateDivider.vue';
 import GroupChatBubble from '@/components/challenge/group/chat/GroupChatBubble.vue';
-import GroupChatSystemCard from '@/components/challenge/group/chat/GroupChatSystemCard.vue';
 import GroupChatSystemPill from '@/components/challenge/group/chat/GroupChatSystemPill.vue';
 import GroupChatInput from '@/components/challenge/group/chat/GroupChatInput.vue';
 import GroupChatToast from '@/components/challenge/group/chat/GroupChatToast.vue';
 import StateError from '@/components/common/StateError.vue';
 
 const route = useRoute();
-const router = useRouter();
 const store = useGroupChatStore();
 
 const groupId = computed(() => route.params.id);
@@ -28,12 +26,18 @@ let socket = null;
 let unmounted = false; // enterRoom 대기 중 라우트 이탈 시 소켓을 만들지 않기 위한 가드
 
 /* ── 메시지 그룹핑 (날짜 구분 삽입) ────────────────────── */
+/* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
+   그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다. */
 const groupedMessages = computed(() => {
     const items = [];
     let lastDateKey = '';
 
     for (const msg of store.messages) {
-        const d = new Date(msg.createdAt);
+        const d = msg.sentAt;
+        if (!d) {
+            items.push({ type: 'message', data: msg, key: msg.messageId });
+            continue;
+        }
         const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
         if (dateKey !== lastDateKey) {
@@ -114,46 +118,14 @@ function handleSendText(text) {
     }
 }
 
-/* ── 시스템 CTA ────────────────────────────────────────── */
-function handleOpenTrial(indictmentId) {
-    router.push({
-        name: 'defenseViolation',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
-function handleVote(indictmentId) {
-    router.push({
-        name: 'voteVerdict',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
-function handleOpenVerdict(indictmentId) {
-    router.push({
-        name: 'groupAiVerdictDetail',
-        params: { id: groupId.value, indictmentId },
-    });
-}
-
 /* ── 메시지 판별 헬퍼 ──────────────────────────────────── */
+/*
+ * 서버가 주는 구분은 type: 'TEXT' | 'SYSTEM' 둘뿐이다(ChatMessageDto). 목업에 있던
+ * 시스템 서브타입·메타데이터(재판 딥링크 CTA)는 서버 계약에 없으므로 화면에서도 만들지 않는다.
+ * 시스템 메시지는 본문 그대로 pill 로 보여준다.
+ */
 function isMine(msg) {
     return Number(msg.senderId) === Number(store.currentUserId);
-}
-
-function isSystemCard(msg) {
-    return msg.messageType === 'SYSTEM' && msg.systemSubType === 'TRIAL_STARTED';
-}
-
-function isSystemPill(msg) {
-    return (
-        msg.messageType === 'SYSTEM' &&
-        ['VOTE_OPENED', 'VERDICT_CONFIRMED', 'CONFESSION'].includes(msg.systemSubType)
-    );
-}
-
-function isUserMessage(msg) {
-    return msg.messageType === 'USER';
 }
 
 /* ── 오류 재시도 ───────────────────────────────────────── */
@@ -233,27 +205,11 @@ watch(
                     <!-- 날짜 구분 -->
                     <GroupChatDateDivider v-if="item.type === 'date'" :label="item.label" />
 
-                    <!-- 시스템: 재판 게시 (Ink 카드) -->
-                    <GroupChatSystemCard
-                        v-else-if="isSystemCard(item.data)"
-                        :message="item.data"
-                        @open-trial="handleOpenTrial"
-                    />
+                    <!-- 시스템(재판 봇) 메시지 -->
+                    <GroupChatSystemPill v-else-if="item.data.isSystem" :message="item.data" />
 
-                    <!-- 시스템: 투표/판결/혐의인정 (pill) -->
-                    <GroupChatSystemPill
-                        v-else-if="isSystemPill(item.data)"
-                        :message="item.data"
-                        @vote="handleVote"
-                        @open-verdict="handleOpenVerdict"
-                    />
-
-                    <!-- 사용자 메시지 -->
-                    <GroupChatBubble
-                        v-else-if="isUserMessage(item.data)"
-                        :message="item.data"
-                        :is-mine="isMine(item.data)"
-                    />
+                    <!-- 참여자 메시지. v-else 라 어떤 type 이든 화면에서 사라지지 않는다 -->
+                    <GroupChatBubble v-else :message="item.data" :is-mine="isMine(item.data)" />
                 </template>
             </div>
 

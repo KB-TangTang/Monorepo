@@ -117,3 +117,60 @@ test('GroupChatInput 의 스티커 버튼은 기본적으로 숨겨져 있다', 
         '스티커 버튼은 v-if="showStickerButton" 으로 감싸야 한다 — 마크업은 지우지 않고 감춘다',
     );
 });
+
+/*
+ * 최종 리뷰 C2: 화면이 삭제된 목업 스키마를 보고 있어 메시지가 한 건도 그려지지 않았다.
+ *   - msg.messageType === 'USER'  → 서버는 type: 'TEXT'  (모든 텍스트 메시지가 v-else-if 를 빠져나감)
+ *   - msg.createdAt               → 서버는 sentAt        (날짜 구분선이 "NaN월 NaN일")
+ *   - roomInfo.challengeName      → 서버는 groupName     (제목 빈칸)
+ *   - currentDay · daysLeft       → 서버가 주지 않음      ("undefined일차 · D-undefined")
+ * 렌더링 하네스가 없으므로 소스 텍스트로 계약을 확인한다.
+ */
+const MOCKUP_FIELDS = [
+    'messageType',
+    'systemSubType',
+    'createdAt',
+    'challengeName',
+    'senderColor',
+    'currentDay',
+    'daysLeft',
+    'contentType',
+];
+
+const LIVE_CHAT_FILES = [
+    '../src/views/challenge/group/GroupChatView.vue',
+    '../src/components/challenge/group/chat/GroupChatHeader.vue',
+    '../src/components/challenge/group/chat/GroupChatBubble.vue',
+    '../src/components/challenge/group/chat/GroupChatSystemPill.vue',
+];
+
+test('화면에 목업 전용 필드가 남아 있지 않다', () => {
+    for (const path of LIVE_CHAT_FILES) {
+        const src = readFileSync(new URL(path, import.meta.url), 'utf8');
+        for (const field of MOCKUP_FIELDS) {
+            assert.ok(
+                !src.includes(field),
+                `${path} 에 목업 필드 '${field}' 가 남아 있다 — 서버 DTO 에 없는 이름이다`,
+            );
+        }
+    }
+});
+
+test('메시지는 type 이 무엇이든 화면에서 사라지지 않는다', () => {
+    const src = source();
+    assert.ok(
+        /<GroupChatBubble\s+v-else\b/.test(src),
+        '참여자 메시지는 v-else 로 받아야 한다 — v-else-if 로 좁히면 모르는 type 이 통째로 사라진다',
+    );
+    assert.ok(
+        /v-else-if="item\.data\.isSystem"/.test(src),
+        '시스템 메시지는 어댑터가 만든 isSystem 으로 분기해야 한다',
+    );
+});
+
+test('종료 판정은 스토어의 isEnded 를 쓴다 (목업 상태값 ENDED 를 직접 비교하지 않는다)', () => {
+    for (const path of LIVE_CHAT_FILES) {
+        const src = readFileSync(new URL(path, import.meta.url), 'utf8');
+        assert.ok(!src.includes("'ENDED'"), `${path} 에 서버에 없는 상태값 'ENDED' 비교가 남아 있다`);
+    }
+});

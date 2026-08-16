@@ -85,14 +85,20 @@ test('hasMore 가 false 면 요청하지 않는다', async () => {
 
 test('입장하면 방 정보와 최근 메시지를 불러오고 안 읽은 수를 지운다', async () => {
     const store = newStore();
-    stub.setRoomInfoResponse({ groupId: 7, challengeName: '절약단', status: 'ACTIVE' });
+    stub.setRoomInfoResponse({
+        groupId: 7,
+        groupName: '절약단',
+        status: 'ACTIVE',
+        memberCount: 4,
+        unreadCount: 2,
+    });
     stub.setMessagesResponse({ messages: [{ messageId: 1 }], hasMore: false });
 
     await store.enterRoom(7);
 
     assert.equal(store.messages.length, 1);
     assert.deepEqual(stub.resetUnreadCalls, [7]);
-    assert.equal(store.roomInfo.challengeName, '절약단');
+    assert.equal(store.roomInfo.groupName, '절약단');
     assert.equal(store.closed, false);
     assert.equal(store.error, null);
 });
@@ -202,4 +208,70 @@ test('leaveRoom 은 groupId 를 포함한 모든 상태를 초기화한다', asy
     assert.equal(store.hasMore, false);
     assert.equal(store.closed, false);
     assert.equal(store.error, null);
+});
+
+/*
+ * 최종 리뷰 C2: 화면이 삭제된 목업 스키마(messageType · createdAt · senderName · challengeName)를
+ * 보는 동안 서버는 {type, sentAt, senderNickname, groupName} 을 보내고 있었다. 스토어가 매핑 없이
+ * 그대로 넣어 텍스트 메시지가 한 건도 렌더링되지 않았다.
+ * 아래 두 테스트는 REST 경로와 소켓 경로가 **같은 어댑터**를 지나는지를 확인한다.
+ */
+test('REST 로 받은 메시지는 화면 모델로 정규화된다', async () => {
+    const store = newStore();
+    stub.setMessagesResponse({
+        messages: [
+            {
+                messageId: 1,
+                type: 'TEXT',
+                senderId: 3,
+                senderNickname: '절약왕',
+                content: '안녕',
+                sentAt: '2026-08-16T12:34:56',
+            },
+        ],
+        hasMore: false,
+    });
+
+    await store.enterRoom(7);
+
+    const message = store.messages[0];
+    assert.equal(message.senderName, '절약왕');
+    assert.equal(message.isSystem, false);
+    assert.ok(message.sentAt instanceof Date);
+    assert.equal(message.sentAt.getMonth(), 7); // 8월
+    assert.equal(message.sentAt.getDate(), 16);
+});
+
+test('소켓으로 받은 메시지도 같은 어댑터를 지난다', () => {
+    const store = newStore();
+
+    store.appendMessage({
+        messageId: 9,
+        type: 'SYSTEM',
+        senderId: null,
+        senderNickname: null,
+        content: '재판이 열렸어요',
+        sentAt: '2026-08-16T09:00:00',
+    });
+
+    const message = store.messages[0];
+    assert.equal(message.isSystem, true);
+    assert.equal(message.senderName, '');
+    assert.ok(message.sentAt instanceof Date);
+});
+
+/* 서버 상태값은 RECRUITING · ACTIVE · JUDGING · CLOSED 다. 목업의 'ENDED' 는 존재하지 않는다 */
+test('isEnded 는 서버 상태 CLOSED 에서만 참이다', async () => {
+    const store = newStore();
+    stub.setRoomInfoResponse({ groupId: 7, groupName: '절약단', status: 'ACTIVE', memberCount: 3 });
+    await store.enterRoom(7);
+    assert.equal(store.isEnded, false);
+
+    stub.setRoomInfoResponse({ groupId: 7, groupName: '절약단', status: 'JUDGING', memberCount: 3 });
+    await store.enterRoom(7);
+    assert.equal(store.isEnded, false, 'JUDGING 은 대화가 가장 활발한 구간이라 입력을 막지 않는다');
+
+    stub.setRoomInfoResponse({ groupId: 7, groupName: '절약단', status: 'CLOSED', memberCount: 3 });
+    await store.enterRoom(7);
+    assert.equal(store.isEnded, true);
 });

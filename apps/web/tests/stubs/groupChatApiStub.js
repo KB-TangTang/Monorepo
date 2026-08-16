@@ -10,9 +10,10 @@ export const roomInfoCalls = [];
 export const resetUnreadCalls = [];
 
 let messagesResponse = { messages: [], hasMore: false };
+/* 실제 서버 응답 모양이다 — ChatRoomDto { groupId, groupName, status, memberCount, unreadCount } */
 let roomInfoResponse = {
     groupId: 0,
-    challengeName: '',
+    groupName: '',
     status: 'ACTIVE',
     memberCount: 0,
     unreadCount: 0,
@@ -26,7 +27,7 @@ export function reset() {
     messagesResponse = { messages: [], hasMore: false };
     roomInfoResponse = {
         groupId: 0,
-        challengeName: '',
+        groupName: '',
         status: 'ACTIVE',
         memberCount: 0,
         unreadCount: 0,

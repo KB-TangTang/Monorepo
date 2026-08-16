@@ -11,6 +11,7 @@
  * 허용한다(deny-by-default). 다른 목적지를 쓰면 연결 자체가 끊긴다.
  */
 import { Client, ReconnectionTimeMode } from '@stomp/stompjs';
+import { buildChatSocketUrl } from '@/api/chatSocketUrl';
 
 const INITIAL_RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 30000;
@@ -22,9 +23,13 @@ const MAX_RECONNECT_DELAY_MS = 30000;
  */
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+/*
+ * REST 와 같은 값(VITE_API_BASE_URL)에서 유도한다 — 유도 규칙은 chatSocketUrl.js 참고.
+ * 예전에는 무조건 window.location.host 였다. 로컬은 :5173(프록시에 /ws 가 없어 실패),
+ * 프로덕션은 Vercel 호스트를 가리켜 dev·prod 어디에도 도달하지 못했다.
+ */
 function socketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${window.location.host}/ws/chat`;
+    return buildChatSocketUrl(import.meta.env?.VITE_API_BASE_URL, window.location);
 }
 
 export function createChatSocket({ groupId, getToken, onMessage, onReconnect }) {
