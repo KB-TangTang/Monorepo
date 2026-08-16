@@ -68,3 +68,7 @@ openai.read-timeout-millis=15000
 
 # 배치를 자정까지 기다리지 않고 돌리려면 그룹 챌린지 홈의 DEV 버튼을 누른다
 # (POST /api/dev/batches/group-challenge-status). 로컬에서는 별도 설정 없이 켜져 있다.
+
+# ── 그룹 채팅 Redis (이슈 #174) ──────────────────────
+redis.host=localhost
+redis.port=6379

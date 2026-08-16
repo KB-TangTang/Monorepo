@@ -76,6 +76,10 @@ cp apps/api/src/main/resources/application-local.properties.example \
 cp .env.example .env
 ```
 
+> 그룹 채팅(이슈 #174)이 들어간 뒤로는 **redis 컨테이너가 필요하다.**
+> `docker compose up` 을 다시 돌리면 따라 올라온다. 로컬에서 도커 밖 API 를 띄운다면
+> `application-local.properties` 의 `redis.host=localhost` 를 확인한다.
+
 > ⚠ **`20260805_add_account_name_to_connected_account.sql` 은 건너뛴다.** 이 변경만 `schema.sql` 에도
 > 반영돼 있어 신규 설치에서 실행하면 `Duplicate column name` 으로 죽는다.
 > **각 마이그레이션 머리말에 신규 설치 시 실행 여부가 적혀 있으니 그것을 따른다.**

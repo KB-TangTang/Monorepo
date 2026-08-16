@@ -1191,6 +1191,118 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
 
+## 그룹 채팅 (이슈 #174)
+
+그룹 챌린지방(지방법원)마다 딸린 실시간 채팅이다. 조회 3종은 REST 지만 **발송은 STOMP 로만** 한다.
+이 절엔 발송 엔드포인트가 없다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount }` |
+| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt}], hasMore }` |
+| POST | `/api/groups/{groupId}/chat/read` | Bearer | 없음 (호출한 사용자의 안 읽은 수를 0으로 초기화) |
+
+- `before`·`after` 는 `messageId` 기준 페이징이다. **둘을 동시에 주면 `INVALID_REQUEST`.** 둘 다 없으면
+  최근 `limit` 건을 준다.
+  - `before` - 그 메시지보다 앞 구간 (위로 스크롤)
+  - `after` - 그 메시지보다 뒤 구간 (재연결 후 놓친 구간 보충)
+- `limit` 은 **1~100, 기본값 50** 이다. 범위를 벗어나면 `INVALID_REQUEST` 다(`ChatQueryService`).
+- `hasMore` 는 "위로 더 있는가" 다. 반환된 메시지 중 가장 오래된 `messageId` 가 1보다 크면 `true`.
+- `sentAt` 은 ISO-8601 문자열(`2026-08-16T12:34:56`)이다. **REST 와 STOMP 가 같은 형식**이다
+  (`WebSocketConfig#jsonConverter` 가 브로커 컨버터에도 REST 와 같은 ObjectMapper 를 꽂는다).
+- `type` 은 `TEXT`(참여자가 보낸 메시지) 또는 `SYSTEM`(재판 진행 봇 메시지)이다. `SYSTEM` 이면
+  `senderId`·`senderNickname` 이 `null` 이다.
+- **`CLOSED`(재판 절차가 끝난) 챌린지는 조회 자체가 막힌다.** `JUDGING`(재판 중)은 대화가 가장
+  활발한 구간이라 허용한다.
+
+### 실시간 발송·수신 (STOMP)
+
+발송·수신은 REST 가 아니라 STOMP 다.
+
+- 접속 엔드포인트: `/ws/chat` (SockJS 폴백 없음. 네이티브 WebSocket 전용)
+- 구독: `/sub/chat/{groupId}` · 발행: `/pub/chat/{groupId}`
+- **이 두 목적지 패턴 말고는 서버가 전부 거부하고 연결을 끊는다**(`StompAuthChannelInterceptor`,
+  deny-by-default). `/sub/chat/**` 같은 와일드카드로 우회하려는 시도도 막는다.
+- 인증은 CONNECT(또는 STOMP) 프레임의 네이티브 헤더 `Authorization: Bearer {accessToken}` 이다.
+  브라우저 WebSocket API 는 핸드셰이크에 커스텀 헤더를 실을 수 없어 이 방식을 쓴다.
+- 액세스 토큰은 15분 만료다. 세션 중 토큰을 교체하는 경로는 없다. 만료되면 프론트가 재연결하며
+  새 토큰으로 다시 붙는다.
+- 발행 본문은 `{ content }` 하나다. 비어 있거나 500자를 넘으면 `INVALID_REQUEST` 다.
+- 구독·발행 시점에도 REST 와 같은 `ChatRoomAccessService.verifyCanEnter` 를 거치므로
+  `NOT_FOUND`·`CHAT_NOT_MEMBER`·`CHAT_ROOM_CLOSED` 가 그대로 발생할 수 있다. STOMP 에서는
+  응답 코드가 아니라 **연결 종료**로 나타난다.
+- 수신 메시지 모양은 REST 조회의 `messages[]` 항목과 **완전히 같다**(`ChatMessageDto` 하나를 공유).
+- 프론트는 접속 URL 을 `VITE_API_BASE_URL` 에서 유도한다(`api/chatSocketUrl.js`). 값이 없으면 현재
+  호스트로 폴백한다.
+- **로컬 개발은 그대로 붙는다.** `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 업그레이드 요청을
+  :8080 으로 넘긴다. `VITE_API_BASE_URL` 을 따로 설정할 필요가 없다.
+- **프로덕션 소켓은 아직 동작하지 않는다.** `apps/web/vercel.json` 의 rewrite 는 `/api`·`/uploads`
+  만 EC2 로 넘기고 `/(.*)` 는 전부 `index.html` 로 떨어뜨린다. WebSocket 업그레이드 요청도 이
+  catch-all 에 걸려 소켓이 붙지 않는다.
+  - `VITE_API_BASE_URL` 에 `http://<EC2 주소>:8080/api` 같은 값을 넣어 우회하려 하면 안 된다.
+    프론트는 Vercel(https) 에 올라가므로, https 페이지에서 `http://` XHR 과 `ws://` 소켓은 브라우저가
+    mixed content 로 차단한다. 지금은 `/api` 상대경로 + 위 rewrite 로 REST 가 도는데, 이 값을 넣으면
+    소켓뿐 아니라 **REST 요청까지 함께 막힌다.**
+  - 전제 조건은 EC2 앞단에 TLS 종단(nginx 등)을 붙여 `wss` 를 받고 백엔드로 프록시하는 것이다.
+    그 nginx 설정에는 `proxy_set_header Upgrade $http_upgrade;` · `Connection "upgrade"` ·
+    `proxy_read_timeout` 상향이 필요하다. 이 저장소에는 nginx 설정 파일이 없으므로 EC2 를 관리하는
+    팀원에게 별도로 전달해야 한다.
+  - TLS 종단이 준비된 뒤에만 `VITE_API_BASE_URL` 을 `https://` 절대 URL 로 설정한다. 그 전까지는
+    값을 비워 두거나 `/api` 로 둔다.
+  - **그때까지 그룹 채팅 시연은 로컬 개발 환경(`npm run dev`)에서 한다.**
+
+### 시스템 메시지 (재판 이벤트 수신부, 이슈 #169~#172 인계)
+
+재판 진행 상황(기소·재판 개시·변론·판결)이 바뀌면 채팅방에 봇 메시지(`type=SYSTEM`)가 뜬다.
+**수신부는 이번 브랜치가 만들었고, 발행부는 이슈 #169~#172 담당자 몫이다.** 각자 로직이 끝나는
+지점에서 아래처럼 한 줄만 호출하면 된다.
+
+```java
+events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targetNickname));
+```
+
+이벤트 4종은 `challenge/domain/GroupTrialEvents.java` 에 있다.
+
+| 이벤트 | 발행 시점 | 생성자 인자 |
+|---|---|---|
+| `ViolationDetected` | 소비 위반이 감지돼 기소 후보가 생겼을 때 | `(groupId, indictmentId, targetNickname)` |
+| `TrialOpened` | 재판이 열렸을 때 | `(groupId, indictmentId, targetNickname)` |
+| `DefenseRegistered` | 피고인이 변론을 등록했을 때 | `(groupId, indictmentId, targetNickname)` |
+| `VerdictConfirmed` | 판결이 확정됐을 때 | `(groupId, indictmentId, summary)` |
+
+발행부가 붙기 전까지는 아래 DEV 전용 엔드포인트로 같은 이벤트를 직접 쏴서 채팅방 렌더링을
+시연·확인한다. **발행부가 붙으면 이 컨트롤러는 지운다.**
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/dev/chat/system-message?groupId=&indictmentId=&kind=&nickname=` | Bearer | 없음 |
+
+- **로컬에서만 동작한다.** `/api/dev/batches/**`(이슈 #152)와 같은 `app.env` 기반 차단이다.
+- `kind`: `VIOLATION`(소비 위반 적발) · `TRIAL_OPENED`(재판 개시, 기본값) · `DEFENSE`(변론 등록) ·
+  `VERDICT`(판결 확정)
+- `indictmentId` 기본값 1, `nickname` 기본값 `절약왕`.
+
+### 저장소 - Redis 전용, MySQL 테이블 없음
+
+메시지 원본은 **Redis 에만** 있다. MyBatis 매퍼도 `tbl_chat_*` 테이블도 만들지 않았다
+(DECISIONS.md 2026-08-15). **스키마 변경이 없다.**
+
+- TTL 은 **챌린지 `end_date` + 2일**이다. 종료 다음날 도는 판결 확정 배치가 도착할 방이 남아
+  있어야 해서다.
+- 챌린지가 `CLOSED` 로 전이되면 **TTL 을 기다리지 않고 방을 즉시 삭제한다.** TTL 은 백스톱일 뿐이다.
+- 안 읽은 수(`unreadCount`)도 같은 Redis 인스턴스에 저장하며 같은 TTL 규칙을 따른다.
+
+### 그룹 채팅 에러 코드
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `NOT_FOUND` | 400 | 존재하지 않는 챌린지 |
+| `CHAT_NOT_MEMBER` | 400 | 이 챌린지의 참여자가 아님 |
+| `CHAT_ROOM_CLOSED` | 400 | 종료(`CLOSED`)된 챌린지의 대화 조회·발행 시도 |
+| `INVALID_REQUEST` | 400 | `before`·`after` 동시 지정, `limit` 범위(1~100) 밖, 메시지 내용이 비었거나 500자 초과 |
+| `CHAT_SENDER_NOT_FOUND` | 400 | STOMP 발행 - 인증된 세션인데 발신자가 탈퇴 등으로 사라짐 |
+| `CHAT_BROADCAST_UNAVAILABLE` | 500 | STOMP 브로커가 아직 바인딩되지 않아 전달 불가 (서버 기동 이상) |
+
 ## 알림 (이슈 #58)
 
 | 메서드 | 경로 | 인증 | 응답 |

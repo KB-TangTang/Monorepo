@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +27,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class ChallengeGroupServiceTest {
 
@@ -34,12 +44,14 @@ class ChallengeGroupServiceTest {
 
     private FakeGroupMapper groupMapper;
     private FakeMemberMapper memberMapper;
+    private ChatMessageStore chatMessageStore;
     private ChallengeGroupService service;
 
     @BeforeEach
     void setUp() {
         groupMapper = new FakeGroupMapper();
         memberMapper = new FakeMemberMapper();
+        chatMessageStore = mock(ChatMessageStore.class);
         service = newService(TODAY);
     }
 
@@ -47,7 +59,7 @@ class ChallengeGroupServiceTest {
         ZoneId zone = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(today.atStartOfDay(zone).toInstant(), zone);
         return new ChallengeGroupService(groupMapper, memberMapper,
-                new InviteCodeGenerator(groupMapper), clock);
+                new InviteCodeGenerator(groupMapper), chatMessageStore, clock);
     }
 
     /* ══ 생성 ══════════════════════════════════════════════ */
@@ -71,6 +83,20 @@ class ChallengeGroupServiceTest {
         ChallengeGroup saved = groupMapper.findById(created.getGroupId());
         assertEquals("RECRUITING", saved.getStatus());
         assertEquals(6, saved.getMaxMembers(), "정원은 6명 고정이다");
+
+        verify(chatMessageStore).initRoom(created.getGroupId(), Set.of(OWNER_ID), saved.getEndDate());
+    }
+
+    @Test
+    @DisplayName("채팅방 개설이 실패해도 챌린지 생성 자체는 성공한다 — Redis 장애가 본업을 막지 않는다")
+    void createSucceedsEvenWhenChatRoomInitFails() {
+        doThrow(new RuntimeException("Redis 연결 실패"))
+                .when(chatMessageStore).initRoom(anyLong(), anySet(), any());
+
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+
+        assertNotNull(created.getGroupId());
+        assertEquals("RECRUITING", groupMapper.findById(created.getGroupId()).getStatus());
     }
 
     @Test
@@ -259,6 +285,19 @@ class ChallengeGroupServiceTest {
         assertEquals(3, detail.getLivesCount());
         assertEquals(2, detail.getMemberCount());
         assertFalse(detail.isOwner());
+
+        verify(chatMessageStore).cacheMembers(created.getGroupId(), Set.of(GUEST_ID), detail.getEndDate());
+    }
+
+    @Test
+    @DisplayName("참여 차단 시에는 채팅방 캐시를 건드리지 않는다")
+    void joinBlockedDoesNotTouchChatCache() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        clearInvocations(chatMessageStore);
+
+        assertThrows(BusinessException.class, () -> service.join(OWNER_ID, created.getGroupId()));
+
+        verifyNoInteractions(chatMessageStore);
     }
 
     @Test
@@ -476,6 +515,14 @@ class ChallengeGroupServiceTest {
         public List<GroupMember> findByGroupIds(List<Long> groupIds) {
             return members.stream()
                     .filter(m -> groupIds.contains(m.getGroupId()))
+                    .toList();
+        }
+
+        @Override
+        public List<Long> findUserIdsByGroupId(long groupId) {
+            return members.stream()
+                    .filter(m -> m.getGroupId() == groupId)
+                    .map(GroupMember::getUserId)
                     .toList();
         }
     }

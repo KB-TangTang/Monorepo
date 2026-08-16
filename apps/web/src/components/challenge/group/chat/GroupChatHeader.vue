@@ -2,6 +2,12 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
+/*
+ * roomInfo 는 api/groupChatAdapter.js 가 정규화한 모양이다
+ * ({ groupId, groupName, status, memberCount, unreadCount, isEnded, isJudging }).
+ * 서버는 진행 일차·D-day 를 주지 않으므로 화면에서도 만들지 않는다 — 예전엔 없는 필드를 읽어
+ * "undefined일차 · D-undefined" 가 찍혔다.
+ */
 const props = defineProps({
     roomInfo: { type: Object, default: null },
 });
@@ -13,12 +19,9 @@ function goBack() {
     router.back();
 }
 
-const hasActiveTrial = computed(() => props.roomInfo?.hasActiveTrial ?? false);
-
 const subInfo = computed(() => {
     if (!props.roomInfo) return '';
-    const { memberCount, currentDay, daysLeft } = props.roomInfo;
-    return `멤버 ${memberCount} · ${currentDay}일차 · D-${daysLeft}`;
+    return `멤버 ${props.roomInfo.memberCount}명`;
 });
 </script>
 
@@ -34,12 +37,12 @@ const subInfo = computed(() => {
             <div class="chat-header__info">
                 <div class="chat-header__title-row">
                     <span class="chat-header__title">
-                        {{ roomInfo?.challengeName ?? '' }}
+                        {{ roomInfo?.groupName ?? '' }}
                     </span>
-                    <span v-if="hasActiveTrial" class="chat-header__badge chat-header__badge--trial">
+                    <span v-if="roomInfo?.isJudging" class="chat-header__badge chat-header__badge--trial">
                         재판 중
                     </span>
-                    <span v-if="roomInfo?.status === 'ENDED'" class="chat-header__badge chat-header__badge--ended">
+                    <span v-if="roomInfo?.isEnded" class="chat-header__badge chat-header__badge--ended">
                         종료됨
                     </span>
                 </div>
