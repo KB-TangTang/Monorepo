@@ -173,7 +173,7 @@ class ChallengeGroupControllerTest {
         private BusinessException joinFailure;
 
         StubService() {
-            super(null, null, null);
+            super(null, null, null, null);
         }
 
         @Override

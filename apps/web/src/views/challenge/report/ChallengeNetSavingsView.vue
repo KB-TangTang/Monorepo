@@ -42,7 +42,7 @@ async function loadReport() {
                 ? fetchMockChallengeReport
                 : fetchChallengeReport;
         const data = await fetcher(selectedPeriod.value);
-        if (!data.hasChallengeHistory || data.isFirstServiceMonth) {
+        if (!data.hasChallengeHistory || data.netSavings == null) {
             throw new Error('해당 월에는 확인할 순 절감액이 없습니다.');
         }
         report.value = data;

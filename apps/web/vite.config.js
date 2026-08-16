@@ -27,6 +27,13 @@ export default defineConfig({
                 target: 'http://localhost:8080',
                 changeOrigin: true,
             },
+            // 그룹 채팅 STOMP(이슈 #174). ws: true 가 없으면 업그레이드 요청이 그대로 SPA
+            // fallback 으로 떨어져 소켓이 붙지 않는다.
+            '/ws': {
+                target: 'http://localhost:8080',
+                changeOrigin: true,
+                ws: true,
+            },
         },
     },
 });

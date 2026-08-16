@@ -27,7 +27,6 @@ import { useChallengeReportStore } from '@/stores/challengeReport';
 
 const emit = defineEmits([
     'change-difficulty',
-    'open-group-history',
     'open-monthly-report',
     'start-challenge',
 ]);
@@ -82,7 +81,10 @@ async function loadReport() {
                 ? fetchMockChallengeReport
                 : fetchChallengeReport;
         report.value = await fetcher(selectedPeriod.value);
-        if (resolveChallengeReportState({ report: report.value }) === 'ready') {
+        if (
+            resolveChallengeReportState({ report: report.value }) === 'ready' &&
+            report.value.netSavings != null
+        ) {
             isGuideOpen.value = !(await hasSeenNetSavingsGuide());
         }
     } catch (error) {
@@ -155,6 +157,10 @@ function openMonthlyReport() {
     });
 }
 
+function openGroupHistory() {
+    router.push({ name: 'groupChallengeList', query: { tab: 'ended' } });
+}
+
 onMounted(initialize);
 </script>
 
@@ -206,9 +212,9 @@ onMounted(initialize);
         <ChallengeReportContent
             v-else
             :report="report"
-            :show-comparison="!selectedMonth?.firstReport"
+            :show-comparison="report.hasPreviousComparison ?? !selectedMonth?.firstReport"
             @change-difficulty="router.push({ name: 'personalMissionChallengeDifficulty' })"
-            @open-group-history="emit('open-group-history')"
+            @open-group-history="openGroupHistory"
         />
 
         <ChallengeReportToggle

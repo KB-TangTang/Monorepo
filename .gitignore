@@ -74,6 +74,7 @@ _to_delete/
 CLAUDE.local.md
 AGENTS.override.md
 .claude/settings.local.json
+.claude/hooks/
 
 # ---- AI 작업 산출물 (개인 참고용 — 저장소에 올리지 않는다) ----
 # 설계서·구현계획은 로컬에만 둔다. 결정 근거는 PR 본문과 .claude/context/ 에 남긴다.

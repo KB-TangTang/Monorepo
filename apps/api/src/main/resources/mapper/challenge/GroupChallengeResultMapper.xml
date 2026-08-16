@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &gt; · &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨진다.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper">
+
+    <!--
+      그룹 챌린지가 "소비" 로 세는 거래의 조건. 별칭은 거래 t · 그룹 g 로 고정한다.
+
+      ⚠ 집계와 변론 화면의 거래 목록이 반드시 이 조각 하나를 같이 써야 한다. 조건이 갈리면
+        "합계는 36,700원인데 목록을 더하면 31,700원" 같은 상태가 되고, 사용자는 자기가 왜
+        기소됐는지 화면에서 확인할 수 없게 된다.
+
+      ⚠ is_refund 는 여기서 거르지 않는다. 환불 행을 빼 버리면 원거래 금액이 그대로 남아
+        환불받은 소비로 기소된다. 대신 합계 쪽에서 음수로 빼며, 이는 미션 판정·월간 리포트가
+        쓰는 팀 공통 방식이다(MissionEvaluationMapper.xml:20 · MonthlyReportMapper.xml:15).
+        같은 이유로 목록 조회도 환불 행을 함께 보여줘야 한다.
+
+      category_id 가 NULL 인 그룹은 총소비 챌린지라 카테고리 조건이 사라진다.
+
+      ⚠ 거래의 category_id 는 LLM 분류가 끝나야 채워진다(비동기). 분류 전 거래는 카테고리
+        챌린지 집계에서 잠깐 빠진다. 다음 틱에 자동으로 반영되므로 기소가 늦어질 뿐 틀리지는 않는다.
+    -->
+    <sql id="consumptionFilter">
+        AND t.classification = 'CONSUMPTION'
+        AND t.direction = 'OUT'
+        AND t.is_excluded_from_summary = 0
+        AND (g.category_id IS NULL OR t.category_id = g.category_id)
+    </sql>
+
+    <!--
+      그룹 전원 · 하루치 재집계.
+
+      LEFT JOIN 이라 거래가 없는 참여자도 0원 행이 만들어진다. 랭킹이 참여자 전원을 보여야 해서다.
+
+      ⚠ ON DUPLICATE KEY UPDATE 에 verdict_deduction_amount 를 절대 넣지 않는다.
+        넣으면 무죄 감액이 5분마다 0 으로 초기화되고 화면에는 흔적이 남지 않는다.
+        effective_amount 는 생성 컬럼이라 애초에 쓸 수 없다.
+
+      환불은 음수로 뺀다. 어제 산 것을 오늘 환불하면 오늘 daily_amount 가 음수가 될 수 있는데
+      그대로 둔다 — effective_amount 가 GREATEST(..., 0) 로 막아 주고, 기간평가 SUM 에서는
+      음수가 남아 있어야 환불이 제대로 상쇄된다. 여기서 0 으로 깎으면 기간 합계가 부풀어 오른다.
+
+      target_count 는 '횟수' 라 환불 행을 세지 않는다(MissionCategoryAnalysisMapper.xml:50 과 동일).
+      t.id IS NOT NULL 이 필요한 이유는 LEFT JOIN 미스 행에서 is_refund 가 NULL 이기 때문이다.
+
+      idx_tx_user_date_cat (user_id, tr_date, ...) 를 탄다.
+    -->
+    <insert id="upsertDailyResults">
+        INSERT INTO tbl_group_challenge_daily_result
+            (group_id, user_id, challenge_date, daily_amount, target_count)
+        SELECT m.group_id,
+               m.user_id,
+               #{challengeDate},
+               COALESCE(SUM(CASE WHEN t.is_refund = 1
+                                 THEN -COALESCE(t.refunded_amount, t.amount)
+                                 ELSE t.amount
+                            END), 0),
+               COALESCE(SUM(CASE WHEN t.id IS NOT NULL AND t.is_refund = 0
+                                 THEN 1 ELSE 0
+                            END), 0)
+          FROM tbl_group_member m
+          JOIN tbl_challenge_group g ON g.id = m.group_id
+          LEFT JOIN tbl_transaction t
+                 ON t.user_id = m.user_id
+                AND t.tr_date = #{challengeDate}
+                <include refid="consumptionFilter"/>
+         WHERE m.group_id = #{groupId}
+         GROUP BY m.group_id, m.user_id
+        ON DUPLICATE KEY UPDATE
+            daily_amount = VALUES(daily_amount),
+            target_count = VALUES(target_count)
+    </insert>
+
+    <!--
+      일일평가 기소 대상.
+
+      비교 기준이 effective_amount 다 — 무죄 감액으로 한도 이하가 된 참여자를 다시 기소하지 않는다.
+
+      NOT EXISTS 는 성능용 필터다. 조회와 INSERT 사이에 다른 인스턴스가 끼어들 수 있어
+      중복을 실제로 막는 것은 uk_ind_result UNIQUE 다(20260815_add_indictment_result_unique.sql).
+
+      uk_gcdr_group_user_date (group_id, user_id, challenge_date) 는 선행 컬럼만 상등이라
+      그룹 단위로 좁힌 뒤 날짜를 걸러 낸다. 그룹당 참여자가 최대 6명이라 문제되지 않는다.
+    -->
+    <select id="findOverLimitDaily" resultType="com.kb.tangtang.challenge.domain.IndictmentTarget">
+        SELECT r.id             AS result_id,
+               r.user_id        AS user_id,
+               r.challenge_date AS challenge_date,
+               r.effective_amount AS amount
+          FROM tbl_group_challenge_daily_result r
+          JOIN tbl_challenge_group g ON g.id = r.group_id
+         WHERE r.group_id = #{groupId}
+           AND r.challenge_date = #{challengeDate}
+           AND r.effective_amount &gt; g.limit_amount
+           AND NOT EXISTS (SELECT 1 FROM tbl_indictment i WHERE i.result_id = r.id)
+         ORDER BY r.user_id
+    </select>
+
+    <!--
+      기간평가 기소 대상. 챌린지가 끝난 뒤에만 호출된다(호출부가 today &gt; end_date 를 확인).
+
+      기소는 end_date 행에 붙인다. 기간 중 어느 날이 한도를 넘겼는지 특정할 수 없기 때문이다.
+
+      challenge_date BETWEEN start_date AND end_date 로 좁히는 이유: 배치는 기간 안의 날짜만
+      기록하므로 지금은 없는 행이지만, 조건이 없으면 나중에 기간 밖 행이 한 줄이라도 생겼을 때
+      합계가 조용히 틀어진다. 기소는 되돌릴 수 없는 처분이라 방어해 둔다.
+
+      derived table 로 감싼 이유는 합계를 한 번만 계산하기 위해서다. WHERE 에 그대로 쓰면
+      같은 서브쿼리를 두 번 적어야 한다.
+    -->
+    <select id="findOverLimitPeriod" resultType="com.kb.tangtang.challenge.domain.IndictmentTarget">
+        SELECT t.result_id, t.user_id, t.challenge_date, t.amount
+          FROM (
+              SELECT r_end.id             AS result_id,
+                     r_end.user_id        AS user_id,
+                     r_end.challenge_date AS challenge_date,
+                     g.limit_amount       AS limit_amount,
+                     (SELECT SUM(r.daily_amount)
+                        FROM tbl_group_challenge_daily_result r
+                       WHERE r.group_id = g.id
+                         AND r.user_id = r_end.user_id
+                         AND r.challenge_date BETWEEN g.start_date AND g.end_date) AS amount
+                FROM tbl_challenge_group g
+                JOIN tbl_group_challenge_daily_result r_end
+                  ON r_end.group_id = g.id
+                 AND r_end.challenge_date = g.end_date
+               WHERE g.id = #{groupId}
+          ) t
+         WHERE t.amount &gt; t.limit_amount
+           AND NOT EXISTS (SELECT 1 FROM tbl_indictment i WHERE i.result_id = t.result_id)
+         ORDER BY t.user_id
+    </select>
+
+    <!--
+      감액이 집계액을 넘어선 이상 행. 배치가 로그로만 남기고 고치지 않는다.
+      (20260814_group_challenge_verdict_deduction.sql 이 #168 에 요구한 사항)
+    -->
+    <select id="findDeductionOverflow"
+            resultType="com.kb.tangtang.challenge.domain.GroupChallengeDailyResult">
+        SELECT id, group_id, user_id, challenge_date,
+               daily_amount, verdict_deduction_amount, effective_amount, target_count
+          FROM tbl_group_challenge_daily_result
+         WHERE group_id = #{groupId}
+           AND verdict_deduction_amount &gt; daily_amount
+         ORDER BY user_id, challenge_date
+    </select>
+</mapper>
