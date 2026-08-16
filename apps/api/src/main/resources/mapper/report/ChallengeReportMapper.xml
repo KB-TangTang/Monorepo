@@ -184,6 +184,18 @@
          LIMIT 1
     </select>
 
+    <!--
+      ACTIVE를 함께 본다(이슈 #169). ACTIVE → JUDGING 전이는 종료 당일이 아니라 종료 다음다음 날
+      자정에 일어난다 — 평가·기소 배치가 종료 다음 날까지 status='ACTIVE'로 그룹을 봐야
+      마지막 날 소비가 평가되기 때문이다(ChallengeGroupMapper#findGroupsToJudge).
+
+      그래서 월 마지막 날에 끝난 그룹은 리포트가 생성되는 다음 달 1일에도 아직 ACTIVE다.
+      JUDGING만 보면 그날 하루 "판정 중"이 아니라 EMPTY(전적 없음)로 떨어져,
+      한 달 내내 참여한 사용자가 참여한 적 없는 사용자와 같은 화면을 본다.
+
+      end_date가 조회 월 안이고 리포트는 지난 달 이전만 열리므로(ChallengeReportService#parsePastYearMonth),
+      여기 걸리는 ACTIVE는 "종료됐는데 아직 전이 전"뿐이다. 진행 중인 그룹은 섞이지 않는다.
+    -->
     <select id="hasJudgingGroupRecord" resultType="boolean">
         SELECT EXISTS(
             SELECT 1
@@ -192,7 +204,7 @@
                 ON member.group_id = g.id
              WHERE member.user_id = #{userId}
                AND g.end_date BETWEEN #{startDate} AND #{endDate}
-               AND g.status = 'JUDGING'
+               AND g.status IN ('ACTIVE', 'JUDGING')
         )
     </select>
 

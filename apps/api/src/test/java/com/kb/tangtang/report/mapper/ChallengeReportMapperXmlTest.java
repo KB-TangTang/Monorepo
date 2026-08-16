@@ -70,7 +70,12 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("g.end_date = #{endDate}"));
             assertTrue(xml.contains("g.end_date BETWEEN #{startDate} AND #{endDate}"));
             assertTrue(xml.contains("g.status = 'CLOSED'"));
-            assertTrue(xml.contains("g.status = 'JUDGING'"));
+            /*
+             * 'JUDGING' 단독으로 좁히면 월 마지막 날에 끝난 그룹이 다음 달 1일 하루 동안
+             * EMPTY(전적 없음)로 떨어진다 — ACTIVE → JUDGING 전이가 종료 다음다음 날이라
+             * 그날은 아직 ACTIVE 다(이슈 #169). 화면에 오류가 안 뜨는 종류의 회귀라 못박는다.
+             */
+            assertTrue(xml.contains("g.status IN ('ACTIVE', 'JUDGING')"));
             assertFalse(xml.contains("finalized_member.final_outcome IS NULL"));
             assertFalse(xml.contains("pending_indictment.status IN ('DEFENSE_WAIT', 'VOTING')"));
             assertTrue(xml.contains("indictment.result IS NOT NULL"));
