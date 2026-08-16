@@ -36,7 +36,17 @@ public enum NotificationType {
      */
     GROUP_JUDGMENT("판결이 확정됐어요", "{content}"),
     GROUP_DEFENSE_REGISTERED("변론이 등록됐어요", "{content}"),
-    GROUP_TRIAL_OPENED("재판이 열렸어요", "{content}"),
+    /*
+     * 평가·기소 배치가 발행한다 (이슈 #168).
+     *
+     * {period} 가 날짜 하나가 아니라 문자열인 이유는 일일평가와 기간평가를 한 문구로 덮기 위해서다.
+     *   일일평가 "8월 15일"        — 한도를 넘긴 그 날
+     *   기간평가 "8월 10일~8월 16일" — 챌린지 기간 전체
+     *
+     * ⚠ 날짜는 기소가 만들어진 시각이 아니라 **위반한 날짜**다. 심야 거래는 다음 날 배치가 잡아
+     *   둘이 하루 어긋난다. created_at 을 쓰면 사용자는 쓰지도 않은 날로 기소된 것처럼 본다.
+     */
+    GROUP_TRIAL_OPENED("재판이 열렸어요", "{groupName} · {period} {amount} 지출로 한도를 넘겼어요"),
     MISSION_DEADLINE("오늘 미션 마감 임박", "{content}"),
     MONTHLY_REPORT("판결문이 도착했어요", "{content}"),
     PAYMENT_DUE("결제 예정 알림", "{content}");

@@ -1,6 +1,7 @@
 package com.kb.tangtang.common.dev;
 
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
+import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
 import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderBatchService;
 import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderDevService;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,8 @@ class DevBatchTriggerControllerTest {
     private static final long USER_ID = 7L;
 
     private final ChallengeGroupStatusBatchService groupBatchService = mock(ChallengeGroupStatusBatchService.class);
+    private final GroupChallengeEvaluationBatchService evaluationBatchService =
+            mock(GroupChallengeEvaluationBatchService.class);
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService =
             mock(FixedExpensePaymentReminderBatchService.class);
     private final FixedExpensePaymentReminderDevService paymentReminderDevService =
@@ -34,6 +37,7 @@ class DevBatchTriggerControllerTest {
         DevBatchTriggerController controller = new DevBatchTriggerController(
                 new DevEnvironmentGuard("local"),
                 groupBatchService,
+                evaluationBatchService,
                 paymentReminderBatchService,
                 paymentReminderDevService);
         return MockMvcBuilders.standaloneSetup(controller)
@@ -52,6 +56,21 @@ class DevBatchTriggerControllerTest {
                 .andExpect(jsonPath("$.data.affected").value(2));
 
         verify(paymentReminderBatchService).sendDuePaymentReminders();
+    }
+
+    @Test
+    void runsGroupChallengeEvaluationBatchWithGivenBaseDate() throws Exception {
+        when(evaluationBatchService.evaluateActiveGroups(java.time.LocalDate.of(2026, 8, 17)))
+                .thenReturn(2);
+
+        mockMvc().perform(post("/api/dev/batches/group-challenge-evaluation").param("date", "2026-08-17"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.batch").value("group-challenge-evaluation"))
+                .andExpect(jsonPath("$.data.baseDate").value("2026-08-17"))
+                .andExpect(jsonPath("$.data.affected").value(2));
+
+        /* 기준일을 종료 다음 날로 넣어야 기간평가(PERIOD) 기소를 시연할 수 있다 */
+        verify(evaluationBatchService).evaluateActiveGroups(java.time.LocalDate.of(2026, 8, 17));
     }
 
     @Test

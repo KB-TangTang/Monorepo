@@ -17,7 +17,10 @@ public interface DevBatchTriggerControllerDocs {
             notes = "**로컬에서만 동작한다.** `DevEnvironmentGuard` 가 `app.env` 로 막는다. 인증은 필요하다.\n\n"
                     + "시연·검증용이다. 그룹 챌린지는 자정 배치 → 평가·기소 → 변론 → 투표 → 판결로 이어지는데, "
                     + "각 단계가 자정이나 수 시간 뒤에 도는 배치에 걸려 있어 **기다려서는 검증할 수 없다.**\n\n"
-                    + "등록된 배치 이름: `group-challenge-status`, `fixed-expense-payment-reminders`\n\n"
+                    + "등록된 배치 이름: `group-challenge-status`, `group-challenge-evaluation`, "
+                    + "`fixed-expense-payment-reminders`\n\n"
+                    + "`group-challenge-evaluation` 은 기준일을 종료 다음 날로 넣으면 "
+                    + "기간평가(PERIOD) 기소까지 즉시 재현된다.\n\n"
                     + "없는 이름을 넣으면 `DEV_BATCH_NOT_FOUND` 로 실패한다.")
     ApiResponse<Map<String, Object>> run(
             @ApiIgnore Long userId,
