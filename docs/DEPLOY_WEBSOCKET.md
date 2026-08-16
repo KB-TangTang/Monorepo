@@ -1,27 +1,37 @@
-# 배포 환경 WebSocket(wss) 연결 — EC2 담당자용
+# 배포 환경 WebSocket(wss) 연결
 
-그룹 채팅(이슈 #174)의 **실시간 송수신만** 아직 배포 환경에서 동작하지 않는다.
-REST(방 정보·이전 대화·읽음 처리)는 이미 정상이다. 이 문서는 그 마지막 한 칸을 채우는 절차다.
+그룹 채팅(이슈 #174)의 **실시간 송수신**을 배포 환경에서 연결하는 구성이다.
+REST(방 정보·이전 대화·읽음 처리)는 그 전부터 정상이었고, 소켓만 길이 없었다.
 
-## 왜 지금은 안 되나
+**현재 상태 — 인프라·프론트 모두 적용 완료(이슈 #268).** 아래는 그 구성의 기록이자 재구축 절차다.
+
+## 요청이 두 길로 갈린다
+
+```
+REST   브라우저 → Vercel(rewrite) → EC2:8080          ← 기존 그대로
+소켓   브라우저 → EC2:443(nginx)  → 127.0.0.1:8080     ← #268 에서 뚫은 길
+```
+
+**소켓만 EC2 로 직행시킨다.** REST 까지 옮기지 않는 이유는 아래 「부록 — REST 까지 옮기면 생기는 일」 참고.
+
+## 왜 소켓이 rewrite 를 못 타나
 
 프론트는 Vercel(https), 백엔드는 EC2(http:8080) 다.
 
 1. https 페이지에서 `ws://` 로 붙으면 브라우저가 **mixed content 로 차단**한다. `wss://` 여야 한다.
-2. `wss://` 를 받으려면 EC2 앞단에 **TLS 종단**이 있어야 한다. 지금은 없다.
+2. `wss://` 를 받으려면 EC2 앞단에 **TLS 종단**이 있어야 한다.
 3. `apps/web/vercel.json` 의 rewrite 는 `/api` · `/uploads` 만 EC2 로 넘기고 나머지는 `index.html` 로
-   떨어뜨린다. **rewrite 는 WebSocket 업그레이드를 프록시하지 못한다** — Vercel 을 경유하는 길은 없다.
+   떨어뜨린다. **rewrite 는 WebSocket 업그레이드를 프록시하지 못한다** — Vercel 을 경유하는 길이 없다.
 
-그래서 **환경변수만으로는 해결되지 않는다.** `VITE_API_BASE_URL` 에 `http://<EC2>:8080` 을 넣는 것도 답이
-아니다. 그러면 소켓은 물론이고 지금 잘 도는 REST 까지 mixed content 로 함께 막힌다.
+## 적용된 값
 
-## 필요한 것
-
-EC2 에 도메인과 인증서를 붙이고, nginx 가 443 에서 TLS 를 끊은 뒤 8080 으로 넘긴다.
-
-- 도메인 1개 (예: `api.tangtang.example`) → EC2 공인 IP 로 A 레코드
-- Let's Encrypt 인증서 (`certbot --nginx`)
-- 아래 server 블록
+| 항목 | 값 |
+|---|---|
+| API 도메인 | `kb-tangtang.duckdns.org` (DuckDNS, A 레코드 → `3.35.24.153`) |
+| 인증서 | Let's Encrypt (`certbot --nginx`). `certbot renew` 타이머로 자동 갱신 |
+| nginx 설정 | `/etc/nginx/conf.d/tangtang.conf` |
+| 프록시 대상 | `/ws/` · `/api/` · `/uploads/` → `127.0.0.1:8080` |
+| 보안그룹 | 80 · 443 개방 (**8080 은 그대로 유지** — REST 가 아직 rewrite 로 이 길을 쓴다) |
 
 ## nginx 설정
 
@@ -37,16 +47,16 @@ map $http_upgrade $connection_upgrade {
 
 server {
     listen 80;
-    server_name api.tangtang.example;      # ← 실제 도메인으로 바꾼다
+    server_name kb-tangtang.duckdns.org;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name api.tangtang.example;      # ← 실제 도메인으로 바꾼다
+    server_name kb-tangtang.duckdns.org;
 
-    ssl_certificate     /etc/letsencrypt/live/api.tangtang.example/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.tangtang.example/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/kb-tangtang.duckdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/kb-tangtang.duckdns.org/privkey.pem;
 
     # ── 채팅 WebSocket ──────────────────────────────────
     # 이 블록이 /api 블록보다 먼저 와야 한다(location 은 접두 일치라 순서가 아니라 구체성으로
@@ -93,31 +103,57 @@ server {
 
 ## 프론트 설정
 
-nginx 가 올라간 뒤 Vercel 프로젝트 환경변수에 아래를 넣고 재배포한다.
+Vercel 프로젝트 환경변수에 **소켓 전용 값 하나만** 넣고 재배포한다.
 
 ```
-VITE_API_BASE_URL=https://api.tangtang.example/api
+VITE_WS_BASE_URL=https://kb-tangtang.duckdns.org
 ```
 
-- 반드시 **`https://`** 다. `http://` 를 넣으면 mixed content 로 REST 까지 막힌다.
-- 소켓 주소는 이 값에서 유도된다(`apps/web/src/api/chatSocketUrl.js`) — 따로 설정할 값이 없다.
-- 이 값을 넣으면 REST 도 `vercel.json` rewrite 를 거치지 않고 EC2 로 직접 간다. 그때부터
-  프론트와 API 의 오리진이 갈리므로 **리프레시 쿠키 설정을 함께 확인해야 한다**
-  (`auth.cookie.same-site` · `auth.cookie.secure` — 오리진이 갈리면 `None` + `secure=true` 가 필요하다).
+- **Production · Preview 두 스코프에 모두 넣는다.** Preview 를 빼면 프리뷰 배포에서 소켓이
+  안 붙는다 — 프리뷰를 살리는 것이 이 방식을 고른 이유다(부록 참고).
+- **`https://` 로 넣는다. 끝에 `/api` 를 붙이지 않는다.**
+  `chatSocketUrl.js` 가 `wss://kb-tangtang.duckdns.org/ws/chat` 을 만들어 준다.
+- ⚠ **`wss://` 를 넣으면 안 된다.** 절대 URL 판정이 `/^https?:\/\//i` 라 걸리지 않고
+  **조용히 Vercel 호스트로 폴백**한다. 증상이 「그냥 안 붙는다」뿐이라 원인을 찾기 어렵다.
+- `VITE_API_BASE_URL` 은 **건드리지 않는다.** REST 는 지금처럼 `vercel.json` rewrite 로 간다.
+- 되돌리려면 `VITE_WS_BASE_URL` 을 지우고 재배포하면 된다. 코드가 `VITE_API_BASE_URL` 로
+  폴백하므로 배포 외 작업이 없다.
 
 ## 확인 절차
 
-1. 인증서: `curl -I https://api.tangtang.example/api/health` → `200`
+1. 인증서: `curl -I https://kb-tangtang.duckdns.org/api/health` → `200`
 2. 업그레이드 성립 여부 (핵심):
    ```bash
-   curl -i -N \
+   curl -i -N --http1.1 \
      -H "Connection: Upgrade" -H "Upgrade: websocket" \
      -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
-     -H "Origin: https://<프론트 도메인>" \
-     https://api.tangtang.example/ws/chat
+     -H "Origin: https://monorepo-three-ruby-81.vercel.app" \
+     https://kb-tangtang.duckdns.org/ws/chat
    ```
-   → **`HTTP/1.1 101 Switching Protocols`** 가 나와야 한다. 200·400 이면 업그레이드가 안 넘어간 것이다.
+   → **`HTTP/1.1 101 Switching Protocols`** 가 나와야 한다.
+
+   > **`--http1.1` 을 빠뜨리지 말 것.** 없으면 curl 이 HTTP/2 로 붙는데 HTTP/2 에는 업그레이드
+   > 개념이 없어 **400** 이 돌아온다. 설정 오류가 아니다. 실제 브라우저는 WebSocket 핸드셰이크를
+   > 항상 HTTP/1.1 로 하므로 영향이 없다.
 3. 브라우저에서 채팅방 입장 → DevTools → Network → **WS** 필터 → `chat` 항목이 잡히고 프레임이 오간다.
+
+## 부록 — REST 까지 EC2 직행으로 옮기면 생기는 일 (기각한 안)
+
+`VITE_API_BASE_URL` 을 EC2 도메인으로 바꿔 REST 까지 옮기는 방법도 있었다. **기각했다.**
+나중에 다시 검토한다면 아래 두 가지를 **함께** 처리해야 한다. 환경변수만 바꾸면 배포가 깨진다.
+
+1. **프리뷰 배포가 전부 막힌다.** `ServletConfig.java` 의 `.allowedOrigins(...)` 는 정확 문자열
+   2개만 받는다(와일드카드가 아니다). 지금은 rewrite 덕에 same-origin 이라 CORS 심사 자체를
+   타지 않는데, REST 를 직행으로 바꾸면 심사가 시작되고 `monorepo-git-*.vercel.app` 프리뷰가
+   전부 차단된다.
+2. **로그인 유지가 깨진다.** `application.properties` 의 `auth.cookie.same-site=Lax` 를
+   `application-docker.properties` 가 오버라이드하지 않는다(키 자체가 없다). 오리진이 갈리면
+   리프레시 쿠키가 안 실려 재로그인이 반복된다. **환경변수로는 못 바꾸고 코드를 고쳐야 한다.**
+
+소켓만 빼내는 방식이 성립하는 근거는 **STOMP 인증이 쿠키가 아니기 때문**이다.
+`chatSocket.js` 가 CONNECT 프레임의 `Authorization: Bearer` 헤더로 인증하고 SockJS 도 쓰지 않는다
+(`brokerURL` 직결). 소켓 Origin 은 `WebSocketConfig` 가 `https://*.vercel.app` 와일드카드라
+프리뷰까지 통과한다. 그래서 REST·쿠키·CORS 를 전혀 건드리지 않는다.
 
 ## 서버 쪽에서 이미 준비된 것
 
