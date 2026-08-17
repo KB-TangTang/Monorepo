@@ -1,51 +1,60 @@
 <!--
   05b · 혐의 인정 완료 (E 결과형) — GC_07_06
-  혐의 인정 후 결과 화면. 마스코트 + 유죄 종결 배지 + 남은 목숨 + 판결 기록.
-  "그룹 화면으로 돌아가기" → router.back() 으로 그룹 챌린지 상세 복귀.
+  혐의 인정 후 결과 화면. 마스코트 + 유죄 종결 배지 + 판결 기록.
+
+  ⚠ **목숨을 보여주지 않는다.** 목숨 차감은 판결 확정 후처리(이슈 #172)가 담당하고 혐의 인정
+  API(`POST .../confession`)는 상태만 `GUILTY` 로 바꾼다. 여기서 「5 → 4」 를 그리면 아직
+  일어나지 않은 차감을 단정하게 되고, #172 가 들어온 뒤엔 값이 두 벌로 갈린다.
 -->
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import { fetchTrialDetail } from '@/api/groupChallenge';
 
 import mascotApology from '@/assets/images/emotions/43_apology.png';
-import gavelAlive from '@/assets/images/challenge_live/gavel-alive.png';
-import gavelDepleted from '@/assets/images/challenge_live/gavel-depleted.png';
 
 const router = useRouter();
 const route = useRoute();
 
-/* ── mock 데이터 (API 연동 전) ── */
-const caseNumber = ref('2026-재판-0729');
+const indictment = ref(null);
 
-const TOTAL_LIVES = 5;
-
-const result = ref({
-    livesRemaining: 4,
-    transaction: {
-        merchantName: '배달의민족',
-        amount: 24000,
-    },
-    exceededAmount: 12400,
-    verdict: '본인 인정 · 투표 없음',
+onMounted(async () => {
+    try {
+        indictment.value = await fetchTrialDetail(route.params.indictmentId);
+    } catch (e) {
+        console.error('[DefenseAdmitDone] 재판 상세를 불러오지 못해 그룹 상세로 되돌린다.', e);
+        goToGroupDetail();
+    }
 });
+
+/** `verdict_method` 를 사람이 읽는 문구로. 혐의 인정은 `CONFESSION` 이다. */
+const VERDICT_METHOD_LABEL = {
+    CONFESSION: '본인 인정 · 투표 없음',
+    VOTE: '그룹원 투표',
+    NO_VOTE: '투표 미달 · 자동 처리',
+    SCRATCH_LOTTERY: '동표 · 복권 추첨',
+};
+
+const verdictLabel = computed(
+    () => VERDICT_METHOD_LABEL[indictment.value?.verdictMethod] ?? '판결 완료',
+);
 
 /* ── 네비게이션 ── */
 function goToGroupDetail() {
-    router.back();
+    /* replace 로 들어온 화면이라 `router.back()` 의 직전 항목이 그룹 상세라는 보장이 없다. */
+    router.replace({ name: 'groupChallengeDetail', params: { id: route.params.id } });
 }
-
-
 </script>
 
 <template>
-    <div class="page">
+    <div v-if="indictment" class="page">
         <!-- ── 상단 헤더 ── -->
         <BaseBackHeader title="혐의 인정">
             <template #right>
-                <span class="page__case-number">{{ caseNumber }}</span>
+                <span class="page__case-number">{{ indictment.caseNumber }}</span>
             </template>
         </BaseBackHeader>
 
@@ -63,48 +72,37 @@ function goToGroupDetail() {
             <!-- 제목·부제 -->
             <h2 class="result__title">혐의를 인정했어요</h2>
             <p class="result__desc">
-                투표 없이 재판이 종결됐어요.<br>목숨 1개가 차감됐습니다.
+                투표 없이 재판이 종결됐어요.<br>판결 기록에 유죄로 남아요.
             </p>
-
-            <!-- 남은 목숨 카드 -->
-            <div class="info-card">
-                <div class="info-card__header">
-                    <span class="info-card__label">남은 목숨</span>
-                    <span class="lives-count">
-                        {{ result.livesRemaining }} / {{ TOTAL_LIVES }}
-                    </span>
-                </div>
-                <div class="lives-row">
-                    <img
-                        v-for="i in TOTAL_LIVES"
-                        :key="i"
-                        :src="i <= result.livesRemaining ? gavelAlive : gavelDepleted"
-                        :alt="i <= result.livesRemaining ? '남은 목숨' : '차감된 목숨'"
-                        class="lives-row__icon"
-                    >
-                </div>
-            </div>
 
             <!-- 판결 기록 카드 -->
             <div class="info-card">
                 <span class="info-card__label">판결 기록</span>
                 <div class="record-list">
                     <div class="record-list__row">
-                        <span class="record-list__key">기소 거래</span>
+                        <span class="record-list__key">{{ indictment.evalLabel }}</span>
                         <span class="record-list__value">
-                            {{ result.transaction.merchantName }}
-                            {{ result.transaction.amount.toLocaleString() }}원
+                            {{ indictment.settlementLabel }}
+                        </span>
+                    </div>
+                    <div class="record-list__row">
+                        <span class="record-list__key">
+                            {{ indictment.categoryName ?? '총 소비' }}
+                        </span>
+                        <span class="record-list__value">
+                            {{ indictment.currentAmount.toLocaleString() }}
+                            / {{ indictment.limitAmount.toLocaleString() }}원
                         </span>
                     </div>
                     <div class="record-list__row">
                         <span class="record-list__key">기준 초과</span>
                         <span class="record-list__value record-list__value--danger">
-                            {{ result.exceededAmount.toLocaleString() }}원
+                            {{ indictment.exceededAmount.toLocaleString() }}원
                         </span>
                     </div>
                     <div class="record-list__row">
                         <span class="record-list__key">판결</span>
-                        <span class="record-list__value">{{ result.verdict }}</span>
+                        <span class="record-list__value">{{ verdictLabel }}</span>
                     </div>
                 </div>
             </div>
@@ -215,36 +213,10 @@ function goToGroupDetail() {
     box-shadow: 0 8px 22px rgba(35, 40, 66, 0.05);
 }
 
-.info-card__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
 .info-card__label {
     font-size: 12.5px;
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
-}
-
-/* ── 남은 목숨 ── */
-.lives-count {
-    font-size: 11.5px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-danger);
-    font-family: var(--tt-font-mono);
-}
-
-.lives-row {
-    margin-top: 11px;
-    display: flex;
-    gap: 6px;
-}
-
-.lives-row__icon {
-    width: 26px;
-    height: 26px;
-    object-fit: contain;
 }
 
 /* ── 판결 기록 ── */

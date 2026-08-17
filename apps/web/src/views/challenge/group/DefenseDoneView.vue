@@ -4,45 +4,59 @@
   "그룹 화면으로 돌아가기" → 그룹 챌린지 상세, "재판 진행 보기" → 추후 연결.
 -->
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import { fetchTrialDetail } from '@/api/groupChallenge';
 
 import mascotPlease from '@/assets/images/emotions/44_please.png';
 
 const router = useRouter();
 const route = useRoute();
 
-/* ── mock 데이터 (API 연동 전) ── */
-const caseNumber = ref('2026-재판-0729');
+const indictment = ref(null);
 
-const defense = ref({
-    text: '친구들과 함께 주문했고, 제가 실제로 부담한 금액은 8,000원이에요. 다음부터는 미리 한도를 정할게요.',
-    submittedAt: '18:47',
-    images: [
-        { name: '영수증.jpg' },
-    ],
+onMounted(async () => {
+    try {
+        indictment.value = await fetchTrialDetail(route.params.indictmentId);
+    } catch (e) {
+        console.error('[DefenseDone] 재판 상세를 불러오지 못해 그룹 상세로 되돌린다.', e);
+        goToGroupDetail();
+    }
+});
+
+const defense = computed(() => indictment.value?.defense ?? null);
+
+/** `2026-08-18T18:47:12` → `18:47`. 초는 버린다. */
+const submittedAtLabel = computed(() => {
+    const at = new Date(defense.value?.createdAt ?? '');
+    if (Number.isNaN(at.getTime())) return '';
+    return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
 });
 
 /* ── 네비게이션 ── */
 function goToGroupDetail() {
-    router.back();
+    /*
+     * `router.back()` 을 쓰지 않는다 — 변론 작성 화면이 replace 로 이 화면을 밀어 넣었으므로
+     * 직전 항목이 그룹 상세라는 보장이 없다(기소 안내에서 바로 들어온 경로도 있다).
+     */
+    router.replace({ name: 'groupChallengeDetail', params: { id: route.params.id } });
 }
 
 function goToTrial() {
-    // 추후 재판 진행 화면 연결
+    // 재판 진행(투표) 화면은 이슈 #171 담당이다. 그전까지는 그룹 상세로 보낸다.
     goToGroupDetail();
 }
 </script>
 
 <template>
-    <div class="page">
+    <div v-if="indictment" class="page">
         <!-- ── 상단 헤더 ── -->
         <BaseBackHeader title="변론 완료">
             <template #right>
-                <span class="page__case-number">{{ caseNumber }}</span>
+                <span class="page__case-number">{{ indictment.caseNumber }}</span>
             </template>
         </BaseBackHeader>
 
@@ -64,20 +78,29 @@ function goToTrial() {
             </p>
 
             <!-- 제출한 변론 요약 카드 -->
-            <div class="summary-card">
+            <div v-if="defense" class="summary-card">
                 <div class="summary-card__header">
                     <span class="summary-card__label">제출한 변론</span>
-                    <span class="summary-card__time">{{ defense.submittedAt }} 제출</span>
+                    <span class="summary-card__time">{{ submittedAtLabel }} 제출</span>
                 </div>
-                <p class="summary-card__text">{{ defense.text }}</p>
+                <p class="summary-card__text">{{ defense.content }}</p>
 
-                <div
-                    v-for="(img, idx) in defense.images"
-                    :key="idx"
-                    class="summary-card__attachment"
-                >
-                    <div class="summary-card__thumb"></div>
-                    <span class="summary-card__filename">{{ img.name }}</span>
+                <div class="summary-card__row">
+                    <span class="summary-card__row-label">실제 개인 부담금</span>
+                    <span class="summary-card__row-value">
+                        {{ defense.actualBurdenAmount.toLocaleString() }}원
+                    </span>
+                </div>
+
+                <!-- 증빙 — 서버가 키를 URL 로 변환해 내려주므로 그대로 렌더한다. -->
+                <div v-if="defense.images.length" class="summary-card__thumbs">
+                    <img
+                        v-for="(url, idx) in defense.images"
+                        :key="url"
+                        :src="url"
+                        :alt="`증빙 ${idx + 1}`"
+                        class="summary-card__thumb"
+                    >
                 </div>
             </div>
         </div>
@@ -217,27 +240,41 @@ function goToTrial() {
     margin: 8px 0 0;
 }
 
-.summary-card__attachment {
-    margin-top: 11px;
+.summary-card__row {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--tt-border);
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.summary-card__row-label {
+    font-size: 11.5px;
+    color: var(--tt-text-muted);
+    font-weight: var(--tt-fw-bold);
+}
+
+.summary-card__row-value {
+    font-size: 13px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-primary);
+}
+
+.summary-card__thumbs {
+    margin-top: 10px;
+    display: flex;
+    gap: 6px;
 }
 
 .summary-card__thumb {
-    width: 32px;
-    height: 32px;
+    width: 46px;
+    height: 46px;
     border-radius: 9px;
     background: var(--tt-bg-subtle);
     border: 1px solid var(--tt-border);
+    object-fit: cover;
     flex: none;
-}
-
-.summary-card__filename {
-    font-size: 11px;
-    color: var(--tt-text-muted);
-    font-weight: var(--tt-fw-bold);
-    font-family: var(--tt-font-mono);
 }
 
 /* ── 하단 ── */
