@@ -13,6 +13,12 @@ const props = defineProps({
     isMine: { type: Boolean, default: false },
     /* 같은 사람이 연달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
     grouped: { type: Boolean, default: false },
+    /*
+     * 같은 사람이 같은 분에 연달아 보내면 시간은 묶음의 마지막 줄에만 남긴다(카카오톡 방식).
+     * 판정은 다음 메시지를 봐야 해서 목록을 만드는 GroupChatView 가 한다 —
+     * utils/groupChat.js 의 shouldShowTime 이다. 기본값 true 는 단독 사용 시 기존 동작 유지용.
+     */
+    showTime: { type: Boolean, default: true },
 });
 
 const timeLabel = computed(() => {
@@ -35,7 +41,7 @@ const displayName = computed(() => props.message.senderName || '익명');
             <span v-if="!isMine && !grouped" class="bubble-row__name">{{ displayName }}</span>
 
             <div class="bubble-row__content-row">
-                <span v-if="isMine" class="bubble-row__time">{{ timeLabel }}</span>
+                <span v-if="isMine && showTime" class="bubble-row__time">{{ timeLabel }}</span>
 
                 <div
                     class="bubble-row__bubble"
@@ -44,7 +50,7 @@ const displayName = computed(() => props.message.senderName || '익명');
                     {{ message.content }}
                 </div>
 
-                <span v-if="!isMine" class="bubble-row__time">{{ timeLabel }}</span>
+                <span v-if="!isMine && showTime" class="bubble-row__time">{{ timeLabel }}</span>
             </div>
         </div>
     </div>
