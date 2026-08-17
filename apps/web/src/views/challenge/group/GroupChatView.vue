@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { useGroupChatStore } from '@/stores/groupChat';
 import { useAuthStore } from '@/stores/auth';
 import { createChatSocket } from '@/api/chatSocket';
+import { isGroupedMessage, shouldShowTime } from '@/utils/groupChat';
 import GroupChatHeader from '@/components/challenge/group/chat/GroupChatHeader.vue';
 import GroupChatDateDivider from '@/components/challenge/group/chat/GroupChatDateDivider.vue';
 import GroupChatUnreadDivider from '@/components/challenge/group/chat/GroupChatUnreadDivider.vue';
@@ -53,8 +54,8 @@ function isRecordCard(msg) {
 
 /* ── 메시지 그룹핑 (날짜 · 안 읽은 경계 · 연속 발화) ───── */
 /* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
-   그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다. */
-const GROUPING_WINDOW_MS = 5 * 60 * 1000;
+   그때는 구분선을 넣지 않는다 — 예전엔 NaN 이 흘러들어 "NaN월 NaN일" 이 찍혔다.
+   묶기 규칙 두 가지는 utils/groupChat.js 에 있다(이름·아바타는 5분 창, 시간은 분 단위). */
 
 const groupedMessages = computed(() => {
     const items = [];
@@ -80,11 +81,25 @@ const groupedMessages = computed(() => {
             type: 'message',
             data: msg,
             key: msg.messageId,
-            grouped: isGrouped(prev, msg),
+            grouped: isGroupedMessage(prev, msg),
             /* 재판 기록이 잇달아 오면 "재판 시스템" 라벨은 첫 장에만 붙인다 */
             showSystemLabel: isRecordCard(msg) && !isRecordCard(prev),
         });
         prev = msg;
+    }
+
+    /*
+     * 시간 표시는 "다음 줄"을 봐야 정해진다. 바로 아래가 같은 사람의 같은 분 메시지면 이 줄의
+     * 시간은 숨기고 묶음의 마지막 줄에만 남긴다. 사이에 날짜 구분선이나 안 읽은 경계가 끼면
+     * next 를 넘기지 않아 구분선 위 줄에는 시간이 남는다.
+     */
+    for (let i = 0; i < items.length; i += 1) {
+        if (items[i].type !== 'message') continue;
+        const next = items[i + 1];
+        items[i].showTime = shouldShowTime(
+            items[i].data,
+            next?.type === 'message' ? next.data : null,
+        );
     }
     return items;
 });
@@ -105,14 +120,6 @@ function isSameDay(a, b) {
         a.getMonth() === b.getMonth() &&
         a.getDate() === b.getDate()
     );
-}
-
-/** 같은 사람이 5분 안에 잇달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
-function isGrouped(prev, msg) {
-    if (!prev || prev.isSystem || msg.isSystem) return false;
-    if (Number(prev.senderId) !== Number(msg.senderId)) return false;
-    if (!prev.sentAt || !msg.sentAt) return false;
-    return msg.sentAt - prev.sentAt < GROUPING_WINDOW_MS;
 }
 
 /* ── 스크롤 ────────────────────────────────────────────── */
@@ -281,6 +288,7 @@ watch(
                         :message="item.data"
                         :is-mine="isMine(item.data)"
                         :grouped="item.grouped"
+                        :show-time="item.showTime"
                     />
                 </template>
             </div>
