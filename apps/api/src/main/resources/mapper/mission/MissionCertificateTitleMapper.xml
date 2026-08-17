@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionCertificateTitleMapper">
+
+    <select id="findGenerationCandidates" resultType="java.lang.Long">
+        SELECT ranking.user_id
+          FROM tbl_monthly_ranking ranking
+          JOIN tbl_user u ON u.id = ranking.user_id
+          LEFT JOIN tbl_mission_certificate_title title
+            ON title.user_id = ranking.user_id
+           AND title.`year_month` = ranking.`year_month`
+         WHERE ranking.`year_month` = #{yearMonth}
+           AND u.status = 'ACTIVE'
+           AND (
+               title.id IS NULL
+               OR title.status = 'NOT_REQUESTED'
+               OR (
+                   title.status = 'FAILED'
+                   AND title.attempt_count &lt; #{maxAttempts}
+                   AND title.failed_at IS NOT NULL
+                   AND title.failed_at &lt;= #{retryNotBefore}
+               )
+           )
+    </select>
+
+    <insert id="insertIfAbsent">
+        INSERT INTO tbl_mission_certificate_title (user_id, `year_month`)
+        VALUES (#{userId}, #{yearMonth})
+        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
+    </insert>
+
+    <select id="findByUserIdAndYearMonth"
+            resultType="com.kb.tangtang.mission.domain.MissionCertificateTitle">
+        SELECT user_id, `year_month`, title_1, title_2, title_3,
+               status, provider, failure_code, attempt_count
+          FROM tbl_mission_certificate_title
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+    </select>
+
+    <update id="claimGeneration">
+        UPDATE tbl_mission_certificate_title
+           SET status = 'IN_PROGRESS',
+               provider = #{provider},
+               model = #{model},
+               prompt_version = #{promptVersion},
+               input_hash = #{inputHash},
+               attempt_count = attempt_count + 1,
+               requested_at = CURRENT_TIMESTAMP,
+               completed_at = NULL,
+               failed_at = NULL,
+               failure_code = NULL
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+           AND status IN ('NOT_REQUESTED', 'FAILED')
+    </update>
+
+    <update id="completeGeneration">
+        UPDATE tbl_mission_certificate_title
+           SET title_1 = #{title1},
+               title_2 = #{title2},
+               title_3 = #{title3},
+               status = 'COMPLETED',
+               completed_at = CURRENT_TIMESTAMP,
+               failed_at = NULL,
+               failure_code = NULL
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+           AND status = 'IN_PROGRESS'
+    </update>
+
+    <update id="failGeneration">
+        UPDATE tbl_mission_certificate_title
+           SET status = 'FAILED',
+               failed_at = CURRENT_TIMESTAMP,
+               completed_at = NULL,
+               failure_code = #{failureCode}
+         WHERE user_id = #{userId}
+           AND `year_month` = #{yearMonth}
+           AND status = 'IN_PROGRESS'
+    </update>
+</mapper>

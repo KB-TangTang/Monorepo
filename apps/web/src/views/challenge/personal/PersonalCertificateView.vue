@@ -7,7 +7,7 @@ import PersonalCertificateRatioSelector from '@/components/challenge/personal/ra
 import PersonalCertificateShareSheet from '@/components/challenge/personal/ranking/PersonalCertificateShareSheet.vue';
 import PersonalCertificateTitleSelector from '@/components/challenge/personal/ranking/PersonalCertificateTitleSelector.vue';
 import PersonalHonorCertificate from '@/components/challenge/personal/ranking/PersonalHonorCertificate.vue';
-import { fetchMissionCertificate } from '@/api/personalMission';
+import { fetchMissionCertificate, fetchMissionCertificateTitles } from '@/api/personalMission';
 
 const route = useRoute();
 const router = useRouter();
@@ -29,21 +29,25 @@ const period = computed(() => {
 
 const ranking = computed(() => certificate.value);
 const periodLabel = computed(() => period.value.replace('-', '.'));
+const titleRecommendation = ref(null);
 const certificateTitles = computed(() => {
     if (!ranking.value) {
         return [];
     }
-    return [
-        `상위 ${ranking.value.myRanking.topPercent}%의 판결력`,
-        '이번 달 진짜 무죄',
-        '절약 판결 갱신',
-    ];
+    return (
+        titleRecommendation.value?.titles ?? [
+            `상위 ${ranking.value.myRanking.topPercent}%의 판결력`,
+            '이번 달 진짜 무죄',
+            '절약 판결 갱신',
+        ]
+    );
 });
 const selectedTitle = ref('');
 const selectedRatio = ref('portrait');
 
 watch(period, () => {
     selectedTitle.value = '';
+    titleRecommendation.value = null;
 });
 
 const judgmentDate = computed(() => {
@@ -70,7 +74,12 @@ async function loadCertificate() {
     loadError.value = '';
     try {
         certificate.value = await fetchMissionCertificate(period.value);
-        selectedTitle.value = `상위 ${certificate.value.myRanking.topPercent}%의 판결력`;
+        try {
+            titleRecommendation.value = await fetchMissionCertificateTitles(period.value);
+        } catch {
+            titleRecommendation.value = null;
+        }
+        selectedTitle.value = certificateTitles.value[0];
     } catch (error) {
         loadError.value = error.message || '인증서 데이터를 불러오지 못했어요.';
     } finally {

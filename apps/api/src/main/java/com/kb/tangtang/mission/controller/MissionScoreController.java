@@ -8,6 +8,9 @@ import com.kb.tangtang.mission.dto.MissionMonthlyScoreDto;
 import com.kb.tangtang.mission.dto.MissionRankingMonthsDto;
 import com.kb.tangtang.mission.docs.MissionScoreControllerDocs;
 import com.kb.tangtang.mission.service.MissionScoreService;
+import com.kb.tangtang.mission.service.MissionCertificateTitleService;
+import com.kb.tangtang.mission.dto.MissionCertificateTitlesDto;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,9 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class MissionScoreController implements MissionScoreControllerDocs {
 
     private final MissionScoreService missionScoreService;
+    private final MissionCertificateTitleService missionCertificateTitleService;
+
+    @Autowired
+    public MissionScoreController(MissionScoreService missionScoreService,
+                                  MissionCertificateTitleService missionCertificateTitleService) {
+        this.missionScoreService = missionScoreService;
+        this.missionCertificateTitleService = missionCertificateTitleService;
+    }
 
     public MissionScoreController(MissionScoreService missionScoreService) {
-        this.missionScoreService = missionScoreService;
+        this(missionScoreService, null);
     }
 
     @GetMapping("/monthly-score")
@@ -40,6 +51,13 @@ public class MissionScoreController implements MissionScoreControllerDocs {
             @LoginUser Long userId,
             @RequestParam String yearMonth) {
         return ApiResponse.ok(missionScoreService.getCertificate(userId, yearMonth));
+    }
+
+    @GetMapping("/rankings/certificate/titles")
+    public ApiResponse<MissionCertificateTitlesDto> getCertificateTitles(
+            @LoginUser Long userId,
+            @RequestParam String yearMonth) {
+        return ApiResponse.ok(missionCertificateTitleService.getTitles(userId, yearMonth));
     }
 
     @GetMapping("/rankings/months")
