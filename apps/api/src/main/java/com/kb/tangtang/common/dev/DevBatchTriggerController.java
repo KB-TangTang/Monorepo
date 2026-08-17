@@ -3,6 +3,7 @@ package com.kb.tangtang.common.dev;
 import com.kb.tangtang.common.docs.DevBatchTriggerControllerDocs;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
 import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
+import com.kb.tangtang.challenge.service.GroupTrialDeadlineBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -41,17 +42,20 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
     private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
     private final GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService;
+    private final GroupTrialDeadlineBatchService groupTrialDeadlineBatchService;
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService;
     private final FixedExpensePaymentReminderDevService paymentReminderDevService;
 
     public DevBatchTriggerController(DevEnvironmentGuard guard,
                                      ChallengeGroupStatusBatchService challengeGroupStatusBatchService,
                                      GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService,
+                                     GroupTrialDeadlineBatchService groupTrialDeadlineBatchService,
                                      FixedExpensePaymentReminderBatchService paymentReminderBatchService,
                                      FixedExpensePaymentReminderDevService paymentReminderDevService) {
         this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
         this.groupChallengeEvaluationBatchService = groupChallengeEvaluationBatchService;
+        this.groupTrialDeadlineBatchService = groupTrialDeadlineBatchService;
         this.paymentReminderBatchService = paymentReminderBatchService;
         this.paymentReminderDevService = paymentReminderDevService;
     }
@@ -59,7 +63,8 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
     /**
      * 배치를 즉시 실행한다.
      *
-     * @param name 배치 이름. {@code group-challenge-status} · {@code group-challenge-evaluation}
+     * @param name 배치 이름. {@code group-challenge-status} · {@code group-challenge-evaluation} ·
+     *             {@code group-trial-deadline}
      * @param date 기준일. 없으면 오늘. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다
      * @return 배치가 처리한 건수
      */
@@ -89,6 +94,14 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
              */
             case "group-challenge-evaluation" ->
                     groupChallengeEvaluationBatchService.evaluateActiveGroups(baseDate);
+            /*
+             * 변론 마감(이슈 #170). date 를 받지 않는다 — 마감 판정은 created_at 과 NOW() 를
+             * SQL 이 직접 비교하고, 기준일을 밖에서 바꿀 수 있게 하려면 배치와 다른 쿼리를
+             * 타게 된다. 앞당겨 확인하려면 CHALLENGE_DEFENSE_HOURS 를 0 으로 내리거나
+             * tbl_indictment.created_at 을 과거로 UPDATE 한다.
+             * 두 번 실행해도 결과가 같은지(멱등) 확인하는 용도로도 쓴다.
+             */
+            case "group-trial-deadline" -> groupTrialDeadlineBatchService.closeExpiredDefenses();
             case "fixed-expense-payment-reminders" -> {
                 if (date != null) {
                     throw new BusinessException("INVALID_REQUEST",
