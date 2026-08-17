@@ -1224,6 +1224,168 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 | `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
 | `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
 
+## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170)
+
+기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그리고 그 반대인 혐의 인정까지.
+**투표(#171)와 개표·확정(#172)은 여기 없다.**
+
+| 메서드 | 경로 | 인증 | 권한 | 응답 |
+|---|---|---|---|---|
+| GET | `/api/group-challenges/trials/{indictmentId}` | Bearer | 그룹 참여자 | `GroupTrialDetail` |
+| GET | `/api/group-challenges/trials/{indictmentId}/transactions` | Bearer | **피고 본인만** | `TrialTransactions` |
+| POST | `/api/group-challenges/trials/{indictmentId}/defense` | Bearer | 피고 본인만 | `null` |
+| POST | `/api/group-challenges/trials/{indictmentId}/confession` | Bearer | 피고 본인만 | `null` |
+
+### `GroupTrialDetail` — 재판 화면 한 벌
+
+**#171 과 공유하는 계약이다.** 기소 안내 · 변론 작성 · 투표 · 판결 상세가 이 응답 하나를 쓴다.
+화면마다 엔드포인트를 두면 같은 금액을 네 곳에서 다르게 계산하게 된다.
+
+```
+{ indictmentId, groupId, groupName, status, result, verdictMethod, message,
+  accused: { userId, nickname, profileImageUrl, mine },
+  evalType, challengeDate, startDate, endDate,
+  categoryId, categoryName,
+  limitAmount, currentAmount, exceededAmount,
+  createdAt, defenseDeadline, voteDeadline,
+  defense: { content, actualBurdenAmount, deductionAmount, imageUrls[], createdAt } | null,
+  myVerdict, voteCount, totalVoters }
+```
+
+- 마감 두 개는 **#169 와 같은 계산값**이다 (`created_at + defense-hours` / `+ vote-hours`). 컬럼이 없다.
+- `defense` 는 **아직 변론이 없으면 NULL 이다.** 빈 객체로 채우지 않는다 — 화면이 「변론 대기」와
+  「내용 없는 변론」을 구분할 수 없게 된다.
+- `myVerdict` 는 안 던졌으면 NULL, **피고 본인은 항상 NULL** 이다. `totalVoters` = 참여자 − 피고 1명.
+  #170 이 이 세 필드를 함께 채운다 — 서브쿼리가 이미 있어 비용이 0 이고 #171 은 쓰는 쪽만 만들면 된다.
+- `categoryName` 이 NULL 이면 총소비 챌린지다.
+- `currentAmount` 는 **무죄 감액이 반영된 결산 구간 소비액**이고, 동시에 **실제 부담금 입력의 상한**이다.
+- `accused.mine` 은 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 `mine`** 이다.
+- 「D-2시간」·「일일결산 8/18」 같은 표시 문구는 담지 않는다. 서버는 재료만 주고
+  `api/groupChallenge.js` 의 `toTrialDetailViewModel` 이 조립한다.
+  사건번호(`2026-재판-0805`)도 컬럼이 아니라 **결산일에서 만드는 라벨**이다.
+
+### `TrialTransactions` — 결산 구간 거래 목록
+
+```
+{ evalType, limitAmount, currentAmount,
+  days: [ { date, dailyAmount,
+            transactions: [ { transactionId, time, merchantName, amount,
+                              categoryName, paymentMethod, isRefund } ] } ] }
+```
+
+**상세와 분리한 이유는 권한이다.** 상세는 투표자도 보지만 거래 목록은 피고 본인만 본다.
+한 응답에 섞으면 투표자에게 남의 거래내역이 흘러간다.
+
+- **기소를 발화시킨 거래 1건이 아니라 구간 전체다.** 한도 초과는 누적 판정이라 발화 거래가 문제의
+  거래라는 보장이 없다. 친구들 몫까지 대납한 큰 거래는 그 시점에 한도 미달이라 기소를 만들지 않고,
+  뒤따르는 평범한 소비가 기소를 만든다 — 발화 거래만 보이면 정작 대납한 금액을 신고할 방법이 없다.
+- DAILY 는 `days` 가 **하나**, PERIOD 는 거래가 있는 날만큼 여러 개다(날짜 오름차순).
+  거래가 없는 날은 내려보내지 않는다.
+- **`transactions[].amount` 의 합 = `dailyAmount`, 그 합 = `currentAmount`** 여야 한다
+  (무죄 감액이 0 인 동안. 감액이 붙으면 `currentAmount` 만 줄어든다 — 아래 참고). 화면이
+  「실제 부담금 합계 vs 한도」를 이 값으로 판정하므로 어긋나면 판정이 무너진다. 그래서 조회 조건을
+  집계 배치와 같은 `consumptionFilter` 조각으로 공유한다(복사하지 않는다).
+  `dailyAmount` 도 `tbl_group_challenge_daily_result` 에서 다시 읽지 않고 **목록을 더해 만든다** —
+  두 값이 어긋나면 화면에 「합계와 항목이 다른」 하루가 나온다.
+- 환불은 **음수 `amount`** 다(`is_refund=1 → -COALESCE(refunded_amount, amount)`). 0 으로 깎으면
+  환불받은 소비로 기소된 것처럼 보인다.
+- `dailyAmount` 에는 **무죄 감액이 빠져 있지 않다.** 감액은 구간 총액(`currentAmount`)에만 적용된다 —
+  어느 날에서 깎을지가 정해지지 않은 값이라 날짜별로 배분할 수 없다. 감액을 기록하는 주체는 #172 라
+  이 시점에는 항상 0 이고 두 값이 같다.
+- `time` 은 원천에 시각이 없으면 NULL, `categoryName` 은 LLM 분류 전이면 NULL 이다.
+- `isRefund` 는 `@JsonProperty("isRefund")` 로 **이름을 고정했다.** 고정하지 않으면 Jackson 이
+  `refund` 로 내려보내 프론트에서 항상 `undefined` 다.
+- 피고가 아닌 사람이 부르면 `NOT_INDICTMENT_OWNER` 가 아니라 **`TRIAL_NOT_FOUND`** 다.
+  「그 재판의 피고가 누구인지」를 노출하지 않기 위함이다.
+
+### 변론 제출 — `multipart/form-data`
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `content` | text | O | 변론 내용. **최대 150자** (`DefenseService.CONTENT_MAX_LENGTH`) |
+| `actualBurdenAmount` | number | O | 건별 실제 부담금의 **합계** |
+| `images` | file[] | X | 증빙. **최대 3장**, 장당 5MB |
+
+- **건별 입력은 서버로 올라오지 않는다.** 거래-변론 연결 테이블을 만들지 않기로 했고(마이그레이션 0건),
+  건별 값은 순수 UI 다. 합계만 전송된다.
+- **`deductionAmount` 는 클라이언트를 믿지 않고 서버가 계산한다** — `currentAmount − actualBurdenAmount`.
+  무죄 확정 시 소비액에서 빠질 금액이라 클라이언트가 정하게 두면 감액을 임의로 부풀릴 수 있다.
+- 이미지는 `ImageProcessor.toBoundedJpeg` 로 **긴 변 1280px 상한**까지만 줄인다(비율 유지).
+  프로필의 `toSquareJpeg`(256×256 센터 크롭)를 쓰면 영수증이 잘린다.
+- **저장되는 값은 URL 이 아니라 키**다 — `defense/{indictmentId}/{uuid}.jpg`. 읽을 때
+  `imageStorage.urlOf(key)` 로 변환해 `defense.imageUrls` 로 내려준다. 로컬 → S3 이전 시
+  기존 행을 변환하지 않아도 되게 하기 위함이다.
+- 성공하면 `tbl_indictment.status` 가 `DEFENSE_WAIT` → **`VOTING`** 으로 넘어가고
+  `DefenseRegistered` 이벤트가 그룹 채팅에 시스템 메시지를 남긴다.
+- 프론트에서 `axios` 로 보낼 때 **`headers: { 'Content-Type': undefined }`** 로 인스턴스 기본값
+  (`application/json`)을 지워야 한다. 안 지우면 axios 가 FormData 를 `JSON.stringify` 한다.
+
+### 혐의 인정 — 본문 없음
+
+`status='GUILTY'`, `result=1`, `verdict_method='CONFESSION'` 으로 조건부 UPDATE 하고
+`VerdictConfirmed` 이벤트를 발행한다.
+
+- **`tbl_vote` · `tbl_defense` 행을 만들지 않는다.** 투표 없이 끝난 재판이다.
+- **목숨 차감과 무죄 감액(`verdict_deduction_amount`) 기록은 하지 않는다 — 이슈 #172 담당이다.**
+  그래서 완료 화면도 「목숨 5 → 4」 를 그리지 않는다. 그리면 아직 일어나지 않은 차감을 단정하게 되고,
+  #172 가 들어온 뒤엔 값이 두 벌로 갈린다.
+- 상태 UPDATE 는 `WHERE ... AND status='DEFENSE_WAIT'` 라 **멱등**이다. 같은 요청을 두 번 보내면
+  두 번째는 `DEFENSE_NOT_ALLOWED` 다.
+
+### 기간결산 소비액 공식이 바뀌었다 — #168 · #169 응답에도 영향
+
+기간평가(`PERIOD`) 소비액을 `SUM(daily_amount)` 에서 아래로 통일했다. #170 이 변론 화면용 소비액을
+계산하며 **복사본을 하나 더 만드는** 시점이라 함께 정리했다(변론 화면은 결국 재판 상세의 같은 조각을
+재사용한다).
+
+```sql
+GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
+```
+
+- 그전까지 기간결산은 `verdict_deduction_amount` 를 전혀 보지 않았다 → **무죄를 받아도 그룹 상세
+  소비액·초과액·재기소 판정이 하나도 바뀌지 않았다.**
+- `SUM(effective_amount)` 로 바꾸면 안 된다. 그 생성컬럼은 **행마다** `GREATEST(…,0)` 를 거는데
+  환불은 음수 `daily_amount` 행으로 상쇄되므로 그 음수가 0 으로 깎여 **환불받은 소비로 기소된다.**
+  합산한 뒤 한 번만 클램프해야 한다.
+- 값이 바뀌는 응답: `ChallengeGroupDetail` 의 `dailyAmount`·`myDailyAmount`(기간평가 그룹),
+  `indictments[].exceededAmount`, 그리고 이 절의 `currentAmount`. **세 곳이 항상 같은 값이어야 한다.**
+- 공식 원본은 `GroupChallengeResultMapper.xml` 상단 주석이다. `<sql>` 조각으로 못 묶었다 —
+  상관 서브쿼리가 참조하는 바깥 별칭이 호출부마다 달라 `${}` 가 필요해지는데 금지 대상이다.
+  대신 내부 별칭을 `rp` 로 통일하고 `ChallengeMapperXmlTest` 가 세 statement
+  (`findOverLimitPeriod`·`findMemberConsumption`·`findTrialDetail`)의 SQL 을 문자열로 대조한다 —
+  한 곳만 고치면 테스트가 깨진다.
+- `findDeductionOverflow` 경고는 **DAILY 이고 감액이 0 보다 큰 행만** 검사한다.
+  PERIOD 는 기간 전체 감액을 기소가 붙은 `end_date` 행 한 줄에 적으므로
+  `verdict_deduction_amount > daily_amount` 가 정상이고, 환불이 소비보다 많은 날은 `daily_amount` 가
+  음수라 **감액한 적이 없는 행까지** `0 > -10000` 으로 걸린다. 둘 다 수동 검증에서 실제로 오탐이 났다.
+
+> 감액을 **기록하는** 주체는 #172 다. #170 은 그 값을 *읽는* 쪽만 준비해 뒀고, 지금은 항상 0 이라
+> 실제 응답 값은 달라지지 않는다.
+
+### 변론 마감은 배치가 넘긴다
+
+`GroupTrialDeadlineScheduler` 가 `challenge.trial.deadline.fixed-delay-ms`(기본 5분)마다
+마감이 지난 `DEFENSE_WAIT` 를 `VOTING` 으로 넘긴다. **일일 cron 에 붙이지 않았다** — 변론 창이
+6시간인데 하루 한 번 돌면 재판이 최대 24시간 멈춘다.
+**자동 유죄 처리는 하지 않는다.** 변론이 없어도 투표는 열린다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `TRIAL_NOT_FOUND` | 400 | 없는 기소 · 그룹 참여자가 아님 · (거래 목록에서) 피고가 아님 |
+| `NOT_INDICTMENT_OWNER` | 400 | 남의 재판에 변론·혐의 인정 |
+| `DEFENSE_NOT_ALLOWED` | 400 | `status != DEFENSE_WAIT` (이미 투표 중이거나 확정됨) |
+| `DEFENSE_CLOSED` | 400 | 변론 마감 시각이 지남 (배치가 아직 안 돈 사이) |
+| `DEFENSE_ALREADY_EXISTS` | 400 | 이미 변론을 제출함 (`uk_def_indictment`) |
+| `DEFENSE_CONTENT_REQUIRED` | 400 | 내용이 공백 |
+| `DEFENSE_CONTENT_TOO_LONG` | 400 | 150자 초과 |
+| `INVALID_BURDEN_AMOUNT` | 400 | 음수이거나 `currentAmount` 초과 |
+| `TOO_MANY_IMAGES` | 400 | 4장 이상 |
+| `IMAGE_TOO_LARGE` | 400 | 장당 5MB 초과 |
+
+> ⚠ `IMAGE_TOO_LARGE` 는 **업무 검증보다 먼저** 난다. 컨트롤러가 파일을 바이트로 읽기 전에
+> `requireWithinLimit` 을 걸기 때문에, 없는 기소에 5MB 넘는 이미지를 보내면 `TRIAL_NOT_FOUND`
+> 대신 이 코드가 온다. 메모리에 거대한 파일을 올린 뒤 "없는 재판입니다" 를 답하는 것보다 낫다.
+
 ## 그룹 채팅 (이슈 #174)
 
 그룹 챌린지방(지방법원)마다 딸린 실시간 채팅이다. 조회 3종은 REST 지만 **발송은 STOMP 로만** 한다.
