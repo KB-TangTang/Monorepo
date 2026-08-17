@@ -317,7 +317,7 @@ class ChallengeGroupControllerTest {
         private long lastUserId;
 
         StubTrialService() {
-            super(null, null, 6, 24);
+            super(null, null, null, null, 6, 24);
         }
 
         @Override
