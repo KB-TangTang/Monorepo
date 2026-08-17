@@ -17,6 +17,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,11 +28,14 @@ class AssetInvestmentDetailServiceTest {
     @Mock
     private InvestmentHoldingMapper investmentHoldingMapper;
 
+    @Mock
+    private InvestmentPriceRefresher investmentPriceRefresher;
+
     private AssetInvestmentDetailService service() {
         ZoneId zoneId = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(
                 LocalDate.of(2026, 8, 15).atTime(9, 41).atZone(zoneId).toInstant(), zoneId);
-        return new AssetInvestmentDetailService(investmentHoldingMapper, clock);
+        return new AssetInvestmentDetailService(investmentHoldingMapper, investmentPriceRefresher, clock);
     }
 
     private InvestmentHolding holding(String symbol, String name, long marketValue, long purchaseAmount,
@@ -70,6 +74,18 @@ class AssetInvestmentDetailServiceTest {
         assertEquals(2, result.getHoldings().size());
         assertEquals("삼성전자", result.getHoldings().get(0).getName());
         assertEquals(new BigDecimal("100000"), result.getHoldings().get(0).getProfitLossAmount());
+    }
+
+    @Test
+    @DisplayName("조회한 보유종목을 InvestmentPriceRefresher 에 넘겨 실시간 시세를 반영시킨다")
+    void refreshesLivePriceOnRead() {
+        List<InvestmentHolding> holdings = List.of(
+                holding("005930", "삼성전자", 1_600_000, 1_500_000, 100_000, "0.0667"));
+        when(investmentHoldingMapper.findByUser(USER_ID)).thenReturn(holdings);
+
+        service().getInvestments(USER_ID);
+
+        verify(investmentPriceRefresher).refresh(holdings);
     }
 
     @Test

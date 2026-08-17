@@ -23,20 +23,28 @@
         ORDER BY id
     </select>
 
-    <update id="update" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
+    <!-- 목서버 동기화 전용. 가격 4컬럼(last_price·market_value·profit_loss_amount·profit_loss_rate)은
+         건드리지 않는다 — 그건 updatePrice 가 토스 실시간 시세로만 갱신한다(InvestmentHoldingMapper.java 참고). -->
+    <update id="updatePosition" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
         UPDATE tbl_investment_holding
         SET name                    = #{name},
             market_country          = #{marketCountry},
             currency                = #{currency},
             quantity                = #{quantity},
             average_purchase_price  = #{averagePurchasePrice},
-            last_price              = #{lastPrice},
-            purchase_amount         = #{purchaseAmount},
-            market_value            = #{marketValue},
-            profit_loss_amount      = #{profitLossAmount},
-            profit_loss_rate        = #{profitLossRate}
+            purchase_amount         = #{purchaseAmount}
         WHERE account_id = #{accountId}
           AND symbol = #{symbol}
+    </update>
+
+    <!-- 토스 실시간 시세 갱신 전용. id 로 행 하나만 짚는다(InvestmentPriceRefresher 참고). -->
+    <update id="updatePrice" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
+        UPDATE tbl_investment_holding
+        SET last_price          = #{lastPrice},
+            market_value        = #{marketValue},
+            profit_loss_amount  = #{profitLossAmount},
+            profit_loss_rate    = #{profitLossRate}
+        WHERE id = #{id}
     </update>
 
     <insert id="insert" parameterType="com.kb.tangtang.account.domain.InvestmentHolding"

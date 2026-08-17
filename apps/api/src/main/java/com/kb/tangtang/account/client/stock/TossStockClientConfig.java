@@ -36,4 +36,10 @@ public class TossStockClientConfig {
     public TossAuthClient tossAuthClient(@Qualifier("tossRestTemplate") RestTemplate restTemplate) {
         return new TossAuthClient(restTemplate, clientId, clientSecret);
     }
+
+    @Bean
+    public TossPriceClient tossPriceClient(@Qualifier("tossRestTemplate") RestTemplate restTemplate,
+                                           TossTokenHolder tokenHolder) {
+        return new TossPriceClient(restTemplate, tokenHolder);
+    }
 }
