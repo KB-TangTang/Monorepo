@@ -35,4 +35,6 @@ public interface MissionScoreMapper {
                                                      @Param("endDate") LocalDate endDate);
 
     List<String> findRankingMonths();
+
+    List<Long> findCertificateEligibleUserIds(@Param("yearMonth") String yearMonth);
 }

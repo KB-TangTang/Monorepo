@@ -1374,7 +1374,10 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 | `GROUP_CHALLENGE_CANCELED` | 챌린지가 성립되지 않았어요 | challenge — 상태 전이 배치 (#152). 시작일에 참여자가 방장 1명뿐일 때 |
 | `GROUP_JUDGMENT` | 판결이 확정됐어요 | challenge — 백엔드 미구현 |
 | `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 평가·기소 배치 (#168). 딥링크는 변론 첫 화면 |
-| `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission — 백엔드 미구현 |
+| `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission |
+| `MISSION_ASSIGNED` | 오늘의 미션 도착 | mission |
+| `MISSION_VERDICT` | 어제 미션 판결 확정 | mission |
+| `MISSION_CERTIFICATE_ISSUED` | 개인 미션 명예 인증서 발급 | mission |
 | `MONTHLY_REPORT` | 판결문이 도착했어요 | report — 백엔드 미구현 |
 | `PAYMENT_DUE` | 결제 예정 알림 | fixedexpense — 백엔드 미구현 |
 
