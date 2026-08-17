@@ -3,7 +3,7 @@
   언제 쓰는지: router/index.js 의 /asset/investment 라우트. 백엔드 연동 전까지 api/asset.js 가 목업 데이터를 반환한다.
 -->
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { fetchInvestmentAccountDetail } from '@/api/asset';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import AssetTotalCard from '@/components/asset/AssetTotalCard.vue';
@@ -13,9 +13,17 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import StateError from '@/components/common/StateError.vue';
 import { formatWon, formatSignedWon, formatSignedPercent } from '@/utils/asset';
 
+/*
+ * 화면이 열려 있는 동안 시세를 폴링한다. 백엔드 InvestmentPriceRefresher 가 심볼별로
+ * 20초(toss.price.cache-ttl-ms) 캐시를 두고 있어, 이보다 짧게 물어봐야 매번 토스를 새로
+ * 부르는 게 아니라 그냥 캐시된 값을 받는다 — 그래서 자주 불러도 백엔드 부담이 늘지 않는다.
+ */
+const POLL_INTERVAL_MS = 8000;
+
 const detail = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
+let pollTimer = null;
 
 const gainAmount = computed(() =>
     detail.value ? detail.value.totalValuation - detail.value.totalCost : 0,
@@ -37,7 +45,38 @@ async function load() {
     }
 }
 
-onMounted(load);
+/*
+ * 폴링 전용 재조회. load() 와 달리 loading 을 건드리지 않는다 — 8초마다 전체 화면이 스피너로
+ * 바뀌면 오히려 거슬린다. 실패해도 errorMessage 를 띄우지 않고 마지막으로 받은 값을 그대로
+ * 둔다("실시간 시세 미수신 시 마지막 수신 값으로 표시돼요" 안내와 같은 원칙) — 다음 폴링에서
+ * 다시 시도한다. 단, 이 폴링으로 회복되면(재연결 등) 남아있던 에러 배너는 지운다.
+ */
+async function pollQuietly() {
+    try {
+        detail.value = await fetchInvestmentAccountDetail();
+        errorMessage.value = '';
+    } catch {
+        // 조용히 무시 — 다음 폴링에서 다시 시도한다.
+    }
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(pollQuietly, POLL_INTERVAL_MS);
+}
+
+onMounted(() => {
+    load();
+    startPolling();
+});
+onUnmounted(stopPolling);
 </script>
 
 <template>
