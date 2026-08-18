@@ -6,6 +6,8 @@ import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOver
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
 import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
+import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
+import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
@@ -227,7 +229,7 @@ function livesColor(challenge) {
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- TO-DO 인박스 또는 완료 카드 -->
+            <!-- TO-DO 인박스 / 방금 다 처리함 / 애초에 할 일이 없음 -->
             <GroupTodoCard
                 v-if="hasTodo"
                 :items="todoItems"
@@ -236,6 +238,12 @@ function livesColor(challenge) {
                 @open-sheet="showSheet = true"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
+            <!-- 기소·투표가 아예 없는 평온 상태. 이 분기가 없으면 자리 전체가 빈 화면이 된다.
+                 doneIds 는 DEV 토글로만 채워지므로 allDone 은 실사용에서 거의 오지 않는다. -->
+            <template v-else>
+                <GroupPeacefulCard />
+                <GroupMascotScene scene="peaceful" />
+            </template>
 
             <!-- 진행 중인 챌린지 -->
             <div class="gc-section">
