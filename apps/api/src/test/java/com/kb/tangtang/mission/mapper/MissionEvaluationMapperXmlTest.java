@@ -22,6 +22,7 @@ class MissionEvaluationMapperXmlTest {
 
         String namespace = MissionEvaluationMapper.class.getName() + ".";
         assertTrue(configuration.hasStatement(namespace + "findPendingAssignmentIds"));
+        assertTrue(configuration.hasStatement(namespace + "findPendingAssignmentIdsBefore"));
         assertTrue(configuration.hasStatement(namespace + "lockPendingAssignment"));
         assertTrue(configuration.hasStatement(namespace + "updateMissionResult"));
         assertTrue(configuration.hasStatement(namespace + "increaseSuccessStreak"));

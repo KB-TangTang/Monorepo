@@ -11,6 +11,15 @@
          ORDER BY id
     </select>
 
+    <select id="findPendingAssignmentIdsBefore" resultType="java.lang.Long">
+        SELECT id
+          FROM tbl_user_mission_info
+         WHERE user_id = #{userId}
+           AND assign_date &lt; #{beforeDate}
+           AND result = 'PENDING'
+         ORDER BY assign_date, id
+    </select>
+
     <select id="lockPendingAssignment"
             resultType="com.kb.tangtang.mission.domain.MissionEvaluationTarget">
         SELECT assignment.id AS assignment_id,
