@@ -4,6 +4,8 @@ import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
+import com.kb.tangtang.challenge.mapper.DefenseMapper;
+import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.storage.ImageStorage;
 import org.junit.jupiter.api.DisplayName;
@@ -36,10 +38,13 @@ class GroupTrialServiceTest {
     private static final long USER_ID = 7L;
 
     @Mock private IndictmentMapper indictmentMapper;
+    @Mock private DefenseMapper defenseMapper;
+    @Mock private GroupChallengeResultMapper resultMapper;
     @Mock private ImageStorage imageStorage;
 
     private GroupTrialService service() {
-        return new GroupTrialService(indictmentMapper, imageStorage, DEFENSE_HOURS, VOTE_HOURS);
+        return new GroupTrialService(indictmentMapper, defenseMapper, resultMapper, imageStorage,
+                DEFENSE_HOURS, VOTE_HOURS);
     }
 
     private TrialTodoRow row(long indictmentId, LocalDateTime createdAt) {

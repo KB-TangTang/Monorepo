@@ -51,17 +51,26 @@
         금액을 기소 시점에 박아 두면 환불·재분류로 집계가 줄어도 옛 금액이 화면에 남는다.
 
       일일평가는 위반한 그 날의 effective_amount(무죄 감액 반영값),
-      기간평가는 기간 전체의 daily_amount 합계가 기준이다.
+      기간평가는 GroupChallengeResultMapper.xml 의 「★ 기간평가(PERIOD) 소비액 공식」 주석에 적힌 식이다.
+      그 주석이 원본이므로 식을 고칠 일이 생기면 거기부터 읽는다. 여기만 고치면 테스트가 깨진다.
     -->
     <sql id="exceededAmount">
+        <include refid="periodConsumption"/> - g.limit_amount
+    </sql>
+
+    <!--
+      기소 대상 구간의 소비액(감액 반영). exceededAmount 에서 한도를 빼기 전의 값이고,
+      변론 화면의 currentAmount 도 이 값을 그대로 쓴다. 두 화면이 다른 값을 보이면 안 된다.
+    -->
+    <sql id="periodConsumption">
         CASE WHEN g.eval_type = 'PERIOD'
-             THEN COALESCE((SELECT SUM(rp.daily_amount)
+             THEN COALESCE((SELECT GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
                               FROM tbl_group_challenge_daily_result rp
                              WHERE rp.group_id = g.id
                                AND rp.user_id = i.user_id
                                AND rp.challenge_date BETWEEN g.start_date AND g.end_date), 0)
              ELSE r.effective_amount
-        END - g.limit_amount
+        END
     </sql>
 
     <!-- 표시용 닉네임. 소셜 로그인만 하고 닉네임을 안 정한 사용자가 빈칸으로 보이지 않게 한다 -->
@@ -176,4 +185,108 @@
           </foreach>
         GROUP BY i.group_id
     </select>
+
+    <!--
+      ── 이하 재판 상세 (이슈 #170) ────────────────────────────────────────
+    -->
+
+    <!--
+      재판 상세 한 벌. 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 이 한 문장을 공유한다.
+      화면마다 select 를 두면 같은 초과액을 네 곳에서 다르게 계산하게 된다.
+
+      ⚠ tbl_group_member 조인이 권한 검사다. 지우면 남의 그룹 재판이 열린다
+        (findVoteTodos:122 와 같은 이유). 확정된 기소도 내려보내야 해서 status 는 걸러지지 않는다.
+
+      ⚠ tbl_defense 를 조인하지 않는다. 증빙 이미지가 여러 장이면 행이 그만큼 늘어
+        나머지 컬럼이 전부 중복된다 — 변론은 DefenseMapper 로 따로 읽는다.
+
+      결산 구간 안내:
+        일일평가는 r.challenge_date 하루, 기간평가는 g.start_date ~ g.end_date 다.
+        기간평가에서도 challenge_date 를 함께 내려보낸다 — 기소가 붙은 행의 날짜라
+        「어느 날 집계에서 걸렸는지」 를 화면이 표시할 수 있다.
+    -->
+    <select id="findTrialDetail" resultType="com.kb.tangtang.challenge.domain.GroupTrialDetailRow">
+        SELECT i.id             AS indictment_id,
+               i.group_id       AS group_id,
+               g.group_name     AS group_name,
+               i.status         AS status,
+               i.result         AS result,
+               i.verdict_method AS verdict_method,
+               i.message        AS message,
+               i.user_id        AS user_id,
+               <include refid="displayNickname"/> AS nickname,
+               u.profile_image_key AS profile_image_key,
+               g.eval_type      AS eval_type,
+               r.challenge_date AS challenge_date,
+               g.start_date     AS start_date,
+               g.end_date       AS end_date,
+               g.category_id    AS category_id,
+               c.category_name  AS category_name,
+               g.limit_amount   AS limit_amount,
+               <include refid="periodConsumption"/> AS current_amount,
+               <include refid="exceededAmount"/>    AS exceeded_amount,
+               (SELECT v.verdict FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               <include refid="totalVoters"/> AS total_voters,
+               i.created_at     AS created_at
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member gm ON gm.group_id = i.group_id AND gm.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        LEFT JOIN tbl_category c ON c.id = g.category_id
+        WHERE i.id = #{indictmentId}
+    </select>
+
+    <!--
+      ── 이하 상태 전이 (이슈 #170) ────────────────────────────────────────
+
+      두 구문 모두 WHERE 에 status = 'DEFENSE_WAIT' 를 둔다. 서비스가 SELECT 로 상태를 확인한
+      뒤라도 그 사이에 마감 배치나 중복 클릭이 상태를 옮길 수 있어서다. 0행을 돌려받으면
+      서비스가 예외로 되돌린다 — 조건 없이 UPDATE 하면 이미 확정된 판결을 되돌려 쓴다.
+
+      updated_at 은 컬럼의 ON UPDATE CURRENT_TIMESTAMP 에 맡긴다.
+    -->
+    <update id="moveToVoting">
+        UPDATE tbl_indictment
+           SET status = 'VOTING'
+         WHERE id = #{indictmentId}
+           AND status = 'DEFENSE_WAIT'
+    </update>
+
+    <!--
+      혐의 인정. result = 1 을 함께 쓰지 않으면 DB CHECK(ck_ind_result)가 막는다
+      (GUILTY 는 result = 1 조합만 허용).
+
+      tbl_vote · tbl_defense 행은 만들지 않는다 — schema.sql:505-508 의 계약이다.
+      목숨 차감과 무죄 감액 기록은 여기서 하지 않는다(이슈 #172).
+    -->
+    <update id="confirmConfession">
+        UPDATE tbl_indictment
+           SET status = 'GUILTY',
+               result = 1,
+               verdict_method = 'CONFESSION'
+         WHERE id = #{indictmentId}
+           AND status = 'DEFENSE_WAIT'
+    </update>
+
+    <!--
+      변론 마감 배치. 마감이 지난 기소를 한 번에 투표로 넘긴다.
+
+      status = 'DEFENSE_WAIT' 조건 하나가 멱등을 보장한다 — 두 번 돌려도 같은 상태다.
+      변론을 낸 건(VOTING)과 혐의를 인정한 건(GUILTY)은 애초에 걸리지 않는다.
+
+      마감 시각 컬럼을 두지 않는다(schema.sql:478-482 결정). created_at 에서 계산하며,
+      시간 값은 프로퍼티라 파라미터로 받는다 — ${} 는 금지다.
+
+      idx_ind_user_status 는 (user_id, status) 라 이 쿼리를 타지 못한다. 대신
+      idx_ind_group (group_id, status) 도 선두 컬럼이 group_id 여서 못 탄다 →
+      DEFENSE_WAIT 행이 몇 만 건으로 늘면 status 단독 인덱스를 검토한다.
+      지금은 진행 중인 기소가 수십~수백 건이라 풀스캔이 문제되지 않는다.
+    -->
+    <update id="moveExpiredDefensesToVoting">
+        UPDATE tbl_indictment
+           SET status = 'VOTING'
+         WHERE status = 'DEFENSE_WAIT'
+           AND created_at &lt;= DATE_SUB(NOW(), INTERVAL #{defenseHours} HOUR)
+    </update>
 </mapper>

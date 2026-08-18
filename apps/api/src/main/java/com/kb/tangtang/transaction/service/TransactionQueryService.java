@@ -1,6 +1,7 @@
 package com.kb.tangtang.transaction.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.util.PaymentMethodLabels;
 import com.kb.tangtang.transaction.domain.TransactionListRow;
 import com.kb.tangtang.transaction.dto.LedgerSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionListItemDto;
@@ -158,36 +159,12 @@ public class TransactionQueryService {
     }
 
     /**
-     * 결제수단 라벨. 신용카드는 "{카드사명}카드"(기존 프론트 목업과 동일), 체크카드는 발급사를
-     * 살려 "{카드사명} 체크카드"로 표기한다(2026-08-15 결정 — 정보량을 늘리는 쪽을 택했다. 프론트
-     * 목업의 "체크카드" 통일 표기와는 다르니 화면에서 문구를 다시 확인할 것).
+     * 결제수단 라벨. 규칙은 {@link PaymentMethodLabels} 가 소유한다 —
+     * 그룹챌린지 변론 화면(이슈 #170)이 같은 라벨을 써야 해서 {@code common} 으로 옮겼다.
      */
     private String resolvePaymentMethod(TransactionListRow row) {
-        String sourceType = row.getSourceType();
-        if (sourceType == null) {
-            return "기타";
-        }
-        switch (sourceType) {
-            case "CARD_CREDIT":
-                return row.getCardInstitutionName() != null ? row.getCardInstitutionName() + "카드" : "신용카드";
-            case "CARD_CHECK":
-                return row.getCardInstitutionName() != null ? row.getCardInstitutionName() + " 체크카드" : "체크카드";
-            case "BANK":
-                if ("IN".equals(row.getDirection())) {
-                    return "입금";
-                }
-                return row.getAccountBankName() != null ? row.getAccountBankName() + " 출금" : "출금";
-            case "DEPOSIT":
-                return row.getAccountBankName() != null ? row.getAccountBankName() + " 예금" : "예금";
-            case "PAYMONEY":
-                return row.getAccountBankName() != null ? row.getAccountBankName() : "페이머니";
-            case "SECURITIES":
-                return "증권";
-            case "LOAN":
-                return "대출";
-            default:
-                return sourceType;
-        }
+        return PaymentMethodLabels.resolve(row.getSourceType(), row.getDirection(),
+                row.getCardInstitutionName(), row.getAccountBankName());
     }
 
     /**

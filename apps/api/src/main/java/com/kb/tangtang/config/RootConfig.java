@@ -151,11 +151,12 @@ public class RootConfig {
      * 점유하는 동안 하트비트가 밀린다. LLM 폴링과 금융 동기화 배치는 한 tick 에 여러 건의 외부 HTTP
      * 호출을 순차로 수행하므로 실제로 오래 점유한다(이슈 #199).
      *
-     * 2026-08-16 기준 @Scheduled 14개 → poolSize 18 로 둔다.
+     * 2026-08-18 기준 @Scheduled 15개 → poolSize 18 을 그대로 둔다(여유 3).
      *   15초  SseHeartbeat.ping
      *   60초  NotificationDlqRetryScheduler.retryDue
      *   60초  LlmCategorizationScheduler.pollAndProcess
      *   5분   GroupChallengeEvaluationScheduler.evaluateActiveGroups   (#168)
+     *   5분   GroupTrialDeadlineScheduler.closeExpiredDefenses         (#170)
      *   20분  FinancialSyncBatchScheduler.runBatch
      *   일별  ChallengeGroupStatusScheduler.runDailyTransitions
      *   일별  RelativeMissionAssignmentScheduler.assignDailyMissions · recoverMissingDailyMissions
@@ -170,7 +171,8 @@ public class RootConfig {
      *   2026-08-16 에도 같은 일이 반복됐다 — #256 이 refreshPreviousMonthEndGroupRecords 를
      *   추가하면서 목록을 갱신하지 않아 "13개 / poolSize 14" 로 적혀 있었지만 실제로는
      *   14개 / 14 (여유 0) 였다. #169 에서 세어 정정하고 18 로 올렸다.
-     *   그룹챌린지 배치가 3개 더 붙을 예정이다(#170 변론 마감 1개 · #172 개표·최종확정 2개).
+     *   #170 이 변론 마감 1개를 추가해 15개가 됐다. poolSize 는 그대로 둔다 — 아직 여유가 3이다.
+     *   #172 개표·최종확정 2개가 더 붙으면 17개 / 18 (여유 1) 이 되므로 그때 올린다.
      *   #169 의 ACTIVE → JUDGING 전이는 새 @Scheduled 를 만들지 않고
      *   ChallengeGroupStatusScheduler.runDailyTransitions 안에 붙였다.
      *

@@ -1,22 +1,43 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.domain.Defense;
+import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
+import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
+import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
+import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
+import com.kb.tangtang.challenge.dto.TrialAccusedDto;
+import com.kb.tangtang.challenge.dto.TrialDefenseDto;
+import com.kb.tangtang.challenge.dto.TrialTransactionDayDto;
+import com.kb.tangtang.challenge.dto.TrialTransactionDto;
+import com.kb.tangtang.challenge.dto.TrialTransactionsDto;
+import com.kb.tangtang.challenge.mapper.DefenseMapper;
+import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
+import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageStorage;
+import com.kb.tangtang.common.util.PaymentMethodLabels;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
 /**
- * 재판 진입로 — 홈 「오늘의 할 일」과 그룹 상세의 재판 카드 (이슈 #169).
+ * 재판 조회 — 홈 「오늘의 할 일」·그룹 상세의 재판 카드(이슈 #169)와
+ * 재판 상세·결산 구간 거래 목록(이슈 #170).
+ *
+ * <p><b>읽기 전용이다.</b> 변론 등록·혐의 인정은 {@code DefenseService} 가 맡는다 —
+ * 상태를 바꾸는 쪽과 읽는 쪽을 한 클래스에 두면 {@code @Transactional(readOnly = true)} 를
+ * 메서드마다 확인해야 한다.
  *
  * <p>{@link ChallengeGroupService} 에 넣지 않았다. 그쪽은 그룹 자체(생성·초대·참여)를 다루는데
  * 여기는 {@code tbl_indictment} 만 읽는다. 한 클래스에 묶으면 그룹을 고치는 사람과 재판을 고치는
@@ -30,6 +51,8 @@ import java.util.List;
 public class GroupTrialService {
 
     private final IndictmentMapper indictmentMapper;
+    private final DefenseMapper defenseMapper;
+    private final GroupChallengeResultMapper resultMapper;
     private final ImageStorage imageStorage;
 
     /** 기소 후 변론을 낼 수 있는 시간. */
@@ -40,10 +63,14 @@ public class GroupTrialService {
 
     @Autowired
     public GroupTrialService(IndictmentMapper indictmentMapper,
+                             DefenseMapper defenseMapper,
+                             GroupChallengeResultMapper resultMapper,
                              ImageStorage imageStorage,
                              @Value("${challenge.trial.defense-hours}") int defenseHours,
                              @Value("${challenge.trial.vote-hours}") int voteHours) {
         this.indictmentMapper = indictmentMapper;
+        this.defenseMapper = defenseMapper;
+        this.resultMapper = resultMapper;
         this.imageStorage = imageStorage;
         this.defenseHours = defenseHours;
         this.voteHours = voteHours;
@@ -129,5 +156,161 @@ public class GroupTrialService {
                     .build());
         }
         return cards;
+    }
+
+    /**
+     * 재판 상세 한 벌 (이슈 #170). 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 모두 이것을 쓴다.
+     *
+     * <p>권한 검사는 매퍼가 겸한다 — 참여자 조인이 있어 그룹 밖 사람에게는 행이 없다.
+     * 그 NULL 을 그대로 {@code TRIAL_NOT_FOUND} 로 바꾼다. 「권한 없음」과 구분해 주면
+     * 남의 그룹에 그 기소가 존재한다는 사실이 새어 나간다.
+     *
+     * <p>변론을 따로 한 번 더 읽는다. 상세 쿼리에 조인하면 증빙 이미지 개수만큼 행이 늘어
+     * 나머지 컬럼이 전부 중복된다.
+     */
+    @Transactional(readOnly = true)
+    public GroupTrialDetailDto findTrialDetail(long userId, long indictmentId) {
+        GroupTrialDetailRow row = indictmentMapper.findTrialDetail(indictmentId, userId);
+        if (row == null) {
+            throw new BusinessException("TRIAL_NOT_FOUND", "재판을 찾을 수 없습니다.");
+        }
+
+        boolean mine = row.getUserId() != null && row.getUserId() == userId;
+        return GroupTrialDetailDto.builder()
+                .indictmentId(row.getIndictmentId())
+                .groupId(row.getGroupId())
+                .groupName(row.getGroupName())
+                .status(row.getStatus())
+                .result(row.getResult())
+                .verdictMethod(row.getVerdictMethod())
+                .message(row.getMessage())
+                .accused(TrialAccusedDto.builder()
+                        .userId(row.getUserId())
+                        .nickname(row.getNickname())
+                        .profileImageUrl(imageStorage.urlOf(row.getProfileImageKey()))
+                        .mine(mine)
+                        .build())
+                .evalType(row.getEvalType())
+                .challengeDate(row.getChallengeDate())
+                .startDate(row.getStartDate())
+                .endDate(row.getEndDate())
+                .categoryId(row.getCategoryId())
+                .categoryName(row.getCategoryName())
+                .limitAmount(row.getLimitAmount())
+                .currentAmount(row.getCurrentAmount())
+                .exceededAmount(row.getExceededAmount())
+                .createdAt(row.getCreatedAt())
+                .defenseDeadline(row.getCreatedAt().plusHours(defenseHours))
+                .voteDeadline(row.getCreatedAt().plusHours(defenseHours + voteHours))
+                .defense(findDefense(indictmentId))
+                .myVerdict(row.getMyVerdict())
+                .voteCount(row.getVoteCount())
+                .totalVoters(row.getTotalVoters())
+                .build();
+    }
+
+    /**
+     * 결산 구간의 거래 목록 (이슈 #170). <b>피고 본인만</b> 볼 수 있다.
+     *
+     * <p>상세와 분리한 이유는 여기에 있다 — 상세는 투표자(#171)도 보는데 거래 목록까지 섞으면
+     * 남의 거래내역이 배심원에게 흘러간다.
+     *
+     * <p>피고가 아니면 {@code TRIAL_NOT_FOUND} 다. 「권한 없음」으로 구분하면 그룹 안에서
+     * 남의 재판에 거래 목록이 있다는 것까지는 알려 주는 셈이라, 여기서는 없는 것으로 취급한다.
+     *
+     * <p>날짜 범위는 {@code evalType} 이 정한다 — 일일결산은 위반한 그 하루, 기간결산은
+     * 그룹 기간 전체다. 판단을 SQL 로 내리지 않는 이유는 매퍼 주석에 있다.
+     */
+    @Transactional(readOnly = true)
+    public TrialTransactionsDto findTrialTransactions(long userId, long indictmentId) {
+        GroupTrialDetailRow row = indictmentMapper.findTrialDetail(indictmentId, userId);
+        if (row == null || row.getUserId() == null || row.getUserId() != userId) {
+            throw new BusinessException("TRIAL_NOT_FOUND", "재판을 찾을 수 없습니다.");
+        }
+
+        boolean period = EvalType.PERIOD.name().equals(row.getEvalType());
+        LocalDate from = period ? row.getStartDate() : row.getChallengeDate();
+        LocalDate to = period ? row.getEndDate() : row.getChallengeDate();
+
+        return TrialTransactionsDto.builder()
+                .evalType(row.getEvalType())
+                .limitAmount(row.getLimitAmount())
+                .currentAmount(row.getCurrentAmount())
+                .days(groupByDate(resultMapper.findTrialTransactions(
+                        row.getGroupId(), userId, from, to)))
+                .build();
+    }
+
+    /** 변론이 없으면 NULL. 빈 객체로 채우면 화면이 「변론 대기」와 구분할 수 없다. */
+    private TrialDefenseDto findDefense(long indictmentId) {
+        Defense defense = defenseMapper.findByIndictmentId(indictmentId);
+        if (defense == null) {
+            return null;
+        }
+
+        List<String> imageUrls = new ArrayList<>();
+        for (String key : defenseMapper.findImageKeysByDefenseId(defense.getId())) {
+            imageUrls.add(imageStorage.urlOf(key));
+        }
+
+        return TrialDefenseDto.builder()
+                .content(defense.getContent())
+                .actualBurdenAmount(defense.getActualBurdenAmount())
+                .deductionAmount(defense.getDeductionAmount())
+                .imageUrls(imageUrls)
+                .createdAt(defense.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * 거래를 날짜별로 묶는다. 매퍼가 날짜순으로 정렬해 주므로 <b>날짜가 바뀌는 지점만</b> 보면 된다.
+     *
+     * <p>{@code dailyAmount} 를 {@code tbl_group_challenge_daily_result} 에서 다시 읽지 않고
+     * 목록을 더해 만든다 — 두 값이 어긋나면 화면에서 「합계와 항목이 다른」 하루가 나온다.
+     * 조건도 환불 규칙도 집계 배치와 같은 조각을 쓰므로 결과는 같은 값이다.
+     */
+    private List<TrialTransactionDayDto> groupByDate(List<TrialTransactionRow> rows) {
+        List<TrialTransactionDayDto> days = new ArrayList<>();
+
+        LocalDate currentDate = null;
+        List<TrialTransactionDto> items = null;
+        BigDecimal dailyAmount = null;
+
+        for (TrialTransactionRow row : rows) {
+            if (!row.getTrDate().equals(currentDate)) {
+                if (currentDate != null) {
+                    days.add(TrialTransactionDayDto.builder()
+                            .date(currentDate)
+                            .dailyAmount(dailyAmount)
+                            .transactions(items)
+                            .build());
+                }
+                currentDate = row.getTrDate();
+                items = new ArrayList<>();
+                dailyAmount = BigDecimal.ZERO;
+            }
+
+            items.add(TrialTransactionDto.builder()
+                    .transactionId(row.getTransactionId())
+                    .time(row.getTrTime())
+                    .merchantName(row.getMerchantName())
+                    .amount(row.getAmount())
+                    .categoryName(row.getCategoryName())
+                    .paymentMethod(PaymentMethodLabels.resolve(row.getSourceType(),
+                            row.getDirection(), row.getCardInstitutionName(),
+                            row.getAccountBankName()))
+                    .isRefund(row.isRefund())
+                    .build());
+            dailyAmount = dailyAmount.add(row.getAmount());
+        }
+
+        if (currentDate != null) {
+            days.add(TrialTransactionDayDto.builder()
+                    .date(currentDate)
+                    .dailyAmount(dailyAmount)
+                    .transactions(items)
+                    .build());
+        }
+        return days;
     }
 }

@@ -1,7 +1,11 @@
 <!--
   02d · 변론 작성 (F 입력형) — GC_07_02c
-  기소 거래 요약 아코디언 + 변론 텍스트(150자) + 증빙 이미지(최대 3장).
-  제출 시 defenseDone 으로 이동한다.
+  기소 요약 아코디언 + 변론 텍스트(150자) + 증빙 이미지(최대 3장).
+  제출이 성공하면 defenseDone 으로 이동한다.
+
+  실제 부담금 합계는 02a(실제 부담금 입력)가 `?burden=` 으로 넘긴다. 건별 입력은 그 화면의
+  UI 일 뿐이고 서버로는 **합계만** 가므로 여기서는 숫자 하나만 받으면 된다. 쿼리가 없으면
+  (02a 를 거치지 않고 URL 로 바로 들어온 경우) 소비액 전액을 본인이 부담한 것으로 본다.
 -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
@@ -9,70 +13,74 @@ import { useRouter, useRoute } from 'vue-router';
 
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import { fetchTrialDetail, submitDefense } from '@/api/groupChallenge';
 
 import mascotPlease from '@/assets/images/emotions/44_please.png';
 
 const router = useRouter();
 const route = useRoute();
 
+/* 서버(`DefenseService.CONTENT_MAX_LENGTH` · `MAX_IMAGES`)와 같은 값이어야 한다. */
 const MAX_TEXT = 150;
 const MAX_IMAGES = 3;
 
-/* ── mock 데이터 (API 연동 전) ── */
-const indictment = ref({
-    id: route.params.indictmentId || 'IND-001',
-    challengeName: '배달 소비 줄이기',
-    evalType: 'DAILY',
-    limitAmount: 25000,
-    currentAmount: 37400,
-    exceededAmount: 12400,
-    transaction: {
-        merchantName: '배달의민족',
-        amount: 24000,
-        time: '오늘 18:42',
-        category: '음식/배달',
-        paymentMethod: '카드 결제',
-    },
-    actualCost: 8000,
-    defenseDeadlineLabel: '오늘 22:00',
+const indictment = ref(null);
+
+onMounted(async () => {
+    try {
+        indictment.value = await fetchTrialDetail(route.params.indictmentId);
+    } catch (e) {
+        console.error('[DefenseWrite] 재판 상세를 불러오지 못해 기소 안내로 되돌린다.', e);
+        router.replace({
+            name: 'defenseViolation',
+            params: { id: route.params.id, indictmentId: route.params.indictmentId },
+        });
+        return;
+    }
+    startTimer();
 });
 
-/* ── 부담금 반영 결과 (02a 에서 넘어온 값, mock) ── */
-const adjustedTotal = computed(() => {
-    const base = indictment.value.currentAmount - indictment.value.transaction.amount;
-    return base + indictment.value.actualCost;
+/* ── 실제 부담금 합계 ── */
+const actualBurdenAmount = computed(() => {
+    const fromQuery = Number(route.query.burden);
+    if (Number.isFinite(fromQuery) && fromQuery >= 0) return fromQuery;
+    return indictment.value?.currentAmount ?? 0;
 });
 
-const isSafe = computed(() => adjustedTotal.value <= indictment.value.limitAmount);
+const isSafe = computed(
+    () => actualBurdenAmount.value <= (indictment.value?.limitAmount ?? 0),
+);
 
-const marginOrExceeded = computed(() => {
-    const diff = indictment.value.limitAmount - adjustedTotal.value;
-    if (diff >= 0) return { safe: true, amount: diff };
-    return { safe: false, amount: Math.abs(diff) };
-});
+const marginAmount = computed(
+    () => (indictment.value?.limitAmount ?? 0) - actualBurdenAmount.value,
+);
 
-/* ── 마감 타이머 ── */
-const remainingSeconds = ref(8043);
+/* ── 마감 타이머 ──
+ * 남은 초를 감소시키지 않고 절대시각과 지금을 매초 다시 비교한다 (절전 복귀 시 값이 굳는 문제). */
+const now = ref(Date.now());
 let timerHandle = null;
 
-const timerLabel = computed(() => {
-    const h = String(Math.floor(remainingSeconds.value / 3600)).padStart(2, '0');
-    const m = String(Math.floor((remainingSeconds.value % 3600) / 60)).padStart(2, '0');
-    const s = String(remainingSeconds.value % 60).padStart(2, '0');
-    return `마감 ${h}:${m}:${s}`;
-});
-
-onMounted(() => {
+function startTimer() {
     timerHandle = setInterval(() => {
-        if (remainingSeconds.value > 0) remainingSeconds.value--;
+        now.value = Date.now();
     }, 1000);
-});
+}
 
 onBeforeUnmount(() => {
     clearInterval(timerHandle);
+    images.value.forEach((img) => URL.revokeObjectURL(img.url));
 });
 
-/* ── 기소 거래 아코디언 ── */
+const timerLabel = computed(() => {
+    const deadline = new Date(indictment.value?.defenseDeadline ?? '').getTime();
+    if (Number.isNaN(deadline)) return '';
+
+    const left = Math.max(0, deadline - now.value);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `마감 ${pad(Math.floor(left / 3600000))}:${pad(Math.floor(left / 60000) % 60)}:${pad(Math.floor(left / 1000) % 60)}`;
+});
+
+/* ── 기소 요약 아코디언 ── */
 const citeOpen = ref(false);
 
 function toggleCite() {
@@ -121,10 +129,27 @@ function removeImage(index) {
 }
 
 /* ── 제출 ── */
-const canSubmit = computed(() => defenseText.value.trim().length > 0);
+const submitting = ref(false);
+const canSubmit = computed(
+    () => !!indictment.value && !submitting.value && defenseText.value.trim().length > 0,
+);
 
-function submitDefense() {
+async function onSubmit() {
     if (!canSubmit.value) return;
+    submitting.value = true;
+    try {
+        await submitDefense(route.params.indictmentId, {
+            content: defenseText.value.trim(),
+            actualBurdenAmount: actualBurdenAmount.value,
+            images: images.value.map((img) => img.file),
+        });
+    } catch (e) {
+        console.error('[DefenseWrite] 변론 제출에 실패했다.', e);
+        window.alert(e.message ?? '변론 제출에 실패했어요. 잠시 후 다시 시도해주세요.');
+        submitting.value = false;
+        return;
+    }
+    /* 제출은 되돌릴 수 없다(`uk_def_indictment`) — replace 로 작성 화면을 스택에서 지운다. */
     router.replace({
         name: 'defenseDone',
         params: {
@@ -136,7 +161,7 @@ function submitDefense() {
 </script>
 
 <template>
-    <div class="write-page">
+    <div v-if="indictment" class="write-page">
         <!-- ── Court Bar 헤더 ── -->
         <DefenseCourtHeader>
             <template #nav-right>
@@ -145,7 +170,7 @@ function submitDefense() {
 
             <div class="write-page__header-body">
                 <h2 class="write-page__headline">
-                    지민님의 변론을<br>작성해주세요
+                    {{ indictment.accused.nickname }}님의 변론을<br>작성해주세요
                 </h2>
                 <img
                     :src="mascotPlease"
@@ -157,13 +182,13 @@ function submitDefense() {
 
         <!-- ── 본문 ── -->
         <div class="write-page__content">
-            <!-- 기소 거래 아코디언 -->
+            <!-- 기소 요약 아코디언 -->
             <div class="write-page__cite-card">
                 <div class="write-page__cite-header" @click="toggleCite">
-                    <span class="write-page__cite-badge">기소 거래</span>
+                    <span class="write-page__cite-badge">{{ indictment.evalLabel }}</span>
                     <span class="write-page__cite-summary">
-                        {{ indictment.transaction.merchantName }}
-                        {{ indictment.transaction.amount.toLocaleString() }}원
+                        {{ indictment.settlementLabel }} ·
+                        {{ indictment.exceededAmount.toLocaleString() }}원 초과
                     </span>
                     <svg
                         class="write-page__cite-chevron"
@@ -188,15 +213,17 @@ function submitDefense() {
                         <div class="write-page__cite-divider"></div>
                         <div class="write-page__cite-rows">
                             <div class="write-page__cite-row">
-                                <span class="write-page__cite-label">결제 시각</span>
+                                <span class="write-page__cite-label">
+                                    {{ indictment.categoryName ?? '총 소비' }}
+                                </span>
                                 <span class="write-page__cite-value">
-                                    {{ indictment.transaction.time }}
+                                    {{ indictment.limitAmount.toLocaleString() }}원 기준
                                 </span>
                             </div>
                             <div class="write-page__cite-row">
-                                <span class="write-page__cite-label">결제 금액</span>
+                                <span class="write-page__cite-label">소비 금액</span>
                                 <span class="write-page__cite-value write-page__cite-value--bold">
-                                    {{ indictment.transaction.amount.toLocaleString() }}원
+                                    {{ indictment.currentAmount.toLocaleString() }}원
                                 </span>
                             </div>
                             <div class="write-page__cite-row">
@@ -204,7 +231,7 @@ function submitDefense() {
                                     실제 개인 부담금
                                 </span>
                                 <span class="write-page__cite-value write-page__cite-value--blue">
-                                    {{ indictment.actualCost.toLocaleString() }}원
+                                    {{ actualBurdenAmount.toLocaleString() }}원
                                 </span>
                             </div>
                         </div>
@@ -212,7 +239,7 @@ function submitDefense() {
                             v-if="isSafe"
                             class="write-page__cite-safe-badge"
                         >
-                            반영 시 기준 내 · {{ marginOrExceeded.amount.toLocaleString() }}원 여유
+                            반영 시 기준 내 · {{ marginAmount.toLocaleString() }}원 여유
                         </div>
                     </div>
                 </Transition>
@@ -308,9 +335,9 @@ function submitDefense() {
                 size="lg"
                 block
                 :disabled="!canSubmit"
-                @click="submitDefense"
+                @click="onSubmit"
             >
-                변론 제출하기
+                {{ submitting ? '제출 중…' : '변론 제출하기' }}
             </BaseButton>
         </div>
     </div>

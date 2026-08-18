@@ -1,6 +1,7 @@
 package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
+import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.domain.Indictment;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
@@ -74,4 +75,60 @@ public interface IndictmentMapper {
      */
     List<GroupTrialSummaryRow> findTrialSummaryByGroupIds(@Param("userId") Long userId,
                                                           @Param("groupIds") List<Long> groupIds);
+
+    /**
+     * 재판 상세 한 벌 (이슈 #170). 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 모두 이것을 쓴다.
+     *
+     * <p><b>권한 검사를 SQL 이 겸한다.</b> {@code tbl_group_member} 조인이 있어 그룹 사람이
+     * 아니면 행이 나오지 않는다. 호출부는 NULL 을 {@code TRIAL_NOT_FOUND} 로 바꾼다 —
+     * 권한 오류와 구분하면 남의 그룹에 그 기소가 있다는 사실이 새어 나간다.
+     *
+     * <p>피고 본인도 멤버라 같은 조인으로 통과한다. 「내가 피고인지」는 {@code userId} 비교로
+     * 서비스가 판단한다.
+     *
+     * @param userId 보는 사람. 내 표({@code myVerdict})와 권한 검사에 쓴다
+     * @return 없거나 볼 권한이 없으면 NULL
+     */
+    GroupTrialDetailRow findTrialDetail(@Param("indictmentId") Long indictmentId,
+                                       @Param("userId") Long userId);
+
+    /**
+     * 변론 등록 후 투표 대기로 넘긴다 (이슈 #170).
+     *
+     * <p><b>{@code WHERE ... AND status = 'DEFENSE_WAIT'} 가 동시 요청 방어다.</b> 같은 사용자가
+     * 제출 버튼을 두 번 눌러도 두 번째는 0행을 바꾼다. 서비스가 그 0 을 보고 되돌린다 —
+     * 읽고 나서 쓰는 사이에 상태가 바뀌면 SELECT 검증만으로는 못 막는다.
+     *
+     * @return 바꾼 행 수. 0 이면 이미 남이(또는 배치가) 상태를 옮겼다
+     */
+    int moveToVoting(@Param("indictmentId") Long indictmentId);
+
+    /**
+     * 혐의 인정 — 변론 대기에서 유죄로 바로 확정한다 (이슈 #170).
+     *
+     * <p>{@code result = 1} 을 같이 쓰는 이유는 DB CHECK({@code ck_ind_result})가
+     * {@code GUILTY} + {@code result = 1} 조합만 허용해서다. 상태만 바꾸면 INSERT 가 아니라
+     * UPDATE 여도 제약에 걸린다.
+     *
+     * <p><b>목숨 차감·{@code verdict_deduction_amount} 기록은 하지 않는다.</b> 판결 확정 후처리는
+     * 이슈 #172 담당이고, 여기서 같이 하면 투표 개표 경로와 후처리가 두 벌이 된다.
+     *
+     * @return 바꾼 행 수. 0 이면 이미 변론이 등록됐거나 마감 배치가 투표로 넘겼다
+     */
+    int confirmConfession(@Param("indictmentId") Long indictmentId);
+
+    /**
+     * 변론 마감이 지난 기소를 한꺼번에 투표로 넘긴다 (이슈 #170 배치).
+     *
+     * <p><b>{@code WHERE status = 'DEFENSE_WAIT'} 하나로 멱등이다.</b> 몇 번을 돌려도 같은 상태가
+     * 되고, 이미 변론을 낸 건(=VOTING)이나 혐의를 인정한 건(=GUILTY)은 건드리지 않는다.
+     *
+     * <p>마감 시각을 컬럼으로 두지 않는 이유는 {@code db/schema.sql:478-482} 주석에 있다 —
+     * {@code created_at} 에서 계산한다. 그 시간이 프로퍼티라서 SQL 에 상수로 박을 수 없어
+     * 파라미터로 받는다({@code ${}} 금지).
+     *
+     * @param defenseHours {@code challenge.trial.defense-hours}. 호출부가 그대로 넘긴다
+     * @return 넘긴 건수
+     */
+    int moveExpiredDefensesToVoting(@Param("defenseHours") int defenseHours);
 }

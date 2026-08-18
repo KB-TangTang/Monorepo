@@ -10,54 +10,57 @@ import { useRouter, useRoute } from 'vue-router';
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import { confessIndictment, fetchTrialDetail } from '@/api/groupChallenge';
 
 import mascotApology from '@/assets/images/emotions/43_apology.png';
-import lifeAlive from '@/assets/images/challenge_live/gavel-alive.png';
-import lifeDepleted from '@/assets/images/challenge_live/gavel-depleted.png';
 
 const router = useRouter();
 const route = useRoute();
 
-/* ── mock 데이터 (API 연동 전) ── */
-const indictment = ref({
-    id: route.params.indictmentId || 'IND-001',
-    caseNumber: '2026-재판-0729',
-    challengeName: '배달 소비 줄이기',
-    settlementDate: '6월 19일',
-    evalType: 'DAILY',
-    limitAmount: 25000,
-    currentAmount: 37400,
-    exceededAmount: 12400,
-    transaction: {
-        merchantName: '배달의민족',
-        amount: 24000,
-        time: '오늘 18:42',
-        category: '음식/배달',
-        paymentMethod: '카드 결제',
-    },
-    defenseDeadlineLabel: '오늘 22:00',
-    lives: { current: 5, total: 5 },
+const indictment = ref(null);
+
+/*
+ * 실패를 조용히 넘기면 화면이 「클릭이 씹힌 것」처럼 보인다 — replace 라 히스토리도 남지 않아
+ * 카드를 눌러도 아무 일이 없는 것과 구분되지 않는다 (`GroupChallengeDetailView` 와 같은 이유).
+ */
+onMounted(async () => {
+    try {
+        indictment.value = await fetchTrialDetail(route.params.indictmentId);
+    } catch (e) {
+        console.error('[DefenseViolation] 재판 상세를 불러오지 못해 그룹 상세로 되돌린다.', e);
+        router.replace({ name: 'groupChallengeDetail', params: { id: route.params.id } });
+        return;
+    }
+    startTimer();
 });
 
-/* ── 마감 타이머 ── */
-const remainingSeconds = ref(8280); // 2시간 18분
+/* ── 마감 타이머 ──
+ * 남은 초를 세지 않고 **절대시각과 지금을 매초 다시 비교한다.** 진입 시점의 남은 초를 감소시키면
+ * 화면을 열어 둔 채 절전에 들어갔다 돌아왔을 때 값이 그 시점에 굳는다. */
+const now = ref(Date.now());
 let timerHandle = null;
 
-const remainingLabel = computed(() => {
-    const h = Math.floor(remainingSeconds.value / 3600);
-    const m = Math.floor((remainingSeconds.value % 3600) / 60);
-    if (h > 0) return `${h}시간 ${m}분 남음`;
-    return `${m}분 남음`;
-});
-
-onMounted(() => {
+function startTimer() {
     timerHandle = setInterval(() => {
-        if (remainingSeconds.value > 0) remainingSeconds.value--;
+        now.value = Date.now();
     }, 1000);
-});
+}
 
 onBeforeUnmount(() => {
     clearInterval(timerHandle);
+});
+
+const remainingLabel = computed(() => {
+    const deadline = new Date(indictment.value?.defenseDeadline ?? '').getTime();
+    if (Number.isNaN(deadline)) return '';
+
+    const left = Math.max(0, deadline - now.value);
+    if (left === 0) return '마감됨';
+
+    const h = Math.floor(left / 3600000);
+    const m = Math.floor(left / 60000) % 60;
+    if (h > 0) return `${h}시간 ${m}분 남음`;
+    return `${m}분 남음`;
 });
 
 /* ── 프로그레스 바 계산 ── */
@@ -70,20 +73,39 @@ const withinPercent = computed(() => {
 
 const overPercent = computed(() => 100 - withinPercent.value);
 
+/* 기간결산은 「오늘」이 아니다 — 구간 전체를 합쳐 판정하므로 문구를 갈라야 한다. */
+const isDaily = computed(() => indictment.value?.evalType === 'DAILY');
+const scopeLabel = computed(() => (isDaily.value ? '오늘' : '기간'));
+const summaryLabel = computed(() => (isDaily.value ? '오늘 나의 소비' : '기간 나의 소비'));
+const limitLabel = computed(() => (isDaily.value ? '하루 기준' : '기간 기준'));
+
 /* ── 혐의 인정 확인 바텀시트 (05a) ── */
 const showAdmitSheet = ref(false);
 const HISTORY_SETTLE_MS = 100;
 const pendingNav = ref(null);
-
-const livesAfterAdmit = computed(() => indictment.value.lives.current - 1);
+const admitting = ref(false);
 
 function openAdmitSheet() {
     showAdmitSheet.value = true;
 }
 
-function confirmAdmit() {
-    pendingNav.value = 'defenseAdmitDone';
-    showAdmitSheet.value = false;
+/*
+ * 서버가 성공한 뒤에 시트를 닫는다. 낙관적으로 먼저 넘기면 이미 마감돼
+ * `DEFENSE_NOT_ALLOWED` 로 거절된 요청에도 「인정 완료」 화면이 뜬다.
+ */
+async function confirmAdmit() {
+    if (admitting.value) return;
+    admitting.value = true;
+    try {
+        await confessIndictment(route.params.indictmentId);
+        pendingNav.value = 'defenseAdmitDone';
+        showAdmitSheet.value = false;
+    } catch (e) {
+        console.error('[DefenseViolation] 혐의 인정에 실패했다.', e);
+        window.alert(e.message ?? '혐의 인정에 실패했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+        admitting.value = false;
+    }
 }
 
 function cancelAdmit() {
@@ -119,7 +141,7 @@ function startDefense() {
 </script>
 
 <template>
-    <div class="violation-page">
+    <div v-if="indictment" class="violation-page">
         <!-- ── Court Bar 헤더 ── -->
         <DefenseCourtHeader
             title="소비 기준 위반"
@@ -127,14 +149,16 @@ function startDefense() {
         >
             <div class="violation-page__header-body">
                 <div class="violation-page__tags">
-                    <span class="violation-page__tag violation-page__tag--eval">일일결산</span>
+                    <span class="violation-page__tag violation-page__tag--eval">
+                        {{ indictment.evalLabel }}
+                    </span>
                     <span class="violation-page__tag violation-page__tag--charge">기소 발생</span>
                 </div>
                 <h2 class="violation-page__headline">
-                    오늘 기준 금액을<br>넘었어요
+                    {{ scopeLabel }} 기준 금액을<br>넘었어요
                 </h2>
                 <p class="violation-page__sub">
-                    {{ indictment.challengeName }} · {{ indictment.settlementDate }}
+                    {{ indictment.challengeName }} · {{ indictment.settlementLabel }}
                 </p>
             </div>
         </DefenseCourtHeader>
@@ -144,9 +168,9 @@ function startDefense() {
             <!-- 소비 요약 카드 -->
             <div class="violation-page__summary-card">
                 <div class="violation-page__summary-header">
-                    <span class="violation-page__summary-label">오늘 나의 소비</span>
+                    <span class="violation-page__summary-label">{{ summaryLabel }}</span>
                     <span class="violation-page__summary-limit">
-                        하루 기준 {{ indictment.limitAmount.toLocaleString() }}원
+                        {{ limitLabel }} {{ indictment.limitAmount.toLocaleString() }}원
                     </span>
                 </div>
 
@@ -179,16 +203,13 @@ function startDefense() {
                 </div>
             </div>
 
-            <!-- 기소 발생 거래 -->
-            <div class="violation-page__tx-card">
-                <span class="violation-page__tx-label">기소 발생 거래</span>
-                <div class="violation-page__tx-row">
-                    <span class="violation-page__tx-name">
-                        {{ indictment.transaction.merchantName }} · {{ indictment.transaction.amount.toLocaleString() }}원
-                    </span>
-                    <span class="violation-page__tx-time">{{ indictment.transaction.time }}</span>
-                </div>
-            </div>
+            <!--
+              ⚠ 「기소 발생 거래」 카드를 두지 않는다. 한도 초과는 **누적**으로 판정되므로
+              기소를 발화시킨 거래가 문제의 거래라는 보장이 없다 — 친구들 몫까지 대납한 큰 거래는
+              그 시점에 한도 미달이어서 기소를 만들지 않고, 뒤따르는 평범한 소비가 기소를 만든다.
+              한 건만 보여주면 정작 대납한 금액을 신고할 방법이 없다.
+              결산 구간 전체 거래는 다음 화면(실제 부담금 입력)이 보여준다.
+            -->
 
             <!-- 변론 마감 안내 -->
             <div class="violation-page__deadline-card">
@@ -204,10 +225,14 @@ function startDefense() {
                 </div>
             </div>
 
-            <!-- 자동 인정 안내 -->
+            <!--
+              마감 배치는 변론이 없어도 유죄로 확정하지 않는다 — `DEFENSE_WAIT` → `VOTING` 으로
+              옮기기만 한다(`IndictmentMapper.moveExpiredDefensesToVoting`). 「자동으로 혐의가
+              인정된다」고 적으면 실제 동작과 다른 안내가 된다. 목숨 차감 문구도 두지 않는다.
+            -->
             <div class="violation-page__notice">
                 기한 안에 변론을 제출하지 않으면
-                <b>자동으로 혐의가 인정</b>돼 목숨 1개가 차감돼요.
+                <b>변론 없이 배심원 투표로 넘어가요.</b>
             </div>
         </div>
 
@@ -231,9 +256,6 @@ function startDefense() {
                     혐의 인정하기
                 </button>
             </div>
-            <button type="button" class="violation-page__link">
-                오늘 거래 내역 다시 보기
-            </button>
         </div>
 
         <!-- ── 05a · 혐의 인정 확인 바텀시트 ── -->
@@ -257,26 +279,13 @@ function startDefense() {
                     </div>
                 </div>
 
+                <!-- 목숨 표시를 두지 않는다 — 혐의 인정은 목숨을 건드리지 않는다(개표·확정 담당). -->
                 <div class="admit-sheet__info-card">
                     <div class="admit-sheet__info-header">
-                        <span class="admit-sheet__info-label">차감 후 남은 목숨</span>
+                        <span class="admit-sheet__info-label">초과 금액</span>
                         <span class="admit-sheet__info-value">
-                            {{ indictment.lives.current }} → {{ livesAfterAdmit }}
+                            {{ indictment.exceededAmount.toLocaleString() }}원
                         </span>
-                    </div>
-                    <div class="admit-sheet__lives">
-                        <img
-                            v-for="n in livesAfterAdmit"
-                            :key="'alive-' + n"
-                            :src="lifeAlive"
-                            alt="남은 목숨"
-                            class="admit-sheet__life"
-                        >
-                        <img
-                            :src="lifeDepleted"
-                            alt="차감된 목숨"
-                            class="admit-sheet__life admit-sheet__life--depleted"
-                        >
                     </div>
                     <p class="admit-sheet__info-desc">
                         투표 없이 종결되고
@@ -299,9 +308,10 @@ function startDefense() {
                     <button
                         type="button"
                         class="admit-sheet__btn-confirm"
+                        :disabled="admitting"
                         @click="confirmAdmit"
                     >
-                        네, 혐의를 인정할게요
+                        {{ admitting ? '처리 중…' : '네, 혐의를 인정할게요' }}
                     </button>
                     <p class="admit-sheet__hint">
                         변론은 {{ indictment.defenseDeadlineLabel }}까지 제출할 수 있어요.
@@ -469,39 +479,6 @@ function startDefense() {
     font-family: var(--tt-font-mono);
 }
 
-/* ── 기소 발생 거래 ── */
-.violation-page__tx-card {
-    background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
-    padding: 14px var(--tt-card-padding);
-    box-shadow: var(--tt-elevation-2);
-}
-
-.violation-page__tx-label {
-    font-size: var(--tt-fs-badge);
-    color: var(--tt-text-muted);
-    font-weight: var(--tt-fw-bold);
-}
-
-.violation-page__tx-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-top: 6px;
-}
-
-.violation-page__tx-name {
-    font-size: var(--tt-fs-label);
-    font-weight: var(--tt-fw-black);
-}
-
-.violation-page__tx-time {
-    font-size: var(--tt-fs-badge);
-    color: var(--tt-text-hint);
-    font-weight: var(--tt-fw-bold);
-}
-
 /* ── 변론 마감 안내 ── */
 .violation-page__deadline-card {
     background: var(--tt-danger-subtle);
@@ -592,21 +569,6 @@ function startDefense() {
     cursor: pointer;
 }
 
-.violation-page__link {
-    display: block;
-    width: 100%;
-    margin-top: 13px;
-    background: transparent;
-    border: 0;
-    padding: 0;
-    font-family: var(--tt-font-sans);
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-info);
-    text-align: center;
-    cursor: pointer;
-}
-
 /* ── 05a 혐의 인정 확인 바텀시트 ── */
 .admit-sheet {
     display: flex;
@@ -671,22 +633,6 @@ function startDefense() {
     font-family: var(--tt-font-mono);
 }
 
-.admit-sheet__lives {
-    display: flex;
-    gap: 6px;
-    margin-top: 10px;
-}
-
-.admit-sheet__life {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-}
-
-.admit-sheet__life--depleted {
-    opacity: 0.9;
-}
-
 .admit-sheet__info-desc {
     font-size: var(--tt-fs-badge);
     color: var(--tt-text-body);
@@ -718,6 +664,11 @@ function startDefense() {
     border-radius: var(--tt-radius-md);
     text-align: center;
     cursor: pointer;
+}
+
+.admit-sheet__btn-confirm:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .admit-sheet__hint {

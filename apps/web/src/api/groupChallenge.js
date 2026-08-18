@@ -17,6 +17,12 @@ import {
     MOCK_TODO_ITEMS,
 } from '@/fixtures/groupChallenge';
 import { MOCK_CHALLENGE_DETAILS, MOCK_CHALLENGE_RANKINGS } from '@/fixtures/groupChallengeDetail';
+import {
+    MOCK_TRIAL_DETAIL,
+    MOCK_TRIAL_DETAIL_CONFESSED,
+    MOCK_TRIAL_DETAIL_DEFENDED,
+    MOCK_TRIAL_TRANSACTIONS,
+} from '@/fixtures/groupChallengeTrial';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -286,6 +292,178 @@ export async function runGroupChallengeStatusBatch(date) {
     return http.post('/dev/batches/group-challenge-status', null, {
         params: date ? { date } : {},
     });
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * 소비 재판 — 상세 · 결산 구간 거래 목록 · 변론 · 혐의 인정 (이슈 #170)
+ * ────────────────────────────────────────────────────────────── */
+
+/**
+ * 재판 상세. 기소 안내 · 변론 작성 · 변론 완료 화면이 **같은 응답 하나**를 쓴다.
+ * 화면마다 다른 엔드포인트를 두면 같은 소비액을 네 곳에서 다르게 계산하게 된다.
+ *
+ * 그룹 참여자면 누구나 볼 수 있다(배심원도 봐야 한다). 참여자가 아니면 서버가
+ * `TRIAL_NOT_FOUND` 로 거절한다 — 기소의 존재 자체를 노출하지 않기 위함이다.
+ */
+export async function fetchTrialDetail(indictmentId) {
+    if (isMockMode.value) {
+        return toTrialDetailViewModel(clone(mockTrialDetailNow()));
+    }
+    return toTrialDetailViewModel(await http.get(`/group-challenges/trials/${indictmentId}`));
+}
+
+/*
+ * 목데이터 모드의 재판 진행 단계.
+ *
+ * 상수 하나만 돌려주면 **변론 제출 → 변론 완료** 화면에서 변론이 `null` 이라 요약 카드가
+ * 통째로 사라지고, 혐의 인정 완료 화면도 `verdictMethod` 가 없어 판결 문구가 비어 버린다.
+ * 목데이터로 흐름을 끝까지 걸어볼 수 없으면 검증 도구로서 쓸모가 없다.
+ * 새로고침하면 초기 단계로 돌아간다 — 목데이터에 영속성을 만들 이유는 없다.
+ */
+let mockStage = 'DEFENSE_WAIT';
+
+function mockTrialDetailNow() {
+    if (mockStage === 'DEFENDED') return MOCK_TRIAL_DETAIL_DEFENDED;
+    if (mockStage === 'CONFESSED') return MOCK_TRIAL_DETAIL_CONFESSED;
+    return MOCK_TRIAL_DETAIL;
+}
+
+/**
+ * 서버 재판 상세 → 화면이 쓰는 모양.
+ *
+ * 목데이터도 이 함수를 지나간다 — 픽스처를 화면 이름으로 적어 두면 실데이터에서만
+ * 깨지는 매핑 실수를 목데이터 모드가 가려버린다.
+ *
+ * `caseNumber` · `evalLabel` · `settlementLabel` 은 서버에 없다. 사건 번호와 「일일결산」
+ * 같은 문구는 표시 전용이라 서버가 내려주면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ */
+function toTrialDetailViewModel(dto) {
+    const isDaily = dto.evalType === 'DAILY';
+    return {
+        ...dto,
+        /* 화면 목록 key 이자 카운트다운 키. */
+        id: dto.indictmentId,
+        caseNumber: toCaseNumber(isDaily ? dto.challengeDate : dto.endDate),
+        challengeName: dto.groupName,
+        evalLabel: isDaily ? '일일결산' : '기간결산',
+        settlementLabel: isDaily
+            ? formatMonthDay(dto.challengeDate)
+            : `${formatMonthDay(dto.startDate)} ~ ${formatMonthDay(dto.endDate)}`,
+        defenseDeadlineLabel: formatDeadlineLabel(dto.defenseDeadline),
+        accused: {
+            ...(dto.accused ?? {}),
+            profileImage: dto.accused?.profileImageUrl ?? null,
+            isMine: dto.accused?.mine ?? false,
+        },
+        /* `defense` 가 null 이면 아직 변론이 없다는 뜻이다. 빈 객체로 채우지 않는다. */
+        defense: dto.defense
+            ? { ...dto.defense, images: dto.defense.imageUrls ?? [] }
+            : null,
+    };
+}
+
+/** `2026-08-05` → `2026-재판-0805`. 사건 번호는 컬럼이 아니라 결산일에서 만드는 라벨이다. */
+function toCaseNumber(isoDate) {
+    if (!isoDate) return '';
+    const [year, month, day] = isoDate.split('-');
+    return `${year}-재판-${month}${day}`;
+}
+
+/**
+ * `2026-08-05T22:00:00` → `오늘 22:00` · `내일 02:00` · `8월 6일 02:00`.
+ *
+ * 변론 마감은 기소 시각 + 6시간이라 대개 오늘 안이지만 자정을 넘길 수 있다.
+ * 「오늘」로 고정해 두면 밤에 기소된 사람에게 지난 시각을 마감으로 보여준다.
+ */
+function formatDeadlineLabel(isoDateTime) {
+    if (!isoDateTime) return '';
+    const at = new Date(isoDateTime);
+    if (Number.isNaN(at.getTime())) return '';
+
+    const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const days = Math.round((midnight(at) - midnight(new Date())) / 86400000);
+
+    if (days === 0) return `오늘 ${time}`;
+    if (days === 1) return `내일 ${time}`;
+    return `${at.getMonth() + 1}월 ${at.getDate()}일 ${time}`;
+}
+
+/**
+ * 결산 구간의 거래 목록. **피고 본인만** 받는다(상세와 엔드포인트를 나눈 이유).
+ *
+ * 기소를 발화시킨 거래 1건이 아니라 **구간 전체**다. 한도 초과는 누적으로 판정되므로
+ * 발화 거래가 문제의 거래라는 보장이 없다 — 친구들 몫까지 대납한 큰 거래는 그 시점에
+ * 한도 미달이라 기소를 만들지 않고, 뒤따르는 평범한 소비가 기소를 만든다.
+ * 발화 거래만 보이면 정작 대납한 금액을 신고할 방법이 없다.
+ *
+ * `days[].transactions[].amount` 의 합이 `currentAmount` 와 맞는다(무죄 감액이 생기기 전까지).
+ * 화면이 「실제 부담금 합계 vs 한도」를 계산하는 기준이라 어긋나면 판정이 무너진다.
+ */
+export async function fetchTrialTransactions(indictmentId) {
+    if (isMockMode.value) {
+        return toTrialTransactionsViewModel(clone(MOCK_TRIAL_TRANSACTIONS));
+    }
+    return toTrialTransactionsViewModel(
+        await http.get(`/group-challenges/trials/${indictmentId}/transactions`),
+    );
+}
+
+function toTrialTransactionsViewModel(dto) {
+    return {
+        ...dto,
+        days: (dto.days ?? []).map((day) => ({
+            ...day,
+            dateLabel: formatMonthDay(day.date),
+            transactions: (day.transactions ?? []).map((tx) => ({
+                ...tx,
+                /* LocalTime 은 초가 0이면 `18:42`, 아니면 `18:42:30` 으로 온다. 표시는 분까지. */
+                timeLabel: tx.time ? tx.time.slice(0, 5) : '',
+            })),
+        })),
+    };
+}
+
+/**
+ * 변론 등록 (multipart). 피고 본인만, 변론 마감 전까지 한 번만.
+ *
+ * **건별 입력값은 올리지 않는다** — 서버는 합계(`actualBurdenAmount`)만 받는다.
+ * 거래-변론 연결 테이블을 만들지 않기로 했기 때문이다. 감액(`deductionAmount`)도
+ * 클라이언트를 믿지 않고 서버가 `소비액 - 부담금` 으로 직접 계산한다.
+ *
+ * ⚠ `headers: { 'Content-Type': undefined }` 는 **기본값을 지우는 것**이 핵심이다.
+ * `http.js` 인스턴스가 `application/json` 을 박아 두므로 그대로 두면 axios 가 FormData 를
+ * JSON.stringify 해버려 파일이 브라우저를 떠나지 못한다 (`api/user.js:49-72` 와 같은 함정).
+ *
+ * @param {number|string} indictmentId
+ * @param {{ content: string, actualBurdenAmount: number, images?: File[] }} payload
+ */
+export async function submitDefense(indictmentId, { content, actualBurdenAmount, images = [] }) {
+    if (isMockMode.value) {
+        mockStage = 'DEFENDED';
+        return { mocked: true };
+    }
+    const form = new FormData();
+    form.append('content', content);
+    form.append('actualBurdenAmount', String(actualBurdenAmount));
+    images.forEach((file) => form.append('images', file));
+
+    return http.post(`/group-challenges/trials/${indictmentId}/defense`, form, {
+        headers: { 'Content-Type': undefined },
+    });
+}
+
+/**
+ * 혐의 인정 — 투표 없이 즉시 유죄로 종결한다. **되돌릴 수 없다.**
+ *
+ * 보낼 값이 없어 본문이 비어 있다. 목숨 차감은 여기서 일어나지 않는다(이슈 #172).
+ */
+export async function confessIndictment(indictmentId) {
+    if (isMockMode.value) {
+        mockStage = 'CONFESSED';
+        return { mocked: true };
+    }
+    return http.post(`/group-challenges/trials/${indictmentId}/confession`);
 }
 
 /**
