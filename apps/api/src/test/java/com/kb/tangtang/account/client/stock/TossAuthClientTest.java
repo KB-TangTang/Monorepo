@@ -9,6 +9,7 @@ import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -51,19 +52,27 @@ class TossAuthClientTest {
     }
 
     @Test
-    @DisplayName("토스 서버가 401을 주면 BusinessException으로 바뀐다")
+    @DisplayName("토스 서버가 401을 주면 BusinessException으로 바뀌고, 메시지에 상태 코드가 남는다")
     void wrapsUnauthorizedAsBusinessException() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
-        server.expect(requestTo(TOKEN_URL)).andRespond(withUnauthorizedRequest());
+        server.expect(requestTo(TOKEN_URL)).andRespond(withUnauthorizedRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"error\":{\"code\":\"INVALID_CLIENT\",\"message\":\"잘못된 client_id/client_secret\"}}"));
 
         TossAuthClient client = new TossAuthClient(restTemplate, "id-1", "wrong-secret");
 
-        assertThrows(BusinessException.class, client::fetchToken);
+        /*
+         * 이 테스트가 QA 디버깅에서 확인한 진짜 버그를 잠근다 — 예전엔 401(인증 실패)과 진짜
+         * 네트워크 연결 실패가 똑같은 "연결하지 못했어요" 메시지로 뭉뚱그려져서 원인을 못 가렸다.
+         * 이제는 상태 코드가 메시지에 남아 401 인 걸 로그만 보고도 알 수 있어야 한다.
+         */
+        BusinessException e = assertThrows(BusinessException.class, client::fetchToken);
+        assertTrue(e.getMessage().contains("401"), "401 상태 코드가 메시지에 남아야 진짜 원인(인증 실패)을 알 수 있다");
     }
 
     @Test
-    @DisplayName("토스 서버가 500을 주면 BusinessException으로 바뀐다")
+    @DisplayName("토스 서버가 500을 주면 BusinessException으로 바뀌고, 메시지에 상태 코드가 남는다")
     void wrapsServerErrorAsBusinessException() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
@@ -71,6 +80,7 @@ class TossAuthClientTest {
 
         TossAuthClient client = new TossAuthClient(restTemplate, "id-1", "secret-1");
 
-        assertThrows(BusinessException.class, client::fetchToken);
+        BusinessException e = assertThrows(BusinessException.class, client::fetchToken);
+        assertTrue(e.getMessage().contains("500"), "500 상태 코드가 메시지에 남아야 인증 실패와 구분된다");
     }
 }

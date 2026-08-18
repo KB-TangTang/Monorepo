@@ -21,10 +21,10 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class TossStockClientConfig {
 
-    @Value("${toss.client-id:}")
+    @Value("${toss.client-id}")
     private String clientId;
 
-    @Value("${toss.client-secret:}")
+    @Value("${toss.client-secret}")
     private String clientSecret;
 
     @Value("${toss.connect-timeout-ms}")

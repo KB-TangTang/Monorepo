@@ -1,12 +1,15 @@
 package com.kb.tangtang.account.client.stock;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
@@ -25,6 +28,7 @@ import java.util.Map;
  */
 public class TossAuthClient {
 
+    private static final Logger log = LoggerFactory.getLogger(TossAuthClient.class);
     private static final String TOKEN_URL = "https://openapi.tossinvest.com/oauth2/token";
 
     private final RestTemplate restTemplate;
@@ -55,7 +59,20 @@ public class TossAuthClient {
         Map<?, ?> response;
         try {
             response = restTemplate.postForObject(TOKEN_URL, new HttpEntity<>(body, headers), Map.class);
+        } catch (RestClientResponseException e) {
+            /*
+             * 서버가 실제로 응답은 줬지만 에러였을 때(401/403/429/5xx 등) — RestClientException
+             * 하나로 뭉뚱그리면 "서버에 연결 자체가 안 됐다"는 것과 구분이 안 된다(QA 디버깅 중 발견).
+             * status·본문을 로그로 남겨야 client-id/secret 오류인지, IP 미허용(403)인지,
+             * 레이트리밋(429)인지 바로 알 수 있다 — 원인 예외를 삼키지 않고 로그에 남긴다.
+             */
+            log.error("토스 토큰 발급 실패 status={} body={}",
+                    e.getRawStatusCode(), e.getResponseBodyAsString(), e);
+            throw new BusinessException("EXTERNAL_API_UNAVAILABLE",
+                    "토스 인증에 실패했어요 (status=" + e.getRawStatusCode() + ").");
         } catch (RestClientException e) {
+            /* 여기까지 오면 상태 코드조차 못 받은, 진짜 연결 실패(DNS·타임아웃·TLS 등)다. */
+            log.error("토스 인증 서버에 연결하지 못했다", e);
             throw new BusinessException("EXTERNAL_API_UNAVAILABLE", "토스 인증 서버에 연결하지 못했어요.");
         }
 
