@@ -8,6 +8,7 @@ import {
     getDaysUntilNextMonth,
     getHomeAssetChange,
     getHomeGroupStatus,
+    getHomeReportEmptyCopy,
     toHomeMission,
     toHomeReportSummary,
 } from '../src/utils/home.js';
@@ -113,4 +114,11 @@ test('가장 절감액이 큰 카테고리로 홈 리포트 요약을 만든다'
         savedAmount: 128000,
         topCategoryName: '카페·간식',
     });
+});
+
+test('확정 리포트가 없어도 홈 리포트 카드의 상태 안내를 제공한다', () => {
+    assert.match(getHomeReportEmptyCopy('preparing').title, /준비 중/);
+    assert.match(getHomeReportEmptyCopy('not-agreed').title, /시작/);
+    assert.match(getHomeReportEmptyCopy('error').title, /불러오지 못했어요/);
+    assert.match(getHomeReportEmptyCopy('empty').title, /확정된 절감 결과가 없어요/);
 });
