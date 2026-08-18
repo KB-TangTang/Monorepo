@@ -38,10 +38,9 @@ public interface IndictmentMapper {
     /**
      * 내가 피고이고 아직 변론을 내지 않은 기소 (이슈 #169). 홈 「오늘의 할 일」의 {@code accuse} 줄.
      *
-     * <p><b>마감이 지났는지는 여기서 거르지 않는다.</b> 마감은 {@code created_at} 에서 계산하는
-     * 값이라 SQL 로 거를 수는 있지만, 그러면 상태를 넘기는 배치(#170)와 <b>판단 주체가 둘</b>이 된다.
-     * 배치가 5분 늦게 돌면 할 일이 사라졌다가 투표 줄로 다시 나타난다. 진실은 {@code status} 하나다.
-     * 마감 시각은 화면에 표시만 한다.
+     * <p><b>마감이 지났는지는 SQL 이 거르지 않는다.</b> 마감 시간은 {@code challenge.trial.*}
+     * 프로퍼티라 SQL 에 넣으려면 {@code ${}} 가 필요하다 — 팀 규칙상 금지다.
+     * 거르는 일은 {@link com.kb.tangtang.challenge.service.GroupTrialService#findMyTrials} 가 한다.
      *
      * <p>{@code idx_ind_user_status (user_id, status)} 를 그대로 탄다.
      */

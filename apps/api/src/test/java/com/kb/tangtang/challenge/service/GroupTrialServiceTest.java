@@ -16,8 +16,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,6 +40,16 @@ class GroupTrialServiceTest {
     private static final int VOTE_HOURS = 24;
     private static final long USER_ID = 7L;
 
+    /**
+     * 테스트가 보는 「지금」. 아래 픽스처의 기소 시각과 같은 값이라 마감은 전부 미래다.
+     *
+     * <p>고정하지 않으면 마감이 지난 건을 거르는 규칙 때문에 <b>픽스처가 하루 만에 썩는다</b>.
+     */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 16, 9, 0);
+
+    private static final Clock CLOCK = Clock.fixed(
+            NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     @Mock private IndictmentMapper indictmentMapper;
     @Mock private DefenseMapper defenseMapper;
     @Mock private VoteMapper voteMapper;
@@ -46,7 +58,7 @@ class GroupTrialServiceTest {
 
     private GroupTrialService service() {
         return new GroupTrialService(indictmentMapper, defenseMapper, voteMapper, resultMapper,
-                imageStorage, DEFENSE_HOURS, VOTE_HOURS);
+                imageStorage, DEFENSE_HOURS, VOTE_HOURS, CLOCK);
     }
 
     private TrialTodoRow row(long indictmentId, LocalDateTime createdAt) {
@@ -102,6 +114,38 @@ class GroupTrialServiceTest {
         assertEquals("지판", trial.getDefendantNickname());
         assertEquals(3, trial.getVoteCount());
         assertEquals(5, trial.getTotalVoters());
+    }
+
+    /**
+     * 마감을 넘긴 재판은 TO-DO 에서 뺀다.
+     *
+     * <p>남겨 두면 카운트다운이 {@code 00:00:00} 인 줄을 눌러 화면까지 들어간 뒤 제출에서야 튕긴다.
+     * 특히 투표는 {@code VOTING} 을 풀어 줄 개표 배치가 없어(#172) 영원히 남는다.
+     */
+    @Test
+    @DisplayName("마감이 지난 변론·투표는 할 일 목록에서 빠진다")
+    void dropsExpiredTodos() {
+        /* 변론 마감 = -1h, 투표 마감 = -1h. 둘 다 이미 지났다 */
+        when(indictmentMapper.findDefenseTodos(USER_ID))
+                .thenReturn(List.of(row(11L, NOW.minusHours(DEFENSE_HOURS + 1))));
+        when(indictmentMapper.findVoteTodos(USER_ID))
+                .thenReturn(List.of(row(21L, NOW.minusHours(DEFENSE_HOURS + VOTE_HOURS + 1))));
+
+        assertEquals(List.of(), service().findMyTrials(USER_ID));
+    }
+
+    /**
+     * 경계는 「지났다」가 아니다. 마감 시각 정각에 낸 표를 {@code VoteService} 는 받는다 —
+     * 목록에서 먼저 지우면 화면은 막는데 서버는 받는 구간이 생긴다.
+     */
+    @Test
+    @DisplayName("마감 시각 정각은 아직 남아 있는 것으로 본다")
+    void keepsTodoExactlyAtDeadline() {
+        when(indictmentMapper.findDefenseTodos(USER_ID))
+                .thenReturn(List.of(row(11L, NOW.minusHours(DEFENSE_HOURS))));
+        when(indictmentMapper.findVoteTodos(USER_ID)).thenReturn(List.of());
+
+        assertEquals(1, service().findMyTrials(USER_ID).size());
     }
 
     /**

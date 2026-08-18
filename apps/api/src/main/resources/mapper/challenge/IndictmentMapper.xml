@@ -86,7 +86,8 @@
     <!--
       내가 변론해야 하는 기소.
 
-      마감이 지났는지는 거르지 않는다 — 이유는 IndictmentMapper#findDefenseTodos 주석 참고.
+      마감이 지났는지는 SQL 이 거르지 않는다 — 거르는 쪽은 GroupTrialService#findMyTrials 다.
+      이유는 IndictmentMapper#findDefenseTodos 주석 참고.
       idx_ind_user_status (user_id, status) 를 탄다.
     -->
     <select id="findDefenseTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">

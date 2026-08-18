@@ -30,7 +30,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -66,6 +68,9 @@ public class GroupTrialService {
     /** 변론 마감 후 투표를 받는 시간. */
     private final int voteHours;
 
+    /** 마감이 지났는지 판단하는 기준. 테스트가 고정 시각을 끼운다. */
+    private final Clock clock;
+
     @Autowired
     public GroupTrialService(IndictmentMapper indictmentMapper,
                              DefenseMapper defenseMapper,
@@ -74,6 +79,19 @@ public class GroupTrialService {
                              ImageStorage imageStorage,
                              @Value("${challenge.trial.defense-hours}") int defenseHours,
                              @Value("${challenge.trial.vote-hours}") int voteHours) {
+        this(indictmentMapper, defenseMapper, voteMapper, resultMapper, imageStorage,
+                defenseHours, voteHours, Clock.systemDefaultZone());
+    }
+
+    /** 테스트용. {@code DefenseService} · {@code VoteService} 와 같은 방식이다. */
+    GroupTrialService(IndictmentMapper indictmentMapper,
+                      DefenseMapper defenseMapper,
+                      VoteMapper voteMapper,
+                      GroupChallengeResultMapper resultMapper,
+                      ImageStorage imageStorage,
+                      int defenseHours,
+                      int voteHours,
+                      Clock clock) {
         this.indictmentMapper = indictmentMapper;
         this.defenseMapper = defenseMapper;
         this.voteMapper = voteMapper;
@@ -81,6 +99,7 @@ public class GroupTrialService {
         this.imageStorage = imageStorage;
         this.defenseHours = defenseHours;
         this.voteHours = voteHours;
+        this.clock = clock;
     }
 
     /**
@@ -90,25 +109,40 @@ public class GroupTrialService {
      * 서로 다른데도 컬럼 수를 억지로 맞춰야 해서, 한쪽만 고칠 때 다른 쪽이 조용히 깨진다.
      * 한 사람이 동시에 지고 있는 재판은 많아야 수십 건이라 쿼리 두 번이 부담되지 않는다.
      *
-     * <p><b>마감이 지난 건도 그대로 내려간다.</b> 걸러내는 주체는 상태 전이 배치(#170) 하나여야 한다 —
-     * 근거는 {@link IndictmentMapper#findDefenseTodos} 주석에 있다.
+     * <p><b>마감이 지난 건은 내리지 않는다.</b> TO-DO 는 「지금 처리할 수 있는 일」이고, 마감을 넘긴
+     * 재판에 변론·투표를 넣으면 {@code DefenseService} · {@code VoteService} 가 그 자리에서 거절한다.
+     * 목록에 남겨 두면 카운트다운이 {@code 00:00:00} 인 줄을 눌러 화면까지 들어간 뒤 제출에서야
+     * 튕긴다. 특히 투표는 {@code VOTING} 을 풀어 줄 개표 배치가 아직 없어(#172) <b>영원히</b> 남는다.
+     *
+     * <p>상태 전이 배치와 판단 주체가 둘이 되는 것은 맞다. 다만 배치는 {@code status} 를 옮기는
+     * 일을 하고 여기는 <b>보여줄지</b>를 정한다 — 마감을 넘긴 순간부터 배치가 돌기 전까지의 구간에서
+     * 둘의 답이 갈릴 뿐이고, 그 구간에서 옳은 답은 「보여주지 않는다」다.
      */
     @Transactional(readOnly = true)
     public List<MyTrialDto> findMyTrials(long userId) {
         List<MyTrialDto> trials = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         for (TrialTodoRow row : indictmentMapper.findDefenseTodos(userId)) {
+            LocalDateTime deadline = row.getCreatedAt().plusHours(defenseHours);
+            if (deadline.isBefore(now)) {
+                continue;
+            }
             trials.add(MyTrialDto.builder()
                     .indictmentId(row.getIndictmentId())
                     .type("accuse")
                     .challengeId(row.getChallengeId())
                     .challengeName(row.getChallengeName())
                     .amount(row.getAmount())
-                    .deadline(row.getCreatedAt().plusHours(defenseHours))
+                    .deadline(deadline)
                     .build());
         }
 
         for (TrialTodoRow row : indictmentMapper.findVoteTodos(userId)) {
+            LocalDateTime deadline = row.getCreatedAt().plusHours(defenseHours + voteHours);
+            if (deadline.isBefore(now)) {
+                continue;
+            }
             trials.add(MyTrialDto.builder()
                     .indictmentId(row.getIndictmentId())
                     .type("vote")
@@ -117,7 +151,7 @@ public class GroupTrialService {
                     .defendantNickname(row.getDefendantNickname())
                     .voteCount(row.getVoteCount())
                     .totalVoters(row.getTotalVoters())
-                    .deadline(row.getCreatedAt().plusHours(defenseHours + voteHours))
+                    .deadline(deadline)
                     .build());
         }
 

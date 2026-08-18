@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canVote, toVoteScreen } from '../src/utils/groupTrial.js';
 
+/**
+ * 지금부터 `hours` 시간 뒤의 현지 시각 문자열.
+ *
+ * 절대시각을 박으면 그날이 지나는 순간 「마감 지남」이 되어 테스트가 하루 만에 깨진다.
+ * `toISOString()` 을 쓰지 않는 이유는 `groupTrialProgress.test.js` 머리말과 같다 —
+ * 서버가 주는 `LocalDateTime` 은 오프셋 없는 현지 시각이다.
+ */
+function hoursFromNow(hours) {
+    const at = new Date(Date.now() + hours * 3600000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`
+        + `T${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
+}
+
 /*
  * `toTrialDetailViewModel` 을 이미 지난 모양이다. `accused.isMine` · `defense.images` 처럼
  * 그 함수가 붙여 주는 이름을 쓴다 — 서버 원본 이름(`mine` · `imageUrls`)으로 적으면
@@ -16,7 +30,7 @@ function detail(overrides = {}) {
         limitAmount: 25000,
         currentAmount: 37400,
         exceededAmount: 12400,
-        voteDeadline: '2026-08-19T02:00:00',
+        voteDeadline: hoursFromNow(12),
         defense: null,
         myVerdict: null,
         voteCount: 2,
@@ -66,11 +80,16 @@ test('변론 대기·판결 확정 상태는 투표 대상이 아니다', () => 
 });
 
 /*
- * 개표 배치(#172)가 없어 마감이 지나도 상태는 `VOTING` 그대로다. 여기서 마감 시각까지 보면
- * 화면은 막는데 서버는 받는 구간이 생긴다 — 마감 판단은 서버 한 곳(`VoteService`)에만 둔다.
+ * 개표 배치(#172)가 없어 마감이 지나도 상태는 `VOTING` 그대로다. 상태만 보면 봉투를 열고
+ * 변론서까지 읽은 뒤 제출에서야 `VOTE_NOT_ALLOWED` 로 튕긴다 — 마감 시각을 같이 본다.
  */
-test('마감 시각이 지나도 화면에서 미리 막지 않는다', () => {
-    assert.equal(canVote(detail({ voteDeadline: '2020-01-01T00:00:00' })), true);
+test('마감 시각이 지난 재판은 투표 화면을 열지 않는다', () => {
+    assert.equal(canVote(detail({ voteDeadline: hoursFromNow(-1) })), false);
+});
+
+/* 마감 시각을 모르는 것과 마감이 지난 것은 다르다. 모르면 서버에 물어보게 둔다. */
+test('마감 시각이 없으면 화면에서 막지 않는다', () => {
+    assert.equal(canVote(detail({ voteDeadline: null })), true);
 });
 
 /* ══ 뷰모델 매핑 ════════════════════════════════════════════ */

@@ -96,9 +96,9 @@ export function toTrialProgress(detail) {
  * 서버가 같은 조건을 `VoteService` 에서 다시 본다 — 여기는 **화면을 헛되이 열지 않기 위한** 것이지
  * 검증이 아니다. 이 판단을 화면 안에 흩뿌리면 조건이 하나 빠진 화면이 생긴다.
  *
- * 투표 마감 시각은 보지 않는다. 마감이 지나도 개표 배치(#172)가 돌기 전까지 상태는 `VOTING`
- * 그대로라, 여기서 시각까지 따지면 화면은 막는데 서버는 받는 구간이 생긴다. 마감 후 제출은
- * 서버가 `VOTE_NOT_ALLOWED` 로 거절하고 화면은 그 코드로 진행 현황으로 보낸다.
+ * **마감 시각도 본다.** 개표 배치(#172)가 없어 마감이 지나도 상태는 `VOTING` 그대로다.
+ * 상태만 보면 봉투를 열고 변론서까지 읽은 뒤 제출에서야 `VOTE_NOT_ALLOWED` 로 튕긴다.
+ * 서버도 같은 식(`created_at + defense-hours + vote-hours`)으로 계산하므로 판단이 갈리지 않는다.
  */
 export function canVote(detail) {
     if (!detail) return false;
@@ -106,7 +106,15 @@ export function canVote(detail) {
     /* 피고는 자기 재판의 배심원이 아니다. */
     if (detail.accused?.isMine) return false;
     /* 이미 던졌다. 투표 수정은 지원하지 않는다 — 개표 직전 눈치싸움을 만들지 않기 위함이다. */
-    return !detail.myVerdict;
+    if (detail.myVerdict) return false;
+    return !isPast(detail.voteDeadline);
+}
+
+/** 마감 시각이 지났는가. 값이 없으면 「모른다」이므로 막지 않는다 — 막는 판단은 서버가 한다. */
+function isPast(isoDateTime) {
+    if (!isoDateTime) return false;
+    const at = new Date(isoDateTime).getTime();
+    return !Number.isNaN(at) && at < Date.now();
 }
 
 /**
