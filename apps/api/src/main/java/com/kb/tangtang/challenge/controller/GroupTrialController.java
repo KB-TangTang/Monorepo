@@ -3,14 +3,17 @@ package com.kb.tangtang.challenge.controller;
 import com.kb.tangtang.challenge.docs.GroupTrialControllerDocs;
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionsDto;
+import com.kb.tangtang.challenge.dto.VoteRequestDto;
 import com.kb.tangtang.challenge.service.DefenseService;
 import com.kb.tangtang.challenge.service.GroupTrialService;
+import com.kb.tangtang.challenge.service.VoteService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.storage.ImageProcessor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,7 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 소비 재판 — 상세 · 결산 구간 거래 목록 · 변론 · 혐의 인정 (이슈 #170).
+ * 소비 재판 — 상세 · 결산 구간 거래 목록 · 변론 · 혐의 인정 (이슈 #170) · 투표 (이슈 #171).
  *
  * <p>{@link ChallengeGroupController} 에 넣지 않았다. 그쪽은 그룹 자체(생성·초대·참여)를 다루고
  * 6명이 병렬로 작업하는 중이라 같은 파일에서 충돌한다. 경로 접두({@code /trials})가 달라
@@ -37,13 +40,16 @@ public class GroupTrialController implements GroupTrialControllerDocs {
 
     private final GroupTrialService groupTrialService;
     private final DefenseService defenseService;
+    private final VoteService voteService;
     private final ImageProcessor imageProcessor;
 
     public GroupTrialController(GroupTrialService groupTrialService,
                                 DefenseService defenseService,
+                                VoteService voteService,
                                 ImageProcessor imageProcessor) {
         this.groupTrialService = groupTrialService;
         this.defenseService = defenseService;
+        this.voteService = voteService;
         this.imageProcessor = imageProcessor;
     }
 
@@ -115,6 +121,22 @@ public class GroupTrialController implements GroupTrialControllerDocs {
     public ApiResponse<Void> confess(@LoginUser Long userId,
                                      @PathVariable Long indictmentId) {
         defenseService.confess(userId, indictmentId);
+        return ApiResponse.ok();
+    }
+
+    /**
+     * 투표 (이슈 #171). 같은 그룹의 배심원만, 피고 본인은 제외.
+     *
+     * <p>응답 본문이 없다. 던진 뒤의 화면은 재판 상세를 다시 읽어 그린다 — 여기서 표수를
+     * 돌려주면 <b>개표 전 비율 비공개</b> 정책을 이 한 곳에서 뚫게 된다.
+     *
+     * <p>수정 경로(PUT·PATCH)를 두지 않는다. 표를 바꿀 수 있으면 마감 직전 눈치싸움이 생긴다.
+     */
+    @PostMapping("/{indictmentId}/votes")
+    public ApiResponse<Void> vote(@LoginUser Long userId,
+                                  @PathVariable Long indictmentId,
+                                  @RequestBody VoteRequestDto request) {
+        voteService.vote(userId, indictmentId, request.getVerdict(), request.getComment());
         return ApiResponse.ok();
     }
 }
