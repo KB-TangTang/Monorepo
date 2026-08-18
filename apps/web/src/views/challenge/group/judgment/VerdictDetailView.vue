@@ -7,6 +7,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
+import TrialCommentList from '@/components/challenge/group/TrialCommentList.vue';
 import { fetchTrialDetail } from '@/api/groupChallenge';
 import { toVerdictScreen } from '@/utils/groupTrial';
 
@@ -64,8 +65,9 @@ function goBack() {
     router.back();
 }
 
+/* 판결 플로우 위에 상세가 다시 쌓이지 않도록 `replace` 로 돌아간다(이슈 #172). */
 function goGroupHome() {
-    router.push({
+    router.replace({
         name: 'groupChallengeDetail',
         params: { id: route.params.id },
     });
@@ -137,6 +139,9 @@ function goGroupHome() {
                 <div class="verdict-detail__reason-label">판결 사유</div>
                 <div class="verdict-detail__reason-text">{{ verdict.detail.reason }}</div>
             </div>
+
+            <!-- 배심원 한줄 코멘트 (익명) -->
+            <TrialCommentList :comments="verdict.comments" />
         </div>
 
         <!-- 하단 버튼 -->

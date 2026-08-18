@@ -113,6 +113,21 @@ test('AI 가 아닌 판결은 방식이 곧 사유다 — 서버에 문장이 �
     assert.equal(noVote.innocentVotes, 0);
 });
 
+test('확정 재판의 배심원 코멘트는 항상 배열이다 — 없으면 빈 배열', () => {
+    const withComments = toVerdictScreen(
+        confirmedDetail({
+            comments: [{ comment: '이건 좀 심했다', createdAt: '2026-08-05T21:00:00' }],
+        }),
+    );
+    assert.equal(withComments.comments.length, 1);
+    assert.equal(withComments.comments[0].comment, '이건 좀 심했다');
+    /* 서버가 익명으로 내려준다 — 작성자 필드가 붙으면 안 된다(이슈 #171 결정). */
+    assert.equal(withComments.comments[0].userId, undefined);
+
+    /* 아무도 코멘트를 안 남긴 재판. `null` 이 그대로 화면까지 가면 v-for 가 터진다. */
+    assert.deepEqual(toVerdictScreen(confirmedDetail({ comments: null })).comments, []);
+});
+
 test('변론이 없는 재판의 실제 부담금은 0원이 아니라 「없음」이다', () => {
     const screen = toVerdictScreen(confirmedDetail({ defense: null }));
 

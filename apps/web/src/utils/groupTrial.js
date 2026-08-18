@@ -245,6 +245,11 @@ export function toVerdictScreen(trial) {
         /* 개표가 끝났으므로 숫자가 온다. `?? 0` 은 판결 방식이 CONFESSION 인 옛 데이터 대비다. */
         guiltyVotes: trial.guiltyCount ?? 0,
         innocentVotes: trial.innocentCount ?? 0,
+        /*
+         * 확정된 재판만 여기까지 오므로 코멘트는 배열로 확정한다(이슈 #172).
+         * 코멘트를 남기지 않은 표는 서버가 이미 걸러 내려주므로 표 수와 개수가 다를 수 있다.
+         */
+        comments: trial.comments ?? [],
         isAiVerdict: trial.verdictMethod === 'AI_JUDGMENT',
         /*
          * 타이핑 애니메이션이 한 글자씩 읽는 문장이다. 판사 탕이의 사유 원문을 그대로 쓴다 —

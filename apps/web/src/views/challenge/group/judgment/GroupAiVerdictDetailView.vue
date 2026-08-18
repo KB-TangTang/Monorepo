@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
+import TrialCommentList from '@/components/challenge/group/TrialCommentList.vue';
 import { fetchTrialDetail } from '@/api/groupChallenge';
 import { isAiVerdict, toVerdictScreen, verdictRouteName } from '@/utils/groupTrial';
 
@@ -63,6 +64,12 @@ function formatWon(amount) {
                 <span class="ai-detail__reason-label">판결 사유</span>
                 <p class="ai-detail__reason-text">{{ verdict.detail.reason }}</p>
             </BaseCard>
+
+            <!--
+              배심원 한줄 코멘트 (익명). 동률이라 탕이가 판결한 재판이므로
+              양쪽 주장이 어떻게 갈렸는지가 사유 다음으로 궁금한 정보다.
+            -->
+            <TrialCommentList :comments="verdict.comments" />
 
             <BaseCard padding="lg" class="ai-detail__facts">
                 <div class="ai-detail__row">
