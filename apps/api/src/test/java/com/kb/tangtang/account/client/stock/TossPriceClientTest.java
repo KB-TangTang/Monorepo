@@ -125,4 +125,26 @@ class TossPriceClientTest {
 
         assertThrows(BusinessException.class, () -> client.fetchPrices(Set.of("005930")));
     }
+
+    @Test
+    @DisplayName("result 배열에 문서에 없는 항목(null 등)이 섞여도 예외 없이 그 항목만 건너뛴다")
+    void skipsMalformedResultEntriesInsteadOfThrowing() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        Set<String> symbols = new LinkedHashSet<>();
+        symbols.add("005930");
+        symbols.add("999999");
+        server.expect(requestTo(PRICE_URL + "?symbols=005930,999999"))
+                .andRespond(withSuccess(
+                        "{\"result\":[" +
+                                "{\"symbol\":\"005930\",\"lastPrice\":\"72000\",\"currency\":\"KRW\"}," +
+                                "null]}",
+                        MediaType.APPLICATION_JSON));
+
+        TossPriceClient client = new TossPriceClient(restTemplate, holderWithToken("tok-1"));
+        Map<String, TossPriceDto> prices = client.fetchPrices(symbols);
+
+        assertEquals(new BigDecimal("72000"), prices.get("005930").getLastPrice());
+        assertTrue(prices.get("999999") == null);
+    }
 }

@@ -25,6 +25,14 @@ const loading = ref(false);
 const errorMessage = ref('');
 let pollTimer = null;
 
+/*
+ * 요청 순번 가드(QA 지적사항). setInterval 은 이전 요청이 끝나길 기다리지 않으므로, 느린 요청과
+ * 빠른 요청이 겹치면 늦게 도착한(더 오래된) 응답이 이미 반영된 최신 데이터를 덮어쓸 수 있다.
+ * 요청을 보낼 때마다 순번을 올려 캡처해두고, 응답이 왔을 때 그 순번이 아직도 최신인지 확인한 뒤
+ * 최신일 때만 반영한다 — 더 최신 요청이 이미 나갔다면 이 응답은 버린다.
+ */
+let requestSeq = 0;
+
 const gainAmount = computed(() =>
     detail.value ? detail.value.totalValuation - detail.value.totalCost : 0,
 );
@@ -34,14 +42,18 @@ const gainRate = computed(() =>
 const gainVariant = computed(() => (gainAmount.value < 0 ? 'guilty' : 'innocent'));
 
 async function load() {
+    const seq = ++requestSeq;
     loading.value = true;
     errorMessage.value = '';
     try {
-        detail.value = await fetchInvestmentAccountDetail();
+        const next = await fetchInvestmentAccountDetail();
+        if (seq !== requestSeq) return; // 더 최신 요청이 이미 나갔다 — 이 응답은 버린다
+        detail.value = next;
     } catch (err) {
+        if (seq !== requestSeq) return;
         errorMessage.value = err.message ?? '투자증권 정보를 불러오지 못했습니다.';
     } finally {
-        loading.value = false;
+        if (seq === requestSeq) loading.value = false;
     }
 }
 
@@ -52,8 +64,11 @@ async function load() {
  * 다시 시도한다. 단, 이 폴링으로 회복되면(재연결 등) 남아있던 에러 배너는 지운다.
  */
 async function pollQuietly() {
+    const seq = ++requestSeq;
     try {
-        detail.value = await fetchInvestmentAccountDetail();
+        const next = await fetchInvestmentAccountDetail();
+        if (seq !== requestSeq) return; // 더 최신 요청이 이미 나갔다 — 이 응답은 버린다
+        detail.value = next;
         errorMessage.value = '';
     } catch {
         // 조용히 무시 — 다음 폴링에서 다시 시도한다.

@@ -23,8 +23,30 @@
         ORDER BY id
     </select>
 
-    <!-- 목서버 동기화 전용. 가격 4컬럼(last_price·market_value·profit_loss_amount·profit_loss_rate)은
-         건드리지 않는다 — 그건 updatePrice 가 토스 실시간 시세로만 갱신한다(InvestmentHoldingMapper.java 참고). -->
+    <!-- AssetSummaryMapper#findAssetGroupsByUser 와 같은 기준(is_active=1)으로 걸러 순자산
+         계산 전 시세 갱신에 쓴다(QA 지적사항) — 해제한 계좌 종목까지 토스를 부르지 않는다. -->
+    <select id="findActiveByUser" resultType="com.kb.tangtang.account.domain.InvestmentHolding">
+        SELECT ih.id, ih.user_id, ih.account_id, ih.symbol, ih.name, ih.market_country, ih.currency,
+               ih.quantity, ih.average_purchase_price, ih.last_price, ih.purchase_amount,
+               ih.market_value, ih.profit_loss_amount, ih.profit_loss_rate
+        FROM tbl_investment_holding ih
+        JOIN tbl_connected_account ca ON ca.id = ih.account_id
+        WHERE ih.user_id = #{userId}
+          AND ca.is_active = 1
+        ORDER BY ih.id
+    </select>
+
+    <!--
+        목서버 동기화 전용. last_price 는 절대 SET 하지 않는다 — 그건 updatePrice 가 토스 실시간
+        시세로만 쓴다(InvestmentHoldingMapper.java 참고).
+
+        market_value·profit_loss_amount·profit_loss_rate 는 **여기서도 재계산한다** — 수량이
+        바뀌었는데(매수·매도) 평가금액을 그대로 두면, 특히 전량매도(quantity=0) 시 이미 없는
+        포지션의 평가금액이 옛날 값으로 영영 남는다(QA 지적사항). 토스를 다시 부르지 않고
+        DB 에 이미 있는 last_price 를 그대로 곱해 재계산한다 — 방금 반영된 수량 기준으로
+        "마지막으로 안 가격" 은 즉시 맞아떨어지고, 그 가격 자체가 오래됐는지는
+        InvestmentPriceRefresher 가 조회 시점에 따로 갱신한다.
+    -->
     <update id="updatePosition" parameterType="com.kb.tangtang.account.domain.InvestmentHolding">
         UPDATE tbl_investment_holding
         SET name                    = #{name},
@@ -32,7 +54,12 @@
             currency                = #{currency},
             quantity                = #{quantity},
             average_purchase_price  = #{averagePurchasePrice},
-            purchase_amount         = #{purchaseAmount}
+            purchase_amount         = #{purchaseAmount},
+            market_value            = ROUND(last_price * #{quantity}, 4),
+            profit_loss_amount      = ROUND(last_price * #{quantity} - #{purchaseAmount}, 4),
+            profit_loss_rate        = CASE WHEN #{purchaseAmount} = 0 THEN 0
+                                            ELSE ROUND((last_price * #{quantity} - #{purchaseAmount}) / #{purchaseAmount}, 4)
+                                       END
         WHERE account_id = #{accountId}
           AND symbol = #{symbol}
     </update>

@@ -59,7 +59,7 @@ public class TossAuthClient {
             throw new BusinessException("EXTERNAL_API_UNAVAILABLE", "토스 인증 서버에 연결하지 못했어요.");
         }
 
-        String accessToken = response == null ? null : string(response.get("access_token"));
+        String accessToken = response == null ? null : TossJsonSupport.string(response.get("access_token"));
         Long expiresIn = response == null ? null : number(response.get("expires_in"));
         if (accessToken == null || expiresIn == null) {
             throw new BusinessException("EXTERNAL_API_ERROR", "토스 토큰 응답을 읽지 못했어요.");
@@ -68,10 +68,6 @@ public class TossAuthClient {
                 .accessToken(accessToken)
                 .expiresInSeconds(expiresIn)
                 .build();
-    }
-
-    private static String string(Object value) {
-        return value == null ? null : String.valueOf(value);
     }
 
     private static Long number(Object value) {

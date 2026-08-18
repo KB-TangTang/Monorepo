@@ -17,6 +17,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,7 +62,7 @@ class AssetInvestmentDetailServiceTest {
     @Test
     @DisplayName("보유 종목의 평가금액·원금을 합산하고 asOf 는 조회 시각을 그대로 쓴다")
     void aggregatesHoldings() {
-        when(investmentHoldingMapper.findByUser(USER_ID)).thenReturn(List.of(
+        when(investmentHoldingMapper.findActiveByUser(USER_ID)).thenReturn(List.of(
                 holding("005930", "삼성전자", 1_600_000, 1_500_000, 100_000, "0.0667"),
                 holding("035720", "카카오", 500_000, 480_000, 20_000, "0.0417")
         ));
@@ -81,7 +82,7 @@ class AssetInvestmentDetailServiceTest {
     void refreshesLivePriceOnRead() {
         List<InvestmentHolding> holdings = List.of(
                 holding("005930", "삼성전자", 1_600_000, 1_500_000, 100_000, "0.0667"));
-        when(investmentHoldingMapper.findByUser(USER_ID)).thenReturn(holdings);
+        when(investmentHoldingMapper.findActiveByUser(USER_ID)).thenReturn(holdings);
 
         service().getInvestments(USER_ID);
 
@@ -91,12 +92,28 @@ class AssetInvestmentDetailServiceTest {
     @Test
     @DisplayName("보유 종목이 없으면 0 원과 빈 목록을 돌려준다")
     void returnsZeroWhenNoHoldings() {
-        when(investmentHoldingMapper.findByUser(USER_ID)).thenReturn(List.of());
+        when(investmentHoldingMapper.findActiveByUser(USER_ID)).thenReturn(List.of());
 
         AssetInvestmentDetailDto result = service().getInvestments(USER_ID);
 
         assertEquals(BigDecimal.ZERO, result.getTotalValuation());
         assertEquals(BigDecimal.ZERO, result.getTotalCost());
         assertEquals(0, result.getHoldings().size());
+    }
+
+    /*
+     * 매퍼가 목이라 "실제로 is_active=0 계좌가 걸러지는지"는 여기서 증명할 수 없다 — 그건
+     * InvestmentHoldingMapperTest(실DB, @Disabled)의 몫이다. 이 테스트는 그보다 좁게,
+     * "findByUser가 아니라 findActiveByUser를 쓴다"는 배선(wiring)만 고정한다.
+     */
+    @Test
+    @DisplayName("연결 해제한 계좌의 보유종목은 조회 대상에서 뺀다(QA 지적사항) — findByUser가 아니라 findActiveByUser를 쓴다")
+    void excludesHoldingsOfDisconnectedAccounts() {
+        when(investmentHoldingMapper.findActiveByUser(USER_ID)).thenReturn(List.of());
+
+        service().getInvestments(USER_ID);
+
+        verify(investmentHoldingMapper).findActiveByUser(USER_ID);
+        verify(investmentHoldingMapper, never()).findByUser(USER_ID);
     }
 }

@@ -4,11 +4,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TossTokenHolderTest {
 
@@ -58,5 +61,36 @@ class TossTokenHolderTest {
         holder.update("tok-2", 86_400);
 
         assertEquals("tok-2", holder.currentToken());
+    }
+
+    @Test
+    @DisplayName("갱신 전에는 needsRefresh가 true다")
+    void needsRefreshBeforeFirstUpdate() {
+        TossTokenHolder holder = new TossTokenHolder();
+        holder.setClockForTest(fixed(0));
+
+        assertTrue(holder.needsRefresh(Duration.ofHours(1)));
+    }
+
+    @Test
+    @DisplayName("만료까지 여유가 buffer보다 많이 남으면 needsRefresh는 false다")
+    void needsRefreshFalseWhenFarFromExpiry() {
+        TossTokenHolder holder = new TossTokenHolder();
+        holder.setClockForTest(fixed(0));
+        holder.update("tok-1", 86_400);   // 만료: NOW + 86400초
+
+        holder.setClockForTest(fixed(80_000));   // 만료까지 6,400초(1시간=3,600초보다 많이 남음)
+        assertFalse(holder.needsRefresh(Duration.ofHours(1)));
+    }
+
+    @Test
+    @DisplayName("만료가 buffer 안으로 다가오면 needsRefresh는 true다")
+    void needsRefreshTrueWithinBuffer() {
+        TossTokenHolder holder = new TossTokenHolder();
+        holder.setClockForTest(fixed(0));
+        holder.update("tok-1", 86_400);   // 만료: NOW + 86400초
+
+        holder.setClockForTest(fixed(83_000));   // 만료까지 3,400초(1시간=3,600초보다 적게 남음)
+        assertTrue(holder.needsRefresh(Duration.ofHours(1)));
     }
 }

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -26,10 +27,25 @@ public class TossStockClientConfig {
     @Value("${toss.client-secret:}")
     private String clientSecret;
 
+    @Value("${toss.connect-timeout-ms}")
+    private int connectTimeoutMs;
+
+    @Value("${toss.read-timeout-ms}")
+    private int readTimeoutMs;
+
+    /**
+     * ⚠ 타임아웃 없이 new RestTemplate() 만 쓰면 안 된다(QA 지적사항) — 기본 SimpleClientHttpRequestFactory
+     *   는 커넥트·리드 타임아웃이 사실상 무한대라, 토스가 느려지거나 응답을 안 주면 이 호출을 문 스레드가
+     *   무한정 붙잡힌다. InvestmentPriceRefresher.refresh() 가 이 클라이언트를 부르는 동안은 다른 요청들이
+     *   같은 심볼의 갱신을 기다리므로(락 참고), 타임아웃이 없으면 그 대기도 무한정 늘어난다.
+     */
     @Bean
     @Qualifier("tossRestTemplate")
     public RestTemplate tossRestTemplate() {
-        return new RestTemplate();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
+        return new RestTemplate(factory);
     }
 
     @Bean

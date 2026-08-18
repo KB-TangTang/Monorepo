@@ -102,16 +102,25 @@ public class TossPriceClient {
 
         Map<String, TossPriceDto> result = new LinkedHashMap<>();
         for (Object item : asList(response == null ? null : response.get("result"))) {
+            /*
+             * item 이 Map 이 아닐 수 있다(문서에 없는 응답 모양·null 항목 등, QA 지적사항) — 캐스트를
+             * 그대로 하면 ClassCastException 이 호출부(InvestmentPriceRefresher)의 catch 를 뚫고
+             * 나가 요청 전체를 500 으로 만든다. 여기서 걸러 그 항목만 건너뛴다.
+             */
+            if (!(item instanceof Map)) {
+                log.warn("토스 시세 응답에 예상 밖 항목이 있어 건너뛴다: {}", item);
+                continue;
+            }
             Map<?, ?> row = (Map<?, ?>) item;
-            String symbol = string(row.get("symbol"));
+            String symbol = TossJsonSupport.string(row.get("symbol"));
             if (symbol == null) {
                 continue;
             }
             result.put(symbol, TossPriceDto.builder()
                     .symbol(symbol)
                     .lastPrice(decimal(row.get("lastPrice")))
-                    .currency(string(row.get("currency")))
-                    .timestamp(string(row.get("timestamp")))
+                    .currency(TossJsonSupport.string(row.get("currency")))
+                    .timestamp(TossJsonSupport.string(row.get("timestamp")))
                     .build());
         }
         return result;
@@ -134,13 +143,15 @@ public class TossPriceClient {
     }
 
     private static List<?> asList(Object value) {
-        return value instanceof List ? (List<?>) value : List.of();
+        return TossJsonSupport.asList(value);
     }
 
-    private static String string(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
+    /**
+     * ⚠ 파싱 실패·값 없음이면 {@code BigDecimal.ZERO} 가 아니라 **null** 을 돌려준다(QA 지적사항으로
+     *   명시). CodefFinancialDataClient·MockFinancialSyncClient 의 동명 헬퍼는 ZERO 를 돌려주지만,
+     *   여기서 그렇게 하면 "가격을 못 받았다"가 "가격이 0원이다"로 둔갑해 InvestmentPriceRefresher 가
+     *   진짜 0원인 것처럼 DB 에 그대로 써버린다 — 실패는 실패로 남겨야 호출부가 저장된 값을 지킨다.
+     */
     private static BigDecimal decimal(Object value) {
         if (value == null) {
             return null;

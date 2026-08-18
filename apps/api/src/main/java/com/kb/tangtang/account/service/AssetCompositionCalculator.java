@@ -2,9 +2,11 @@ package com.kb.tangtang.account.service;
 
 import com.kb.tangtang.account.domain.AssetGroupRow;
 import com.kb.tangtang.account.domain.AssetLiveComposition;
+import com.kb.tangtang.account.domain.InvestmentHolding;
 import com.kb.tangtang.account.dto.AssetCompositionItemDto;
 import com.kb.tangtang.account.dto.AssetGroupItemDto;
 import com.kb.tangtang.account.mapper.AssetSummaryMapper;
+import com.kb.tangtang.account.mapper.InvestmentHoldingMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,18 @@ import java.util.Map;
  *
  * 순자산 = 입출금 + 예적금 + 투자(SECURITIES 는 tbl_investment_holding.market_value 합계, report 모듈의
  * sumActiveTotalAssets 와 동일 규칙) + 페이머니 - 대출잔액. 연결 해제(is_active=0) 계좌는 제외한다.
+ *
+ * ⚠ SECURITIES 합계를 구하기 전에 {@link InvestmentPriceRefresher} 로 오래된 심볼만 먼저 갱신한다
+ *   (QA 지적사항) — 그러지 않으면 목서버 동기화가 더 이상 market_value 를 건드리지 않는 지금 구조에서,
+ *   투자 상세 화면(/asset/investment)을 한 번도 안 연 사용자는 총자산이 영원히 갱신되지 않는다.
+ *   자산 홈(이 클래스 호출부)이 투자 상세보다 훨씬 자주 열리는 화면이라 여기서도 갱신하면
+ *   실질적인 신선도가 크게 개선된다. 월간 리포트 배치(MonthlyReportBatchScheduler)에는 일부러
+ *   연결하지 않았다 — 그건 특정 사용자의 조회가 아니라 전체 사용자를 순회하는 배치라서, 여기에
+ *   연결하면 접속 안 하는 사용자 몫까지 토스를 부르게 되는, 애초에 피하려던 문제로 되돌아간다.
+ *
+ * ⚠ 갱신 대상은 {@code findByUser} 가 아니라 {@code findActiveByUser} 다(QA 지적사항) — 아래
+ *   findAssetGroupsByUser 자체가 연결 해제(is_active=0)한 계좌를 이미 빼고 합산하므로, 해제한
+ *   계좌의 종목까지 토스로 갱신하는 건 결과에 반영되지도 않는 순수 낭비다.
  */
 @Service
 public class AssetCompositionCalculator {
@@ -54,14 +68,23 @@ public class AssetCompositionCalculator {
 
     private final AssetSummaryMapper assetSummaryMapper;
     private final LoanMapper loanMapper;
+    private final InvestmentHoldingMapper investmentHoldingMapper;
+    private final InvestmentPriceRefresher investmentPriceRefresher;
 
     @Autowired
-    public AssetCompositionCalculator(AssetSummaryMapper assetSummaryMapper, LoanMapper loanMapper) {
+    public AssetCompositionCalculator(AssetSummaryMapper assetSummaryMapper, LoanMapper loanMapper,
+                                      InvestmentHoldingMapper investmentHoldingMapper,
+                                      InvestmentPriceRefresher investmentPriceRefresher) {
         this.assetSummaryMapper = assetSummaryMapper;
         this.loanMapper = loanMapper;
+        this.investmentHoldingMapper = investmentHoldingMapper;
+        this.investmentPriceRefresher = investmentPriceRefresher;
     }
 
     public AssetLiveComposition compute(long userId) {
+        List<InvestmentHolding> holdings = investmentHoldingMapper.findActiveByUser(userId);
+        investmentPriceRefresher.refresh(holdings);
+
         Map<String, AssetGroupRow> groupsByType = new LinkedHashMap<>();
         for (AssetGroupRow row : assetSummaryMapper.findAssetGroupsByUser(userId)) {
             String normalizedType = DB_ACCOUNT_TYPE_ALIASES.getOrDefault(row.getAccountType(), row.getAccountType());
