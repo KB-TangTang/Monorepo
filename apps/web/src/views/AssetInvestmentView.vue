@@ -23,7 +23,12 @@ const POLL_INTERVAL_MS = 8000;
 const detail = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
+const expandedCode = ref(null);
 let pollTimer = null;
+
+function toggleHolding(code) {
+    expandedCode.value = expandedCode.value === code ? null : code;
+}
 
 /*
  * 요청 순번 가드(QA 지적사항). setInterval 은 이전 요청이 끝나길 기다리지 않으므로, 느린 요청과
@@ -128,6 +133,8 @@ onUnmounted(stopPolling);
                         :gain-amount="holding.gainAmount"
                         :return-rate="holding.returnRate"
                         :tone="holding.tone"
+                        :expanded="expandedCode === holding.code"
+                        @toggle="toggleHolding(holding.code)"
                     />
                 </ul>
             </section>
