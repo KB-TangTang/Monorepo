@@ -7,19 +7,31 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
-import { MOCK_VERDICT_RESULT } from '@/fixtures/groupChallengeDetail';
+import TrialCommentList from '@/components/challenge/group/TrialCommentList.vue';
+import { fetchTrialDetail } from '@/api/groupChallenge';
+import { toVerdictScreen } from '@/utils/groupTrial';
 
 const route = useRoute();
 const router = useRouter();
 
 const verdict = ref(null);
 
-onMounted(() => {
-    const id = Number(route.params.indictmentId);
-    verdict.value = MOCK_VERDICT_RESULT[id] ?? null;
-    if (!verdict.value) {
+/* 진입 조건은 최종 판결 화면과 같다 — 확정된 재판만 본다(이슈 #172). */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
         router.replace({ name: 'groupChallenge' });
+        return;
     }
+
+    const screen = toVerdictScreen(loaded);
+    if (!screen) {
+        router.replace({ name: 'trialProgress', params: route.params });
+        return;
+    }
+    verdict.value = screen;
 });
 
 const isInnocent = computed(() => verdict.value?.outcome === 'INNOCENT');
@@ -40,16 +52,22 @@ const scoreText = computed(() => {
     return `${label} · ${verdict.value.innocentVotes} : ${verdict.value.guiltyVotes}`;
 });
 
+/*
+ * 「없음」과 「0원」은 다르다. 변론이 없는 재판은 실제 부담금 자체가 없다 —
+ * 변론 마감 배치가 변론 없이 상태를 넘기므로 무변론 확정이 실제로 존재한다.
+ */
 function formatWon(amount) {
-    return amount.toLocaleString() + '원';
+    if (amount === null || amount === undefined) return '-';
+    return Number(amount).toLocaleString() + '원';
 }
 
 function goBack() {
     router.back();
 }
 
+/* 판결 플로우 위에 상세가 다시 쌓이지 않도록 `replace` 로 돌아간다(이슈 #172). */
 function goGroupHome() {
-    router.push({
+    router.replace({
         name: 'groupChallengeDetail',
         params: { id: route.params.id },
     });
@@ -121,6 +139,9 @@ function goGroupHome() {
                 <div class="verdict-detail__reason-label">판결 사유</div>
                 <div class="verdict-detail__reason-text">{{ verdict.detail.reason }}</div>
             </div>
+
+            <!-- 배심원 한줄 코멘트 (익명) -->
+            <TrialCommentList :comments="verdict.comments" />
         </div>
 
         <!-- 하단 버튼 -->

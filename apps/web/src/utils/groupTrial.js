@@ -73,6 +73,13 @@ export function toTrialProgress(detail) {
         status,
         /** 서버가 준 원래 상태. 유죄·무죄를 구분해야 하는 곳이 쓴다. */
         serverStatus: detail.status,
+        /**
+         * 「판결 보기」가 열 화면 (이슈 #172). 확정 전이면 `null`.
+         *
+         * 여기서 미리 정해 두는 이유는 위에서 `status` 를 화면 어휘(`VERDICT_DONE`)로 덮기
+         * 때문이다. 화면 쪽에서 다시 판단하려면 `serverStatus` 를 원래 자리에 되돌려 넣어야 한다.
+         */
+        verdictRoute: verdictRouteName(detail),
         steps: {
             indictedAt: formatTime(detail.createdAt),
             /* 혐의 인정으로 끝난 재판은 변론이 없다. 타임라인이 `--:--` 로 그린다. */
@@ -154,5 +161,111 @@ export function toVoteScreen(detail) {
             url,
         })),
         voteDeadlineLabel: formatDeadlineLabel(detail.voteDeadline),
+    };
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * 판결 확정 (이슈 #172)
+ * ────────────────────────────────────────────────────────────── */
+
+/** 개표가 끝난 재판인가. 판결 화면 4개는 전부 이 조건을 먼저 본다. */
+export function isVerdictConfirmed(detail) {
+    return detail?.status === 'GUILTY' || detail?.status === 'INNOCENT';
+}
+
+/**
+ * 표가 동률이라 판사 탕이가 판결한 재판인가.
+ *
+ * **`status` 로는 구분되지 않는다.** 다수결로 난 유죄와 AI 가 낸 유죄는 둘 다 `GUILTY` 다.
+ * 서버가 `verdict_method` 를 따로 내려주는 이유가 이것이다.
+ */
+export function isAiVerdict(detail) {
+    return isVerdictConfirmed(detail) && detail.verdictMethod === 'AI_JUDGMENT';
+}
+
+/**
+ * 확정된 재판이 열어야 할 화면.
+ *
+ * 진입로가 여러 곳(홈 · 그룹 상세 · 진행 현황 · 투표 화면)이라 분기를 각 화면에 두면
+ * 한 곳만 AI 판결을 모르는 상태가 생긴다. 확정 전이면 `null` — 호출부가 진행 현황으로 보낸다.
+ */
+export function verdictRouteName(detail) {
+    if (!isVerdictConfirmed(detail)) return null;
+    return isAiVerdict(detail) ? 'groupVoteTie' : 'verdictResult';
+}
+
+/** 확정 판결의 유무죄 어휘. `tbl_indictment.status` 가 그대로 화면 어휘가 된다. */
+const VERDICT_COPY = {
+    GUILTY: {
+        label: '유죄',
+        englishLabel: 'GUILTY',
+        resultTitle: '유죄로\n판결됐어요',
+        resultDescription: '소비 기준 위반이 인정됐습니다.',
+    },
+    INNOCENT: {
+        label: '무죄',
+        englishLabel: 'NOT GUILTY',
+        resultTitle: '무죄로\n판결됐어요',
+        resultDescription: '변론 내용과 실제 부담 사정이 인정됐습니다.',
+    },
+};
+
+/**
+ * 판결 방식별 사유 문구.
+ *
+ * **AI 판결만 서버가 문장을 만든다**(`aiVerdictReason`). 나머지 셋은 방식 자체가 사유라
+ * 서버에 문장이 없다 — `ck_ind_ai_reason` 이 `AI_JUDGMENT` 가 아니면 사유 저장을 막는다.
+ */
+const METHOD_REASON = {
+    VOTE: '배심원 투표 결과를 그대로 따랐어요.',
+    NO_VOTE: '투표한 배심원이 없어 무죄 추정 원칙에 따라 무죄로 확정했어요.',
+    CONFESSION: '피고가 혐의를 인정해 변론 없이 확정됐어요.',
+};
+
+/**
+ * 재판 상세 → 판결 화면 5개(최종 판결 · 판결 상세 · 동점 안내 · 탕이 판결 · 판결 결과)가 쓰는 모양.
+ *
+ * 입력은 `toTrialDetailViewModel` 을 이미 지난 값이다. 확정 전이면 `null` 을 돌려준다 —
+ * 개표 전에는 `guiltyCount` 가 `null` 이라 「0 : 0 만장일치」로 그려지기 때문이다(이슈 #171).
+ */
+export function toVerdictScreen(trial) {
+    if (!isVerdictConfirmed(trial)) return null;
+
+    const copy = VERDICT_COPY[trial.status];
+    const reason =
+        trial.verdictMethod === 'AI_JUDGMENT'
+            ? (trial.aiVerdictReason ?? '')
+            : (METHOD_REASON[trial.verdictMethod] ?? '');
+
+    return {
+        ...trial,
+        ...copy,
+        outcome: trial.status,
+        evaluationLabel: trial.evalLabel,
+        /* 개표가 끝났으므로 숫자가 온다. `?? 0` 은 판결 방식이 CONFESSION 인 옛 데이터 대비다. */
+        guiltyVotes: trial.guiltyCount ?? 0,
+        innocentVotes: trial.innocentCount ?? 0,
+        /*
+         * 확정된 재판만 여기까지 오므로 코멘트는 배열로 확정한다(이슈 #172).
+         * 코멘트를 남기지 않은 표는 서버가 이미 걸러 내려주므로 표 수와 개수가 다를 수 있다.
+         */
+        comments: trial.comments ?? [],
+        isAiVerdict: trial.verdictMethod === 'AI_JUDGMENT',
+        /*
+         * 타이핑 애니메이션이 한 글자씩 읽는 문장이다. 판사 탕이의 사유 원문을 그대로 쓴다 —
+         * 고정 문구를 넣으면 어떤 재판에서도 같은 말을 하는 판사가 된다.
+         */
+        reviewMessage: reason || copy.resultDescription,
+        detail: {
+            judgmentDate: trial.settlementLabel,
+            currentAmount: trial.currentAmount,
+            limitAmount: trial.limitAmount,
+            /*
+             * 변론이 없으면 「없음」이다. 0 으로 채우면 판결문에 「실제 부담금 0원」이라는
+             * 하지도 않은 주장이 적힌다 — 무변론 재판이 실제로 존재한다.
+             */
+            actualCostAmount: trial.defense?.actualBurdenAmount ?? null,
+            reason,
+        },
     };
 }

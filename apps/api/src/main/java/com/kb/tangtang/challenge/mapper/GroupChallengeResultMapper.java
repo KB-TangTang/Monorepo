@@ -1,12 +1,14 @@
 package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupChallengeDailyResult;
+import com.kb.tangtang.challenge.domain.GroupFinalizeRow;
 import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
 import com.kb.tangtang.challenge.domain.IndictmentTarget;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -119,4 +121,47 @@ public interface GroupChallengeResultMapper {
                                                     @Param("userId") Long userId,
                                                     @Param("fromDate") LocalDate fromDate,
                                                     @Param("toDate") LocalDate toDate);
+
+    /**
+     * 무죄 확정 — 인정된 감액을 결산 행에 반영한다 (이슈 #172).
+     *
+     * <p>대입이 아니라 <b>누적</b>({@code = verdict_deduction_amount + #{amount}})이다. 기간평가는
+     * 기간 전체의 기소가 {@code end_date} 행 한 줄에 붙고, 일일평가도 같은 행이 다시 기소될 수
+     * 있다 — 대입으로 쓰면 앞선 무죄의 감액이 사라진다.
+     *
+     * <p><b>{@code effective_amount} 는 건드리지 않는다.</b> STORED 생성 컬럼이라 UPDATE 절에
+     * 넣으면 SQL 이 죽는다. 이 한 줄이 바뀌면 DB 가 알아서 다시 계산한다.
+     * ({@code db/migration/20260814_group_challenge_verdict_deduction.sql})
+     *
+     * <p>감액이 집계액을 넘어서는 상태는 막지 않는다 — 환불·카테고리 재분류로 실제로 생기고,
+     * {@code effective_amount} 의 {@code GREATEST(..., 0)} 가 0 으로 받아 준다.
+     * {@link #findDeductionOverflow} 가 그 상태를 로그로 남긴다.
+     *
+     * @param resultId {@code tbl_indictment.result_id}. 기소가 붙어 있던 그 행이다
+     * @return 바꾼 행 수. 결산 행이 지워졌으면 0 이다(정상 경로에서는 일어나지 않는다)
+     */
+    int addVerdictDeduction(@Param("resultId") Long resultId,
+                            @Param("amount") BigDecimal amount);
+
+    /**
+     * 최종 확정 배치가 볼 참여자별 판정 재료 (이슈 #172). 그룹 하나당 한 번 호출한다.
+     *
+     * <p><b>소비액 식을 평가 주기별로 가르는 것이 핵심이다.</b> 기간평가는
+     * 「★ 기간평가(PERIOD) 소비액 공식」 주석의 식({@code GREATEST(SUM(daily_amount -
+     * verdict_deduction_amount), 0)})을 그대로 쓴다. {@code SUM(effective_amount)} 로 바꾸면
+     * 행마다 걸린 {@code GREATEST(...,0)} 가 환불 음수 행을 0 으로 깎아 합계가 부풀고,
+     * <b>기소를 만든 {@link #findOverLimitPeriod} 와 값이 달라진다</b> — 「한도 초과로 기소됐는데
+     * 최종 판정은 완주」 같은 상태가 생긴다.
+     *
+     * <p>일일평가는 반대로 {@code SUM(effective_amount)} 가 맞다. 하루씩 따로 판정하는 평가라
+     * 클램프도 하루 단위로 걸려야 한다. 어차피 탈락 여부는 목숨으로 정해지고 이 값은
+     * 순위·표시용이다.
+     *
+     * <p>집계 행이 하나도 없는 참여자도 0 으로 내려온다 — 스칼라 서브쿼리 + {@code COALESCE} 다.
+     * 빠지면 그 사람의 {@code final_*} 가 영영 NULL 로 남는다.
+     *
+     * @param groupId 확정할 그룹
+     * @return 참여자 전원. {@code user_id} 오름차순
+     */
+    List<GroupFinalizeRow> findFinalConsumption(@Param("groupId") Long groupId);
 }

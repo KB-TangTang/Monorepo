@@ -41,6 +41,15 @@ public class GroupTrialDetailDto {
     /** {@code VOTE} · {@code NO_VOTE} · {@code AI_JUDGMENT} · {@code CONFESSION}. 확정 전 NULL. */
     private String verdictMethod;
 
+    /**
+     * 판사 탕이의 판결 사유 원문 (이슈 #172). {@code verdictMethod} 가 {@code AI_JUDGMENT} 일
+     * 때만 값이 있다. 화면은 이 문장을 그대로 띄운다 — 요약하지 않는다.
+     *
+     * <p><b>개표 전에는 NULL</b> 이다. {@link #guiltyCount} 와 같은 분기에서 가린다 —
+     * AI 판결은 동률일 때만 나오므로 사유가 보이는 것만으로 표 분포가 드러난다.
+     */
+    private String aiVerdictReason;
+
     /** 기소 문구. */
     private String message;
 

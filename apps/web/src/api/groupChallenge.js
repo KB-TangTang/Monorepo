@@ -341,6 +341,10 @@ function mockTrialDetailNow() {
  * ⚠ `guiltyCount` · `innocentCount` · `comments` 는 **손대지 않고 그대로 통과시킨다**(이슈 #171).
  * 개표 전에는 셋 다 `null` 로 오는데, 이것이 「아직 모른다」는 신호다. `?? 0` · `?? []` 로
  * 채우면 투표 중인 재판이 화면에 「0 : 0 · 코멘트 없음」으로 그려져 만장일치 0표처럼 보인다.
+ *
+ * `result` · `verdictMethod` · `aiVerdictReason` 도 같다(이슈 #172). 확정 전에는 셋 다 `null` 이고,
+ * 판결 화면으로 갈지 진행 현황으로 되돌릴지를 `utils/groupTrial` 의 `toVerdictScreen` 이
+ * 그 `null` 로 판단한다. 여기서 기본값을 채우면 투표 중인 재판이 판결문으로 열린다.
  */
 function toTrialDetailViewModel(dto) {
     const isDaily = dto.evalType === 'DAILY';

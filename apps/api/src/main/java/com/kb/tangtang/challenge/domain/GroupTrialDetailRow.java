@@ -35,6 +35,15 @@ public class GroupTrialDetailRow {
     /** {@link VerdictMethod} 의 이름. 확정 전에는 NULL. */
     private String verdictMethod;
 
+    /**
+     * 판사 탕이의 판결 사유 원문 (이슈 #172). {@code AI_JUDGMENT} 가 아니면 NULL 이다
+     * ({@code ck_ind_ai_reason} 이 강제한다).
+     *
+     * <p>{@link #guiltyCount} 와 같은 규칙 — <b>여기까지는 항상 채워지고</b> 개표 전에 가리는
+     * 일은 서비스가 한 곳에서 한다.
+     */
+    private String aiVerdictReason;
+
     /** 기소 문구. 배치가 만든 한 줄이다. */
     private String message;
 

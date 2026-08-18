@@ -245,7 +245,8 @@ const routes = [
         component: () => import('@/views/challenge/group/judgment/VerdictDetailView.vue'),
         meta: { title: '판결 상세', hideTabBar: true },
     },
-    // ↓ 동점 AI 판결 플로우 (#105). 투표 종료 상태 UI와의 실제 연결은 후속 작업에서 처리한다.
+    // ↓ 동점 AI 판결 플로우 (#105 · #172). verdictMethod 가 AI_JUDGMENT 인 재판만 들어온다.
+    //   진입로는 진행 현황의 「판결 보기」와 투표 화면 가드 두 곳. 각 화면이 스스로 조건을 다시 본다.
     {
         path: '/group-challenges/:id/vote/:indictmentId/tie',
         name: 'groupVoteTie',

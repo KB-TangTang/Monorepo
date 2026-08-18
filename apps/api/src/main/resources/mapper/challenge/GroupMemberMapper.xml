@@ -40,4 +40,41 @@
           FROM tbl_group_member
          WHERE group_id = #{groupId}
     </select>
+
+    <!--
+      유죄 확정 시 목숨 차감 (이슈 #172).
+
+      ⚠ lives_count &gt; 0 이 음수 방어다. lives_count 는 UNSIGNED 가 아니라 그냥 INT 라
+        조건이 없으면 -1 이 그대로 저장되고, 종료 후 확정 배치의 "lives_count = 0 이면 탈락"
+        판정이 조용히 빗나간다.
+
+      읽고 빼서 쓰지 않고 SQL 한 문장으로 깎는다 — 같은 사람의 재판 두 건이 같은 틱에
+      확정되면 읽기-쓰기 사이가 겹친다.
+    -->
+    <update id="decreaseLife">
+        UPDATE tbl_group_member
+           SET lives_count = lives_count - 1
+         WHERE group_id = #{groupId}
+           AND user_id = #{userId}
+           AND lives_count &gt; 0
+    </update>
+
+    <!--
+      최종 결과 확정 (이슈 #172). JUDGING → CLOSED 배치만 호출한다.
+
+      ⚠ final_outcome IS NULL 이 write-once 장치다. 빼면 배치를 다시 돌릴 때마다 값이 다시 쓰이고,
+        그 사이 확정된 재판 때문에 이미 보여 준 순위가 뒤집힌다.
+
+      세 컬럼을 한 문장으로 적는다 — 등수만 있고 판정이 빈 중간 상태를 화면이 읽으면 안 된다.
+      updated_at 은 ON UPDATE CURRENT_TIMESTAMP 라 따로 쓰지 않는다.
+    -->
+    <update id="finalizeMember">
+        UPDATE tbl_group_member
+           SET final_outcome = #{finalOutcome},
+               final_rank = #{finalRank},
+               final_charge_amount = #{finalChargeAmount}
+         WHERE group_id = #{groupId}
+           AND user_id = #{userId}
+           AND final_outcome IS NULL
+    </update>
 </mapper>

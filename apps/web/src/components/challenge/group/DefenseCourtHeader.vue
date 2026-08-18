@@ -6,17 +6,30 @@
 <script setup>
 import { useRouter } from 'vue-router';
 
-defineProps({
+const props = defineProps({
     /** 탭바 옆 제목 (01 화면 등) */
     title: { type: String, default: '' },
     /** 사건번호 (모노스페이스) */
     caseNumber: { type: String, default: '' },
+    /**
+     * 좌상단 버튼의 성격 (이슈 #172).
+     * - `back`  : 화살표. 히스토리를 한 단계 되돌린다 (기본)
+     * - `close` : X. **히스토리를 밟지 않고** `close` 만 올려보내 목적지를 부모가 정한다
+     *
+     * 플로우의 **종착점**에는 `close` 를 쓴다. 판결 결과처럼 되돌아갈 곳이 애니메이션
+     * 재생 화면뿐인 자리에서 화살표를 두면 방금 본 연출이 다시 돌아간다.
+     */
+    navAction: { type: String, default: 'back' },
 });
 
-const emit = defineEmits(['back']);
+const emit = defineEmits(['back', 'close']);
 const router = useRouter();
 
-function goBack() {
+function handleNav() {
+    if (props.navAction === 'close') {
+        emit('close');
+        return;
+    }
     emit('back');
     router.back();
 }
@@ -31,10 +44,24 @@ function goBack() {
             <button
                 type="button"
                 class="court-header__back"
-                aria-label="뒤로가기"
-                @click="goBack"
+                :aria-label="navAction === 'close' ? '닫기' : '뒤로가기'"
+                @click="handleNav"
             >
-                <svg viewBox="0 0 9 16" fill="none" aria-hidden="true">
+                <svg
+                    v-if="navAction === 'close'"
+                    class="court-header__icon--close"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M3 3l10 10M13 3L3 13"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                    />
+                </svg>
+                <svg v-else viewBox="0 0 9 16" fill="none" aria-hidden="true">
                     <path
                         d="M8 1L1 8l7 7"
                         stroke="currentColor"
@@ -103,6 +130,12 @@ function goBack() {
 
 .court-header__back svg {
     width: 9px;
+    height: 16px;
+}
+
+/* X 는 정사각형이라 화살표 폭(9px)을 그대로 쓰면 찌그러진다. */
+.court-header__back .court-header__icon--close {
+    width: 16px;
     height: 16px;
 }
 

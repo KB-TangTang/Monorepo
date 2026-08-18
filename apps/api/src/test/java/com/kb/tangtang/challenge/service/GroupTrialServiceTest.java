@@ -1,8 +1,12 @@
 package com.kb.tangtang.challenge.service;
 
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
+import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
+import com.kb.tangtang.challenge.domain.VerdictMethod;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
+import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.challenge.mapper.DefenseMapper;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
@@ -264,5 +268,52 @@ class GroupTrialServiceTest {
         GroupIndictmentDto card = service().findGroupIndictments(USER_ID, 3L).get(0);
 
         assertEquals("http://localhost/images/profile/9/a.jpg", card.getProfileImageUrl());
+    }
+
+    /* ══ 재판 상세 — 개표 공개 조건 (이슈 #171·#172) ══════════════ */
+
+    private GroupTrialDetailRow detailRow(String status) {
+        GroupTrialDetailRow row = new GroupTrialDetailRow();
+        row.setIndictmentId(11L);
+        row.setGroupId(3L);
+        row.setUserId(9L);
+        row.setStatus(status);
+        row.setVerdictMethod(IndictmentStatus.VOTING.name().equals(status)
+                ? null : VerdictMethod.AI_JUDGMENT.name());
+        row.setAiVerdictReason("변론이 사실과 다르다");
+        row.setGuiltyCount(2);
+        row.setInnocentCount(2);
+        row.setCreatedAt(NOW);
+        return row;
+    }
+
+    /**
+     * <b>AI 판결은 표가 동률일 때만 나온다.</b> 그래서 사유가 내려가는 순간 「지금 2:2 다」가
+     * 드러나 {@code guiltyCount} 를 가린 의미가 없어진다 — 같은 분기에서 함께 가려야 한다.
+     */
+    @Test
+    @DisplayName("개표 전에는 판사 탕이의 사유도 표수와 함께 가린다")
+    void masksAiReasonBeforeTally() {
+        when(indictmentMapper.findTrialDetail(11L, USER_ID))
+                .thenReturn(detailRow(IndictmentStatus.VOTING.name()));
+
+        GroupTrialDetailDto detail = service().findTrialDetail(USER_ID, 11L);
+
+        assertNull(detail.getGuiltyCount());
+        assertNull(detail.getAiVerdictReason());
+    }
+
+    /** 확정된 뒤에는 원문 그대로 내려간다. 화면이 이 문장을 판결문에 띄운다. */
+    @Test
+    @DisplayName("확정된 재판은 판결 방식과 사유를 그대로 내려보낸다")
+    void exposesAiReasonAfterTally() {
+        when(indictmentMapper.findTrialDetail(11L, USER_ID))
+                .thenReturn(detailRow(IndictmentStatus.GUILTY.name()));
+
+        GroupTrialDetailDto detail = service().findTrialDetail(USER_ID, 11L);
+
+        assertEquals(VerdictMethod.AI_JUDGMENT.name(), detail.getVerdictMethod());
+        assertEquals("변론이 사실과 다르다", detail.getAiVerdictReason());
+        assertEquals(2, detail.getGuiltyCount());
     }
 }

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -681,6 +682,12 @@ class ChallengeGroupServiceTest {
         public int deleteIfCurrent(Long groupId, String status) {
             return groups.removeIf(g -> g.getId().equals(groupId) && g.getStatus().equals(status)) ? 1 : 0;
         }
+
+        /** 최종 확정 배치 전용(#172). 이 테스트가 보는 흐름과 무관하다. */
+        @Override
+        public List<ChallengeGroup> findGroupsToClose(String status) {
+            return List.of();
+        }
     }
 
     private static class FakeMemberMapper implements GroupMemberMapper {
@@ -705,6 +712,19 @@ class ChallengeGroupServiceTest {
                     .filter(m -> m.getGroupId() == groupId)
                     .map(GroupMember::getUserId)
                     .toList();
+        }
+
+        /** 목숨 차감(이슈 #172)은 이 테스트의 관심사가 아니다. 그룹 생성·참여만 본다. */
+        @Override
+        public int decreaseLife(Long groupId, Long userId) {
+            return 0;
+        }
+
+        /** 최종 결과 확정(#172)도 마찬가지다. */
+        @Override
+        public int finalizeMember(Long groupId, Long userId, String finalOutcome,
+                                  Integer finalRank, BigDecimal finalChargeAmount) {
+            return 0;
         }
     }
 }

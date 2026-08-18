@@ -34,17 +34,18 @@
     </sql>
 
     <!--
-      ★ 기간평가(PERIOD) 소비액 공식 — 이 주석이 원본이다. 아래 세 곳이 같은 식을 쓴다.
+      ★ 기간평가(PERIOD) 소비액 공식 — 이 주석이 원본이다. 아래 네 곳이 같은 식을 쓴다.
 
           GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
 
         1) findOverLimitPeriod   (이 파일)              — 기간평가 기소 판정
         2) findMemberConsumption (이 파일)              — 그룹 상세 참여자 소비액
-        3) IndictmentMapper.xml 의 exceededAmount 조각 — 재판 화면 초과액 · 변론 화면 총소비액
+        3) findFinalConsumption  (이 파일)              — 최종 확정의 탈락 판정 · 부담금 (#172)
+        4) IndictmentMapper.xml 의 exceededAmount 조각 — 재판 화면 초과액 · 변론 화면 총소비액
 
-      ⚠ <sql> 조각 하나로 묶지 못했다. 상관 서브쿼리가 참조하는 바깥 별칭이 세 곳 다 다르고
+      ⚠ <sql> 조각 하나로 묶지 못했다. 상관 서브쿼리가 참조하는 바깥 별칭이 네 곳 다 다르고
         (r_end.user_id · m.user_id · i.user_id), 별칭을 넘기려면 ${} 를 써야 하는데 금지 대상이다.
-        대신 **내부 별칭을 rp 로 통일**해 두었고 ChallengeMapperXmlTest 가 세 statement 의 SQL 에
+        대신 **내부 별칭을 rp 로 통일**해 두었고 ChallengeMapperXmlTest 가 네 statement 의 SQL 에
         위 식이 문자 그대로 들어있는지 검사한다 — 한 곳만 고치면 테스트가 깨진다.
 
       ⚠ SUM(effective_amount) 로 바꾸지 말 것. effective_amount 는 생성 컬럼이라 GREATEST(...,0) 를
@@ -277,5 +278,58 @@
            AND t.tr_date BETWEEN #{fromDate} AND #{toDate}
            <include refid="consumptionFilter"/>
          ORDER BY t.tr_date, t.tr_time, t.id
+    </select>
+
+    <!--
+      무죄 확정 시 인정된 감액 반영 (이슈 #172).
+
+      ⚠ 대입이 아니라 누적이다. 기간평가는 기간 전체의 기소가 end_date 행 한 줄에 붙고
+        일일평가도 같은 행이 다시 기소될 수 있다. 대입으로 쓰면 앞선 무죄의 감액이 사라진다.
+
+      ⚠ effective_amount 는 SET 절에 넣지 않는다. STORED 생성 컬럼이라 쓰려고 하면 SQL 이 죽는다.
+        이 컬럼만 바꾸면 DB 가 GREATEST(daily_amount - verdict_deduction_amount, 0) 로 다시 계산한다.
+        (20260814_group_challenge_verdict_deduction.sql)
+
+      감액이 집계액을 넘어도 막지 않는다 — 위 findDeductionOverflow 주석 참고.
+    -->
+    <update id="addVerdictDeduction">
+        UPDATE tbl_group_challenge_daily_result
+           SET verdict_deduction_amount = verdict_deduction_amount + #{amount}
+         WHERE id = #{resultId}
+    </update>
+
+    <!--
+      최종 확정 배치가 볼 참여자별 판정 재료 (이슈 #172).
+
+      ⚠ PERIOD 갈래는 위 「★ 기간평가(PERIOD) 소비액 공식」 주석의 식을 그대로 쓴다.
+        SUM(rp.effective_amount) 로 바꾸면 환불 음수 행이 행마다 0 으로 깎여 합계가 부풀고,
+        기소를 만든 findOverLimitPeriod 와 값이 어긋난다 — "초과로 기소됐는데 완주" 가 생긴다.
+
+      ⚠ DAILY 갈래는 반대로 effective_amount 를 합한다. 하루씩 따로 판정하는 평가라 클램프도
+        하루 단위가 맞다. 이쪽은 탈락 여부를 lives_count 가 정하므로 이 값은 순위·표시용이다.
+        내부 별칭을 rd 로 둔 것은 위 findMemberConsumption 의 DAILY 갈래와 같은 규칙이다.
+
+      집계 행이 없는 참여자도 COALESCE 로 0 이 내려온다. 빠지면 그 사람의 final_* 가 NULL 로 남는다.
+      정렬을 user_id 로 고정해 배치 로그를 두 번 돌렸을 때 비교할 수 있게 한다.
+    -->
+    <select id="findFinalConsumption" resultType="com.kb.tangtang.challenge.domain.GroupFinalizeRow">
+        SELECT m.user_id     AS user_id,
+               m.lives_count AS lives_count,
+               CASE WHEN g.eval_type = 'PERIOD'
+                    THEN COALESCE((SELECT GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
+                                     FROM tbl_group_challenge_daily_result rp
+                                    WHERE rp.group_id = g.id
+                                      AND rp.user_id = m.user_id
+                                      AND rp.challenge_date BETWEEN g.start_date AND g.end_date), 0)
+                    ELSE COALESCE((SELECT SUM(rd.effective_amount)
+                                     FROM tbl_group_challenge_daily_result rd
+                                    WHERE rd.group_id = g.id
+                                      AND rd.user_id = m.user_id
+                                      AND rd.challenge_date BETWEEN g.start_date AND g.end_date), 0)
+               END AS charge_amount
+          FROM tbl_group_member m
+          JOIN tbl_challenge_group g ON g.id = m.group_id
+         WHERE m.group_id = #{groupId}
+         ORDER BY m.user_id
     </select>
 </mapper>

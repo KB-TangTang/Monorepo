@@ -4,6 +4,7 @@ import com.kb.tangtang.common.docs.DevBatchTriggerControllerDocs;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
 import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
 import com.kb.tangtang.challenge.service.GroupTrialDeadlineBatchService;
+import com.kb.tangtang.challenge.service.GroupVerdictBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -31,7 +32,7 @@ import java.util.Map;
  * <p><b>로컬에서만 동작한다</b> — {@link DevEnvironmentGuard} 가 {@code app.env} 로 막는다.
  * 인증도 필요하다. 인터셉터가 {@code /api/**} 에 걸려 있다.
  *
- * <p>배치가 늘어나면({@code #170} 변론 마감, {@code #172} 개표) {@code switch} 에 이름을 추가한다.
+ * <p>배치가 늘어나면 {@code switch} 에 이름을 추가한다.
  * 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라 이름 목록이 한눈에 보이는 편이 낫기 때문이다.
  */
 @RestController
@@ -43,6 +44,7 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
     private final GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService;
     private final GroupTrialDeadlineBatchService groupTrialDeadlineBatchService;
+    private final GroupVerdictBatchService groupVerdictBatchService;
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService;
     private final FixedExpensePaymentReminderDevService paymentReminderDevService;
 
@@ -50,12 +52,14 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
                                      ChallengeGroupStatusBatchService challengeGroupStatusBatchService,
                                      GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService,
                                      GroupTrialDeadlineBatchService groupTrialDeadlineBatchService,
+                                     GroupVerdictBatchService groupVerdictBatchService,
                                      FixedExpensePaymentReminderBatchService paymentReminderBatchService,
                                      FixedExpensePaymentReminderDevService paymentReminderDevService) {
         this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
         this.groupChallengeEvaluationBatchService = groupChallengeEvaluationBatchService;
         this.groupTrialDeadlineBatchService = groupTrialDeadlineBatchService;
+        this.groupVerdictBatchService = groupVerdictBatchService;
         this.paymentReminderBatchService = paymentReminderBatchService;
         this.paymentReminderDevService = paymentReminderDevService;
     }
@@ -64,7 +68,7 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
      * 배치를 즉시 실행한다.
      *
      * @param name 배치 이름. {@code group-challenge-status} · {@code group-challenge-evaluation} ·
-     *             {@code group-trial-deadline}
+     *             {@code group-trial-deadline} · {@code group-trial-verdict}
      * @param date 기준일. 없으면 오늘. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다
      * @return 배치가 처리한 건수
      */
@@ -102,6 +106,17 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
              * 두 번 실행해도 결과가 같은지(멱등) 확인하는 용도로도 쓴다.
              */
             case "group-trial-deadline" -> groupTrialDeadlineBatchService.closeExpiredDefenses();
+            /*
+             * 개표(이슈 #172). 마찬가지로 date 를 받지 않는다 — 개표 대상 판정은 created_at 과
+             * NOW() 비교이거나 「투표할 사람이 전부 던졌는가」다. 뒤쪽 조건 덕에 전원 투표만 끝내면
+             * 마감을 기다리지 않고 바로 확인할 수 있어 시연에서 시간을 조작할 일이 거의 없다.
+             * 연속으로 두 번 눌러 목숨이 한 번만 깎이는지(멱등) 확인하는 용도로도 쓴다.
+             *
+             * 스케줄러와 같이 최종 확정(JUDGING → CLOSED)까지 이어 돌린다 —
+             * group-challenge-status 와 같은 이유다. 반환값은 둘의 합이다.
+             */
+            case "group-trial-verdict" -> groupVerdictBatchService.confirmDueVerdicts()
+                    + groupVerdictBatchService.finalizeJudgingGroups();
             case "fixed-expense-payment-reminders" -> {
                 if (date != null) {
                     throw new BusinessException("INVALID_REQUEST",

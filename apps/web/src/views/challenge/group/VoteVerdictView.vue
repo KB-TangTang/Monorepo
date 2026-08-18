@@ -10,7 +10,7 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseModal from '@/components/common/BaseModal.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import { fetchTrialDetail, submitVote as postVote } from '@/api/groupChallenge';
-import { canVote, toVoteScreen } from '@/utils/groupTrial';
+import { canVote, toVoteScreen, verdictRouteName } from '@/utils/groupTrial';
 import judgingImg from '@/assets/images/emotions/48_judging.png';
 import verdictImg from '@/assets/images/emotions/49_verdict.png';
 
@@ -26,9 +26,12 @@ const trialParams = computed(() => ({
 const detail = ref(null);
 
 /*
- * 투표할 수 없는 재판이면 진행 현황으로 보낸다. 판결 상세(`verdictDetail`)로 보내지 않는 이유는
- * 그 화면이 아직 목데이터를 그리기 때문이다(#172) — 실 ID 로 남의 재판 목데이터를 띄우게 된다.
- * 진행 현황은 4개 상태를 모두 실데이터로 그린다.
+ * 투표할 수 없는 재판이면 다른 화면으로 보낸다.
+ *
+ * **이미 확정된 재판은 판결 화면으로 보낸다**(이슈 #172). 개표 배치가 생기기 전에는 확정된
+ * 재판이 없어 전부 진행 현황으로 보냈는데, 알림을 늦게 눌러 개표가 끝난 뒤 들어온 사람에게는
+ * 그게 「타임라인만 보고 판결은 못 보는」 막다른 길이 된다.
+ * 아직 투표 중인데 내가 이미 던졌다면 진행 현황이 맞다.
  */
 onMounted(async () => {
     let loaded;
@@ -41,7 +44,10 @@ onMounted(async () => {
     }
 
     if (!canVote(loaded)) {
-        router.replace({ name: 'trialProgress', params: trialParams.value });
+        router.replace({
+            name: verdictRouteName(loaded) ?? 'trialProgress',
+            params: trialParams.value,
+        });
         return;
     }
 

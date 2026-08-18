@@ -5,6 +5,7 @@ import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.domain.Indictment;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
+import com.kb.tangtang.challenge.domain.VerdictTallyRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -130,4 +131,44 @@ public interface IndictmentMapper {
      * @return 넘긴 건수
      */
     int moveExpiredDefensesToVoting(@Param("defenseHours") int defenseHours);
+
+    /**
+     * 개표할 차례가 된 기소 (이슈 #172 배치).
+     *
+     * <p><b>마감이 지났거나, 투표할 사람이 전부 던졌거나</b> 둘 중 하나면 잡는다. 마감만 보면
+     * 전원이 일찍 투표를 끝낸 재판도 30시간을 채워야 결과가 나온다 — 그 사이 화면은
+     * 「투표 완료」인 채로 멈춰 있어 사용자는 서비스가 멈춘 줄 안다(팀 결정 2026-08-18).
+     *
+     * <p>분모는 {@code 참여자 수 - 1} 이다(피고는 자기 재판에 투표할 수 없다). 중도 이탈 기능이
+     * 없어 분모가 줄지 않는 것을 전제로 한다 — 나가기가 생기면 이 조건부터 다시 본다.
+     *
+     * <p>{@code status = 'VOTING'} 이라 혐의 인정(GUILTY)·이미 확정된 건은 애초에 걸리지 않는다.
+     * 변론 없이 마감된 재판도 그대로 투표에 올라와 있으므로 여기 잡힌다 — 변론 유무는 보지 않는다.
+     *
+     * <p>시간 값은 프로퍼티라 파라미터로 받는다({@code ${}} 금지).
+     *
+     * @param defenseHours {@code challenge.trial.defense-hours}
+     * @param voteHours    {@code challenge.trial.vote-hours}. 투표 마감은 둘의 합이다
+     */
+    List<VerdictTallyRow> findVotingToTally(@Param("defenseHours") int defenseHours,
+                                            @Param("voteHours") int voteHours);
+
+    /**
+     * 판결 확정 — {@code VOTING} → {@code GUILTY} / {@code INNOCENT} (이슈 #172).
+     *
+     * <p><b>{@code WHERE ... AND status = 'VOTING'} 이 멱등의 근거다.</b> 배치를 두 번 돌리거나
+     * 두 인스턴스가 같은 틱을 잡아도 두 번째는 0행을 바꾼다. 호출부는 그 0 을 보고 목숨 차감·
+     * 감액 반영·이벤트 발행을 통째로 건너뛴다 — 조건이 없으면 <b>목숨이 두 번 깎인다.</b>
+     *
+     * <p>{@code result} 를 함께 쓰는 이유는 {@code ck_ind_result} 가 상태와의 조합만 허용해서다.
+     * {@code aiVerdictReason} 은 {@code AI_JUDGMENT} 가 아니면 반드시 NULL 이어야 한다
+     * ({@code ck_ind_ai_reason}).
+     *
+     * @return 바꾼 행 수. 0 이면 이미 확정된 재판이다
+     */
+    int confirmVerdict(@Param("indictmentId") Long indictmentId,
+                       @Param("status") String status,
+                       @Param("result") int result,
+                       @Param("verdictMethod") String verdictMethod,
+                       @Param("aiVerdictReason") String aiVerdictReason);
 }

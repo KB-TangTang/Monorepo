@@ -253,6 +253,12 @@ public class GroupTrialService {
                 .totalVoters(row.getTotalVoters())
                 .guiltyCount(counted ? row.getGuiltyCount() : null)
                 .innocentCount(counted ? row.getInnocentCount() : null)
+                /*
+                 * 판사 탕이의 사유도 같은 분기 안에 둔다(이슈 #172). AI 판결은 표가 동률일 때만
+                 * 나오므로 사유가 내려가는 순간 「지금 2:2 다」가 드러난다 — guiltyCount 를 가린
+                 * 의미가 없어진다. 확정 전에는 컬럼 자체가 NULL 이지만 조건에 기대지 않는다.
+                 */
+                .aiVerdictReason(counted ? row.getAiVerdictReason() : null)
                 .comments(counted ? findComments(indictmentId) : null)
                 .build();
     }
