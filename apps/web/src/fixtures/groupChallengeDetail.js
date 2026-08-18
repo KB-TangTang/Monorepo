@@ -747,15 +747,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=1 · 배달 소비 줄이기 · 일일결산 생존 순위 ──────────── */
     1: {
         groupId: 1,
-        groupName: '배달 소비 줄이기',
         evalType: 'DAILY',
         lastSettlementDate: '8월 6일',
 
-        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
-
         memo: '하루 배달 1회 이하, 커피는 허용',
-        memoAuthor: '유현',
-        memoDate: '7월 30일',
 
         podium: [
             { rank: 1, userId: 1, ...AVATAR[1], isMe: true },
@@ -784,10 +779,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
                 isMe: false, livesCount: 1, maxLives: 7,
                 isEliminated: false, statusLabel: '1', statusType: 'danger',
             },
+            /* 진행 중의 목숨 0 은 「탈락」이 아니라 「탈락 위기」다 — 탈락 확정은 CLOSED 에서만. */
             {
                 rank: 5, userId: 6, ...AVATAR[6],
                 isMe: false, livesCount: 0, maxLives: 7,
-                isEliminated: true, statusLabel: '탈락', statusType: 'eliminated',
+                isEliminated: false, statusLabel: '탈락 위기', statusType: 'danger',
             },
         ],
     },
@@ -795,15 +791,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=4 · 택시 대신 지하철 · 일일결산 생존 순위 ─────────── */
     4: {
         groupId: 4,
-        groupName: '택시 대신 지하철',
         evalType: 'DAILY',
         lastSettlementDate: '8월 5일',
 
-        trialStats: { totalTrials: 1, guiltyCount: 0, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
@@ -838,16 +829,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=5 · 편의점 간식 줄이기 · 기간결산 누적 순위 ─────── */
     5: {
         groupId: 5,
-        groupName: '편의점 간식 줄이기',
         evalType: 'PERIOD',
         limitAmount: 30000,
         lastSettlementDate: '8월 7일',
 
-        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -886,15 +872,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=6 · 편의점 커피 끊기 · 최종 순위 ─────────────────── */
     6: {
         groupId: 6,
-        groupName: '편의점 커피 끊기',
         evalType: 'DAILY',
         lastSettlementDate: '7월 28일',
 
-        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
@@ -939,15 +920,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=7 · 주말 배달 금지령 · 최종 순위 ─────────────────── */
     7: {
         groupId: 7,
-        groupName: '주말 배달 금지령',
         evalType: 'DAILY',
         lastSettlementDate: '7월 14일',
 
-        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -987,16 +963,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=8 · 카페비 방어단 · 7월 · 기간결산 최종 순위 ──────── */
     8: {
         groupId: 8,
-        groupName: '카페비 방어단 · 7월',
         evalType: 'PERIOD',
         limitAmount: 50000,
         lastSettlementDate: '7월 1일',
 
-        trialStats: { totalTrials: 1, guiltyCount: 1, innocentCount: 0 },
-
         memo: '카페는 주 3회까지만!',
-        memoAuthor: '준서',
-        memoDate: '6월 22일',
 
         podium: [
             { rank: 1, userId: 1, ...AVATAR[1], isMe: true },
@@ -1027,16 +998,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=11 · 배달비 절약 도전 · 기간결산 누적 순위 ─────── */
     11: {
         groupId: 11,
-        groupName: '배달비 절약 도전',
         evalType: 'PERIOD',
         limitAmount: 50000,
         lastSettlementDate: '8월 7일',
 
-        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
-
         memo: '배달은 주 2회까지!',
-        memoAuthor: '나',
-        memoDate: '7월 30일',
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -1067,16 +1033,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=12 · 간식비 절약 · 7월 · 기간결산 최종 순위 ──────── */
     12: {
         groupId: 12,
-        groupName: '간식비 절약 · 7월',
         evalType: 'PERIOD',
         limitAmount: 40000,
         lastSettlementDate: '7월 8일',
 
-        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
