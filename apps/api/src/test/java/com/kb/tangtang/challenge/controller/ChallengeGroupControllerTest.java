@@ -280,7 +280,7 @@ class ChallengeGroupControllerTest {
         private long lastGroupId;
 
         StubDetailService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null, null);
         }
 
         @Override

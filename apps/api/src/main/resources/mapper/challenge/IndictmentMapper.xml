@@ -188,6 +188,25 @@
     </select>
 
     <!--
+      종료 그룹의 확정 재판 전적 (이슈 #173). 종료 화면 「재판 기록」 링크의 숫자.
+
+      위 findTrialSummaryByGroupIds 와 반대로 확정 상태(GUILTY·INNOCENT)만 센다.
+      SUM(CASE ...) 이 아니라 COUNT(CASE ...) 인 이유: 재판이 0건이면 SUM 은 NULL 을 돌려주고
+      행 클래스의 int 세터에서 죽는다. COUNT 는 0 이다.
+      GROUP BY 가 없어 행이 항상 하나 나온다 — 호출부가 NULL 방어를 할 필요가 없다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findClosedTrialStats"
+            resultType="com.kb.tangtang.challenge.domain.GroupTrialStatsRow">
+        SELECT COUNT(*) AS total_trials,
+               COUNT(CASE WHEN i.status = 'GUILTY' THEN 1 END) AS guilty_count,
+               COUNT(CASE WHEN i.status = 'INNOCENT' THEN 1 END) AS innocent_count
+          FROM tbl_indictment i
+         WHERE i.group_id = #{groupId}
+           AND i.status IN ('GUILTY', 'INNOCENT')
+    </select>
+
+    <!--
       ── 이하 재판 상세 (이슈 #170) ────────────────────────────────────────
     -->
 

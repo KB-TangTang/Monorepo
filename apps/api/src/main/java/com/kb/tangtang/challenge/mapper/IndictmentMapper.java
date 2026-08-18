@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.GroupTrialStatsRow;
 import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.domain.Indictment;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
@@ -75,6 +76,15 @@ public interface IndictmentMapper {
      */
     List<GroupTrialSummaryRow> findTrialSummaryByGroupIds(@Param("userId") Long userId,
                                                           @Param("groupIds") List<Long> groupIds);
+
+    /**
+     * 종료 그룹의 확정 재판 전적 (이슈 #173). 종료 화면 「재판 기록」 링크의 숫자다.
+     *
+     * <p>확정 상태(GUILTY·INNOCENT)만 센다 — 위의 {@link #findTrialSummaryByGroupIds} 는
+     * 진행 중(DEFENSE_WAIT·VOTING)만 세는 반대 방향이라 재사용할 수 없다.
+     * 재판이 하나도 없어도 GROUP BY 가 없어 0 으로 채워진 행이 항상 나온다.
+     */
+    GroupTrialStatsRow findClosedTrialStats(@Param("groupId") Long groupId);
 
     /**
      * 재판 상세 한 벌 (이슈 #170). 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 모두 이것을 쓴다.

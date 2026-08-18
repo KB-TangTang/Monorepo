@@ -66,7 +66,10 @@ public interface ChallengeGroupControllerDocs {
                     + "카드 종류(변론 필요/제출됨, 투표 필요/완료)는 `mine`·`status`·`myVote` 로 화면이 정한다. "
                     + "`defenseDeadline`·`voteDeadline` 은 저장값이 아니라 `created_at + challenge.trial.*` 계산값이며 "
                     + "**둘 다 채워진다.**\n\n"
-                    + "`settleTime`·`memoAuthor`·`memoDate`·채팅·종료 화면 필드는 아직 NULL 이다.")
+                    + "`status = CLOSED` 면 종료 화면 필드가 붙는다 — `finalMembers`(확정 배치가 남긴 "
+                    + "`finalRank` 오름차순 **저장값**, 재계산 없음)와 `trialStats`(확정 재판 전적). "
+                    + "그 외 상태에서는 둘 다 null 이다.\n\n"
+                    + "`settleTime`·`memoAuthor`·`memoDate`·채팅·`savingsAmount` 는 아직 NULL 이다.")
     ApiResponse<ChallengeGroupDetailDto> findFullDetail(@ApiIgnore Long userId,
                                                         @ApiParam(value = "그룹 ID", required = true) Long groupId);
 

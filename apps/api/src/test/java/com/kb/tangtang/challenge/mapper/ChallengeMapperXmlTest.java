@@ -251,6 +251,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
         assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findClosedTrialStats"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialDetail"));
         assertTrue(configuration.hasStatement(namespace + ".moveToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".confirmConfession"));
