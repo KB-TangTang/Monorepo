@@ -147,23 +147,42 @@ public class RootConfig {
      *   응답 없는 클라이언트 하나가 SseEmitter.send() 에서 막히면 **모든 사용자의 하트비트**가 멈춘다.
      *   하트비트가 막으려던 바로 그 상황이다.
      *
-     * feature/147-asset-api
-     * poolSize 는 @Scheduled 작업 수(현재 4개: SseHeartbeat.ping · NotificationDlqRetryScheduler.retryDue ·
-     * LlmCategorizationScheduler.pollAndProcess · FinancialSyncBatchScheduler.runBatch)보다 넉넉해야
-     * 한다. 작업 수와 딱 맞추면 여유가 사라져 한 작업이 길어질 때 다른 작업이 밀린다 — LLM 폴링과
-     * 금융 동기화 배치 둘 다 한 tick 에 여러 건의 외부 HTTP 호출을 순차로 수행하므로 실제로 오래
-     * 점유한다(이슈 #199).
+     * poolSize 는 @Scheduled 개수보다 넉넉하게 잡는다. 자리가 모자라면 오래 걸리는 배치가 자리를
+     * 점유하는 동안 하트비트가 밀린다. LLM 폴링과 금융 동기화 배치는 한 tick 에 여러 건의 외부 HTTP
+     * 호출을 순차로 수행하므로 실제로 오래 점유한다(이슈 #199).
      *
-     * DEV
-     * poolSize 는 @Scheduled 개수보다 넉넉해야 한다. 자리가 모자라면 오래 걸리는 배치가 자리를
-     * 점유하는 동안 하트비트가 밀린다. 2026-08-13 기준 스케줄러 4개
-     * (SseHeartbeat · NotificationDlqRetry · RelativeMissionAssignment · ChallengeGroupStatus)
-     * 이고 그룹챌린지 배치가 3개 더 붙을 예정(#168 · #170 · #172)이라 8 로 둔다.
+     * 2026-08-18 기준 @Scheduled 15개 → poolSize 18 을 그대로 둔다(여유 3).
+     *   15초  SseHeartbeat.ping
+     *   60초  NotificationDlqRetryScheduler.retryDue
+     *   60초  LlmCategorizationScheduler.pollAndProcess
+     *   5분   GroupChallengeEvaluationScheduler.evaluateActiveGroups   (#168)
+     *   5분   GroupTrialDeadlineScheduler.closeExpiredDefenses         (#170)
+     *   20분  FinancialSyncBatchScheduler.runBatch
+     *   일별  ChallengeGroupStatusScheduler.runDailyTransitions
+     *   일별  RelativeMissionAssignmentScheduler.assignDailyMissions · recoverMissingDailyMissions
+     *   일별  FixedExpenseDetectionScheduler.runDailyFixedExpenseBatch
+     *   일별  FixedExpensePaymentReminderScheduler.sendDuePaymentReminders
+     *   월별  MonthlyReportBatchScheduler.generatePreviousMonthReports · recoverPreviousMonthReports
+     *   월별  ChallengeMonthlyReportScheduler.finalizePreviousMonthReports
+     *                                     · refreshPreviousMonthEndGroupRecords   (#256)
+     *
+     * ⚠ 스케줄러를 추가하면 이 목록과 poolSize 를 같이 갱신한다. 과거에 목록이 "4개" 로 멈춰 있어
+     *   실제 개수를 세어 보기 전에는 여유가 있는지 판단할 수 없었다.
+     *   2026-08-16 에도 같은 일이 반복됐다 — #256 이 refreshPreviousMonthEndGroupRecords 를
+     *   추가하면서 목록을 갱신하지 않아 "13개 / poolSize 14" 로 적혀 있었지만 실제로는
+     *   14개 / 14 (여유 0) 였다. #169 에서 세어 정정하고 18 로 올렸다.
+     *   #170 이 변론 마감 1개를 추가해 15개가 됐다. poolSize 는 그대로 둔다 — 아직 여유가 3이다.
+     *   #172 개표·최종확정 2개가 더 붙으면 17개 / 18 (여유 1) 이 되므로 그때 올린다.
+     *   #169 의 ACTIVE → JUDGING 전이는 새 @Scheduled 를 만들지 않고
+     *   ChallengeGroupStatusScheduler.runDailyTransitions 안에 붙였다.
+     *
+     * 일별·월별 cron 은 자정 직후(00:01·00:10·00:15·00:30·00:40)와 18:30 에 몰린다.
+     * 특히 고정지출 배치 둘은 같은 프로퍼티(${fixed.expense.detection.cron})를 써서 반드시 겹친다.
      */
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(8);
+        scheduler.setPoolSize(18);
         scheduler.setThreadNamePrefix("tt-sched-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);

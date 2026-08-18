@@ -68,6 +68,8 @@ services:
       JDBC_URL: jdbc:log4jdbc:mysql://db:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
       JDBC_USERNAME: ${MYSQL_USER}
       JDBC_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
@@ -80,7 +82,6 @@ services:
       CODEF_API_URL: ${CODEF_API_URL}
       CODEF_CLIENT_ID: ${CODEF_CLIENT_ID}
       CODEF_CLIENT_SECRET: ${CODEF_CLIENT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       MOCK_API_URL: http://mock:8080
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -111,12 +112,34 @@ services:
       # 2026-08-06 실제로 목서버 매퍼 XML 오류 하나로 전면 502 가 났다.
       mock:
         condition: service_started
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # === 4. Redis (그룹 채팅, 이슈 #174) ===
+  redis:
+    image: redis:7-alpine
+    container_name: tangtang-redis
+    restart: unless-stopped
+    # AOF 필수. 장애 시 손실을 최대 1초로 제한한다 — 이 전제가 깨지면
+    # "채팅 원본을 MySQL 에 두지 않는다"는 결정(DECISIONS.md 2026-08-15)이 성립하지 않는다.
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    # 호스트 안쪽에만 연다. MySQL 3307 이 인터넷에 열려 있던 사고(이슈 #225)를 반복하지 않는다.
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   mysql_data:
   uploads:
+  redis_data:

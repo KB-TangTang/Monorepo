@@ -547,9 +547,10 @@ export const MOCK_ENDED_CHALLENGES = [
 /* ────────────────────────────────────────────────────────────
  * 5. 홈 TO-DO 인박스 시드
  *    type: 'accuse' (기소 → 변론 필요) | 'vote' (투표 대기)
- *    deadlineMinutes: 페이지 진입 시점 기준 남은 분 수.
- *      useCountdown 에서 base + deadlineMinutes * 60000 으로
- *      실시간 카운트다운을 계산한다.
+ *    deadlineMinutes: 조회 시점 기준 남은 분 수.
+ *      api/groupChallenge.js 가 호출할 때마다 절대시각(deadline)으로 바꾼다 —
+ *      useCountdown 은 절대시각만 받는다. 픽스처에 절대시각을 박아 두면
+ *      하루만 지나도 전부 「마감됨」이 되기 때문에 상대값으로 둔다.
  * ──────────────────────────────────────────────────────────── */
 
 export const MOCK_TODO_ITEMS = [

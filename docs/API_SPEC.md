@@ -105,162 +105,6 @@
 절약 감정서가 비어도 `200 OK`와 `monthlySavings=0`, `yearlySavings=0`, `items=[]`를 반환한다.
 `yearMonth` 형식과 양수 `categoryId` 검증 실패는 `400 INVALID_REQUEST`다.
 
-## 월간 소비 리포트
-
-모든 엔드포인트는 Bearer 인증이 필요하며 사용자 ID를 요청 파라미터로 받지 않는다.
-`yearMonth`는 `YYYY-MM` 형식이고 현재월·미래월·가입 이전 월은 상세 조회할 수 없다.
-
-| Method | Endpoint | 응답 책임 |
-|---|---|---|
-| GET | `/api/reports/monthly/spending-trend?yearMonth=YYYY-MM` | 선택월을 포함한 최근 6개월 순소비 추이 |
-| GET | `/api/reports/monthly/summary?yearMonth=YYYY-MM` | 당월·전월 총소비, 증감률, 활성 고정지출 후보·확정 개수 |
-| GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
-| GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
-| POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 월간 집계 스냅샷을 저장한 뒤 AI 소비 피드백·절약 비유를 수동 생성·재시도하거나 저장된 성공 결과를 재사용 |
-| GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유만 조회 |
-
-`fixedExpenseCandidateCount`는 `ACTIVE`·미제외·미확정 항목 수이고, `confirmedFixedExpenseCount`는 `ACTIVE`·미제외·확정 항목 수다. 후보가 없어도 확정 항목이 있으면 절약 감정서로 이동할 수 있다.
-
-월 선택기 응답은 다음 형태다.
-
-```json
-{
-  "months": [
-    {
-      "value": "2026-08",
-      "year": 2026,
-      "month": 8,
-      "available": true,
-      "hasReport": false,
-      "status": "ONBOARDING"
-    }
-  ]
-}
-```
-
-`status`는 `ONBOARDING`, `FIRST_REPORT`, `READY`, `CURRENT` 중 하나다. 가입월이 아직
-진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
-가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
-(`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
-`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
-선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
-
-집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
-일반 소비는 `amount`를 더하고 환불은 `COALESCE(refunded_amount, amount)`를 한 번 차감한다.
-기간 조건은 월 시작일 이상, 다음 달 시작일 미만의 반개구간을 사용한다.
-
-최근 6개월 추이는 가입월 이전 슬롯을 `{amount:null, hasData:false}`로 표시한다.
-가입 이후 완료월에 소비가 없으면 `{amount:0, hasData:true}`로 표시하여 실제 0원 월과 구분한다.
-
-증감률과 비율은 소수 둘째 자리에서 `HALF_UP`으로 반올림한다. 전월과 당월이 모두 0이면
-증감률은 `0.00`, 전월이 0이고 당월이 양수이면 계산 불가이므로 `null`이다. 가입 첫 달은
-`hasPreviousComparison=false`이고 전월 금액과 증감률을 `null`로 반환한다.
-
-프론트 화면 상태는 월 목록의 `status`와 요약 응답의 `hasPreviousComparison`으로 결정한다.
-`ONBOARDING`은 온보딩 화면, `FIRST_REPORT`는 전월 비교가 없는 첫 리포트,
-`READY`는 일반 리포트로 표시한다. 상세 집계 응답에는 별도 상태 필드를 추가하지 않고,
-`hasPreviousComparison=false`인 응답을 `FIRST_REPORT` 화면 모델로 조합한다.
-
-카테고리 응답의 `parentCategories`는 원형 차트용 대분류별 금액·비율이고, `categories`는
-선고 명세용 소분류별 금액·비율·전월 증감률이다. 각 소분류에는 `parentCategoryId`와
-`parentCategoryName`을 포함한다. 대분류가 직접 지정된 거래는 해당 대분류 자체를 명세 항목으로
-반환한다. 카테고리 없는 소비는 두 목록 모두 ID `null`, 이름 `"미분류"`로 반환한다. 환불 반영 후
-각 분류의 순소비가 0 이하이면 해당 목록에서 제외한다. 예산 대비 분석과 단일 `categoryId` 조회는
-이 API의 범위가 아니다.
-
-AI 분석 생성은 같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에 아래 구조를 저장한다.
-이는 #154의 카테고리 응답과 같은 월간 집계 스냅샷이다. 스냅샷이 없거나 AI 상태가
-`NOT_REQUESTED`·`FAILED`인 경우에만 최신 집계를 저장한다. `COMPLETED` 또는 `IN_PROGRESS`인 행은
-`category_summary_json`을 포함한 스냅샷을 갱신하지 않는다.
-
-```json
-{
-  "yearMonth": "2026-07",
-  "totalSpent": 3802832,
-  "parentCategories": [
-    {
-      "categoryId": 1,
-      "categoryName": "식비",
-      "amount": 671083,
-      "ratio": 17.65
-    }
-  ],
-  "categories": [
-    {
-      "parentCategoryId": 1,
-      "parentCategoryName": "식비",
-      "categoryId": 13,
-      "categoryName": "음식점/외식",
-      "amount": 174649,
-      "ratio": 4.59,
-      "previousMonthAmount": 136374,
-      "changeRate": 28.07
-    }
-  ]
-}
-```
-
-### `POST /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
-
-월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성한다. 요청 본문은 없으며 `yearMonth`는 필수 쿼리 파라미터다. 스냅샷이 없거나 상태가 `NOT_REQUESTED`·`FAILED`이면 `user_id`, `year_month`, `total_asset`, `total_debt`, `net_worth`, `category_summary_json`을 최신 값으로 저장한 뒤 생성·재시도한다. `total_asset`은 활성 연결계좌 잔액을 기준으로 하되 증권계좌는 보유 종목 평가금액을 사용해 중복 집계를 막고, `total_debt`은 대출 잔액 합계, `net_worth`는 그 차이다. `COMPLETED`면 저장된 스냅샷과 성공 결과를 그대로 반환하며, `IN_PROGRESS`면 스냅샷을 바꾸지 않고 중복 생성을 막는다.
-
-- 인증: Bearer JWT
-- 요청 본문: 없음
-- `yearMonth`: `YYYY-MM` 형식, 필수
-- 외부 전송 범위: 월별·카테고리별 집계 및 서버가 계산한 절감액만 허용한다. 사용자 식별 정보, 계좌·카드 정보, 거래 원문은 전송하지 않는다.
-- `feedbacks`: 1~3개의 문자열만 반환한다. 각 배열 원소는 제목이나 분류 객체가 아닌 사용자에게 보여 줄 피드백 문장 하나다.
-- `savingsAnalogy`: 절감액이 양수이고 전월 비교가 가능한 경우에만 문자열로 반환한다. AI는 반드시 `이번달 아낀 {절감액}원은 {실물자산} {수량}{실물자산의 단위}` 형식으로 생성한다. 예: `이번달 아낀 128,000원은 카페라떼 26잔`.
-- 첫 리포트이거나 절감액이 0원이면 `savingsAnalogy`는 `null`이다.
-- `status`: 성공 응답은 `COMPLETED`다. 상태와 결과는 `tbl_asset_snapshot`에 함께 저장하지만, 기존 #156의 AI 입력 집계·비식별화·외부 호출 규칙은 변경하지 않는다.
-
-```json
-{
-  "success": true,
-  "data": {
-    "yearMonth": "2026-07",
-    "status": "COMPLETED",
-    "feedbacks": [
-      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
-      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
-    ],
-    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
-  }
-}
-```
-
-주요 실패는 잘못된 월(`400 INVALID_REQUEST`), 조회 불가 월(`404 NOT_FOUND`), 이미 생성 중인 월(`409 AI_ANALYSIS_IN_PROGRESS`), 호출 제한(`429 TOO_MANY_REQUESTS`), 외부 AI 일시 장애(`503 AI_PROVIDER_UNAVAILABLE`)로 구분한다.
-
-### `GET /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
-
-저장된 AI 분석 상태와 결과만 조회한다. 이 경로는 외부 AI 제공자·AI 생성 서비스·POST 생성 경로를 호출하지 않으며, 스냅샷 행을 새로 만들거나 갱신하지 않는다.
-
-- 인증: Bearer JWT
-- 요청 본문: 없음
-- `yearMonth`: `YYYY-MM` 형식, 필수
-- `COMPLETED`: `feedbacks`는 저장된 문자열 1~3개, `savingsAnalogy`는 저장된 문자열 또는 `null`
-- `NOT_REQUESTED`, `IN_PROGRESS`, `FAILED`: `feedbacks`는 빈 배열, `savingsAnalogy`는 `null`
-- 스냅샷 행이 없어도 정상 상태인 `NOT_REQUESTED`와 빈 결과를 `200 OK`로 반환한다.
-- `ai_analysis_failure_code`, 제공자·모델·프롬프트 버전·입력 해시·원문 AI 응답은 노출하지 않는다.
-
-```json
-{
-  "success": true,
-  "data": {
-    "yearMonth": "2026-07",
-    "status": "COMPLETED",
-    "feedbacks": [
-      "식비 지출 비중이 지난달보다 늘었어요. 자주 이용한 지출 항목을 한 번 확인해 보세요.",
-      "고정지출을 제외한 소비가 줄어 이번 달 지출을 안정적으로 관리했어요."
-    ],
-    "savingsAnalogy": "이번달 아낀 128,000원은 카페라떼 26잔"
-  }
-}
-```
-
-저장된 `COMPLETED` JSON이 훼손돼 결과를 안전하게 조립할 수 없는 경우에만
-`503 AI_ANALYSIS_RESULT_UNAVAILABLE`을 반환한다. 이는 월간 총소비·추이·카테고리 조회 실패와
-분리된 부가 데이터 오류이며, 화면은 핵심 리포트를 계속 표시한다.
-
 ## 공통
 
 | 메서드 | 경로 | 인증 | 응답 |
@@ -939,15 +783,154 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
 
+## 개인 챌린지 월간 성과 리포트 (이슈 #244)
+
+모든 엔드포인트는 Bearer 인증이 필요하며, 사용자 ID를 요청 파라미터로 받지 않는다. 리포트는
+익월 1일 00:20 KST 배치가 전월의 최종 판정 개인 미션을 확정한 뒤에만 조회할 수 있다.
+
+| 메서드 | 경로 | 응답 |
+|---|---|---|
+| GET | `/api/reports/challenge/months` | 진입 상태와 조회 가능한 확정 월 목록 |
+| GET | `/api/reports/challenge?yearMonth=YYYY-MM` | 선택한 확정 월의 개인 챌린지 성과 |
+
+집계 대상은 대상 월에 배정되고 `SUCCESS` 또는 `FAIL`로 최종 판정됐으며 배정 시점 기준금액
+`base_amount(B)`가 저장된 개인 미션이다. 상대형과 절대형을 구분하지 않으며, `PENDING`과 B가 없는
+과거 이력은 제외한다. 결과는 `tbl_challenge_monthly_report`에 사용자·월별로 확정 저장한다.
+API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해당 사용자·전월만 보정 생성하며,
+이미 행이 있으면 다시 계산하지 않는다.
+
+`weeklyResults`는 월요일 시작 달력 주 순서다. 각 주의 `totalDays`·`successDays`·`successRate`는
+선택 월의 날짜만 세므로, 이전 달과 다음 달에 걸친 날짜는 분자·분모에서 모두 제외한다.
+첫 확정 리포트가 시작된 달에는 사용자의 최초 개인 미션 배정일부터 계산한다.
+`week`는 시작 전 주를 생략해도 다시 번호를 매기지 않으며, 해당 월의 달력 주차를 유지한다.
+
+### `GET /api/reports/challenge/months`
+
+리포트 화면에 처음 들어올 때 호출한다. 진입 상태와 월 선택기에 그릴 목록을 함께 준다.
+
+```json
+{
+  "entryState": "READY",
+  "months": [
+    {
+      "value": "2026-07",
+      "year": 2026,
+      "month": 7,
+      "available": true,
+      "hasReport": true,
+      "firstReport": true,
+      "status": "READY"
+    }
+  ]
+}
+```
+
+`entryState`는 세 가지다. 화면 분기는 이 값 하나로 결정한다.
+
+| `entryState` | 뜻 | `months` |
+|---|---|---|
+| `NOT_AGREED` | 활성 챌린지 동의가 없다 | 빈 배열 |
+| `PREPARING_FIRST_REPORT` | 동의는 했지만 확정된 월이 아직 없다 | 준비 중인 월 1건. 그 월조차 특정할 수 없으면 빈 배열 |
+| `READY` | 조회 가능한 확정 월이 있다 | 최신 월부터 내림차순 |
+
+- `PREPARING_FIRST_REPORT`의 월 1건은 **첫 개인 미션 배정월**이며, 그 이력이 없으면 챌린지 동의월을
+  대신 쓴다. 이 항목은 `available=false`, `hasReport=false`, `status=PREPARING_FIRST_REPORT`라
+  선택할 수 없다. 「첫 리포트 준비 중」 안내를 띄우는 용도다.
+- **당월은 확정 전이므로 절대 포함하지 않는다.** `available=true`인 항목은 전부 지난달 이전이다.
+- `firstReport`는 목록에서 **가장 오래된 확정 월 1건에만** `true`다. 상세의
+  `hasPreviousComparison=false`와 짝이며, 프론트는 이 플래그로 전월 비교 영역만 숨긴다.
+- ⚠ **이 조회는 읽기 전용이 아니다.** 전월 확정 행이 없으면 해당 사용자·전월만 보정 생성한 뒤
+  목록을 만든다. 이미 행이 있으면 다시 계산하지 않는다.
+
+### `GET /api/reports/challenge?yearMonth=YYYY-MM`
+
+상세 응답은 다음 형태다.
+
+```json
+{
+  "period": "2026-07",
+  "hasChallengeHistory": true,
+  "isFirstServiceMonth": false,
+  "hasPreviousComparison": true,
+  "missionSuccessRate": 82.76,
+  "monthOverMonthPercentagePoint": 9.43,
+  "successfulDays": 24,
+  "challengeDays": 29,
+  "bestStreakDays": 8,
+  "bestWeekday": "화요일",
+  "earnedPoints": 245,
+  "savedAmount": 128000,
+  "overspentAmount": 32000,
+  "netSavings": 96000,
+  "annualizedNetSavings": 1152000,
+  "categoryEffects": [
+    {
+      "categoryId": 12,
+      "categoryName": "카페·간식",
+      "successfulDays": 18,
+      "savedAmount": 72000,
+      "failedDays": 4,
+      "overspentAmount": 18000
+    }
+  ],
+  "weeklyResults": [
+    { "week": 1, "successDays": 4, "totalDays": 5, "successRate": 80.00 }
+  ],
+  "difficulties": [
+    { "difficultyName": "EASY", "attempts": 12, "successDays": 11, "successRate": 91.67 }
+  ],
+  "groupRecordState": "READY",
+  "groupRecord": {
+    "participatingGroups": 2,
+    "survivedCount": 1,
+    "eliminatedCount": 1,
+    "indictedCount": 3,
+    "acquittedCount": 2,
+    "convictedCount": 1
+  }
+}
+```
+
+첫 챌린지 리포트는 일반 리포트로 반환하되 `isFirstServiceMonth=true`,
+`hasPreviousComparison=false`, `monthOverMonthPercentagePoint=null`이다. 프론트는 이 필드로
+전월 비교 영역만 숨긴다.
+
+금액 4종은 확정 스냅샷 값이며 저장된 값이 없으면 `0`이다. `netSavings`는 절약액에서 초과액을
+뺀 값이고, `annualizedNetSavings`는 그 12배다(연 환산 표시용).
+
+`groupRecord`는 개인 미션 성과와 **별도 집계**다. 선택 월에 종료되고 최종 결과까지 확정된
+그룹 챌린지 전적만 센다. 표시 여부는 `groupRecordState`로 가른다.
+
+| `groupRecordState` | 뜻 | `groupRecord` |
+|---|---|---|
+| `READY` | 확정된 그룹 전적이 있다 | 객체 |
+| `JUDGING` | 종료한 그룹 중 최종 판정 대기가 있어 아직 못 보여준다 | `null` |
+| `EMPTY` | 선택 월에 표시할 그룹 전적이 없다 | `null` |
+
+현재 월·미래 월은 `CHALLENGE_REPORT_NOT_AVAILABLE`, 확정 스냅샷이 없는 과거 월은
+`CHALLENGE_REPORT_NOT_FOUND`, 형식 오류는 `INVALID_YEAR_MONTH`로 반환한다.
+활성 챌린지 동의가 없는 상태로 상세를 부르면 `CHALLENGE_REPORT_NOT_AVAILABLE`이다
+(월 목록은 오류 대신 `entryState=NOT_AGREED`를 준다). 저장된 스냅샷 JSON을 읽지 못하면
+`CHALLENGE_REPORT_UNREADABLE`이다.
+
+로컬 시연에서는 `POST /api/dev/reports/challenge/monthly?yearMonth=YYYY-MM`로 선택한 과거 월의
+확정 배치를 즉시 실행할 수 있다. 응답은 `{ yearMonth, affected }`이며, `affected`는 실제로
+스냅샷을 계산한 사용자 수다. `app.env=local`에서만 동작하고 인증이 필요하다.
+
 ## 개인 미션 월간 랭킹 조회 (이슈 #209)
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | GET | `/api/missions/rankings?yearMonth=YYYY-MM` | Bearer | 해당 월 상위 10명과 내 순위 |
 | GET | `/api/missions/rankings/months` | Bearer | 전체 랭킹 데이터가 있는 `YYYY-MM` 목록 |
+| GET | `/api/missions/rankings/certificate?yearMonth=YYYY-MM` | Bearer | 확정 월 명예 인증서 데이터 |
+| GET | `/api/missions/rankings/certificate/titles?yearMonth=YYYY-MM` | Bearer | 확정 월 AI 명예 타이틀 3개 |
 
 - 월 목록 응답은 `{ "yearMonths": ["2026-08", "2026-07"] }` 형식이다.
 - 프론트에서 이 목록을 기준으로 월 선택 버튼과 연도 이동을 활성화한다.
+- 인증서는 서울 시간 기준 전월 이전만 발급할 수 있다. 당월·미래 월 요청은 `CERTIFICATE_NOT_FINALIZED` 오류를 반환한다.
+- 인증서 응답은 `{ yearMonth, totalUsers, myRanking, streakDays, bestStreakDays, completedMissionCount, successMissionCount }` 형식이다.
+- AI 명예 타이틀은 매월 1일, 전월 마지막 미션 판정과 당월 미션 배정 후 생성해 저장한다. 조회 API는 `{ yearMonth, titles, source }` 형식이며 AI 생성 전·실패 시 `source: "FALLBACK"` 타이틀을 반환한다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
@@ -1036,9 +1019,10 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.
 - 방장도 `tbl_group_member` 에 들어간다. 정원·목숨·랭킹이 전부 이 테이블을 세기 때문이다.
 - 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
-- `pendingTrialCount`·`defendant` 는 `tbl_indictment` 구현 전이라 항상 `0`/`false` 다.
+- 재판 배지(`pendingTrialCount`·`defendant`·`myVoteStatus`)는 **목록에서만** 채워진다 (이슈 #169).
+  상세·참여·초대 미리보기에서는 `0`·`false`·`null` 이다.
   절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**
-- 상태 전이(`RECRUITING` → `ACTIVE`/`CLOSED`)와 시작 알림은 이 API 가 하지 않는다 —
+- 상태 전이(`RECRUITING` → `ACTIVE`, 모집 미달 시 삭제)와 시작 알림은 이 API 가 하지 않는다 —
   별도 배치(이슈 #152, 아래 참고). **참여 가능 판정은 날짜가 아니라 `status` 하나를 기준으로 한다.**
   그래서 배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있을 수 있다.
 
@@ -1092,12 +1076,35 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 
 - 대상은 `status=RECRUITING` 이면서 `start_date <= 기준일` 인 그룹이다.
   **등호가 아니라 부등호다** — 서버가 내려가 배치를 건너뛰었어도 다음 실행이 밀린 그룹을 주워 담는다.
-- 참여자 **2명 이상**이면 `ACTIVE`, **1명(방장뿐)**이면 `CLOSED` 로 간다. 혼자서는 재판이 성립하지 않는다.
-- 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED`,
-  `CLOSED` 면 방장에게 `GROUP_CHALLENGE_CANCELED`. 딥링크는 `/group-challenges/{groupId}` 다.
+- 참여자 **2명 이상**이면 `ACTIVE` 로 간다. **1명(방장뿐)**이면 그룹을 **삭제한다**(이슈 #261).
+  혼자서는 재판이 성립하지 않는다.
+- **미성립 그룹을 `CLOSED` 로 두지 않는 이유**는 `CLOSED` 가 「정상 종료 + 최종 결과 확정 완료」를
+  뜻하는 상태이기 때문이다. 시작조차 못 한 그룹은 `final_*` 가 영원히 NULL 이고 결산 행도 없으며
+  `end_date` 가 미래라, 종료 연월로 월 귀속을 잡는 그룹 전적·월간 리포트가 이 그룹을 미래 달에 끌어다 놓는다.
+  자식 행(참여자·결산·기소·투표)은 FK 의 `ON DELETE CASCADE` 가 정리한다.
+- 알림은 `ACTIVE` 면 참여자 전원에게 `GROUP_CHALLENGE_STARTED` (딥링크 `/group-challenges/{groupId}`),
+  삭제면 방장에게 `GROUP_CHALLENGE_CANCELED` (딥링크 `/group-challenges` — 그룹이 사라져 상세로 보내면 404 다).
+배치는 두 전이를 **순서대로** 돌린다. 아래는 첫 번째(`RECRUITING → ACTIVE`/삭제) 이야기다.
+두 번째 `ACTIVE → JUDGING` 은 이슈 #169 에서 붙었다 — 같은 절 끝에 따로 적었다.
+
 - 트랜잭션은 **그룹 한 건 단위**다. 한 그룹이 실패해도 나머지는 처리되고, 실패분은 다음 실행이 다시 집는다.
-- 멱등하다. 상태를 `RECRUITING` 인 행만 골라 UPDATE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
+- 멱등하다. `status = 'RECRUITING'` 인 행만 골라 UPDATE·DELETE 하고 바뀐 행이 0이면 알림을 보내지 않는다.
   같은 날 두 번 돌려도 알림이 두 번 나가지 않는다.
+  DELETE 쪽 조건절은 중복 알림보다 **오삭제**를 막는 장치다 — 조회 시점엔 혼자였어도 그 사이 참여가 생겨
+  다른 실행이 `ACTIVE` 로 전이시켰을 수 있고, 조건이 없으면 방금 시작된 그룹이 통째로 사라진다.
+
+### 종료 전이 `ACTIVE → JUDGING` (이슈 #169)
+
+같은 배치의 두 번째 단계다. **`JUDGING` 을 쓰는 코드가 저장소에 한 곳도 없었다** — 종료일이 지난
+그룹이 영영 `ACTIVE` 로 남아 「진행 중」 탭에 쌓이고 「종료됨」 탭(`JUDGING,CLOSED`)은 비어 있었다.
+시드 SQL 이 `JUDGING` 행을 직접 넣고 있어 화면상으로만 가려져 있었다.
+
+- 대상은 `status=ACTIVE` 이면서 **`end_date < 기준일`** 인 그룹이다.
+  기준일은 `today` 가 아니라 **`today - 1일`** 이다. 평가·기소 배치가 종료 다음 날까지 `ACTIVE`
+  그룹을 봐야 마지막 날 소비가 평가된다 — 종료 당일 자정에 `JUDGING` 으로 넘기면 그 하루가 통째로 빠진다.
+- **알림도 트랜잭션도 없다.** UPDATE 한 문장이라 그 자체가 원자적이고, 함께 묶을 다른 쓰기가 없다.
+  멱등성은 `WHERE status = 'ACTIVE'` 비교가 그대로 보장한다.
+- `JUDGING → CLOSED`(최종 결과 확정)는 이 배치가 하지 않는다. 이슈 #172 · #173 범위다.
 
 ### 배치 수동 트리거 (DEV 전용)
 
@@ -1112,9 +1119,11 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 별도 on/off 프로퍼티는 두지 않는다 — **배포 환경에서 쓸 계획이 없는 도구**라 스위치를 달면
 로컬에서 쓸 때마다 설정을 고쳐야 하고, 켜진 채 배포될 위험만 새로 생긴다.
 
-- `name` 은 현재 `group-challenge-status` 하나다. 배치가 늘어나면 여기에 추가된다.
+- `name` 은 `group-challenge-status` · `group-challenge-evaluation` · `fixed-expense-payment-reminders`. 배치가 늘어나면 여기에 추가된다.
 - `date` 는 `yyyy-MM-dd`. 생략하면 오늘이다. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다.
-- `affected` 는 실제로 상태가 바뀐 그룹 수다.
+  `group-challenge-evaluation` 은 기준일을 **종료 다음 날**로 넣어야 기간평가(PERIOD) 기소가 재현된다.
+- `affected` 는 배치가 처리한 건수다 (`group-challenge-status` 는 전이된 그룹 수,
+  `group-challenge-evaluation` 은 새로 만든 기소 수).
 
 프론트에서는 `components/dev/DevBatchTriggerFab.vue` 가 이 API 를 부른다.
 **그룹 챌린지 홈**과 **재판 전체보기** 두 화면 우하단에 「챌린지 시작 배치」 버튼으로 붙어 있다
@@ -1133,6 +1142,371 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 |---|---|---|
 | `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
+
+## 그룹 챌린지 — 재판 진입로 (이슈 #169)
+
+홈 「오늘의 할 일」과 그룹 상세 화면이 쓰는 조회 2종이다. **쓰기(변론 제출·투표)는 여기 없다** —
+이슈 #170 · #171 범위다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/group-challenges/my-trials` | Bearer | `MyTrial[]` |
+| GET | `/api/group-challenges/{groupId}/detail` | Bearer | `ChallengeGroupDetail` |
+
+> `/my-trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다 먼저 매칭한다.
+> 순서를 바꿔도 같다.
+
+### 마감 시각은 저장값이 아니라 계산값이다
+
+`tbl_indictment` 에 마감 컬럼이 없다(`schema.sql` 의 `[0803]` 주석). 응답의 모든 마감은
+`created_at` 에서 파생한다.
+
+```
+변론 마감 = created_at + challenge.trial.defense-hours   (기본 6시간)
+투표 마감 = created_at + defense-hours + vote-hours       (기본 6 + 24 = 30시간)
+```
+
+- 프로퍼티를 줄이면 **이미 생성된 기소의 마감도 함께 앞당겨진다.** 시연 때 코드를 고칠 필요가 없다.
+- **마감이 지난 건도 목록에서 그대로 내려간다.** 지우는 일은 상태 전이 배치가 한다 —
+  조회가 마감을 판단해 숨기면 배치가 아직 안 돈 사이 화면과 DB 가 어긋난다.
+- 응답은 **ISO-8601 절대시각**(`2026-08-16T15:00:00`)이다. 남은 분 수로 주지 않는다 —
+  화면을 열어 둔 채 몇 시간이 지나면 카운트다운이 응답 받은 시점 기준으로 굳는다.
+
+### `MyTrial` — 오늘의 할 일
+
+`{ indictmentId, type, challengeId, challengeName, defendantNickname, amount, voteCount, totalVoters, deadline }`
+
+- 변론 대기와 투표 대기를 **한 배열로** 마감 임박순 정렬해 내려준다. 화면이 하나의 목록으로 보여주고
+  필터 칩으로만 나누기 때문이다. 두 배열로 나눠 주면 프론트가 다시 합쳐 정렬해야 하는데
+  그 기준이 서버와 어긋나면 카드와 시트의 순서가 달라진다.
+- `type` 은 **소문자 고정** `accuse`(내가 변론) · `vote`(내가 투표). `GroupTodoItem.vue` 가
+  소문자 리터럴로 비교한다.
+- `type` 에 따라 비는 필드가 있다 — `accuse` 는 `amount` 만, `vote` 는
+  `defendantNickname`·`voteCount`·`totalVoters` 만 채워진다.
+- **「3/5 투표」 같은 표시 문구는 담지 않는다.** 문구를 서버가 만들면 디자인을 고칠 때마다
+  war 를 다시 올려야 한다. 서버는 재료만 주고 `api/groupChallenge.js` 가 조립한다.
+
+### `ChallengeGroupDetail` — 상세 화면 한 벌
+
+목록과 같은 `ChallengeGroup` 에 상세 전용 필드를 얹은 것이다. **그룹 필드는 한 겹 없이 같은
+높이로 펼쳐진다**(`@JsonUnwrapped`) — 프론트가 응답을 `{...dto}` 로 펼쳐 쓰기 때문에
+`challenge.groupName` 처럼 접히면 화면 전체가 빈칸이 된다.
+
+추가 필드: `myDailyAmount`, `myUsagePercent`, `myRemainingAmount`, `indictments[]`, `dailyMembers[]`.
+
+- `dailyMembers` 에는 **내가 빠져 있다.** 내 몫은 위의 `my*` 세 개다.
+- `myRemainingAmount` 는 **초과 시 음수**다. 0 으로 깎으면 얼마나 넘겼는지 화면이 알 수 없다.
+- `dailyAmount` 는 일일평가면 오늘 하루치, 기간평가면 기간 합계다. 이름은 하나로 뒀다 —
+  둘로 나누면 화면이 매번 둘 중 하나를 골라야 한다.
+- `usagePercent` 는 **100 을 넘을 수 있다**(화면이 막대만 100% 에서 자른다).
+  한도 0원인 무지출 챌린지는 한 푼이라도 쓰면 100 이다.
+
+`indictments[]` = `{ id, userId, nickname, profileImageUrl, status, settlementDate, exceededAmount,
+mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
+
+- 진행 중(`DEFENSE_WAIT`·`VOTING`)인 기소만 **오래된 순**(= 마감이 급한 순)으로 준다.
+  확정된 기소는 카드가 아니라 전적으로 간다.
+- **카드 종류는 서버가 정하지 않는다.** 프론트가 `mine`·`status`·`myVote` 를 조합해
+  「변론 필요 / 변론 제출됨 / 투표 필요 / 투표 완료」를 만든다.
+- **마감 두 개를 둘 다 채운다.** 상태별로 한 쪽만 채우면 상태 전이가 도는 순간 화면에서
+  마감이 잠깐 사라진다.
+- `settlementDate` 는 기소 생성일이 아니라 **위반한 날짜**다. 심야 거래를 다음 날 배치가 잡아
+  하루 어긋난다.
+- `mine`·`defended`·`exceeded` 는 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 접두어 없는
+  `mine`·`defended`·`exceeded`** 다.
+
+### 아직 NULL 인 필드
+
+`settleTime` · `memoAuthor` · `memoDate` 는 근거 컬럼이 없다.
+채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #172 · #173 이다.
+화면이 이미 NULL 을 견디도록 만들어져 있다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
+
+## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170)
+
+기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그리고 그 반대인 혐의 인정까지.
+**투표(#171)와 개표·확정(#172)은 여기 없다.**
+
+| 메서드 | 경로 | 인증 | 권한 | 응답 |
+|---|---|---|---|---|
+| GET | `/api/group-challenges/trials/{indictmentId}` | Bearer | 그룹 참여자 | `GroupTrialDetail` |
+| GET | `/api/group-challenges/trials/{indictmentId}/transactions` | Bearer | **피고 본인만** | `TrialTransactions` |
+| POST | `/api/group-challenges/trials/{indictmentId}/defense` | Bearer | 피고 본인만 | `null` |
+| POST | `/api/group-challenges/trials/{indictmentId}/confession` | Bearer | 피고 본인만 | `null` |
+
+### `GroupTrialDetail` — 재판 화면 한 벌
+
+**#171 과 공유하는 계약이다.** 기소 안내 · 변론 작성 · 투표 · 판결 상세가 이 응답 하나를 쓴다.
+화면마다 엔드포인트를 두면 같은 금액을 네 곳에서 다르게 계산하게 된다.
+
+```
+{ indictmentId, groupId, groupName, status, result, verdictMethod, message,
+  accused: { userId, nickname, profileImageUrl, mine },
+  evalType, challengeDate, startDate, endDate,
+  categoryId, categoryName,
+  limitAmount, currentAmount, exceededAmount,
+  createdAt, defenseDeadline, voteDeadline,
+  defense: { content, actualBurdenAmount, deductionAmount, imageUrls[], createdAt } | null,
+  myVerdict, voteCount, totalVoters }
+```
+
+- 마감 두 개는 **#169 와 같은 계산값**이다 (`created_at + defense-hours` / `+ vote-hours`). 컬럼이 없다.
+- `defense` 는 **아직 변론이 없으면 NULL 이다.** 빈 객체로 채우지 않는다 — 화면이 「변론 대기」와
+  「내용 없는 변론」을 구분할 수 없게 된다.
+- `myVerdict` 는 안 던졌으면 NULL, **피고 본인은 항상 NULL** 이다. `totalVoters` = 참여자 − 피고 1명.
+  #170 이 이 세 필드를 함께 채운다 — 서브쿼리가 이미 있어 비용이 0 이고 #171 은 쓰는 쪽만 만들면 된다.
+- `categoryName` 이 NULL 이면 총소비 챌린지다.
+- `currentAmount` 는 **무죄 감액이 반영된 결산 구간 소비액**이고, 동시에 **실제 부담금 입력의 상한**이다.
+- `accused.mine` 은 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 `mine`** 이다.
+- 「D-2시간」·「일일결산 8/18」 같은 표시 문구는 담지 않는다. 서버는 재료만 주고
+  `api/groupChallenge.js` 의 `toTrialDetailViewModel` 이 조립한다.
+  사건번호(`2026-재판-0805`)도 컬럼이 아니라 **결산일에서 만드는 라벨**이다.
+
+### `TrialTransactions` — 결산 구간 거래 목록
+
+```
+{ evalType, limitAmount, currentAmount,
+  days: [ { date, dailyAmount,
+            transactions: [ { transactionId, time, merchantName, amount,
+                              categoryName, paymentMethod, isRefund } ] } ] }
+```
+
+**상세와 분리한 이유는 권한이다.** 상세는 투표자도 보지만 거래 목록은 피고 본인만 본다.
+한 응답에 섞으면 투표자에게 남의 거래내역이 흘러간다.
+
+- **기소를 발화시킨 거래 1건이 아니라 구간 전체다.** 한도 초과는 누적 판정이라 발화 거래가 문제의
+  거래라는 보장이 없다. 친구들 몫까지 대납한 큰 거래는 그 시점에 한도 미달이라 기소를 만들지 않고,
+  뒤따르는 평범한 소비가 기소를 만든다 — 발화 거래만 보이면 정작 대납한 금액을 신고할 방법이 없다.
+- DAILY 는 `days` 가 **하나**, PERIOD 는 거래가 있는 날만큼 여러 개다(날짜 오름차순).
+  거래가 없는 날은 내려보내지 않는다.
+- **`transactions[].amount` 의 합 = `dailyAmount`, 그 합 = `currentAmount`** 여야 한다
+  (무죄 감액이 0 인 동안. 감액이 붙으면 `currentAmount` 만 줄어든다 — 아래 참고). 화면이
+  「실제 부담금 합계 vs 한도」를 이 값으로 판정하므로 어긋나면 판정이 무너진다. 그래서 조회 조건을
+  집계 배치와 같은 `consumptionFilter` 조각으로 공유한다(복사하지 않는다).
+  `dailyAmount` 도 `tbl_group_challenge_daily_result` 에서 다시 읽지 않고 **목록을 더해 만든다** —
+  두 값이 어긋나면 화면에 「합계와 항목이 다른」 하루가 나온다.
+- 환불은 **음수 `amount`** 다(`is_refund=1 → -COALESCE(refunded_amount, amount)`). 0 으로 깎으면
+  환불받은 소비로 기소된 것처럼 보인다.
+- `dailyAmount` 에는 **무죄 감액이 빠져 있지 않다.** 감액은 구간 총액(`currentAmount`)에만 적용된다 —
+  어느 날에서 깎을지가 정해지지 않은 값이라 날짜별로 배분할 수 없다. 감액을 기록하는 주체는 #172 라
+  이 시점에는 항상 0 이고 두 값이 같다.
+- `time` 은 원천에 시각이 없으면 NULL, `categoryName` 은 LLM 분류 전이면 NULL 이다.
+- `isRefund` 는 `@JsonProperty("isRefund")` 로 **이름을 고정했다.** 고정하지 않으면 Jackson 이
+  `refund` 로 내려보내 프론트에서 항상 `undefined` 다.
+- 피고가 아닌 사람이 부르면 `NOT_INDICTMENT_OWNER` 가 아니라 **`TRIAL_NOT_FOUND`** 다.
+  「그 재판의 피고가 누구인지」를 노출하지 않기 위함이다.
+
+### 변론 제출 — `multipart/form-data`
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `content` | text | O | 변론 내용. **최대 150자** (`DefenseService.CONTENT_MAX_LENGTH`) |
+| `actualBurdenAmount` | number | O | 건별 실제 부담금의 **합계** |
+| `images` | file[] | X | 증빙. **최대 3장**, 장당 5MB |
+
+- **건별 입력은 서버로 올라오지 않는다.** 거래-변론 연결 테이블을 만들지 않기로 했고(마이그레이션 0건),
+  건별 값은 순수 UI 다. 합계만 전송된다.
+- **`deductionAmount` 는 클라이언트를 믿지 않고 서버가 계산한다** — `currentAmount − actualBurdenAmount`.
+  무죄 확정 시 소비액에서 빠질 금액이라 클라이언트가 정하게 두면 감액을 임의로 부풀릴 수 있다.
+- 이미지는 `ImageProcessor.toBoundedJpeg` 로 **긴 변 1280px 상한**까지만 줄인다(비율 유지).
+  프로필의 `toSquareJpeg`(256×256 센터 크롭)를 쓰면 영수증이 잘린다.
+- **저장되는 값은 URL 이 아니라 키**다 — `defense/{indictmentId}/{uuid}.jpg`. 읽을 때
+  `imageStorage.urlOf(key)` 로 변환해 `defense.imageUrls` 로 내려준다. 로컬 → S3 이전 시
+  기존 행을 변환하지 않아도 되게 하기 위함이다.
+- 성공하면 `tbl_indictment.status` 가 `DEFENSE_WAIT` → **`VOTING`** 으로 넘어가고
+  `DefenseRegistered` 이벤트가 그룹 채팅에 시스템 메시지를 남긴다.
+- 프론트에서 `axios` 로 보낼 때 **`headers: { 'Content-Type': undefined }`** 로 인스턴스 기본값
+  (`application/json`)을 지워야 한다. 안 지우면 axios 가 FormData 를 `JSON.stringify` 한다.
+
+### 혐의 인정 — 본문 없음
+
+`status='GUILTY'`, `result=1`, `verdict_method='CONFESSION'` 으로 조건부 UPDATE 하고
+`VerdictConfirmed` 이벤트를 발행한다.
+
+- **`tbl_vote` · `tbl_defense` 행을 만들지 않는다.** 투표 없이 끝난 재판이다.
+- **목숨 차감과 무죄 감액(`verdict_deduction_amount`) 기록은 하지 않는다 — 이슈 #172 담당이다.**
+  그래서 완료 화면도 「목숨 5 → 4」 를 그리지 않는다. 그리면 아직 일어나지 않은 차감을 단정하게 되고,
+  #172 가 들어온 뒤엔 값이 두 벌로 갈린다.
+- 상태 UPDATE 는 `WHERE ... AND status='DEFENSE_WAIT'` 라 **멱등**이다. 같은 요청을 두 번 보내면
+  두 번째는 `DEFENSE_NOT_ALLOWED` 다.
+
+### 기간결산 소비액 공식이 바뀌었다 — #168 · #169 응답에도 영향
+
+기간평가(`PERIOD`) 소비액을 `SUM(daily_amount)` 에서 아래로 통일했다. #170 이 변론 화면용 소비액을
+계산하며 **복사본을 하나 더 만드는** 시점이라 함께 정리했다(변론 화면은 결국 재판 상세의 같은 조각을
+재사용한다).
+
+```sql
+GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
+```
+
+- 그전까지 기간결산은 `verdict_deduction_amount` 를 전혀 보지 않았다 → **무죄를 받아도 그룹 상세
+  소비액·초과액·재기소 판정이 하나도 바뀌지 않았다.**
+- `SUM(effective_amount)` 로 바꾸면 안 된다. 그 생성컬럼은 **행마다** `GREATEST(…,0)` 를 거는데
+  환불은 음수 `daily_amount` 행으로 상쇄되므로 그 음수가 0 으로 깎여 **환불받은 소비로 기소된다.**
+  합산한 뒤 한 번만 클램프해야 한다.
+- 값이 바뀌는 응답: `ChallengeGroupDetail` 의 `dailyAmount`·`myDailyAmount`(기간평가 그룹),
+  `indictments[].exceededAmount`, 그리고 이 절의 `currentAmount`. **세 곳이 항상 같은 값이어야 한다.**
+- 공식 원본은 `GroupChallengeResultMapper.xml` 상단 주석이다. `<sql>` 조각으로 못 묶었다 —
+  상관 서브쿼리가 참조하는 바깥 별칭이 호출부마다 달라 `${}` 가 필요해지는데 금지 대상이다.
+  대신 내부 별칭을 `rp` 로 통일하고 `ChallengeMapperXmlTest` 가 세 statement
+  (`findOverLimitPeriod`·`findMemberConsumption`·`findTrialDetail`)의 SQL 을 문자열로 대조한다 —
+  한 곳만 고치면 테스트가 깨진다.
+- `findDeductionOverflow` 경고는 **DAILY 이고 감액이 0 보다 큰 행만** 검사한다.
+  PERIOD 는 기간 전체 감액을 기소가 붙은 `end_date` 행 한 줄에 적으므로
+  `verdict_deduction_amount > daily_amount` 가 정상이고, 환불이 소비보다 많은 날은 `daily_amount` 가
+  음수라 **감액한 적이 없는 행까지** `0 > -10000` 으로 걸린다. 둘 다 수동 검증에서 실제로 오탐이 났다.
+
+> 감액을 **기록하는** 주체는 #172 다. #170 은 그 값을 *읽는* 쪽만 준비해 뒀고, 지금은 항상 0 이라
+> 실제 응답 값은 달라지지 않는다.
+
+### 변론 마감은 배치가 넘긴다
+
+`GroupTrialDeadlineScheduler` 가 `challenge.trial.deadline.fixed-delay-ms`(기본 5분)마다
+마감이 지난 `DEFENSE_WAIT` 를 `VOTING` 으로 넘긴다. **일일 cron 에 붙이지 않았다** — 변론 창이
+6시간인데 하루 한 번 돌면 재판이 최대 24시간 멈춘다.
+**자동 유죄 처리는 하지 않는다.** 변론이 없어도 투표는 열린다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `TRIAL_NOT_FOUND` | 400 | 없는 기소 · 그룹 참여자가 아님 · (거래 목록에서) 피고가 아님 |
+| `NOT_INDICTMENT_OWNER` | 400 | 남의 재판에 변론·혐의 인정 |
+| `DEFENSE_NOT_ALLOWED` | 400 | `status != DEFENSE_WAIT` (이미 투표 중이거나 확정됨) |
+| `DEFENSE_CLOSED` | 400 | 변론 마감 시각이 지남 (배치가 아직 안 돈 사이) |
+| `DEFENSE_ALREADY_EXISTS` | 400 | 이미 변론을 제출함 (`uk_def_indictment`) |
+| `DEFENSE_CONTENT_REQUIRED` | 400 | 내용이 공백 |
+| `DEFENSE_CONTENT_TOO_LONG` | 400 | 150자 초과 |
+| `INVALID_BURDEN_AMOUNT` | 400 | 음수이거나 `currentAmount` 초과 |
+| `TOO_MANY_IMAGES` | 400 | 4장 이상 |
+| `IMAGE_TOO_LARGE` | 400 | 장당 5MB 초과 |
+
+> ⚠ `IMAGE_TOO_LARGE` 는 **업무 검증보다 먼저** 난다. 컨트롤러가 파일을 바이트로 읽기 전에
+> `requireWithinLimit` 을 걸기 때문에, 없는 기소에 5MB 넘는 이미지를 보내면 `TRIAL_NOT_FOUND`
+> 대신 이 코드가 온다. 메모리에 거대한 파일을 올린 뒤 "없는 재판입니다" 를 답하는 것보다 낫다.
+
+## 그룹 채팅 (이슈 #174)
+
+그룹 챌린지방(지방법원)마다 딸린 실시간 채팅이다. 조회 3종은 REST 지만 **발송은 STOMP 로만** 한다.
+이 절엔 발송 엔드포인트가 없다.
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount, dayIndex, daysLeft }` |
+| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo}], hasMore }` |
+| POST | `/api/groups/{groupId}/chat/read` | Bearer | 없음 (호출한 사용자의 안 읽은 수를 0으로 초기화) |
+
+- `before`·`after` 는 `messageId` 기준 페이징이다. **둘을 동시에 주면 `INVALID_REQUEST`.** 둘 다 없으면
+  최근 `limit` 건을 준다.
+  - `before` - 그 메시지보다 앞 구간 (위로 스크롤)
+  - `after` - 그 메시지보다 뒤 구간 (재연결 후 놓친 구간 보충)
+- `limit` 은 **1~100, 기본값 50** 이다. 범위를 벗어나면 `INVALID_REQUEST` 다(`ChatQueryService`).
+- `hasMore` 는 "위로 더 있는가" 다. 반환된 메시지 중 가장 오래된 `messageId` 가 1보다 크면 `true`.
+- `sentAt` 은 ISO-8601 문자열(`2026-08-16T12:34:56`)이다. **REST 와 STOMP 가 같은 형식**이다
+  (`WebSocketConfig#jsonConverter` 가 브로커 컨버터에도 REST 와 같은 ObjectMapper 를 꽂는다).
+- `type` 은 `TEXT`(참여자가 보낸 메시지) 또는 `SYSTEM`(재판 진행 봇 메시지)이다. `SYSTEM` 이면
+  `senderId`·`senderNickname` 이 `null` 이고, 대신 아래 세 값이 채워진다.
+  - `systemType` - `VIOLATION_DETECTED` · `TRIAL_OPENED` · `DEFENSE_REGISTERED` · `VERDICT_CONFIRMED`.
+    **화면이 카드 모양을 고르는 기준이다.** 문구를 파싱해 종류를 알아내지 말 것 — 문구가 바뀌면 깨진다.
+  - `deepLink` - "재판 보러가기" 가 여는 라우터 경로(`/challenge/group/{groupId}/trial/{indictmentId}`)
+  - `caseNo` - 표시용 사건번호(`2026-재판-0729`). 서버도 이 값을 다시 파싱하지 않는다
+  - **세 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
+    (프론트는 문구만 있는 pill 로 떨어뜨린다).
+  - `content` 는 **본문만** 담는다. "판결이 확정됐어요" 같은 제목은 넣지 않는다 — 채팅 카드는
+    `systemType` 이, 알림은 `NotificationType` 이 각자 제목을 갖고 있어 같은 문장이 두 번 나온다.
+- `dayIndex` 는 시작일을 1일차로 세는 진행 일차(시작 전이면 `0`), `daysLeft` 는 종료일까지 남은 날
+  (종료일 당일 `0`, 지났으면 음수)이다. **서버(Asia/Seoul)가 계산한다** — 기기 시계·시간대에 따라
+  값이 달라지면 안 되는 값이라 프론트에서 세지 않는다.
+- **`CLOSED`(재판 절차가 끝난) 챌린지는 조회 자체가 막힌다.** `JUDGING`(재판 중)은 대화가 가장
+  활발한 구간이라 허용한다.
+
+### 실시간 발송·수신 (STOMP)
+
+발송·수신은 REST 가 아니라 STOMP 다.
+
+- 접속 엔드포인트: `/ws/chat` (SockJS 폴백 없음. 네이티브 WebSocket 전용)
+- 구독: `/sub/chat/{groupId}` · 발행: `/pub/chat/{groupId}`
+- **이 두 목적지 패턴 말고는 서버가 전부 거부하고 연결을 끊는다**(`StompAuthChannelInterceptor`,
+  deny-by-default). `/sub/chat/**` 같은 와일드카드로 우회하려는 시도도 막는다.
+- 인증은 CONNECT(또는 STOMP) 프레임의 네이티브 헤더 `Authorization: Bearer {accessToken}` 이다.
+  브라우저 WebSocket API 는 핸드셰이크에 커스텀 헤더를 실을 수 없어 이 방식을 쓴다.
+- 액세스 토큰은 15분 만료다. 세션 중 토큰을 교체하는 경로는 없다. 만료되면 프론트가 재연결하며
+  새 토큰으로 다시 붙는다.
+- 발행 본문은 `{ content }` 하나다. 비어 있거나 500자를 넘으면 `INVALID_REQUEST` 다.
+- 구독·발행 시점에도 REST 와 같은 `ChatRoomAccessService.verifyCanEnter` 를 거치므로
+  `NOT_FOUND`·`CHAT_NOT_MEMBER`·`CHAT_ROOM_CLOSED` 가 그대로 발생할 수 있다. STOMP 에서는
+  응답 코드가 아니라 **연결 종료**로 나타난다.
+- 수신 메시지 모양은 REST 조회의 `messages[]` 항목과 **완전히 같다**(`ChatMessageDto` 하나를 공유).
+- 프론트는 접속 URL 을 **`VITE_WS_BASE_URL` 에서 먼저 유도하고, 없으면 `VITE_API_BASE_URL` 로
+  폴백**한다(`api/chatSocketUrl.js`). 둘 다 없으면 현재 호스트로 폴백한다.
+- **로컬 개발은 그대로 붙는다.** `vite.config.js` 의 `/ws` 프록시(`ws: true`)가 업그레이드 요청을
+  :8080 으로 넘긴다. 로컬에는 두 환경변수 모두 설정할 필요가 없다.
+- **프로덕션 소켓은 동작한다**(이슈 #268). EC2 앞단 nginx 가 443 에서 TLS 를 끊고 8080 으로 넘긴다.
+  - 요청이 두 길로 갈린다. **REST 는 Vercel rewrite 를 거쳐 EC2:8080**, **소켓은 EC2:443 직행**이다.
+    `vercel.json` 의 rewrite 가 WebSocket 업그레이드를 프록시하지 못해 소켓만 빼냈다.
+  - Vercel 환경변수는 `VITE_WS_BASE_URL=https://kb-tangtang.duckdns.org` 하나다
+    (**Production · Preview 두 스코프 모두**). `VITE_API_BASE_URL` 은 건드리지 않는다.
+  - ⚠ 값에 `wss://` 를 넣으면 절대 URL 로 인식되지 않아 **조용히 Vercel 호스트로 폴백**한다.
+    반드시 `https://` 로 넣고 끝에 `/api` 를 붙이지 않는다.
+  - 되돌리려면 `VITE_WS_BASE_URL` 을 지우고 재배포하면 된다. 코드가 폴백 경로를 유지한다.
+- **설정 원본·확인 명령은 `docs/DEPLOY_WEBSOCKET.md` 에 있다**
+  (nginx 블록 · `curl --http1.1` 검증 · REST 까지 옮기면 생기는 함정 2건).
+
+### 시스템 메시지 (재판 이벤트 수신부, 이슈 #169~#172 인계)
+
+재판 진행 상황(기소·재판 개시·변론·판결)이 바뀌면 채팅방에 봇 메시지(`type=SYSTEM`)가 뜬다.
+**수신부는 이번 브랜치가 만들었고, 발행부는 이슈 #169~#172 담당자 몫이다.** 각자 로직이 끝나는
+지점에서 아래처럼 한 줄만 호출하면 된다.
+
+```java
+events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targetNickname));
+```
+
+이벤트 4종은 `challenge/domain/GroupTrialEvents.java` 에 있다.
+
+| 이벤트 | 발행 시점 | 생성자 인자 |
+|---|---|---|
+| `ViolationDetected` | 소비 위반이 감지돼 기소 후보가 생겼을 때 | `(groupId, indictmentId, targetNickname)` |
+| `TrialOpened` | 재판이 열렸을 때 | `(groupId, indictmentId, targetNickname)` |
+| `DefenseRegistered` | 피고인이 변론을 등록했을 때 | `(groupId, indictmentId, targetNickname)` |
+| `VerdictConfirmed` | 판결이 확정됐을 때 | `(groupId, indictmentId, summary)` |
+
+발행부가 붙기 전까지는 아래 DEV 전용 엔드포인트로 같은 이벤트를 직접 쏴서 채팅방 렌더링을
+시연·확인한다. **발행부가 붙으면 이 컨트롤러는 지운다.**
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| POST | `/api/dev/chat/system-message?groupId=&indictmentId=&kind=&nickname=` | Bearer | 없음 |
+
+- **로컬에서만 동작한다.** `/api/dev/batches/**`(이슈 #152)와 같은 `app.env` 기반 차단이다.
+- `kind`: `VIOLATION`(소비 위반 적발) · `TRIAL_OPENED`(재판 개시, 기본값) · `DEFENSE`(변론 등록) ·
+  `VERDICT`(판결 확정)
+- `indictmentId` 기본값 1, `nickname` 기본값 `절약왕`.
+
+### 저장소 - Redis 전용, MySQL 테이블 없음
+
+메시지 원본은 **Redis 에만** 있다. MyBatis 매퍼도 `tbl_chat_*` 테이블도 만들지 않았다
+(DECISIONS.md 2026-08-15). **스키마 변경이 없다.**
+
+- TTL 은 **챌린지 `end_date` + 2일**이다. 종료 다음날 도는 판결 확정 배치가 도착할 방이 남아
+  있어야 해서다.
+- 챌린지가 `CLOSED` 로 전이되거나 모집 미달로 삭제되면 **TTL 을 기다리지 않고 방을 즉시 삭제한다.**
+  TTL 은 백스톱일 뿐이다.
+- 안 읽은 수(`unreadCount`)도 같은 Redis 인스턴스에 저장하며 같은 TTL 규칙을 따른다.
+
+### 그룹 채팅 에러 코드
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `NOT_FOUND` | 400 | 존재하지 않는 챌린지 |
+| `CHAT_NOT_MEMBER` | 400 | 이 챌린지의 참여자가 아님 |
+| `CHAT_ROOM_CLOSED` | 400 | 종료(`CLOSED`)된 챌린지의 대화 조회·발행 시도 |
+| `INVALID_REQUEST` | 400 | `before`·`after` 동시 지정, `limit` 범위(1~100) 밖, 메시지 내용이 비었거나 500자 초과 |
+| `CHAT_SENDER_NOT_FOUND` | 400 | STOMP 발행 - 인증된 세션인데 발신자가 탈퇴 등으로 사라짐 |
+| `CHAT_BROADCAST_UNAVAILABLE` | 500 | STOMP 브로커가 아직 바인딩되지 않아 전달 불가 (서버 기동 이상) |
 
 ## 알림 (이슈 #58)
 
@@ -1163,8 +1537,11 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 | `GROUP_CHALLENGE_STARTED` | 챌린지가 시작됐어요 | challenge — 상태 전이 배치 (#152) |
 | `GROUP_CHALLENGE_CANCELED` | 챌린지가 성립되지 않았어요 | challenge — 상태 전이 배치 (#152). 시작일에 참여자가 방장 1명뿐일 때 |
 | `GROUP_JUDGMENT` | 판결이 확정됐어요 | challenge — 백엔드 미구현 |
-| `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 백엔드 미구현 |
-| `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission — 백엔드 미구현 |
+| `GROUP_TRIAL_OPENED` | 재판이 열렸어요 | challenge — 평가·기소 배치 (#168). 딥링크는 변론 첫 화면 |
+| `MISSION_DEADLINE` | 오늘 미션 마감 임박 | mission |
+| `MISSION_ASSIGNED` | 오늘의 미션 도착 | mission |
+| `MISSION_VERDICT` | 어제 미션 판결 확정 | mission |
+| `MISSION_CERTIFICATE_ISSUED` | 개인 미션 명예 인증서 발급 | mission |
 | `MONTHLY_REPORT` | 판결문이 도착했어요 | report — 백엔드 미구현 |
 | `PAYMENT_DUE` | 결제 예정 알림 | fixedexpense — 백엔드 미구현 |
 
@@ -1380,3 +1757,88 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 - 거래가 없거나 본인 소유가 아니면 `404 NOT_FOUND`, `categoryId`가 `tbl_category`에 없으면
   `404 CATEGORY_NOT_FOUND`, `categoryId`를 아예 보내지 않으면 `400 INVALID_REQUEST`다.
   `applyToMerchant=true`인데 거래에 가맹점명이 없으면 `400 MERCHANT_NAME_REQUIRED`다.
+
+## 거래내역 월별 조회 (장부)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/transactions/months` | Bearer | `{ months: [{ value, hasData }] }` |
+| GET | `/api/transactions?yearMonth=YYYY-MM` (생략 가능) | Bearer | `{ period, summary, transactions }` |
+| GET | `/api/categories` | Bearer | `{ categories: [{ id, name, parentId }] }` |
+
+`GET /api/transactions/months` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "months": [
+      { "value": "2026-06", "hasData": false },
+      { "value": "2026-07", "hasData": true },
+      { "value": "2026-08", "hasData": false }
+    ]
+  }
+}
+```
+- **데이터가 있는 가장 이른 달**(거래가 하나도 없으면 이번 달)~현재월 범위를 **오름차순**으로
+  반환한다. `hasData`는 그 달에 집계 제외(`is_excluded_from_summary=1`)가 아닌 거래가 1건이라도
+  있는지다.
+  > 가입월(`tbl_user.created_at`) 기준이 **아니다.** CODEF 동기화는 계좌 연동 시점부터 과거
+  > 거래를 끌어오므로 데이터가 가입일보다 앞설 수 있다 — 로컬 데모 시드(`seed_local_demo.sql`)가
+  > 실계정에도 과거 7개월치 거래를 백필하면서 `tbl_user.created_at`은 그대로 두기 때문에 이 어긋남이
+  > 실제로 나타난다. 가입월 기준으로 만들었다가 범위가 "이번 달"뿐이 되어 월 이동 버튼이 전부
+  > 비활성화되는 버그가 있었다(2026-08-15 수정).
+
+`GET /api/categories` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      { "id": 1, "name": "식비", "parentId": null },
+      { "id": 2, "name": "음식점/외식", "parentId": 1 }
+    ]
+  }
+}
+```
+- `parentId`가 `null`이면 대분류, 아니면 부모 대분류의 `id`.
+
+`GET /api/transactions?yearMonth=2026-07` 응답
+```json
+{
+  "success": true,
+  "data": {
+    "period": "2026-07",
+    "summary": {
+      "period": "2026-07",
+      "totalSpent": 420900,
+      "totalDeposit": 3420000,
+      "monthOverMonthRate": 12.50,
+      "paymentMethods": ["신한카드", "KB국민 체크카드", "입금"]
+    },
+    "transactions": [
+      {
+        "id": 501,
+        "date": "2026-07-29",
+        "merchant": "오늘의집",
+        "category": "온라인쇼핑",
+        "paymentMethod": "신한카드",
+        "classification": "CONSUMPTION",
+        "amount": -48900,
+        "isRefund": false
+      }
+    ]
+  }
+}
+```
+- `amount`는 부호 있는 값이다 — `CONSUMPTION`은 음수, `INCOME`은 양수, 환불(`is_refund=1`)은
+  지출을 상계하는 양수. `TRANSFER`(이체)도 목록에는 포함되지만 `summary.totalSpent`/
+  `totalDeposit`/`monthOverMonthRate` 계산에서는 제외된다.
+- `isRefund`: 이 거래가 환불 행인지. `true`면 `amount`가 양수여도 실제로는 이전 소비를 상계하는
+  것이지 새로운 입금이 아니다 — 프론트가 "(환불)" 같은 별도 표기를 붙이는 근거로 쓴다.
+- `paymentMethod`: 신용카드는 `{카드사명}카드`, 체크카드는 `{카드사명} 체크카드`, 계좌 입금은
+  `입금`이다. `tbl_transaction.card_id`/`account_id`로 `tbl_card`/`tbl_connected_account`를
+  조인해 만든다 — DB에 결제수단 컬럼이 따로 있는 게 아니다.
+- `yearMonth`를 생략하면 `period: null`, `summary: null`이고 `transactions`는 기간 제한 없이
+  데이터가 있는 전체 월을 합쳐서 반환한다(검색 화면 전용).
+- `yearMonth`가 `YYYY-MM` 형식이 아니면 `400 INVALID_REQUEST`, 데이터가 있는 가장 이른 달보다
+  이전이면 `400 LEDGER_NOT_AVAILABLE`.

@@ -2,6 +2,8 @@ package com.kb.tangtang.common.dev;
 
 import com.kb.tangtang.common.docs.DevBatchTriggerControllerDocs;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
+import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
+import com.kb.tangtang.challenge.service.GroupTrialDeadlineBatchService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -29,9 +31,8 @@ import java.util.Map;
  * <p><b>로컬에서만 동작한다</b> — {@link DevEnvironmentGuard} 가 {@code app.env} 로 막는다.
  * 인증도 필요하다. 인터셉터가 {@code /api/**} 에 걸려 있다.
  *
- * <p>배치가 늘어나면({@code #168} 평가·기소, {@code #170} 변론 마감, {@code #172} 개표)
- * {@code switch} 에 이름을 추가한다. 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라
- * 이름 목록이 한눈에 보이는 편이 낫기 때문이다.
+ * <p>배치가 늘어나면({@code #170} 변론 마감, {@code #172} 개표) {@code switch} 에 이름을 추가한다.
+ * 등록 인터페이스를 두지 않은 이유는 배치가 서너 개뿐이라 이름 목록이 한눈에 보이는 편이 낫기 때문이다.
  */
 @RestController
 @RequestMapping("/api/dev/batches")
@@ -40,15 +41,21 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
 
     private final DevEnvironmentGuard guard;
     private final ChallengeGroupStatusBatchService challengeGroupStatusBatchService;
+    private final GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService;
+    private final GroupTrialDeadlineBatchService groupTrialDeadlineBatchService;
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService;
     private final FixedExpensePaymentReminderDevService paymentReminderDevService;
 
     public DevBatchTriggerController(DevEnvironmentGuard guard,
                                      ChallengeGroupStatusBatchService challengeGroupStatusBatchService,
+                                     GroupChallengeEvaluationBatchService groupChallengeEvaluationBatchService,
+                                     GroupTrialDeadlineBatchService groupTrialDeadlineBatchService,
                                      FixedExpensePaymentReminderBatchService paymentReminderBatchService,
                                      FixedExpensePaymentReminderDevService paymentReminderDevService) {
         this.guard = guard;
         this.challengeGroupStatusBatchService = challengeGroupStatusBatchService;
+        this.groupChallengeEvaluationBatchService = groupChallengeEvaluationBatchService;
+        this.groupTrialDeadlineBatchService = groupTrialDeadlineBatchService;
         this.paymentReminderBatchService = paymentReminderBatchService;
         this.paymentReminderDevService = paymentReminderDevService;
     }
@@ -56,7 +63,8 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
     /**
      * 배치를 즉시 실행한다.
      *
-     * @param name 배치 이름. {@code group-challenge-status}
+     * @param name 배치 이름. {@code group-challenge-status} · {@code group-challenge-evaluation} ·
+     *             {@code group-trial-deadline}
      * @param date 기준일. 없으면 오늘. 미래 날짜를 넣으면 그날 시작하는 챌린지까지 당겨 처리한다
      * @return 배치가 처리한 건수
      */
@@ -73,7 +81,27 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
         log.warn("DEV 배치 수동 실행 name={} baseDate={} userId={}", name, baseDate, userId);
 
         int affected = switch (name) {
-            case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate);
+            /*
+             * 스케줄러와 같은 순서로 두 전이를 모두 돌린다(이슈 #169). 하나만 돌리는 이름을 따로 두면
+             * 수동 실행과 실제 배치의 동작이 갈라져, 여기서 통과한 시나리오가 자정에 재현되지 않는다.
+             * 반환값은 두 전이의 합이다.
+             */
+            case "group-challenge-status" -> challengeGroupStatusBatchService.startDueGroups(baseDate)
+                    + challengeGroupStatusBatchService.judgeEndedGroups(baseDate);
+            /*
+             * 기소가 열리는지 기다리지 않고 확인하는 용도다. date 로 기준일을 바꾸면
+             * "종료 다음 날" 로 넘어가 기간평가(PERIOD) 기소까지 즉시 재현할 수 있다.
+             */
+            case "group-challenge-evaluation" ->
+                    groupChallengeEvaluationBatchService.evaluateActiveGroups(baseDate);
+            /*
+             * 변론 마감(이슈 #170). date 를 받지 않는다 — 마감 판정은 created_at 과 NOW() 를
+             * SQL 이 직접 비교하고, 기준일을 밖에서 바꿀 수 있게 하려면 배치와 다른 쿼리를
+             * 타게 된다. 앞당겨 확인하려면 CHALLENGE_DEFENSE_HOURS 를 0 으로 내리거나
+             * tbl_indictment.created_at 을 과거로 UPDATE 한다.
+             * 두 번 실행해도 결과가 같은지(멱등) 확인하는 용도로도 쓴다.
+             */
+            case "group-trial-deadline" -> groupTrialDeadlineBatchService.closeExpiredDefenses();
             case "fixed-expense-payment-reminders" -> {
                 if (date != null) {
                     throw new BusinessException("INVALID_REQUEST",

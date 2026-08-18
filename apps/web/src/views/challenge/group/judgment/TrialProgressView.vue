@@ -10,16 +10,24 @@ import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import TrialProgressTimeline from '@/components/challenge/group/TrialProgressTimeline.vue';
 import thinkingImg from '@/assets/images/emotions/47_thinking.png';
 import verdictImg from '@/assets/images/emotions/49_verdict.png';
-import { MOCK_TRIAL_PROGRESS } from '@/fixtures/groupChallengeDetail';
+import { fetchTrialProgress } from '@/api/groupChallenge';
 
 const route = useRoute();
 const router = useRouter();
 
 const trial = ref(null);
 
-onMounted(() => {
-    const id = Number(route.params.indictmentId);
-    trial.value = MOCK_TRIAL_PROGRESS[id] ?? null;
+/*
+ * 채팅 시스템 메시지·알림의 딥링크가 이 화면으로 들어온다(`ChatSystemMessageListener`).
+ * 실패하면 그룹 챌린지 홈으로 되돌린다. 참여자가 아니면 서버가 `TRIAL_NOT_FOUND` 로 거절하고,
+ * 기소의 존재 자체를 노출하지 않기 위해 「없는 재판」과 「권한 없음」을 구분하지 않는다.
+ */
+onMounted(async () => {
+    try {
+        trial.value = await fetchTrialProgress(route.params.indictmentId);
+    } catch (e) {
+        console.error('[TrialProgress] 재판 상세를 불러오지 못해 그룹 챌린지 홈으로 되돌린다.', e);
+    }
     if (!trial.value) {
         router.replace({ name: 'groupChallenge' });
     }
@@ -27,6 +35,10 @@ onMounted(() => {
 
 const isDone = computed(() => trial.value?.status === 'VERDICT_DONE');
 const isVoting = computed(() => trial.value?.status === 'VOTING');
+/*
+ * 서버는 이 상태를 만들지 않는다. 변론을 내는 순간 `VOTING` 으로 넘어간다(`DefenseService`).
+ * 판결 전에 투표 대기 구간이 다시 생기면 그때 `toTrialProgress` 가 이 값을 내주면 된다.
+ */
 const isDefenseSubmitted = computed(() => trial.value?.status === 'DEFENSE_SUBMITTED');
 
 const heroImage = computed(() => isDone.value ? verdictImg : thinkingImg);
@@ -41,7 +53,14 @@ const heroTitle = computed(() => {
 
 const heroSub = computed(() => {
     if (isDone.value) return '아래에서 최종 판결을 확인하세요.';
-    if (isVoting.value) return `판결은 오늘 ${trial.value?.steps.voteDeadline}에 확정돼요.`;
+    if (isVoting.value) {
+        /*
+         * 투표 마감은 변론 마감 + 24시간이라 대개 다음 날이다. 「오늘」로 적어 두면
+         * 밤에 기소된 사람에게 이미 지난 시각을 마감으로 보여준다.
+         */
+        const label = trial.value?.voteDeadlineLabel;
+        return label ? `판결은 ${label}에 확정돼요.` : '판결은 투표가 마감되면 확정돼요.';
+    }
     if (isDefenseSubmitted.value) return '투표가 시작되면 알려드릴게요.';
     return '변론을 작성해주세요.';
 });
@@ -58,8 +77,12 @@ const decoClass = computed(() => {
     return 'trial-progress__deco--pending';
 });
 
+/*
+ * 배심원이 0명이면 참여 현황을 감춘다. 피고를 뺀 참여자가 없을 수 있고(2인 방에서 피고 1명),
+ * 그때 진행바가 `0/0` 을 나눠 폭이 NaN 이 된다.
+ */
 const showVoteStats = computed(() =>
-    isVoting.value && trial.value?.vote,
+    isVoting.value && (trial.value?.vote?.totalVoters ?? 0) > 0,
 );
 
 function goVerdict() {

@@ -1,17 +1,21 @@
 <!--
   용도: 검색 화면 상단의 조건 칩 목록. "가맹점 · 검색어" / "카테고리 · 값" 은 값이 있을 때만 나타나고
-  X 로 지울 수 있다. "+ 메모" 는 토글형 진입 버튼이다.
-  주의: 메모 칩은 UI 만 제공한다. 거래 픽스처에 memo 필드가 없어 실제 검색 결과에는 반영되지 않는다.
+  X 로 지울 수 있다.
   언제 쓰는지: LedgerSearchView 한 곳에서만 렌더한다.
 -->
 <script setup>
+const DIRECTION_LABELS = {
+    CONSUMPTION: '지출',
+    INCOME: '입금',
+};
+
 defineProps({
     merchantTerm: { type: String, default: '' },
     category: { type: String, default: '' },
-    memoActive: { type: Boolean, default: false },
+    direction: { type: String, default: 'ALL' },
 });
 
-defineEmits(['remove-merchant', 'open-category', 'remove-category', 'toggle-memo']);
+defineEmits(['remove-merchant', 'open-category', 'remove-category', 'remove-direction']);
 </script>
 
 <template>
@@ -33,14 +37,16 @@ defineEmits(['remove-merchant', 'open-category', 'remove-category', 'toggle-memo
             카테고리
         </button>
 
-        <button
-            type="button"
-            class="search-chips__chip"
-            :class="{ 'search-chips__chip--active': memoActive }"
-            @click="$emit('toggle-memo')"
+        <span
+            v-if="direction !== 'ALL'"
+            role="listitem"
+            class="search-chips__chip search-chips__chip--active"
         >
-            + 메모
-        </button>
+            구분 · {{ DIRECTION_LABELS[direction] }}
+            <button type="button" aria-label="구분 조건 지우기" @click="$emit('remove-direction')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+        </span>
     </div>
 </template>
 

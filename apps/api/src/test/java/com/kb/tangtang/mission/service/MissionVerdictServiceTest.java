@@ -35,13 +35,14 @@ class MissionVerdictServiceTest {
     private static final LocalDateTime CHECKED_AT = LocalDateTime.of(2026, 8, 14, 9, 10);
 
     @Mock MissionVerdictMapper mapper;
+    @Mock MissionEvaluationBatchService evaluationBatchService;
     MissionVerdictService service;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(
                 Instant.parse("2026-08-14T00:10:00Z"), ZoneId.of("Asia/Seoul"));
-        service = new MissionVerdictService(mapper, clock);
+        service = new MissionVerdictService(mapper, evaluationBatchService, clock);
     }
 
     @Test
@@ -49,6 +50,8 @@ class MissionVerdictServiceTest {
         when(mapper.findOldestUncheckedVerdict(USER_ID, ASSIGN_DATE)).thenReturn(null);
 
         assertNull(service.getPendingVerdict(USER_ID));
+        verify(evaluationBatchService).evaluatePendingMissionsBefore(
+                USER_ID, LocalDate.of(2026, 8, 14), LocalDateTime.of(2026, 8, 14, 9, 10));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.kb.tangtang.mission.mapper;
 
 import com.kb.tangtang.mission.domain.MissionRankingRow;
+import com.kb.tangtang.mission.domain.MissionCertificateStatsRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -29,5 +30,11 @@ public interface MissionScoreMapper {
 
     int countRankingUsers(@Param("yearMonth") String yearMonth);
 
+    MissionCertificateStatsRow findCertificateStats(@Param("userId") long userId,
+                                                     @Param("startDate") LocalDate startDate,
+                                                     @Param("endDate") LocalDate endDate);
+
     List<String> findRankingMonths();
+
+    List<Long> findCertificateEligibleUserIds(@Param("yearMonth") String yearMonth);
 }

@@ -77,6 +77,14 @@ function handleInvite(challenge) {
 function goToDetail(challenge) {
     router.push({ name: 'groupChallengeDetail', params: { id: challenge.id } });
 }
+
+/*
+ * 카드 하단의 채팅 영역을 누르면 상세를 거치지 않고 바로 방으로 들어간다.
+ * 상세 화면이 아직 실서버에 붙지 않아, 지금은 이 경로가 채팅방으로 가는 유일한 UI 다(이슈 #271).
+ */
+function goToChat(challenge) {
+    router.push({ name: 'groupChallengeChat', params: { id: challenge.id } });
+}
 </script>
 
 <template>
@@ -111,6 +119,7 @@ function goToDetail(challenge) {
                     :key="ch.id"
                     :challenge="ch"
                     @click="goToDetail(ch)"
+                    @open-chat="goToChat(ch)"
                 />
             </template>
 

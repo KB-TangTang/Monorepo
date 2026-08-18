@@ -4,6 +4,8 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.Category;
 import com.kb.tangtang.transaction.domain.CategorySource;
 import com.kb.tangtang.transaction.domain.Transaction;
+import com.kb.tangtang.transaction.dto.CategoryDto;
+import com.kb.tangtang.transaction.dto.CategoryListDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateResultDto;
 import com.kb.tangtang.transaction.mapper.CategoryMapper;
 import com.kb.tangtang.transaction.mapper.TransactionMapper;
@@ -11,6 +13,9 @@ import com.kb.tangtang.transaction.mapper.UserCategoryMapMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 사용자가 거래의 카테고리를 직접 수정한다. 자동 분류(TransactionCategorizationService)와는
@@ -68,5 +73,16 @@ public class TransactionService {
                 .categorySource(CategorySource.USER)
                 .merchantRuleApplied(applyToMerchant)
                 .build();
+    }
+
+    public CategoryListDto getAllCategories() {
+        List<CategoryDto> categories = categoryMapper.findAll().stream()
+                .map(c -> CategoryDto.builder()
+                        .id(c.getId())
+                        .name(c.getCategoryName())
+                        .parentId(c.getParentId())
+                        .build())
+                .collect(Collectors.toList());
+        return CategoryListDto.builder().categories(categories).build();
     }
 }

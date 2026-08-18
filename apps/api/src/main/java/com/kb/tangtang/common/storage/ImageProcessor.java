@@ -23,8 +23,14 @@ import java.io.UncheckedIOException;
  * **재인코딩이 곧 검증이다.** ImageIO 가 읽지 못하면 이미지가 아니므로, 확장자나
  * Content-Type 을 믿지 않고 디코딩 성공 여부로 판정한다. 이름만 .jpg 인 파일은 여기서 걸린다.
  *
- * 목록 화면(그룹 멤버·랭킹)에 아바타가 여러 개 깔리므로 원본을 그대로 두지 않는다.
- * 결과는 항상 256x256 JPEG 한 장이고 원본은 보관하지 않는다.
+ * 결과는 항상 JPEG 한 장이고 원본은 보관하지 않는다. 용도별로 규격이 둘이다.
+ *
+ * <ul>
+ *   <li>{@link #toSquareJpeg} — 아바타. 256x256 센터 크롭. 목록 화면(그룹 멤버·랭킹)에
+ *       여러 개 깔리므로 자리 크기에 맞춰 작게 굽는다</li>
+ *   <li>{@link #toBoundedJpeg} — 증빙 사진(변론 영수증 등). 비율을 유지하고 긴 변만 1280 으로
+ *       제한한다. 센터 크롭을 쓰면 영수증의 위아래가 잘려 증빙 구실을 못 한다</li>
+ * </ul>
  */
 @Component
 public class ImageProcessor {
@@ -34,6 +40,9 @@ public class ImageProcessor {
 
     /** 아바타는 가장 큰 자리도 100px 남짓이다. 2배 화면을 감안해 256 으로 둔다. */
     private static final int SIZE = 256;
+
+    /** 증빙 사진 긴 변 상한. 전체화면(≈430px)에서 2배 화면으로 봐도 글씨가 읽힌다. */
+    private static final int MAX_EDGE = 1280;
 
     private static final float QUALITY = 0.85f;
 
@@ -46,6 +55,22 @@ public class ImageProcessor {
         BufferedImage original = decode(source);
         BufferedImage square = cropCenterSquare(original);
         return encodeJpeg(square);
+    }
+
+    /**
+     * 비율을 유지하며 긴 변을 {@value #MAX_EDGE} 로 제한한 JPEG.
+     *
+     * <p>영수증·화면 캡처처럼 <b>전체가 보여야 하는</b> 증빙에 쓴다. 원본이 이미 작으면
+     * 확대하지 않는다 — 늘려도 정보가 늘지 않고 파일만 커진다. 확대를 건너뛰어도 재인코딩은
+     * 그대로 거치므로 이미지가 아닌 파일을 걸러내는 검증 효과는 같다.
+     */
+    public byte[] toBoundedJpeg(byte[] source) {
+        if (source == null || source.length == 0) {
+            throw new BusinessException("IMAGE_REQUIRED", "올릴 이미지를 선택해주세요.");
+        }
+        requireWithinLimit(source.length);
+
+        return encodeJpeg(fitWithin(decode(source)));
     }
 
     /**
@@ -93,6 +118,35 @@ public class ImageProcessor {
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(original, 0, 0, SIZE, SIZE, x, y, x + side, y + side, null);
+        g.dispose();
+        return target;
+    }
+
+    /**
+     * 긴 변이 MAX_EDGE 를 넘으면 비율대로 줄여 다시 그린다.
+     *
+     * <p>{@code cropCenterSquare} 와 같은 이유로 TYPE_INT_RGB + 흰 배경 선칠이다
+     * (투명 PNG 의 알파가 사라지면 배경이 검게 나온다). 줄일 필요가 없어도 이 변환을 거쳐
+     * 알파를 없앤다 — 원본이 작은 투명 PNG 라고 검은 배경으로 저장될 이유는 없다.
+     */
+    private static BufferedImage fitWithin(BufferedImage original) {
+        int width = original.getWidth();
+        int height = original.getHeight();
+        int longEdge = Math.max(width, height);
+
+        if (longEdge > MAX_EDGE) {
+            double ratio = (double) MAX_EDGE / longEdge;
+            width = Math.max(1, (int) Math.round(width * ratio));
+            height = Math.max(1, (int) Math.round(height * ratio));
+        }
+
+        BufferedImage target = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = target.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(original, 0, 0, width, height, null);
         g.dispose();
         return target;
     }

@@ -14,6 +14,11 @@ const props = defineProps({
     evalType: { type: String, required: true },
     status: { type: String, required: true },
     limitAmount: { type: Number, required: true },
+    /*
+     * 서버는 총소비 챌린지에서 이 값을 NULL 로 내려준다(categoryId 가 NULL 이라 조인이 비어서다).
+     * prop default 는 값이 undefined 일 때만 걸리고 null 에는 안 걸리므로 여기서 받지 못한다 —
+     * 그래서 아래 categoryLabel 로 한 번 더 거른다. default 를 지우지 말 것(목데이터 경로가 쓴다).
+     */
     categoryName: { type: String, default: '총 소비' },
     /* 진행 중 전용 */
     currentAmount: { type: Number, default: 0 },
@@ -24,6 +29,9 @@ const props = defineProps({
 const isActive = computed(() => props.status === 'ACTIVE');
 const isDaily = computed(() => props.evalType === 'DAILY');
 
+/** 카테고리 없는 챌린지(총소비)는 서버가 NULL 을 준다. 화면에서 부르는 이름은 「총 소비」 하나뿐이다. */
+const categoryLabel = computed(() => props.categoryName || '총 소비');
+
 const evalLabel = computed(() => isDaily.value ? '일일 결산' : '기간 결산');
 const limitSuffix = computed(() => isDaily.value ? '/ 하루' : '/ 기간 전체');
 const limitLabel = computed(() => {
@@ -33,9 +41,9 @@ const limitLabel = computed(() => {
             : `기간 한도 ${props.limitAmount.toLocaleString()}원`;
     }
     /* 시작 전: evalType + 카테고리에 맞는 설명 */
-    const catDesc = props.categoryName === '총 소비'
+    const catDesc = categoryLabel.value === '총 소비'
         ? '모든 카테고리 소비를 합산해'
-        : `${props.categoryName} 카테고리 소비를 합산해`;
+        : `${categoryLabel.value} 카테고리 소비를 합산해`;
     if (isDaily.value) {
         return props.limitAmount > 0
             ? `${catDesc} 매일 자정 판정`
@@ -83,7 +91,7 @@ const mascotLeft = computed(() => Math.min(props.usagePercent, 100) + '%');
                 class="ink-card__badge"
                 :class="isDaily ? 'ink-card__badge--eval' : 'ink-card__badge--eval-period'"
             >{{ evalLabel }}</span>
-            <span class="ink-card__badge ink-card__badge--category">{{ categoryName }}</span>
+            <span class="ink-card__badge ink-card__badge--category">{{ categoryLabel }}</span>
             <span
                 v-if="isActive"
                 class="ink-card__badge ink-card__badge--status"

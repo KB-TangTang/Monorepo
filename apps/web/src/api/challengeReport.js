@@ -1,6 +1,10 @@
 import http from '@/api/http';
 import { AVAILABLE_MONTHS, REPORTS } from '@/fixtures/challengeReport';
-import { getPreviousPeriod, isPublishedPeriod } from '@/utils/challengeReport';
+import {
+    getPreviousPeriod,
+    isPublishedPeriod,
+    toChallengeReportModel,
+} from '@/utils/challengeReport';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -26,9 +30,11 @@ export async function fetchMockChallengeReportMonths(referenceDate = new Date())
     );
 }
 
-/** TEMP(#241): 챌린지 리포트 상세 API 계약이 확정돼 Mock 소스를 제거할 때까지 유지한다. */
+/** TEMP(#241): Mock 경로를 유지한 채 상세 API 응답만 화면 모델로 바꾼다. */
 export async function fetchChallengeReport(period) {
-    return http.get('/reports/challenge', { params: { yearMonth: period } });
+    return toChallengeReportModel(
+        await http.get('/reports/challenge', { params: { yearMonth: period } }),
+    );
 }
 
 export async function fetchChallengeReportMonths() {

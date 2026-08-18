@@ -25,23 +25,30 @@ public class MissionVerdictService {
     private static final int STREAK_BONUS_POINTS = 5;
 
     private final MissionVerdictMapper mapper;
+    private final MissionEvaluationBatchService evaluationBatchService;
     private final Clock clock;
 
     @Autowired
     public MissionVerdictService(
             MissionVerdictMapper mapper,
+            MissionEvaluationBatchService evaluationBatchService,
             @Value("${mission.zone:Asia/Seoul}") String zoneId) {
-        this(mapper, Clock.system(ZoneId.of(zoneId)));
+        this(mapper, evaluationBatchService, Clock.system(ZoneId.of(zoneId)));
     }
 
-    MissionVerdictService(MissionVerdictMapper mapper, Clock clock) {
+    MissionVerdictService(MissionVerdictMapper mapper,
+                          MissionEvaluationBatchService evaluationBatchService,
+                          Clock clock) {
         this.mapper = mapper;
+        this.evaluationBatchService = evaluationBatchService;
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
     public MissionVerdictDto getPendingVerdict(long userId) {
-        LocalDate verdictDate = LocalDate.now(clock).minusDays(1);
+        LocalDate today = LocalDate.now(clock);
+        evaluationBatchService.evaluatePendingMissionsBefore(
+                userId, today, LocalDateTime.now(clock).withNano(0));
+        LocalDate verdictDate = today.minusDays(1);
         MissionVerdictRow row = mapper.findOldestUncheckedVerdict(userId, verdictDate);
         if (row == null) {
             return null;

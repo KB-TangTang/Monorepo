@@ -49,6 +49,54 @@ public interface ChallengeGroupMapper {
                                            @Param("today") LocalDate today);
 
     /**
+     * 평가·기소 배치(이슈 #168)가 이번 틱에 볼 그룹.
+     *
+     * <b>어제가 조건에 들어가는 이유가 이 메서드의 핵심이다.</b> 배치는 매 틱 어제·오늘 두 날짜를
+     * 집계한다. 거래 동기화가 뒤늦게 도착하기 때문이다 — 23:57 결제는 그 시각의 배치가 볼 때
+     * 아직 DB 에 없고, 동기화가 끝난 00:10 시점의 배치는 이미 기준일이 오늘로 넘어가 있다.
+     * 어제를 같이 보지 않으면 <b>그 결제가 어제 집계에 영원히 반영되지 않는다.</b>
+     * ({@code tbl_transaction.tr_date} 는 거래 발생일이라 수집 시각과 무관하게 어제로 남는다)
+     *
+     * 그래서 종료 조건도 {@code end_date >= 어제} 다. {@code end_date >= 오늘} 로 좁히면
+     * <b>챌린지 마지막 날의 심야 거래가 통째로 누락된다</b> — 그 거래를 처리해야 할 다음 날에는
+     * 그룹이 조회에서 빠져 버리기 때문이다.
+     *
+     * 부수 효과로 이 조건은 {@code end_date + 1일} 까지만 그룹을 잡아 준다. 기간평가(PERIOD)
+     * 기소를 판정할 수 있는 마지막 날과 정확히 일치한다.
+     *
+     * {@code idx_cg_status_start (status, start_date)} 를 탄다 — 선행 컬럼이 상등 비교,
+     * 후행 컬럼이 범위 비교라 인덱스 순서와 조건 모양이 맞는다. {@code end_date} 는 걸러 낸 뒤
+     * 평가하며, ACTIVE 그룹 수 자체가 작아 문제되지 않는다.
+     *
+     * @param status    찾을 상태. 보통 {@code ACTIVE}
+     * @param today     배치 기준일
+     * @param yesterday {@code today} 의 전날. 호출부가 계산해 넘긴다 —
+     *                  SQL 안에서 {@code DATE_SUB(CURDATE(), ...)} 로 만들면
+     *                  테스트가 날짜를 고정할 수 없다
+     */
+    List<ChallengeGroup> findGroupsToEvaluate(@Param("status") String status,
+                                              @Param("today") LocalDate today,
+                                              @Param("yesterday") LocalDate yesterday);
+
+    /**
+     * 평가가 끝나 재판(JUDGING)으로 넘길 그룹 (이슈 #169).
+     *
+     * <b>{@code end_date} 가 지났다고 바로 넘기면 안 된다.</b> 평가·기소 배치는
+     * {@link #findGroupsToEvaluate} 조건대로 <b>종료 다음 날까지</b> 그 그룹을 본다 —
+     * 마지막 날 심야 거래와 기간평가(PERIOD) 기소가 그날 판정되기 때문이다. 그런데 그 조회는
+     * {@code status = 'ACTIVE'} 를 함께 걸고 있어, 종료 다음 날 자정에 JUDGING 으로 바꿔 버리면
+     * <b>마지막 날치 기소가 통째로 생기지 않는다.</b>
+     *
+     * 그래서 호출부가 {@code today - 1일} 을 넘기고 여기서 {@code end_date < 그 날짜} 로 거른다.
+     * 결과적으로 전이는 <b>종료 다음다음 날</b> 자정에 일어난다.
+     *
+     * @param status      찾을 상태. 보통 {@code ACTIVE}
+     * @param endedBefore 이 날짜보다 앞서 끝난 그룹만. 호출부가 {@code today.minusDays(1)} 을 넘긴다
+     */
+    List<ChallengeGroup> findGroupsToJudge(@Param("status") String status,
+                                           @Param("endedBefore") LocalDate endedBefore);
+
+    /**
      * 기대한 상태일 때만 상태를 바꾼다(compare-and-set).
      *
      * <b>배치 멱등성의 근거가 이 반환값이다.</b> 두 번째 실행이나 동시에 도는 인스턴스는 0 을 받고,
@@ -60,4 +108,24 @@ public interface ChallengeGroupMapper {
     int updateStatusIfCurrent(@Param("groupId") Long groupId,
                               @Param("fromStatus") String fromStatus,
                               @Param("toStatus") String toStatus);
+
+    /**
+     * 기대한 상태일 때만 그룹을 지운다. 모집 미달로 시작하지 못한 그룹을 정리한다(이슈 #261).
+     *
+     * <b>{@code status} 조건이 없으면 정상 시작한 그룹을 지울 수 있다.</b> 배치는 조회와 처리가
+     * 두 단계라, 조회 시점에는 참여자가 1명이었지만 그 사이 누가 들어와 다른 실행이 이미
+     * {@code ACTIVE} 로 전이시켜 놓았을 수 있다. 그때 조건 없이 지우면 방금 시작된 멀쩡한 그룹이
+     * 참여자·결산·재판까지 {@code ON DELETE CASCADE} 로 통째로 사라진다.
+     * {@code updateStatusIfCurrent} 와 같은 compare-and-set 장치다.
+     *
+     * <p>중복 알림은 조건이 없어도 막힌다 — 행이 사라지므로 두 번째 실행은 어차피 0 을 받는다.
+     * 조건절이 막는 것은 <b>되돌릴 수 없는 오삭제</b> 쪽이다.
+     *
+     * <p>자식 행({@code tbl_group_member} · {@code tbl_group_challenge_daily_result} ·
+     * {@code tbl_indictment} · {@code tbl_vote})은 FK 의 {@code ON DELETE CASCADE} 가 정리한다.
+     *
+     * @return 지운 행 수. 0 이면 이미 다른 쪽이 처리했거나 그룹이 그 상태가 아니라는 뜻이다
+     */
+    int deleteIfCurrent(@Param("groupId") Long groupId,
+                        @Param("status") String status);
 }

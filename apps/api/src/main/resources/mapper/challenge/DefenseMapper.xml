@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ 컬럼명 주의 (이슈 #170) — db/schema.sql:510-523 에는 아직 옛 이름
+    requested_adjustment_amount 가 남아 있다. 실행 기준은
+    db/migration/20260814_group_challenge_verdict_deduction.sql 이고
+    현재 컬럼은 actual_burden_amount · deduction_amount 다.
+    schema.sql 은 공유 후 갱신하지 않는 것이 팀 규칙이라 낡은 이름이 그대로 있는 것이다.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.DefenseMapper">
+
+    <!--
+      변론 저장.
+
+      updated_at 은 컬럼 기본값에 맡긴다 — 수정 경로가 없어 항상 created_at 과 같다.
+
+      deduction_amount 를 클라이언트 값으로 채우지 않는다. 호출부가
+      (결산 구간 소비액 - actualBurdenAmount) 를 계산해 넘긴 값이다.
+      클라이언트가 감액을 직접 정하면 무죄 판결로 소비액을 원하는 만큼 지울 수 있다.
+    -->
+    <insert id="insertDefense" parameterType="com.kb.tangtang.challenge.domain.Defense"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_defense
+            (indictment_id, content, actual_burden_amount, deduction_amount)
+        VALUES
+            (#{indictmentId}, #{content}, #{actualBurdenAmount}, #{deductionAmount})
+    </insert>
+
+    <!--
+      증빙 이미지. image_url 컬럼에 들어가는 값은 URL 이 아니라 저장 키다
+      (defense/{indictmentId}/{uuid}.jpg ≈ 68자 → VARCHAR(100) 안에 들어간다).
+
+      순서를 보존해야 해서 한 문장에 foreach 로 넣는다 — 화면이 업로드한 순서대로 보여준다.
+      건별로 나눠 INSERT 하면 순서는 같지만 왕복이 최대 3번이 된다.
+    -->
+    <insert id="insertDefenseImages">
+        INSERT INTO tbl_defense_images (defense_id, image_url)
+        VALUES
+        <foreach collection="imageKeys" item="imageKey" separator=",">
+            (#{defenseId}, #{imageKey})
+        </foreach>
+    </insert>
+
+    <!-- uk_def_indictment 를 그대로 탄다. 본문·이미지를 읽을 필요가 없는 검사라 EXISTS 로 끝낸다 -->
+    <select id="existsByIndictmentId" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM tbl_defense WHERE indictment_id = #{indictmentId})
+    </select>
+
+    <!-- 기소 1건당 변론 1건이라 결과는 0 또는 1행이다 -->
+    <select id="findByIndictmentId" resultType="com.kb.tangtang.challenge.domain.Defense">
+        SELECT id,
+               indictment_id,
+               content,
+               actual_burden_amount,
+               deduction_amount,
+               created_at
+          FROM tbl_defense
+         WHERE indictment_id = #{indictmentId}
+    </select>
+
+    <!-- 업로드 순서 = id 순서. idx_di_defense 를 탄다 -->
+    <select id="findImageKeysByDefenseId" resultType="string">
+        SELECT image_url
+          FROM tbl_defense_images
+         WHERE defense_id = #{defenseId}
+         ORDER BY id
+    </select>
+</mapper>

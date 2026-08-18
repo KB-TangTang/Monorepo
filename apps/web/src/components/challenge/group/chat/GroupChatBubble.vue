@@ -1,72 +1,56 @@
 <script setup>
 import { computed } from 'vue';
-import { STICKER_MAP } from '@/constants/stickerCatalog';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 
+/*
+ * message 는 api/groupChatAdapter.js 가 정규화한 모양이다
+ * ({ messageId, type, isSystem, senderId, senderName, content, sentAt: Date|null }).
+ *
+ * 아바타 색은 공용 UserAvatar 가 이름 해시로 정한다. 화면마다 각자 이니셜 원을 그리지 않는다.
+ */
 const props = defineProps({
     message: { type: Object, required: true },
     isMine: { type: Boolean, default: false },
-});
-
-const isSticker = computed(() => props.message.contentType === 'STICKER');
-const stickerSrc = computed(() => {
-    if (!isSticker.value) return null;
-    return STICKER_MAP[props.message.content]?.src ?? null;
+    /* 같은 사람이 연달아 보낸 메시지면 이름·아바타를 반복하지 않는다 */
+    grouped: { type: Boolean, default: false },
+    /*
+     * 같은 사람이 같은 분에 연달아 보내면 시간은 묶음의 마지막 줄에만 남긴다(카카오톡 방식).
+     * 판정은 다음 메시지를 봐야 해서 목록을 만드는 GroupChatView 가 한다 —
+     * utils/groupChat.js 의 shouldShowTime 이다. 기본값 true 는 단독 사용 시 기존 동작 유지용.
+     */
+    showTime: { type: Boolean, default: true },
 });
 
 const timeLabel = computed(() => {
-    const d = new Date(props.message.createdAt);
-    const h = d.getHours();
-    const m = String(d.getMinutes()).padStart(2, '0');
-    const period = h < 12 ? '오전' : '오후';
-    const hour12 = h % 12 || 12;
-    return `${period} ${hour12}:${m}`;
+    const d = props.message.sentAt;
+    if (!d) return '';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 });
 
-const initial = computed(() => {
-    const name = props.message.senderName ?? '';
-    return name.charAt(0);
-});
+/* 닉네임 온보딩 전(서버가 senderNickname: null)이면 빈 문자열이 온다 */
+const displayName = computed(() => props.message.senderName || '익명');
 </script>
 
 <template>
-    <div class="bubble-row" :class="{ 'bubble-row--mine': isMine }">
-        <!-- 상대 아바타 -->
-        <div v-if="!isMine" class="bubble-row__avatar" :style="{ background: message.senderColor }">
-            {{ initial }}
+    <div class="bubble-row" :class="{ 'bubble-row--mine': isMine, 'bubble-row--grouped': grouped }">
+        <div v-if="!isMine" class="bubble-row__avatar-slot">
+            <UserAvatar v-if="!grouped" :name="displayName" :size="34" />
         </div>
 
         <div class="bubble-row__body">
-            <!-- 상대 이름 -->
-            <span v-if="!isMine" class="bubble-row__name">{{ message.senderName }}</span>
+            <span v-if="!isMine && !grouped" class="bubble-row__name">{{ displayName }}</span>
 
             <div class="bubble-row__content-row">
-                <!-- 내 메시지: 시간이 왼쪽 -->
-                <span v-if="isMine" class="bubble-row__time">{{ timeLabel }}</span>
+                <span v-if="isMine && showTime" class="bubble-row__time">{{ timeLabel }}</span>
 
-                <!-- 스티커 -->
-                <img
-                    v-if="isSticker && stickerSrc"
-                    :src="stickerSrc"
-                    :alt="message.content"
-                    class="bubble-row__sticker"
-                />
-
-                <!-- 스티커 로드 실패 -->
-                <div v-else-if="isSticker" class="bubble-row__sticker-fallback">
-                    스티커
-                </div>
-
-                <!-- 텍스트 -->
                 <div
-                    v-else
                     class="bubble-row__bubble"
                     :class="isMine ? 'bubble-row__bubble--mine' : 'bubble-row__bubble--other'"
                 >
                     {{ message.content }}
                 </div>
 
-                <!-- 상대 메시지: 시간이 오른쪽 -->
-                <span v-if="!isMine" class="bubble-row__time">{{ timeLabel }}</span>
+                <span v-if="!isMine && showTime" class="bubble-row__time">{{ timeLabel }}</span>
             </div>
         </div>
     </div>
@@ -83,29 +67,26 @@ const initial = computed(() => {
     flex-direction: row-reverse;
 }
 
-.bubble-row__avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 13px;
-    font-weight: var(--tt-fw-bold);
+/* 연속 메시지는 아바타 자리만 비워 말풍선 왼쪽 선을 맞춘다 */
+.bubble-row__avatar-slot {
+    width: 34px;
     flex: none;
+}
+
+.bubble-row--grouped {
+    margin-top: -6px;
 }
 
 .bubble-row__body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-width: 70%;
+    max-width: 74%;
 }
 
 .bubble-row__name {
     font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-semibold);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     padding-left: 2px;
 }
@@ -116,50 +97,32 @@ const initial = computed(() => {
     gap: 6px;
 }
 
-
 .bubble-row__bubble {
     padding: 10px 14px;
-    border-radius: 16px;
+    border-radius: var(--tt-radius-lg);
     font-size: var(--tt-fs-body);
-    line-height: 1.45;
+    line-height: 1.5;
     word-break: break-word;
 }
 
 .bubble-row__bubble--mine {
     background: var(--tt-info);
-    color: #fff;
-    border-bottom-right-radius: 4px;
+    color: var(--tt-text-inverse);
+    border-bottom-right-radius: 6px;
 }
 
 .bubble-row__bubble--other {
     background: var(--tt-bg);
     color: var(--tt-text);
-    border: 1px solid var(--tt-border);
-    border-top-left-radius: 4px;
-}
-
-.bubble-row__sticker {
-    width: 100px;
-    height: 100px;
-    object-fit: contain;
-}
-
-.bubble-row__sticker-fallback {
-    width: 100px;
-    height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--tt-bg-fill);
-    border-radius: var(--tt-radius-md);
-    color: var(--tt-text-hint);
-    font-size: var(--tt-fs-caption);
+    border-top-left-radius: 6px;
+    box-shadow: var(--tt-elevation-1);
 }
 
 .bubble-row__time {
-    font-size: 10.5px;
+    font-size: var(--tt-fs-overline);
     color: var(--tt-text-hint);
     flex: none;
     white-space: nowrap;
+    padding-bottom: 2px;
 }
 </style>

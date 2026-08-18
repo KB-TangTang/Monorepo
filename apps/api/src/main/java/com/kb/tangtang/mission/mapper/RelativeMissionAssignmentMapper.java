@@ -26,4 +26,6 @@ public interface RelativeMissionAssignmentMapper {
     int insertAssignment(RelativeMissionAssignment assignment);
     int deleteAssignment(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
     int resetAssignedSnapshots(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);
+    List<com.kb.tangtang.mission.domain.MissionDeadlineTarget> findPendingDeadlineTargets(
+            @Param("assignDate") LocalDate assignDate);
 }

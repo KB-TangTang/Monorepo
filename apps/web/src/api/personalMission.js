@@ -26,6 +26,18 @@ export function fetchMissionRankings(yearMonth) {
     });
 }
 
+export function fetchMissionCertificate(yearMonth) {
+    return http.get('/missions/rankings/certificate', {
+        params: { yearMonth },
+    });
+}
+
+export function fetchMissionCertificateTitles(yearMonth) {
+    return http.get('/missions/rankings/certificate/titles', {
+        params: { yearMonth },
+    });
+}
+
 export function fetchMissionRankingMonths() {
     return http.get('/missions/rankings/months');
 }

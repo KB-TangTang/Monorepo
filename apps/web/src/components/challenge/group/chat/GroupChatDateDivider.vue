@@ -14,15 +14,15 @@ defineProps({
 .date-divider {
     display: flex;
     justify-content: center;
-    padding: var(--tt-space-2) 0;
+    margin: var(--tt-space-3) 0 var(--tt-space-1);
 }
 
 .date-divider__pill {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-semibold);
-    color: var(--tt-text-muted);
     background: var(--tt-bg-fill);
-    padding: 4px 14px;
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    padding: 5px 14px;
     border-radius: var(--tt-radius-full);
 }
 </style>

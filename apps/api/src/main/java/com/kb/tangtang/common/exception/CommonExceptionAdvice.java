@@ -4,6 +4,7 @@ import com.kb.tangtang.common.dto.ApiResponse;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -48,6 +49,19 @@ public class CommonExceptionAdvice {
         log.warn("MultipartException {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("IMAGE_REQUIRED", "올릴 이미지를 선택해주세요."));
+    }
+
+    /*
+     * 본문이 깨졌거나(잘못된 인코딩·문법) 타입이 맞지 않아 Jackson 이 읽지 못한 경우다.
+     * 잡지 않으면 handleAll 이 500 INTERNAL_ERROR 로 응답해 클라이언트 잘못이 서버 오류로
+     * 보고된다 — 실제로 한글이 UTF-8 이 아닌 인코딩으로 들어왔을 때 500 이 났다.
+     * 원문 메시지에는 파싱 위치·필드 경로가 담겨 있어 그대로 노출하지 않는다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException ex) {
+        log.warn("HttpMessageNotReadableException {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("INVALID_REQUEST", "요청 본문을 읽을 수 없습니다."));
     }
 
     @ExceptionHandler(NoHandlerFoundException.class)

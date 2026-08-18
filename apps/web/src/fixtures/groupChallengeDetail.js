@@ -76,11 +76,9 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        /* 채팅 (그룹 채팅방 요약) */
-        chat: {
-            unreadCount: 3,
-            lastMessage: { sender: '유현', text: '나 오늘 진짜 참았다' },
-        },
+        /* 채팅 (그룹 채팅방 요약) — 서버 DTO 와 같은 평평한 이름을 쓴다 */
+        unreadChatCount: 3,
+        lastChatMessage: '나 오늘 진짜 참았다',
 
         /*
          * 재판 캐러셀 (tbl_indictment + tbl_defense + tbl_vote)
@@ -291,10 +289,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        chat: {
-            unreadCount: 1,
-            lastMessage: { sender: '세영', text: '오늘 택시 안 탔다!' },
-        },
+        unreadChatCount: 1,
+        lastChatMessage: '오늘 택시 안 탔다!',
 
         indictments: [
             {
@@ -380,10 +376,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(6),
         ],
 
-        chat: {
-            unreadCount: 5,
-            lastMessage: { sender: '세영', text: '편의점 들렸는데 참았다 ㅋㅋ' },
-        },
+        unreadChatCount: 5,
+        lastChatMessage: '편의점 들렸는데 참았다 ㅋㅋ',
 
         dailyMembers: [
             {
@@ -668,10 +662,8 @@ export const MOCK_CHALLENGE_DETAILS = {
             member(5),
         ],
 
-        chat: {
-            unreadCount: 0,
-            lastMessage: { sender: '민지', text: '배달 시켜먹고 싶다...' },
-        },
+        unreadChatCount: 0,
+        lastChatMessage: '배달 시켜먹고 싶다...',
 
         dailyMembers: [
             {
@@ -1304,148 +1296,7 @@ export const MOCK_VOTE_DETAIL = {
 };
 
 /* ────────────────────────────────────────────────────────────
- * 4. MOCK_TRIAL_PROGRESS — 재판 진행 현황 (TrialProgressView)
- *    indictmentId 기준. 단계별 상태:
- *      INDICTED         — 기소 접수됨, 변론 대기
- *      DEFENSE_SUBMITTED — 변론 제출 완료, 투표 대기
- *      VOTING           — 배심원 투표 진행 중
- *      VERDICT_DONE     — 최종 판결 확정
- * ──────────────────────────────────────────────────────────── */
-
-export const MOCK_TRIAL_PROGRESS = {
-    /* ── 102: 투표 진행 중 (디자인 00 기본 상태) ── */
-    102: {
-        indictmentId: 102,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0805',
-        status: 'VOTING',
-
-        defendant: { userId: 5, ...AVATAR[5] },
-
-        steps: {
-            indictedAt: '20:14',
-            defenseSubmittedAt: '20:32',
-            voteDeadline: '23:59',
-            verdictAt: null,
-        },
-
-        vote: {
-            votedCount: 4,
-            totalVoters: 6,
-            remainingVoters: 2,
-        },
-    },
-
-    /* ── 103: 최종 판결 · 무죄 ── */
-    103: {
-        indictmentId: 103,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0803',
-        status: 'VERDICT_DONE',
-
-        defendant: { userId: 3, ...AVATAR[3] },
-
-        steps: {
-            indictedAt: '19:42',
-            defenseSubmittedAt: '20:05',
-            voteDeadline: '23:59',
-            verdictAt: '23:59',
-        },
-
-        vote: {
-            votedCount: 3,
-            totalVoters: 3,
-            remainingVoters: 0,
-        },
-    },
-
-    /* ── 101: 기소 접수됨 (변론 대기) ── */
-    101: {
-        indictmentId: 101,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0805',
-        status: 'INDICTED',
-
-        defendant: { userId: 1, ...AVATAR[1] },
-
-        steps: {
-            indictedAt: '23:30',
-            defenseSubmittedAt: null,
-            voteDeadline: '23:59',
-            verdictAt: null,
-        },
-
-        vote: {
-            votedCount: 0,
-            totalVoters: 3,
-            remainingVoters: 3,
-        },
-    },
-
-    /* ── 104: 투표 진행 중 ── */
-    104: {
-        indictmentId: 104,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0805-2',
-        status: 'VOTING',
-
-        defendant: { userId: 2, ...AVATAR[2] },
-
-        steps: {
-            indictedAt: '23:30',
-            defenseSubmittedAt: '23:55',
-            voteDeadline: '23:59',
-            verdictAt: null,
-        },
-
-        vote: {
-            votedCount: 0,
-            totalVoters: 3,
-            remainingVoters: 3,
-        },
-    },
-
-    /* ── 201: 변론 제출 완료 (투표 대기) ── */
-    201: {
-        indictmentId: 201,
-        challengeId: 4,
-        challengeName: '택시 대신 지하철',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0804',
-        status: 'DEFENSE_SUBMITTED',
-
-        defendant: { userId: 6, ...AVATAR[6] },
-
-        steps: {
-            indictedAt: '23:30',
-            defenseSubmittedAt: '23:48',
-            voteDeadline: '23:59',
-            verdictAt: null,
-        },
-
-        vote: {
-            votedCount: 0,
-            totalVoters: 2,
-            remainingVoters: 2,
-        },
-    },
-};
-
-/* ────────────────────────────────────────────────────────────
- * 5. MOCK_VERDICT_RESULT — 최종 판결 결과 (VerdictResultView / VerdictDetailView)
+ * 4. MOCK_VERDICT_RESULT — 최종 판결 결과 (VerdictResultView / VerdictDetailView)
  *    indictmentId 기준. outcome: 'INNOCENT' | 'GUILTY'
  * ──────────────────────────────────────────────────────────── */
 

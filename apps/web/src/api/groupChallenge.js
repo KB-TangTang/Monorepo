@@ -14,11 +14,31 @@ import {
     MOCK_PRE_START_CHALLENGES,
     MOCK_ACTIVE_LIST_CHALLENGES,
     MOCK_ENDED_CHALLENGES,
+    MOCK_TODO_ITEMS,
 } from '@/fixtures/groupChallenge';
 import { MOCK_CHALLENGE_DETAILS, MOCK_CHALLENGE_RANKINGS } from '@/fixtures/groupChallengeDetail';
+import {
+    MOCK_TRIAL_DETAIL,
+    MOCK_TRIAL_DETAIL_CONFESSED,
+    MOCK_TRIAL_DETAIL_DEFENDED,
+    MOCK_TRIAL_TRANSACTIONS,
+} from '@/fixtures/groupChallengeTrial';
+import { formatDeadlineLabel, toTrialProgress } from '@/utils/groupTrial';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+/** 지금부터 `ms` 뒤의 절대시각. 목데이터의 상대 마감을 실데이터 모양으로 맞출 때 쓴다. */
+function afterNow(ms) {
+    return new Date(Date.now() + ms).toISOString();
+}
+
+/** `2026-08-05` → `8월 5일`. 화면은 「8월 5일 결산」으로 읽는다. */
+function formatMonthDay(isoDate) {
+    if (!isoDate) return '';
+    const [, month, day] = isoDate.split('-');
+    return `${Number(month)}월 ${Number(day)}일`;
 }
 
 /**
@@ -28,8 +48,14 @@ function clone(value) {
  * 이름(`rules`, `isOwner`, `isDefendant`)을 쓴다. 아바타 이니셜은 표시 전용이라
  * 서버가 내려주지 않고 닉네임에서 만든다.
  *
- * 여기서 채우지 않는 필드(`myVoteStatus`, `savingsAmount`, `unreadChatCount` …)는
- * 근거 데이터가 아직 없다. 카드들이 falsy 를 기본 상태로 처리하므로 비워둔다.
+ * 배지 값(`defendant` · `myVoteStatus` · `pendingTrialCount`)은 **목록 응답에서만** 채워진다.
+ * 상세·참여·초대 미리보기에서는 서버가 `false` · `null` · `0` 을 준다 —
+ * 카드들이 falsy 를 「순항중」으로 처리하므로 그대로 흘려보낸다.
+ *
+ * 채팅 요약(`unreadChatCount`·`lastChatMessage`·`lastChatTime`)은 서버가 그대로 내려주므로
+ * 스프레드로 통과한다. 여기서 이름을 바꾸지 않는다.
+ *
+ * `savingsAmount` 는 아직 근거 데이터가 없다 (이슈 #172).
  */
 function toViewModel(dto) {
     return {
@@ -149,18 +175,105 @@ export async function joinGroup(groupId) {
 }
 
 /**
- * 그룹 챌린지 상세 (재판 현황·랭킹 포함).
- * 서버 미구현 — 기소/투표(tbl_indictment)가 들어와야 만들 수 있다.
+ * 홈 「오늘의 할 일」 — 내가 변론하거나 투표해야 하는 재판. 마감 임박순이다.
+ *
+ * 변론 대기와 투표 대기가 **한 배열로** 섞여 온다. 화면이 하나의 목록으로 보여주고
+ * 필터 칩으로만 나누기 때문이다.
+ */
+export async function fetchMyTrials() {
+    if (isMockMode.value) {
+        return MOCK_TODO_ITEMS.map((item) => ({
+            ...item,
+            deadline: afterNow(item.deadlineMinutes * 60000),
+        }));
+    }
+    const list = await http.get('/group-challenges/my-trials');
+    return list.map(toTrialViewModel);
+}
+
+/**
+ * 서버 DTO → TO-DO 아이템.
+ *
+ * 서버는 재료(`type` · `defendantNickname` · `voteCount`)만 주고 **문구는 여기서 만든다.**
+ * 문구를 서버가 만들면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ */
+function toTrialViewModel(dto) {
+    const isAccuse = dto.type === 'accuse';
+    return {
+        ...dto,
+        /* 목록 key 이자 카운트다운 키. 기소 ID 는 그룹을 넘어 유일하다. */
+        id: dto.indictmentId,
+        title: isAccuse
+            ? '기소 되어 변론이 필요해요!'
+            : `${dto.defendantNickname}님의 변론에 투표하세요`,
+        tally: isAccuse ? null : `${dto.voteCount}/${dto.totalVoters} 투표`,
+    };
+}
+
+/**
+ * 그룹 챌린지 상세 (재판 카드 · 참여자 소비 상태 포함).
+ *
+ * 그룹 정보는 한 겹 없이 평평하게 내려온다(`@JsonUnwrapped`). 그래서 목록과 같은
+ * `toViewModel` 을 그대로 태울 수 있다.
  */
 export async function fetchGroupChallengeDetail(groupId) {
-    if (!isMockMode.value) {
-        throw notImplementedYet('그룹 챌린지 상세');
+    if (isMockMode.value) {
+        const detail = MOCK_CHALLENGE_DETAILS[Number(groupId)];
+        if (!detail) {
+            throw new Error('챌린지를 찾을 수 없습니다.');
+        }
+        return withMockDeadlines(clone(detail));
     }
-    const detail = MOCK_CHALLENGE_DETAILS[Number(groupId)];
-    if (!detail) {
-        throw new Error('챌린지를 찾을 수 없습니다.');
-    }
-    return clone(detail);
+    return toDetailViewModel(await http.get(`/group-challenges/${groupId}/detail`));
+}
+
+/**
+ * 상세 응답 → 화면이 쓰는 모양.
+ *
+ * 서버는 ERD·Lombok 이 정한 이름(`mine`, `defended`, `exceeded`, `profileImageUrl`)을 준다.
+ * 화면은 목데이터 시절의 이름을 쓴다. 아바타 이니셜·색은 `UserAvatar` 가 닉네임에서 만들므로
+ * 서버가 내려주지 않는다.
+ */
+function toDetailViewModel(dto) {
+    return {
+        ...toViewModel(dto),
+        indictments: (dto.indictments ?? []).map((item) => ({
+            ...item,
+            profileImage: item.profileImageUrl,
+            isMine: item.mine,
+            hasDefended: item.defended,
+            settlementDate: formatMonthDay(item.settlementDate),
+            /* 서버는 마감 두 개를 다 주지만 카드는 하나만 그린다. 고르는 일을 여기서 끝낸다. */
+            deadline: item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline,
+        })),
+        dailyMembers: (dto.dailyMembers ?? []).map((member) => ({
+            ...member,
+            profileImage: member.profileImageUrl,
+            isExceeded: member.exceeded,
+        })),
+    };
+}
+
+/**
+ * 목데이터의 마감은 `'02:14:03'` 같은 **남은 시간 문자열**이라 카운트다운이 돌지 않는다.
+ * 호출 시점 기준 절대시각으로 바꿔 실데이터와 같은 모양으로 맞춘다.
+ * (픽스처에 절대시각을 박아 두면 하루만 지나도 전부 「마감됨」이 된다)
+ */
+function withMockDeadlines(detail) {
+    return {
+        ...detail,
+        indictments: (detail.indictments ?? []).map((item) => {
+            const remaining =
+                item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline;
+            return { ...item, deadline: remainingToDeadline(remaining) };
+        }),
+    };
+}
+
+function remainingToDeadline(text) {
+    if (!text) return null;
+    const [h = 0, m = 0, s = 0] = text.split(':').map(Number);
+    return afterNow(((h * 60 + m) * 60 + s) * 1000);
 }
 
 /**
@@ -180,6 +293,170 @@ export async function runGroupChallengeStatusBatch(date) {
     return http.post('/dev/batches/group-challenge-status', null, {
         params: date ? { date } : {},
     });
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * 소비 재판 — 상세 · 결산 구간 거래 목록 · 변론 · 혐의 인정 (이슈 #170)
+ * ────────────────────────────────────────────────────────────── */
+
+/**
+ * 재판 상세. 기소 안내 · 변론 작성 · 변론 완료 화면이 **같은 응답 하나**를 쓴다.
+ * 화면마다 다른 엔드포인트를 두면 같은 소비액을 네 곳에서 다르게 계산하게 된다.
+ *
+ * 그룹 참여자면 누구나 볼 수 있다(배심원도 봐야 한다). 참여자가 아니면 서버가
+ * `TRIAL_NOT_FOUND` 로 거절한다 — 기소의 존재 자체를 노출하지 않기 위함이다.
+ */
+export async function fetchTrialDetail(indictmentId) {
+    if (isMockMode.value) {
+        return toTrialDetailViewModel(clone(mockTrialDetailNow()));
+    }
+    return toTrialDetailViewModel(await http.get(`/group-challenges/trials/${indictmentId}`));
+}
+
+/*
+ * 목데이터 모드의 재판 진행 단계.
+ *
+ * 상수 하나만 돌려주면 **변론 제출 → 변론 완료** 화면에서 변론이 `null` 이라 요약 카드가
+ * 통째로 사라지고, 혐의 인정 완료 화면도 `verdictMethod` 가 없어 판결 문구가 비어 버린다.
+ * 목데이터로 흐름을 끝까지 걸어볼 수 없으면 검증 도구로서 쓸모가 없다.
+ * 새로고침하면 초기 단계로 돌아간다 — 목데이터에 영속성을 만들 이유는 없다.
+ */
+let mockStage = 'DEFENSE_WAIT';
+
+function mockTrialDetailNow() {
+    if (mockStage === 'DEFENDED') return MOCK_TRIAL_DETAIL_DEFENDED;
+    if (mockStage === 'CONFESSED') return MOCK_TRIAL_DETAIL_CONFESSED;
+    return MOCK_TRIAL_DETAIL;
+}
+
+/**
+ * 서버 재판 상세 → 화면이 쓰는 모양.
+ *
+ * 목데이터도 이 함수를 지나간다 — 픽스처를 화면 이름으로 적어 두면 실데이터에서만
+ * 깨지는 매핑 실수를 목데이터 모드가 가려버린다.
+ *
+ * `caseNumber` · `evalLabel` · `settlementLabel` 은 서버에 없다. 사건 번호와 「일일결산」
+ * 같은 문구는 표시 전용이라 서버가 내려주면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ */
+function toTrialDetailViewModel(dto) {
+    const isDaily = dto.evalType === 'DAILY';
+    return {
+        ...dto,
+        /* 화면 목록 key 이자 카운트다운 키. */
+        id: dto.indictmentId,
+        caseNumber: toCaseNumber(isDaily ? dto.challengeDate : dto.endDate),
+        challengeName: dto.groupName,
+        evalLabel: isDaily ? '일일결산' : '기간결산',
+        settlementLabel: isDaily
+            ? formatMonthDay(dto.challengeDate)
+            : `${formatMonthDay(dto.startDate)} ~ ${formatMonthDay(dto.endDate)}`,
+        defenseDeadlineLabel: formatDeadlineLabel(dto.defenseDeadline),
+        accused: {
+            ...(dto.accused ?? {}),
+            profileImage: dto.accused?.profileImageUrl ?? null,
+            isMine: dto.accused?.mine ?? false,
+        },
+        /* `defense` 가 null 이면 아직 변론이 없다는 뜻이다. 빈 객체로 채우지 않는다. */
+        defense: dto.defense
+            ? { ...dto.defense, images: dto.defense.imageUrls ?? [] }
+            : null,
+    };
+}
+
+/** `2026-08-05` → `2026-재판-0805`. 사건 번호는 컬럼이 아니라 결산일에서 만드는 라벨이다. */
+function toCaseNumber(isoDate) {
+    if (!isoDate) return '';
+    const [year, month, day] = isoDate.split('-');
+    return `${year}-재판-${month}${day}`;
+}
+
+/**
+ * 재판 진행 현황 화면 한 벌 (`/group-challenges/:id/trial/:indictmentId`).
+ *
+ * 상세와 **같은 응답**을 쓴다. 진행 현황만을 위한 엔드포인트를 따로 두면 같은 재판의 단계를
+ * 두 곳에서 다르게 계산하게 된다. 화면이 쓰는 4단계 어휘로 옮기는 일만 `toTrialProgress` 가 한다.
+ *
+ * 상태가 계약을 벗어나면 `null` 이다. 호출부가 그룹 챌린지 홈으로 되돌린다.
+ */
+export async function fetchTrialProgress(indictmentId) {
+    return toTrialProgress(await fetchTrialDetail(indictmentId));
+}
+
+/**
+ * 결산 구간의 거래 목록. **피고 본인만** 받는다(상세와 엔드포인트를 나눈 이유).
+ *
+ * 기소를 발화시킨 거래 1건이 아니라 **구간 전체**다. 한도 초과는 누적으로 판정되므로
+ * 발화 거래가 문제의 거래라는 보장이 없다 — 친구들 몫까지 대납한 큰 거래는 그 시점에
+ * 한도 미달이라 기소를 만들지 않고, 뒤따르는 평범한 소비가 기소를 만든다.
+ * 발화 거래만 보이면 정작 대납한 금액을 신고할 방법이 없다.
+ *
+ * `days[].transactions[].amount` 의 합이 `currentAmount` 와 맞는다(무죄 감액이 생기기 전까지).
+ * 화면이 「실제 부담금 합계 vs 한도」를 계산하는 기준이라 어긋나면 판정이 무너진다.
+ */
+export async function fetchTrialTransactions(indictmentId) {
+    if (isMockMode.value) {
+        return toTrialTransactionsViewModel(clone(MOCK_TRIAL_TRANSACTIONS));
+    }
+    return toTrialTransactionsViewModel(
+        await http.get(`/group-challenges/trials/${indictmentId}/transactions`),
+    );
+}
+
+function toTrialTransactionsViewModel(dto) {
+    return {
+        ...dto,
+        days: (dto.days ?? []).map((day) => ({
+            ...day,
+            dateLabel: formatMonthDay(day.date),
+            transactions: (day.transactions ?? []).map((tx) => ({
+                ...tx,
+                /* LocalTime 은 초가 0이면 `18:42`, 아니면 `18:42:30` 으로 온다. 표시는 분까지. */
+                timeLabel: tx.time ? tx.time.slice(0, 5) : '',
+            })),
+        })),
+    };
+}
+
+/**
+ * 변론 등록 (multipart). 피고 본인만, 변론 마감 전까지 한 번만.
+ *
+ * **건별 입력값은 올리지 않는다** — 서버는 합계(`actualBurdenAmount`)만 받는다.
+ * 거래-변론 연결 테이블을 만들지 않기로 했기 때문이다. 감액(`deductionAmount`)도
+ * 클라이언트를 믿지 않고 서버가 `소비액 - 부담금` 으로 직접 계산한다.
+ *
+ * ⚠ `headers: { 'Content-Type': undefined }` 는 **기본값을 지우는 것**이 핵심이다.
+ * `http.js` 인스턴스가 `application/json` 을 박아 두므로 그대로 두면 axios 가 FormData 를
+ * JSON.stringify 해버려 파일이 브라우저를 떠나지 못한다 (`api/user.js:49-72` 와 같은 함정).
+ *
+ * @param {number|string} indictmentId
+ * @param {{ content: string, actualBurdenAmount: number, images?: File[] }} payload
+ */
+export async function submitDefense(indictmentId, { content, actualBurdenAmount, images = [] }) {
+    if (isMockMode.value) {
+        mockStage = 'DEFENDED';
+        return { mocked: true };
+    }
+    const form = new FormData();
+    form.append('content', content);
+    form.append('actualBurdenAmount', String(actualBurdenAmount));
+    images.forEach((file) => form.append('images', file));
+
+    return http.post(`/group-challenges/trials/${indictmentId}/defense`, form, {
+        headers: { 'Content-Type': undefined },
+    });
+}
+
+/**
+ * 혐의 인정 — 투표 없이 즉시 유죄로 종결한다. **되돌릴 수 없다.**
+ *
+ * 보낼 값이 없어 본문이 비어 있다. 목숨 차감은 여기서 일어나지 않는다(이슈 #172).
+ */
+export async function confessIndictment(indictmentId) {
+    if (isMockMode.value) {
+        mockStage = 'CONFESSED';
+        return { mocked: true };
+    }
+    return http.post(`/group-challenges/trials/${indictmentId}/confession`);
 }
 
 /**

@@ -1,9 +1,12 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.chat.domain.ChatMessage;
+import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupMember;
+import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
@@ -11,6 +14,7 @@ import com.kb.tangtang.challenge.dto.GroupMemberDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
+import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,11 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -59,23 +65,32 @@ public class ChallengeGroupService {
 
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
+    private final IndictmentMapper indictmentMapper;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final ChatMessageStore chatMessageStore;
     private final Clock clock;
 
     @Autowired
     public ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                                  GroupMemberMapper groupMemberMapper,
-                                 InviteCodeGenerator inviteCodeGenerator) {
-        this(challengeGroupMapper, groupMemberMapper, inviteCodeGenerator, Clock.systemDefaultZone());
+                                 IndictmentMapper indictmentMapper,
+                                 InviteCodeGenerator inviteCodeGenerator,
+                                 ChatMessageStore chatMessageStore) {
+        this(challengeGroupMapper, groupMemberMapper, indictmentMapper, inviteCodeGenerator,
+                chatMessageStore, Clock.systemDefaultZone());
     }
 
     ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                           GroupMemberMapper groupMemberMapper,
+                          IndictmentMapper indictmentMapper,
                           InviteCodeGenerator inviteCodeGenerator,
+                          ChatMessageStore chatMessageStore,
                           Clock clock) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
+        this.indictmentMapper = indictmentMapper;
         this.inviteCodeGenerator = inviteCodeGenerator;
+        this.chatMessageStore = chatMessageStore;
         this.clock = clock;
     }
 
@@ -110,6 +125,14 @@ public class ChallengeGroupService {
         groupMemberMapper.insertMember(newMember(group, userId));
         log.info("그룹 챌린지 생성 userId={} groupId={} inviteCode={} startDate={}",
                 userId, group.getId(), group.getInviteCode(), group.getStartDate());
+
+        // 채팅방은 챌린지 생성과 동시에 열린다. 개설·삭제 UI 는 없다(이슈 #174)
+        // Redis 장애로 채팅방을 못 열어도 챌린지 생성이라는 본업은 성공해야 한다 — 조용히 삼키지 않고 로그만 남긴다.
+        try {
+            chatMessageStore.initRoom(group.getId(), Set.of(group.getAdminId()), group.getEndDate());
+        } catch (Exception e) {
+            log.error("채팅방 개설 실패 groupId={} — 챌린지 생성은 계속 진행한다", group.getId(), e);
+        }
 
         return ChallengeGroupCreatedDto.builder()
                 .groupId(group.getId())
@@ -166,6 +189,15 @@ public class ChallengeGroupService {
         List<GroupMember> joined = findMembers(groupId);
         log.info("그룹 참여 완료 userId={} groupId={} memberCount={}", userId, groupId, joined.size());
 
+        // 참여자 캐시를 갱신하지 않으면 새 멤버에게 안 읽은 수가 쌓이지 않는다
+        // Redis 장애로 캐시 갱신이 실패해도 참여라는 본업은 성공해야 한다 — 조용히 삼키지 않고 로그만 남긴다.
+        try {
+            chatMessageStore.cacheMembers(groupId, Set.of(userId), group.getEndDate());
+        } catch (Exception e) {
+            log.error("채팅방 참여자 캐시 갱신 실패 groupId={} userId={} — 참여 처리는 계속 진행한다",
+                    groupId, userId, e);
+        }
+
         return toDto(userId, group, joined, LocalDate.now(clock));
     }
 
@@ -188,11 +220,16 @@ public class ChallengeGroupService {
         Map<Long, List<GroupMember>> membersByGroup = groupMemberMapper.findByGroupIds(groupIds).stream()
                 .collect(Collectors.groupingBy(GroupMember::getGroupId));
 
+        // 재판 배지도 같은 이유로 한 번에 센다. 재판이 없는 그룹은 행 자체가 안 나오므로 없으면 null 이다.
+        Map<Long, GroupTrialSummaryRow> trialByGroup =
+                indictmentMapper.findTrialSummaryByGroupIds(userId, groupIds).stream()
+                        .collect(Collectors.toMap(GroupTrialSummaryRow::getGroupId, row -> row));
+
         LocalDate today = LocalDate.now(clock);
         List<ChallengeGroupDto> result = new ArrayList<>(groups.size());
         for (ChallengeGroup group : groups) {
             List<GroupMember> members = membersByGroup.getOrDefault(group.getId(), List.of());
-            result.add(toDto(userId, group, members, today));
+            result.add(toDto(userId, group, members, today, trialByGroup.get(group.getId())));
         }
         return result;
     }
@@ -334,13 +371,24 @@ public class ChallengeGroupService {
 
     /* ══ 조립 ══════════════════════════════════════════════ */
 
+    /** 재판 배지가 없는 자리(상세 · 참여 · 초대 미리보기)용. */
     private ChallengeGroupDto toDto(long userId,
                                     ChallengeGroup group,
                                     List<GroupMember> members,
                                     LocalDate today) {
+        return toDto(userId, group, members, today, null);
+    }
+
+    /** @param trial 재판 배지 집계. 목록에서만 채워지고 그 외에는 NULL 이다 */
+    private ChallengeGroupDto toDto(long userId,
+                                    ChallengeGroup group,
+                                    List<GroupMember> members,
+                                    LocalDate today,
+                                    GroupTrialSummaryRow trial) {
         int totalDays = daysBetweenInclusive(group.getStartDate(), group.getEndDate());
         EvalType evalType = EvalType.valueOf(group.getEvalType());
         GroupMember me = findMember(members, userId);
+        ChatSummary chat = me == null ? ChatSummary.EMPTY : chatSummary(group.getId(), userId);
 
         return ChallengeGroupDto.builder()
                 .id(group.getId())
@@ -371,7 +419,59 @@ public class ChallengeGroupService {
                 .members(members.stream()
                         .map(m -> toMemberDto(m, group.getAdminId()))
                         .toList())
+                .unreadChatCount(chat.unreadCount())
+                .lastChatMessage(chat.lastMessage())
+                .lastChatTime(chat.lastTime())
+                .pendingTrialCount(trial == null ? 0 : trial.getPendingVoteCount())
+                .defendant(trial != null && trial.getMyDefenseNeededCount() > 0)
+                .myVoteStatus(myVoteStatus(trial))
                 .build();
+    }
+
+    /**
+     * 「투표중」 · 「투표완료」 · 배지 없음을 가른다.
+     *
+     * <p>안 던진 표가 하나라도 남아 있으면 이미 던진 표가 있어도 {@code PENDING} 이다 —
+     * 배지는 남은 할 일을 가리키므로 완료 쪽이 이기면 할 일이 숨는다.
+     */
+    private String myVoteStatus(GroupTrialSummaryRow trial) {
+        if (trial == null) {
+            return null;
+        }
+        if (trial.getPendingVoteCount() > 0) {
+            return "PENDING";
+        }
+        return trial.getCastVoteCount() > 0 ? "DONE" : null;
+    }
+
+    /**
+     * 목록·상세에 함께 실을 채팅 요약. 값은 Redis 에만 있다(채팅은 MySQL 에 저장하지 않는다).
+     *
+     * <p>새 Redis 코드는 필요 없다. 안 읽은 수는 메시지 발행 때 이미 쌓이고 있고,
+     * {@code findRecent(groupId, 1)} 은 내부가 {@code range(-1, -1)} 이라 가장 최근 1건을 준다.
+     *
+     * <p><b>Redis 가 죽어도 그룹 목록은 떠야 한다.</b> 채팅 요약은 부가 정보라 실패를 삼키고
+     * 빈 값을 돌려준다. 여기서 예외를 올리면 채팅과 무관한 재판 목록 화면 전체가 함께 죽는다.
+     */
+    private ChatSummary chatSummary(long groupId, long userId) {
+        try {
+            List<ChatMessage> recent = chatMessageStore.findRecent(groupId, 1);
+            if (recent.isEmpty()) {
+                // 방은 있는데 대화만 없는 경우다. 안 읽은 수는 어차피 0 이라 조회를 아낀다.
+                return ChatSummary.EMPTY;
+            }
+            ChatMessage last = recent.get(recent.size() - 1);
+            return new ChatSummary(chatMessageStore.unreadOf(groupId, userId),
+                    last.getContent(), last.getSentAt());
+        } catch (RuntimeException e) {
+            log.warn("채팅 요약을 읽지 못해 빈 값으로 내린다. groupId={} userId={}", groupId, userId, e);
+            return ChatSummary.EMPTY;
+        }
+    }
+
+    /** {@link #chatSummary} 의 반환 묶음. 세 값이 항상 함께 결정돼서 따로 나르지 않는다. */
+    private record ChatSummary(int unreadCount, String lastMessage, LocalDateTime lastTime) {
+        private static final ChatSummary EMPTY = new ChatSummary(0, null, null);
     }
 
     private GroupMemberDto toMemberDto(GroupMember member, Long adminId) {

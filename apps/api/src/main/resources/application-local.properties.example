@@ -23,8 +23,9 @@ jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
 google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
 google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
 
-# === OpenAI monthly report analysis (issue #156) ===
-# Put the institutional key in application-local.properties; never commit that file.
+# === OpenAI (월간 리포트 분석 #156 · LLM 거래 카테고리화 #147 공용) ===
+# 두 기능이 같은 키를 쓴다. 이 줄 하나면 된다.
+# 값이 비어 있어도 앱은 뜬다 — 해당 기능만 실패한다.
 openai.api-key=CHANGE_ME_OPENAI_API_KEY
 openai.model=gpt-5-nano
 #openai.responses-url=https://api.openai.com/v1/responses
@@ -68,3 +69,7 @@ openai.read-timeout-millis=15000
 
 # 배치를 자정까지 기다리지 않고 돌리려면 그룹 챌린지 홈의 DEV 버튼을 누른다
 # (POST /api/dev/batches/group-challenge-status). 로컬에서는 별도 설정 없이 켜져 있다.
+
+# ── 그룹 채팅 Redis (이슈 #174) ──────────────────────
+redis.host=localhost
+redis.port=6379
