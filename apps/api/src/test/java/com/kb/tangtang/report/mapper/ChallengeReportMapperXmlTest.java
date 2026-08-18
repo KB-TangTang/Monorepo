@@ -67,6 +67,15 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("group_record_json"));
             assertTrue(xml.contains("ON DUPLICATE KEY UPDATE"));
             assertTrue(xml.contains("UPDATE tbl_challenge_monthly_report"));
+            /*
+             * 보강 UPDATE 의 WHERE 는 user_id + year_month 여야 한다 (이슈 #267).
+             * 여기에 조건이 하나라도 더 붙으면 — 예컨대 group_record_json IS NULL 로 좁히면 —
+             * 확정 이벤트와 보강 cron 이 겹쳐 돌 때 두 번째 호출이 조용히 0행이 되어 멱등이 깨진다.
+             * 반대로 조건이 빠지면 남의 달 리포트를 덮는다.
+             */
+            assertTrue(xml.contains("SET group_record_json = CAST(#{groupRecordJson} AS JSON)\n"
+                    + "         WHERE user_id = #{userId}\n"
+                    + "           AND `year_month` = #{yearMonth}"));
             assertTrue(xml.contains("g.end_date = #{endDate}"));
             assertTrue(xml.contains("g.end_date BETWEEN #{startDate} AND #{endDate}"));
             assertTrue(xml.contains("g.status = 'CLOSED'"));
