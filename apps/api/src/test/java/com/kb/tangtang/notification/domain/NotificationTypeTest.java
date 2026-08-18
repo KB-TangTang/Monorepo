@@ -11,10 +11,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NotificationTypeTest {
 
+    /*
+     * 개수를 못 박는 단언이라 종류가 늘면 반드시 깨진다. 의도된 설계다.
+     * 문구·제목은 NotificationType 이 소유하므로(발행자는 치환값만 넘긴다), 종류만 추가하고
+     * 문구를 빠뜨리는 것을 이 테스트가 잡는다. 늘렸으면 이 숫자와 아래 설명을 함께 고친다.
+     */
     @Test
-    @DisplayName("알림 9종이 모두 정의돼 있다 — 참고화면 6종 + 그룹챌린지 시작·미성립 2종(#152) + 그룹챌린지 변론 등록 1종(#174)")
+    @DisplayName("알림 12종이 모두 정의돼 있다. 참고화면 6종 + 그룹챌린지 시작·미성립 2종(#152)"
+            + " + 그룹챌린지 변론 등록 1종(#174) + 개인 미션 3종(#282)")
     void hasAllTypes() {
-        assertEquals(9, NotificationType.values().length);
+        assertEquals(12, NotificationType.values().length);
     }
 
     @Test
