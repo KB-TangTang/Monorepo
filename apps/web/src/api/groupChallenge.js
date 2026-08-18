@@ -23,6 +23,7 @@ import {
     MOCK_TRIAL_DETAIL_DEFENDED,
     MOCK_TRIAL_TRANSACTIONS,
 } from '@/fixtures/groupChallengeTrial';
+import { formatDeadlineLabel, toTrialProgress } from '@/utils/groupTrial';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -370,23 +371,15 @@ function toCaseNumber(isoDate) {
 }
 
 /**
- * `2026-08-05T22:00:00` → `오늘 22:00` · `내일 02:00` · `8월 6일 02:00`.
+ * 재판 진행 현황 화면 한 벌 (`/group-challenges/:id/trial/:indictmentId`).
  *
- * 변론 마감은 기소 시각 + 6시간이라 대개 오늘 안이지만 자정을 넘길 수 있다.
- * 「오늘」로 고정해 두면 밤에 기소된 사람에게 지난 시각을 마감으로 보여준다.
+ * 상세와 **같은 응답**을 쓴다. 진행 현황만을 위한 엔드포인트를 따로 두면 같은 재판의 단계를
+ * 두 곳에서 다르게 계산하게 된다. 화면이 쓰는 4단계 어휘로 옮기는 일만 `toTrialProgress` 가 한다.
+ *
+ * 상태가 계약을 벗어나면 `null` 이다. 호출부가 그룹 챌린지 홈으로 되돌린다.
  */
-function formatDeadlineLabel(isoDateTime) {
-    if (!isoDateTime) return '';
-    const at = new Date(isoDateTime);
-    if (Number.isNaN(at.getTime())) return '';
-
-    const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-    const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const days = Math.round((midnight(at) - midnight(new Date())) / 86400000);
-
-    if (days === 0) return `오늘 ${time}`;
-    if (days === 1) return `내일 ${time}`;
-    return `${at.getMonth() + 1}월 ${at.getDate()}일 ${time}`;
+export async function fetchTrialProgress(indictmentId) {
+    return toTrialProgress(await fetchTrialDetail(indictmentId));
 }
 
 /**
