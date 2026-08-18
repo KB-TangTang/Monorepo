@@ -1,17 +1,39 @@
 <script setup>
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
 import GroupAiVerdictResultCard from '@/components/challenge/group/GroupAiVerdictResultCard.vue';
 import GroupTieScoreCard from '@/components/challenge/group/GroupTieScoreCard.vue';
-import { getAiVerdict } from '@/fixtures/groupChallengeAiVerdict';
+import { fetchTrialDetail } from '@/api/groupChallenge';
+import { isAiVerdict, toVerdictScreen, verdictRouteName } from '@/utils/groupTrial';
 
 const route = useRoute();
 const router = useRouter();
-const verdict = getAiVerdict(route.query.outcome);
+const verdict = ref(null);
+
+/* 판결은 서버에서 다시 읽는다. 앞 화면이 쿼리로 넘겨주면 URL 조작으로 결과가 바뀐다(이슈 #172). */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
+        router.replace({ name: 'groupChallenge' });
+        return;
+    }
+
+    if (!isAiVerdict(loaded)) {
+        router.replace({
+            name: verdictRouteName(loaded) ?? 'trialProgress',
+            params: route.params,
+        });
+        return;
+    }
+    verdict.value = toVerdictScreen(loaded);
+});
 
 function goGroupHome() {
-    router.push({ name: 'groupChallenge' });
+    router.push({ name: 'groupChallengeDetail', params: { id: route.params.id } });
 }
 
 function goDetail() {
@@ -20,7 +42,7 @@ function goDetail() {
 </script>
 
 <template>
-    <main class="result-page">
+    <main v-if="verdict" class="result-page">
         <DefenseCourtHeader>
             <template #nav-right
                 ><span class="result-page__case">{{ verdict.caseNumber }}</span></template

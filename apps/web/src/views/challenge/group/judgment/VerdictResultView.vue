@@ -9,19 +9,34 @@ import { useRoute, useRouter } from 'vue-router';
 import BaseBackHeader from '@/components/common/BaseBackHeader.vue';
 import VerdictDocumentCard from '@/components/challenge/group/VerdictDocumentCard.vue';
 import VoteResultBar from '@/components/challenge/group/VoteResultBar.vue';
-import { MOCK_VERDICT_RESULT } from '@/fixtures/groupChallengeDetail';
+import { fetchTrialDetail } from '@/api/groupChallenge';
+import { toVerdictScreen } from '@/utils/groupTrial';
 
 const route = useRoute();
 const router = useRouter();
 
 const verdict = ref(null);
 
-onMounted(() => {
-    const id = Number(route.params.indictmentId);
-    verdict.value = MOCK_VERDICT_RESULT[id] ?? null;
-    if (!verdict.value) {
+/*
+ * 확정된 재판(`GUILTY`/`INNOCENT`)만 이 화면에 들어온다(이슈 #172).
+ * 아직 투표 중이면 진행 현황이 4개 상태를 모두 그려준다 — 판결문을 빈 채로 띄우지 않는다.
+ */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
+        /* 참여자가 아니거나 없는 재판이다. 서버가 존재 자체를 알려주지 않는다. */
         router.replace({ name: 'groupChallenge' });
+        return;
     }
+
+    const screen = toVerdictScreen(loaded);
+    if (!screen) {
+        router.replace({ name: 'trialProgress', params: route.params });
+        return;
+    }
+    verdict.value = screen;
 });
 
 const isInnocent = computed(() => verdict.value?.outcome === 'INNOCENT');

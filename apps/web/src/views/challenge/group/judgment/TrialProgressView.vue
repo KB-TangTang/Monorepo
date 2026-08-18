@@ -85,9 +85,13 @@ const showVoteStats = computed(() =>
     isVoting.value && (trial.value?.vote?.totalVoters ?? 0) > 0,
 );
 
+/*
+ * 다수결로 끝난 재판은 판결문으로, 동률이라 판사 탕이가 판결한 재판은 동점 안내로 간다(이슈 #172).
+ * 판정은 `toTrialProgress` 가 서버 상태를 보고 미리 해 둔다.
+ */
 function goVerdict() {
     router.push({
-        name: 'verdictResult',
+        name: trial.value?.verdictRoute ?? 'verdictResult',
         params: route.params,
     });
 }
