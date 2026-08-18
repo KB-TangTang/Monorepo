@@ -1,11 +1,23 @@
 <!--
-  용도: 투자증권 상세 화면의 보유 종목 한 행. 종목명 · 보유 수량 · 평가금액 · 수익률·증감액을 보여준다.
+  용도: 투자증권 상세 화면의 보유 종목 한 행. 종목명 · 보유 수량 · 평가금액 · 수익률·증감액을 보여주고,
+  클릭하면 바로 아래로 평가금액 · 매입금액 · 평가손익 · 수익률 · 보유수량 · 매입평균 상세가 펼쳐진다.
   언제 쓰는지: AssetInvestmentView 하나뿐. returnRate 는 소수(0.124 = +12.4%)로 받는다.
+  펼침 상태는 이 컴포넌트가 소유하지 않는다 — 부모가 expanded prop 으로 내려주고 toggle 이벤트로 반응한다
+  (여러 종목 중 한 번에 하나만 펼쳐지도록 부모가 단일 확장을 보장하기 위함).
 -->
 <script setup>
-import { formatWon, formatSignedWon, formatSignedPercent, toneColor } from '@/utils/asset';
+import { computed } from 'vue';
+import { ChevronDownIcon } from '@heroicons/vue/24/solid';
+import {
+    formatWon,
+    formatSignedWon,
+    formatSignedPercent,
+    toneColor,
+    getHoldingCost,
+    getHoldingAveragePrice,
+} from '@/utils/asset';
 
-defineProps({
+const props = defineProps({
     badge: { type: String, required: true },
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
@@ -13,43 +25,105 @@ defineProps({
     gainAmount: { type: Number, required: true },
     returnRate: { type: Number, required: true },
     tone: { type: String, default: 'gray' },
+    expanded: { type: Boolean, default: false },
 });
+
+defineEmits(['toggle']);
+
+const cost = computed(() => getHoldingCost(props.amount, props.gainAmount));
+const averagePrice = computed(() => getHoldingAveragePrice(cost.value, props.quantity));
+const rateTone = computed(() =>
+    props.returnRate < 0 ? 'holding-row__rate--down' : 'holding-row__rate--up',
+);
 </script>
 
 <template>
     <li class="holding-row">
-        <span
-            class="holding-row__avatar"
-            :style="{ background: toneColor(tone) }"
-            aria-hidden="true"
+        <button
+            type="button"
+            class="holding-row__trigger"
+            :aria-expanded="expanded"
+            @click="$emit('toggle')"
         >
-            {{ badge }}
-        </span>
-        <div class="holding-row__info">
-            <p class="holding-row__name">{{ name }}</p>
-            <p class="holding-row__meta">{{ quantity }}주</p>
-        </div>
-        <div class="holding-row__figures">
-            <p class="holding-row__amount">{{ formatWon(amount) }}</p>
-            <p
-                class="holding-row__rate"
-                :class="returnRate < 0 ? 'holding-row__rate--down' : 'holding-row__rate--up'"
+            <span
+                class="holding-row__avatar"
+                :style="{ background: toneColor(tone) }"
+                aria-hidden="true"
             >
-                {{ formatSignedPercent(returnRate) }} ({{ formatSignedWon(gainAmount) }})
-            </p>
-        </div>
+                {{ badge }}
+            </span>
+            <div class="holding-row__info">
+                <p class="holding-row__name">{{ name }}</p>
+                <p class="holding-row__meta">{{ quantity }}주</p>
+            </div>
+            <div class="holding-row__figures">
+                <p class="holding-row__amount">{{ formatWon(amount) }}</p>
+                <p class="holding-row__rate" :class="rateTone">
+                    {{ formatSignedPercent(returnRate) }} ({{ formatSignedWon(gainAmount) }})
+                </p>
+            </div>
+            <ChevronDownIcon
+                class="holding-row__chevron"
+                :class="{ 'holding-row__chevron--open': expanded }"
+                aria-hidden="true"
+            />
+        </button>
+
+        <Transition name="holding-slide">
+            <div v-if="expanded" class="holding-row__detail">
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">평가금액</span>
+                    <span class="holding-row__detail-value">{{ formatWon(amount) }}</span>
+                </div>
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">매입금액</span>
+                    <span class="holding-row__detail-value">{{ formatWon(cost) }}</span>
+                </div>
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">평가손익</span>
+                    <span class="holding-row__detail-value" :class="rateTone">
+                        {{ formatSignedWon(gainAmount) }}
+                    </span>
+                </div>
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">수익률</span>
+                    <span class="holding-row__detail-value" :class="rateTone">
+                        {{ formatSignedPercent(returnRate) }}
+                    </span>
+                </div>
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">보유수량</span>
+                    <span class="holding-row__detail-value">{{ quantity }}주</span>
+                </div>
+                <div class="holding-row__detail-row">
+                    <span class="holding-row__detail-label">매입평균</span>
+                    <span class="holding-row__detail-value">{{ formatWon(averagePrice) }}</span>
+                </div>
+            </div>
+        </Transition>
     </li>
 </template>
 
 <style scoped>
 .holding-row {
-    display: flex;
-    align-items: center;
-    gap: var(--tt-space-3);
-    padding: var(--tt-space-4);
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
+    overflow: hidden;
+}
+
+.holding-row__trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: var(--tt-space-3);
+    padding: var(--tt-space-4);
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 
 .holding-row__avatar {
@@ -104,5 +178,53 @@ defineProps({
 
 .holding-row__rate--down {
     color: var(--tt-danger);
+}
+
+.holding-row__chevron {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: var(--tt-text-hint);
+    transition: transform 0.25s ease;
+}
+
+.holding-row__chevron--open {
+    transform: rotate(180deg);
+}
+
+.holding-row__detail {
+    padding: 0 var(--tt-space-4) var(--tt-space-4);
+}
+
+.holding-row__detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--tt-space-2) 0;
+    border-top: 1px solid var(--tt-border-light);
+}
+
+.holding-row__detail-label {
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-text-muted);
+}
+
+.holding-row__detail-value {
+    font-family: var(--tt-font-mono);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text);
+}
+
+.holding-slide-enter-active,
+.holding-slide-leave-active {
+    max-height: 240px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.holding-slide-enter-from,
+.holding-slide-leave-to {
+    max-height: 0;
+    opacity: 0;
 }
 </style>
