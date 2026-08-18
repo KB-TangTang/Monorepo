@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.common.docs.SwaggerTags;
@@ -68,6 +69,22 @@ public interface ChallengeGroupControllerDocs {
                     + "`settleTime`·`memoAuthor`·`memoDate`·채팅·종료 화면 필드는 아직 NULL 이다.")
     ApiResponse<ChallengeGroupDetailDto> findFullDetail(@ApiIgnore Long userId,
                                                         @ApiParam(value = "그룹 ID", required = true) Long groupId);
+
+    @ApiOperation(value = "명예 법정 — 생존자 랭킹",
+            notes = "**참여자만 볼 수 있다.** 화면 한 벌을 한 번에 내려준다 — 헤더(평가 방식·한도·메모)와 "
+                    + "참여자 전원의 순위.\n\n"
+                    + "정렬은 요구사항정의서 6.6 — 일일평가는 남은 목숨 내림차순 → 누적 소비액 오름차순, "
+                    + "기간평가는 누적 소비액 오름차순. **동률은 공동 순위**다(1, 1, 3).\n\n"
+                    + "`status = CLOSED` 면 순위·부담금이 확정 배치가 남긴 **저장값**이고 다시 계산하지 않는다. "
+                    + "그 외 상태에서는 조회 시점의 스냅샷이다.\n\n"
+                    + "`finalOutcome`(`SURVIVED`/`ELIMINATED`)·`finalChargeAmount` 는 **CLOSED 전에는 null** 이다. "
+                    + "진행 중의 목숨 0 은 「탈락 위기」이지 탈락이 아니다 — 탈락 표시 여부는 화면이 "
+                    + "`status`+`finalOutcome` 으로 정한다.\n\n"
+                    + "`lastSettlementDate` 는 마지막으로 결산이 끝난 날짜다(진행 중에는 오늘 제외). "
+                    + "결산 행이 아직 없으면 null 이고 화면이 날짜 부분을 생략한다.\n\n"
+                    + "오류 코드: `GROUP_NOT_FOUND`(그룹 없음) · `GROUP_NOT_MEMBER`(참여자 아님)")
+    ApiResponse<GroupRankingDto> findRanking(@ApiIgnore Long userId,
+                                             @ApiParam(value = "그룹 ID", required = true) Long groupId);
 
     @ApiOperation(value = "초대 코드 미리보기",
             notes = "참여 확인 화면이 「어떤 그룹인지」 먼저 보여주기 위해 쓴다.\n\n"
