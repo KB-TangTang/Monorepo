@@ -4,34 +4,66 @@
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { fetchHome } from '@/api/home';
+import { useRouter } from 'vue-router';
+import { fetchAssetSummary } from '@/api/asset';
+import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
+import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
+import { fetchMissionRankings, fetchTodayMission } from '@/api/personalMission';
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
-import { MOCK_HOME_ACTIVE, MOCK_HOME_EMPTY } from '@/fixtures/home';
-import { clampHomeProgress, formatHomeAmount, formatHomeRate } from '@/utils/home';
+import { useAuthStore } from '@/stores/auth';
+import {
+    clampHomeProgress,
+    formatHomeAmount,
+    getCurrentYearMonth,
+    getDaysUntilNextMonth,
+    getHomeAssetChange,
+    getHomeGroupStatus,
+    toHomeMission,
+    toHomeReportSummary,
+} from '@/utils/home';
+import { useCountdown } from '@/utils/useCountdown';
+import { resolveDisplayName } from '@/utils/user';
 import challengeImage from '@/assets/images/tang_home.png';
 import honorCourtImage from '@/assets/images/emotions/56_with_trophy_ver4.png';
 
 const router = useRouter();
-const route = useRoute();
+const auth = useAuthStore();
 
-const homeData = ref(null);
-const isLoading = ref(false);
+const isLoading = ref(true);
 const errorMessage = ref('');
 const animatedProgress = ref(0);
-const isDevelopment = import.meta.env.DEV;
+const challenge = ref(null);
+const assetSummary = ref(null);
+const honorCourt = ref(null);
+const habitSummary = ref(null);
+const groupTrials = ref([]);
+const activeGroupCount = ref(0);
+const isGroupSummaryLoading = ref(true);
+const hasGroupSummaryError = ref(false);
 let progressAnimationFrame = 0;
 let progressAnimationTimer = 0;
 
-const challenge = computed(() => homeData.value?.challenge ?? null);
-const pendingVote = computed(() => homeData.value?.pendingVote ?? null);
-const assetSummary = computed(() => homeData.value?.assetSummary ?? null);
-const honorCourt = computed(() => homeData.value?.honorCourt ?? null);
+const displayName = computed(() => resolveDisplayName(auth.user) || '사용자');
+const currentPeriod = getCurrentYearMonth();
+const assetChange = computed(() => getHomeAssetChange(assetSummary.value?.monthOverMonthRate));
+const groupStatus = computed(() =>
+    getHomeGroupStatus({
+        trials: groupTrials.value,
+        activeGroupCount: activeGroupCount.value,
+        failed: hasGroupSummaryError.value,
+    }),
+);
+const groupTodoItems = computed(() => groupTrials.value);
+const { countdowns: groupCountdowns } = useCountdown(groupTodoItems);
+const groupDeadline = computed(() => {
+    const item = groupStatus.value.item;
+    return item ? groupCountdowns.value[item.id]?.text : null;
+});
 
 const dateLabel = computed(() => {
     const today = new Date();
@@ -80,23 +112,66 @@ function animateProgress(targetProgress) {
 watch(challengeProgress, animateProgress, { immediate: true });
 
 async function loadHome() {
-    homeData.value = route.query.homeState === 'empty' ? MOCK_HOME_EMPTY : MOCK_HOME_ACTIVE;
-    // // 백엔드 홈 API가 준비되기 전까지 개발 환경에서는 데이터가 있는 시안을 기본으로 보여준다.
-    // if (isDevelopment) {
-    //     homeData.value = route.query.homeState === 'empty' ? MOCK_HOME_EMPTY : MOCK_HOME_ACTIVE;
-    //     return;
-    // }
-    //
-    // isLoading.value = true;
-    // errorMessage.value = '';
-    //
-    // try {
-    //     homeData.value = await fetchHome();
-    // } catch (error) {
-    //     errorMessage.value = error.message ?? '홈 정보를 불러오지 못했습니다.';
-    // } finally {
-    //     isLoading.value = false;
-    // }
+    isLoading.value = true;
+    errorMessage.value = '';
+
+    const [missionResult, assetResult, rankingResult, reportResult] = await Promise.allSettled([
+        fetchTodayMission(),
+        fetchAssetSummary(),
+        fetchMissionRankings(currentPeriod),
+        loadLatestReport(),
+    ]);
+
+    challenge.value =
+        missionResult.status === 'fulfilled' ? toHomeMission(missionResult.value) : null;
+    assetSummary.value = assetResult.status === 'fulfilled' ? assetResult.value : null;
+
+    const myRanking = rankingResult.status === 'fulfilled' ? rankingResult.value?.myRanking : null;
+    honorCourt.value = myRanking
+        ? {
+              month: Number(currentPeriod.split('-')[1]),
+              rank: myRanking.rank,
+              topPercent: myRanking.topPercent,
+              reportOpenDays: getDaysUntilNextMonth(),
+          }
+        : null;
+    habitSummary.value = reportResult.status === 'fulfilled' ? reportResult.value : null;
+
+    if (
+        [missionResult, assetResult, rankingResult, reportResult].every(
+            (r) => r.status === 'rejected',
+        )
+    ) {
+        errorMessage.value = '홈 정보를 불러오지 못했습니다.';
+    }
+    isLoading.value = false;
+}
+
+async function loadLatestReport() {
+    const availability = await fetchChallengeReportMonths();
+    const latestMonth = availability.months?.find((month) => month.available);
+    if (!latestMonth) return null;
+
+    return toHomeReportSummary(await fetchChallengeReport(latestMonth.value));
+}
+
+async function loadGroupSummary() {
+    isGroupSummaryLoading.value = true;
+    hasGroupSummaryError.value = false;
+
+    const [trialsResult, activeGroupsResult] = await Promise.allSettled([
+        fetchMyTrials(),
+        fetchMyGroupChallenges(['ACTIVE']),
+    ]);
+
+    groupTrials.value = trialsResult.status === 'fulfilled' ? trialsResult.value : [];
+    activeGroupCount.value =
+        activeGroupsResult.status === 'fulfilled' ? activeGroupsResult.value.length : 0;
+
+    const cannotDecideEmptyState =
+        groupTrials.value.length === 0 && activeGroupsResult.status === 'rejected';
+    hasGroupSummaryError.value = trialsResult.status === 'rejected' || cannotDecideEmptyState;
+    isGroupSummaryLoading.value = false;
 }
 
 function goToPersonalChallenge() {
@@ -104,6 +179,27 @@ function goToPersonalChallenge() {
 }
 
 function goToGroupChallenge() {
+    if (hasGroupSummaryError.value) {
+        loadGroupSummary();
+        return;
+    }
+
+    const item = groupStatus.value.item;
+    if (item?.type === 'accuse') {
+        router.push({
+            name: 'defenseViolation',
+            params: { id: item.challengeId, indictmentId: item.indictmentId },
+        });
+        return;
+    }
+    if (item?.type === 'vote') {
+        router.push({
+            name: 'voteVerdict',
+            params: { id: item.challengeId, indictmentId: item.indictmentId },
+        });
+        return;
+    }
+
     router.push({ name: 'groupChallengeList' });
 }
 
@@ -112,14 +208,20 @@ function goToAsset() {
 }
 
 function goToPersonalRanking() {
-    router.push({ name: 'personalRanking' });
+    router.push({ name: 'personalRanking', query: { month: currentPeriod } });
 }
 
 function goToChallengeReport() {
-    router.push({ name: 'challengeReport' });
+    router.push({
+        name: 'challengeReport',
+        query: habitSummary.value?.period ? { month: habitSummary.value.period } : {},
+    });
 }
 
-onMounted(loadHome);
+onMounted(() => {
+    loadHome();
+    loadGroupSummary();
+});
 onBeforeUnmount(stopProgressAnimation);
 </script>
 
@@ -137,7 +239,7 @@ onBeforeUnmount(stopProgressAnimation);
                     <TheNotificationBell />
                 </div>
 
-                <h1 class="home__title">{{ homeData?.userName ?? '사용자' }}님, 오늘도 탕탕!</h1>
+                <h1 class="home__title">{{ displayName }}님, 오늘도 탕탕!</h1>
 
                 <p class="home__description">
                     오늘의 재판과 자산을<br />
@@ -228,22 +330,36 @@ onBeforeUnmount(stopProgressAnimation);
                             그룹 재판
                         </span>
 
-                        <template v-if="challenge">
-                            <strong class="summary-card__value">
-                                투표 대기 {{ pendingVote?.count ?? 0 }}건
-                            </strong>
-                            <span
-                                v-if="pendingVote?.closingSoonHours"
-                                class="summary-card__caption summary-card__caption--danger"
-                            >
-                                마감 {{ pendingVote.closingSoonHours }}시간 전
-                            </span>
+                        <template v-if="isGroupSummaryLoading">
+                            <strong class="summary-card__value">할 일을 확인 중이에요</strong>
                         </template>
 
-                        <p v-else class="summary-card__empty-message">
-                            새로운 사건에 참여해<br />
-                            첫 판결을 내려보세요
-                        </p>
+                        <template v-else>
+                            <strong
+                                class="summary-card__value summary-card__value--group"
+                                :class="{
+                                    'summary-card__value--success': groupStatus.kind === 'cruising',
+                                }"
+                            >
+                                {{ groupStatus.title }}
+                            </strong>
+                            <span
+                                class="summary-card__caption"
+                                :class="{
+                                    'summary-card__caption--danger':
+                                        groupStatus.kind === 'accuse' ||
+                                        groupStatus.kind === 'vote' ||
+                                        groupStatus.kind === 'error',
+                                    'summary-card__caption--success':
+                                        groupStatus.kind === 'cruising',
+                                }"
+                            >
+                                <template v-if="groupDeadline"
+                                    >마감 {{ groupDeadline }} ·
+                                </template>
+                                {{ groupStatus.caption }}
+                            </span>
+                        </template>
                     </BaseCard>
 
                     <BaseCard clickable padding="md" @click="goToAsset">
@@ -264,13 +380,18 @@ onBeforeUnmount(stopProgressAnimation);
 
                         <template v-if="assetSummary">
                             <strong class="summary-card__amount">
-                                {{ formatHomeAmount(assetSummary.netAssetAmount) }}
+                                {{ formatHomeAmount(assetSummary.netWorth) }}
                             </strong>
                             <span
-                                v-if="challenge"
-                                class="summary-card__caption summary-card__caption--success"
+                                v-if="assetChange"
+                                class="summary-card__caption"
+                                :class="{
+                                    'summary-card__caption--success':
+                                        assetChange.tone === 'success',
+                                    'summary-card__caption--danger': assetChange.tone === 'danger',
+                                }"
                             >
-                                전월 대비 {{ formatHomeRate(assetSummary.monthlyChangeRate) }}
+                                {{ assetChange.text }}
                             </span>
                         </template>
 
@@ -282,14 +403,13 @@ onBeforeUnmount(stopProgressAnimation);
             </section>
 
             <BaseCard
-                v-if="honorCourt || !challenge"
                 class="honor-court"
-                :class="{ 'honor-court--empty': !challenge }"
+                :class="{ 'honor-court--empty': !honorCourt }"
                 clickable
                 padding="md"
-                @click="challenge ? goToPersonalRanking() : goToPersonalChallenge()"
+                @click="goToPersonalRanking"
             >
-                <div v-if="honorCourt && challenge" class="honor-court__content">
+                <div v-if="honorCourt" class="honor-court__content">
                     <h2 class="honor-court__title">{{ honorCourt.month }}월 명예의 전당</h2>
 
                     <div class="honor-court__ranking">
@@ -303,9 +423,11 @@ onBeforeUnmount(stopProgressAnimation);
                 </div>
 
                 <div v-else class="honor-court__content honor-court__empty-content">
-                    <h2 class="honor-court__empty-title">명예의 전당에 도전하세요</h2>
+                    <h2 class="honor-court__empty-title">
+                        {{ Number(currentPeriod.split('-')[1]) }}월 명예의 전당
+                    </h2>
                     <p class="honor-court__empty-description">
-                        미션에 참여해 순위에 이름을 올려보세요
+                        이번 달 랭킹이 집계되면 순위를 알려드릴게요
                     </p>
                 </div>
 
@@ -313,15 +435,20 @@ onBeforeUnmount(stopProgressAnimation);
             </BaseCard>
 
             <button
-                v-if="honorCourt && challenge"
+                v-if="habitSummary"
                 type="button"
                 class="home-habit-card"
                 @click="goToChallengeReport"
             >
                 <span class="home-habit-card__content">
-                    <small>이번 달 소비습관 변화</small>
-                    <strong><b>74,000원</b> 아꼈어요</strong>
-                    <em>카페에서 가장 큰 변화가 있었어요</em>
+                    <small>{{ habitSummary.month }}월 소비습관 변화</small>
+                    <strong
+                        ><b>{{ formatHomeAmount(habitSummary.savedAmount) }}원</b> 아꼈어요</strong
+                    >
+                    <em v-if="habitSummary.topCategoryName">
+                        {{ habitSummary.topCategoryName }}에서 가장 큰 변화가 있었어요
+                    </em>
+                    <em v-else>확정된 챌린지 결과를 확인해 보세요</em>
                 </span>
                 <span class="home-habit-card__action">자세히 보기</span>
             </button>

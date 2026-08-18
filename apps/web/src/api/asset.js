@@ -42,6 +42,7 @@ export async function fetchAssetSummary(baseDate) {
         netWorth: raw.netWorth,
         // changeAmount 는 전월 자산 스냅샷이 없으면 null 이다(가입 초기 등) — 그 달은 "변화 없음"으로 본다.
         monthOverMonthChange: raw.changeAmount ?? 0,
+        monthOverMonthRate: raw.changeRate ?? null,
         // 스파크라인은 값이 있는 점만으로 그린다. null 이 섞이면 min/max 계산이 깨진다.
         trend: raw.trend.map((point) => point.netWorth).filter((value) => value !== null),
         composition: raw.composition.map((item) => ({
