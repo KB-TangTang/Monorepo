@@ -113,13 +113,13 @@ const rateTone = computed(() =>
 }
 
 .holding-row__detail-wrap {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 0.25s ease;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.25s ease;
 }
 
 .holding-row__detail-wrap--open {
-    grid-template-rows: 1fr;
+    max-height: 500px;
 }
 
 .holding-row__trigger {
