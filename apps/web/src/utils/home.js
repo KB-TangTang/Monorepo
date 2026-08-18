@@ -81,6 +81,31 @@ export function toHomeReportSummary(report) {
     };
 }
 
+export function getHomeReportEmptyCopy(status) {
+    if (status === 'not-agreed') {
+        return {
+            title: '챌린지를 시작해 보세요',
+            description: '참여 후 소비습관 변화를 기록해 드릴게요',
+        };
+    }
+    if (status === 'preparing') {
+        return {
+            title: '첫 리포트를 준비 중이에요',
+            description: '한 달의 기록이 모이면 결과를 알려드릴게요',
+        };
+    }
+    if (status === 'error') {
+        return {
+            title: '리포트를 불러오지 못했어요',
+            description: '자세히 보기에서 다시 확인해 주세요',
+        };
+    }
+    return {
+        title: '아직 확정된 절감 결과가 없어요',
+        description: '챌린지를 완료하면 변화가 기록돼요',
+    };
+}
+
 /**
  * 홈 그룹 재판 카드의 상태를 한 곳에서 결정한다.
  * 조회 실패를 빈 목록처럼 취급하면 실제 할 일을 두고도 "순항 중"이라고 안내하므로 분리한다.

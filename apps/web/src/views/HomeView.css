@@ -443,6 +443,12 @@
     white-space: nowrap;
 }
 
+.home-habit-card__content--empty strong {
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-section);
+    white-space: normal;
+}
+
 .home-habit-card__content strong b {
     color: var(--tt-accent);
 }
