@@ -1218,19 +1218,43 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 ### 아직 NULL 인 필드
 
 `settleTime` · `memoAuthor` · `memoDate` 는 근거 컬럼이 없다.
-채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #172 · #173 이다.
+채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #173 이다.
 화면이 이미 NULL 을 견디도록 만들어져 있다.
+
+목록의 `finalOutcome` · `finalRank` · `finalChargeAmount` 는 **#172 가 채운다.** 그룹이
+`CLOSED` 로 확정되는 순간 값이 들어간다 — 진행 중에는 계속 `null` 이다(목숨이 0이어도
+「탈락 위기」까지만 표시한다. 최종 판정은 확정 배치 한 곳에서만 일어난다).
 
 | 코드 | HTTP | 상황 |
 |---|---|---|
 | `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
 | `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
 
-## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170) · 투표 (이슈 #171)
+## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170) · 투표 (이슈 #171) · 개표 (이슈 #172)
 
-기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그 반대인 혐의 인정, 그리고 배심원 투표까지.
-**개표·확정(#172)은 여기 없다.** 표를 모아 결과를 정하는 배치가 아직 없어서
-`status` 는 마감이 지나도 `VOTING` 에 머문다.
+기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그 반대인 혐의 인정, 배심원 투표, 그리고 개표까지.
+
+**개표에는 엔드포인트가 없다.** 확정은 1분마다 도는 배치(`GroupVerdictScheduler`)가 하고,
+화면은 같은 `GroupTrialDetail` 을 다시 읽어 `status` 가 `GUILTY`·`INNOCENT` 로 바뀐 것을 본다.
+확정 시점에는 그룹 채팅 시스템 메시지와 `GROUP_JUDGMENT` 알림이 함께 나간다.
+
+개표 규칙은 다음과 같다(요구사항정의서 6.5).
+
+| 표 | 결과 | `verdictMethod` |
+|---|---|---|
+| 유죄 > 무죄 | `GUILTY` | `VOTE` |
+| 무죄 > 유죄 | `INNOCENT` | `VOTE` |
+| 아무도 안 던짐 | `INNOCENT` (무죄 추정) | `NO_VOTE` |
+| 동률 | 판사 탕이(LLM)가 판단 | `AI_JUDGMENT` |
+| 혐의 인정 | `GUILTY` | `CONFESSION` |
+
+- 확정 시점은 **「투표 마감(기소 + 30시간)이 지났거나, 던질 사람이 전부 던졌거나」** 다.
+  전원 투표가 끝나면 마감을 기다리지 않는다.
+- 유죄면 `lives_count` 가 1 줄고(0 아래로는 안 내려간다), 무죄면 변론에 적은 `deductionAmount`
+  만큼 그 구간 소비액이 깎인다.
+- **판사 탕이 호출이 실패하면 무죄로 확정한다.** 0표 무죄 추정과 같은 기준이다. 이때
+  `aiVerdictReason` 에 실패 안내 문구가 들어가고 `verdictMethod` 는 `AI_JUDGMENT` 다
+  (사유를 담으려면 그래야 한다 — `ck_ind_ai_reason`). 재시도는 하지 않는다.
 
 | 메서드 | 경로 | 인증 | 권한 | 응답 |
 |---|---|---|---|---|
@@ -1247,6 +1271,7 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 
 ```
 { indictmentId, groupId, groupName, status, result, verdictMethod, message,
+  aiVerdictReason,                                               // 개표 전 null
   accused: { userId, nickname, profileImageUrl, mine },
   evalType, challengeDate, startDate, endDate,
   categoryId, categoryName,
@@ -1263,12 +1288,17 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
   「내용 없는 변론」을 구분할 수 없게 된다.
 - `myVerdict` 는 안 던졌으면 NULL, **피고 본인은 항상 NULL** 이다. `totalVoters` = 참여자 − 피고 1명.
   #170 이 이 세 필드를 함께 채운다 — 서브쿼리가 이미 있어 비용이 0 이고 #171 은 쓰는 쪽만 만들면 된다.
-- **`guiltyCount`·`innocentCount`·`comments` 는 개표 후에만 값이 있다.**
-  `status` 가 `DEFENSE_WAIT`·`VOTING` 이면 셋 다 **`null`** 이다 — **`0` 이 아니다.**
+- **`guiltyCount`·`innocentCount`·`comments`·`aiVerdictReason` 은 개표 후에만 값이 있다.**
+  `status` 가 `DEFENSE_WAIT`·`VOTING` 이면 넷 다 **`null`** 이다 — **`0` 이 아니다.**
   「아직 모른다」와 「0표」를 구분해야 해서 서버 타입도 `int` 가 아니라 `Integer` 다.
   투표 중에 비율이 보이면 이기는 쪽에 표가 몰리고, 코멘트 문장에는 어느 쪽에 던졌는지가 드러나
   숫자를 가린 의미가 없어진다. 프론트에서 `?? 0` 으로 뭉개면 정책이 무너진다.
-  마스킹 판단은 `GroupTrialService#isCounted` **한 곳**에만 있다 — #172 는 그 메서드만 고치면 된다.
+  `aiVerdictReason` 을 같은 줄에 세운 이유는 **AI 판결이 동률일 때만 나오기 때문**이다 —
+  사유가 보이는 것만으로 「지금 2:2」가 드러난다.
+  마스킹 판단은 `GroupTrialService#isCounted` **한 곳**에만 있다.
+- `verdictMethod` 는 확정 전 `null`, 확정 후 `VOTE`·`NO_VOTE`·`AI_JUDGMENT`·`CONFESSION` 중
+  하나다. `aiVerdictReason` 은 **`AI_JUDGMENT` 일 때만** 값이 있다(최대 300자). 화면은
+  이 문장을 요약하지 않고 그대로 띄운다.
 - **누가 투표했는지는 어떤 필드로도 내려가지 않는다.** 배심원 명단은 비공개이고 `comments[]` 에도
   `userId`·닉네임이 없다. 진행 상황은 `voteCount / totalVoters`(몇 명이 던졌나)까지만 공개한다.
 - `categoryName` 이 NULL 이면 총소비 챌린지다.

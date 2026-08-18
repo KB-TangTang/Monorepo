@@ -562,4 +562,21 @@ class ChallengeMapperXmlTest {
         assertFalse(sql.contains("i.status = 'GUILTY'"),
                 "노출 조건을 SQL 에 넣으면 #172 가 두 군데를 풀어야 한다");
     }
+
+    /**
+     * 이 두 컬럼이 화면의 분기 근거다 — 「다수결 / 무투표 / 탕이 판결 / 혐의 인정」을 구분하고,
+     * 동률로 끝난 재판을 AI 판결 화면으로 보낸다.
+     */
+    @Test
+    @DisplayName("재판 상세는 판결 방식과 AI 판결 사유를 함께 내려보낸다")
+    void trialDetailSelectsVerdictMethodAndAiReason() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findTrialDetail");
+
+        assertTrue(sql.contains("i.verdict_method AS verdict_method"),
+                "판결 방식이 없으면 AI 판결 화면으로 갈 분기 근거가 없다");
+        assertTrue(sql.contains("i.ai_verdict_reason AS ai_verdict_reason"),
+                "사유가 없으면 탕이 판결 상세가 빈 화면이 된다");
+    }
 }

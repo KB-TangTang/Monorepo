@@ -219,6 +219,7 @@
                i.status         AS status,
                i.result         AS result,
                i.verdict_method AS verdict_method,
+               i.ai_verdict_reason AS ai_verdict_reason,
                i.message        AS message,
                i.user_id        AS user_id,
                <include refid="displayNickname"/> AS nickname,
