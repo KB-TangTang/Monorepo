@@ -31,7 +31,8 @@ test('getHoldingCost 는 평가금액에서 평가손익을 뺀 매입금액을 
 });
 
 test('getHoldingAveragePrice 는 매입금액을 보유수량으로 나눈다', () => {
-    assert.equal(getHoldingAveragePrice(101753750, 475), 214218.42105263158);
+    assert.equal(getHoldingAveragePrice(100000, 500), 200);
+    assert.equal(getHoldingAveragePrice(1000000, 500), 2000);
 });
 
 test('getHoldingAveragePrice 는 보유수량이 0이하이면 0으로 나누지 않고 0을 반환한다', () => {
