@@ -69,7 +69,11 @@ const rateTone = computed(() =>
             />
         </button>
 
-        <div class="holding-row__detail-wrap" :class="{ 'holding-row__detail-wrap--open': expanded }">
+        <div
+            class="holding-row__detail-wrap"
+            :class="{ 'holding-row__detail-wrap--open': expanded }"
+            :aria-hidden="!expanded"
+        >
             <div class="holding-row__detail">
                 <div class="holding-row__detail-row">
                     <span class="holding-row__detail-label">평가금액</span>
