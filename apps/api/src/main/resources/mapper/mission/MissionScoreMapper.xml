@@ -115,4 +115,13 @@
          ORDER BY `year_month` DESC
     </select>
 
+    <select id="findCertificateEligibleUserIds" resultType="java.lang.Long">
+        SELECT ranking.user_id
+          FROM tbl_monthly_ranking ranking
+          JOIN tbl_user user ON user.id = ranking.user_id
+         WHERE ranking.`year_month` = #{yearMonth}
+           AND user.status = 'ACTIVE'
+         ORDER BY ranking.user_id
+    </select>
+
 </mapper>

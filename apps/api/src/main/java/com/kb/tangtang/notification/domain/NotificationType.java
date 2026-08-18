@@ -47,7 +47,10 @@ public enum NotificationType {
      *   둘이 하루 어긋난다. created_at 을 쓰면 사용자는 쓰지도 않은 날로 기소된 것처럼 본다.
      */
     GROUP_TRIAL_OPENED("재판이 열렸어요", "{groupName} · {period} {amount} 지출로 한도를 넘겼어요"),
+    MISSION_ASSIGNED("오늘의 미션이 도착했어요", "{missionTitle}"),
     MISSION_DEADLINE("오늘 미션 마감 임박", "{content}"),
+    MISSION_VERDICT("어제 미션 판결이 확정됐어요", "{result}"),
+    MISSION_CERTIFICATE_ISSUED("명예 인증서가 발급됐어요", "{yearMonth} 개인 미션 명예 인증서를 확인해 보세요"),
     MONTHLY_REPORT("판결문이 도착했어요", "{content}"),
     PAYMENT_DUE("결제 예정 알림", "{content}");
 

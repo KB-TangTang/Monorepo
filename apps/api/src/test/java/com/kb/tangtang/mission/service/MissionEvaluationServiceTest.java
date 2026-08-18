@@ -2,6 +2,8 @@ package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.mission.domain.MissionEvaluationTarget;
 import com.kb.tangtang.mission.mapper.MissionEvaluationMapper;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,11 +29,12 @@ class MissionEvaluationServiceTest {
 
     @Mock MissionEvaluationMapper mapper;
     @Mock MissionScoreService missionScoreService;
+    @Mock ApplicationEventPublisher events;
     MissionEvaluationService service;
 
     @BeforeEach
     void setUp() {
-        service = new MissionEvaluationService(mapper, missionScoreService);
+        service = new MissionEvaluationService(mapper, missionScoreService, events);
     }
 
     @Test
@@ -46,6 +50,10 @@ class MissionEvaluationServiceTest {
         order.verify(mapper).increaseSuccessStreak(7L, EVALUATED_AT);
         verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
         verify(mapper, never()).resetStreak(7L, EVALUATED_AT);
+        verify(events).publishEvent((Object) argThat(event -> {
+            NotificationRequestedEvent request = (NotificationRequestedEvent) event;
+            return request.userId() == 7L && request.params().get("result").contains("성공");
+        }));
     }
 
     @Test
@@ -59,6 +67,10 @@ class MissionEvaluationServiceTest {
         verify(mapper).resetStreak(7L, EVALUATED_AT);
         verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
         verify(mapper, never()).increaseSuccessStreak(7L, EVALUATED_AT);
+        verify(events).publishEvent((Object) argThat(event -> {
+            NotificationRequestedEvent request = (NotificationRequestedEvent) event;
+            return request.userId() == 7L && request.params().get("result").equals("결과를 확인해 보세요");
+        }));
     }
 
     @Test
