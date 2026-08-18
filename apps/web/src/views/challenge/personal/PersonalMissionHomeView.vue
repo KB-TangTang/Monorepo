@@ -82,12 +82,12 @@ onMounted(async () => {
         store.setConsentState(consentState);
 
         if (consentState !== CHALLENGE_CONSENT_STATE.FIRST) {
+            await store.loadPendingVerdict();
             await Promise.all([
                 store.loadTodayMission(),
                 store.loadCategoryAnalysis(),
                 store.loadMissionStreak(),
                 store.loadMissionMonthlyScore(),
-                store.loadPendingVerdict(),
             ]);
         }
     } catch (err) {

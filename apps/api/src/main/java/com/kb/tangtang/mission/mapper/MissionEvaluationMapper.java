@@ -13,6 +13,9 @@ public interface MissionEvaluationMapper {
 
     List<Long> findPendingAssignmentIds(@Param("assignDate") LocalDate assignDate);
 
+    List<Long> findPendingAssignmentIdsBefore(@Param("userId") long userId,
+                                              @Param("beforeDate") LocalDate beforeDate);
+
     MissionEvaluationTarget lockPendingAssignment(@Param("assignmentId") long assignmentId);
 
     int updateMissionResult(@Param("assignmentId") long assignmentId,
