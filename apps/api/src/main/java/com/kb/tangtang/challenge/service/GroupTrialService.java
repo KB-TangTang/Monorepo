@@ -4,8 +4,10 @@ import com.kb.tangtang.challenge.domain.Defense;
 import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
+import com.kb.tangtang.challenge.domain.VoteCommentRow;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -14,9 +16,11 @@ import com.kb.tangtang.challenge.dto.TrialDefenseDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionDayDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionsDto;
+import com.kb.tangtang.challenge.dto.TrialVoteCommentDto;
 import com.kb.tangtang.challenge.mapper.DefenseMapper;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
+import com.kb.tangtang.challenge.mapper.VoteMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.common.util.PaymentMethodLabels;
@@ -52,6 +56,7 @@ public class GroupTrialService {
 
     private final IndictmentMapper indictmentMapper;
     private final DefenseMapper defenseMapper;
+    private final VoteMapper voteMapper;
     private final GroupChallengeResultMapper resultMapper;
     private final ImageStorage imageStorage;
 
@@ -64,12 +69,14 @@ public class GroupTrialService {
     @Autowired
     public GroupTrialService(IndictmentMapper indictmentMapper,
                              DefenseMapper defenseMapper,
+                             VoteMapper voteMapper,
                              GroupChallengeResultMapper resultMapper,
                              ImageStorage imageStorage,
                              @Value("${challenge.trial.defense-hours}") int defenseHours,
                              @Value("${challenge.trial.vote-hours}") int voteHours) {
         this.indictmentMapper = indictmentMapper;
         this.defenseMapper = defenseMapper;
+        this.voteMapper = voteMapper;
         this.resultMapper = resultMapper;
         this.imageStorage = imageStorage;
         this.defenseHours = defenseHours;
@@ -167,6 +174,9 @@ public class GroupTrialService {
      *
      * <p>변론을 따로 한 번 더 읽는다. 상세 쿼리에 조인하면 증빙 이미지 개수만큼 행이 늘어
      * 나머지 컬럼이 전부 중복된다.
+     *
+     * <p><b>표 분포와 코멘트는 개표 후에만 채운다</b>({@link #isCounted}). 매퍼는 항상 세지만
+     * 투표 중이면 여기서 NULL 로 덮는다 — 이슈 #171 의 「개표 전 비율 비공개」 정책이다.
      */
     @Transactional(readOnly = true)
     public GroupTrialDetailDto findTrialDetail(long userId, long indictmentId) {
@@ -176,6 +186,7 @@ public class GroupTrialService {
         }
 
         boolean mine = row.getUserId() != null && row.getUserId() == userId;
+        boolean counted = isCounted(row.getStatus());
         return GroupTrialDetailDto.builder()
                 .indictmentId(row.getIndictmentId())
                 .groupId(row.getGroupId())
@@ -206,7 +217,37 @@ public class GroupTrialService {
                 .myVerdict(row.getMyVerdict())
                 .voteCount(row.getVoteCount())
                 .totalVoters(row.getTotalVoters())
+                .guiltyCount(counted ? row.getGuiltyCount() : null)
+                .innocentCount(counted ? row.getInnocentCount() : null)
+                .comments(counted ? findComments(indictmentId) : null)
                 .build();
+    }
+
+    /**
+     * 표 분포와 코멘트를 내려보내도 되는 상태인가 (이슈 #171 결정).
+     *
+     * <p><b>개표 전에는 안 된다.</b> 투표 중에 유무죄 비율이 보이면 이기는 쪽에 표가 몰리고,
+     * 코멘트 문장에는 어느 쪽에 던졌는지가 그대로 드러나 숫자를 가린 의미가 없어진다.
+     * 진행 상황은 {@code voteCount / totalVoters}(몇 명이 던졌나)까지만 공개한다.
+     *
+     * <p><b>판단을 여기 한 곳에만 둔다.</b> SQL 이나 컨트롤러로 흩뿌리면 이슈 #172 가
+     * 공개 조건을 풀 때 한쪽을 빠뜨린다. #172 는 이 메서드만 보면 된다.
+     */
+    private boolean isCounted(String status) {
+        return IndictmentStatus.GUILTY.name().equals(status)
+                || IndictmentStatus.INNOCENT.name().equals(status);
+    }
+
+    /** 익명 코멘트. 비어 있는 표는 매퍼가 이미 걸러 낸다. */
+    private List<TrialVoteCommentDto> findComments(long indictmentId) {
+        List<TrialVoteCommentDto> comments = new ArrayList<>();
+        for (VoteCommentRow row : voteMapper.findCommentsByIndictmentId(indictmentId)) {
+            comments.add(TrialVoteCommentDto.builder()
+                    .comment(row.getComment())
+                    .createdAt(row.getCreatedAt())
+                    .build());
+        }
+        return comments;
     }
 
     /**
