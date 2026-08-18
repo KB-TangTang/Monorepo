@@ -123,7 +123,7 @@ const rateTone = computed(() =>
 }
 
 .holding-row__detail-wrap--open {
-    max-height: 500px;
+    max-height: 320px;
 }
 
 .holding-row__trigger {
@@ -138,6 +138,10 @@ const rateTone = computed(() =>
     background: none;
     border: none;
     cursor: pointer;
+}
+
+.holding-row__trigger:focus-visible {
+    outline-offset: -2px;
 }
 
 .holding-row__avatar {
@@ -207,8 +211,6 @@ const rateTone = computed(() =>
 }
 
 .holding-row__detail {
-    min-height: 0;
-    overflow: hidden;
     padding: 0 var(--tt-space-4) var(--tt-space-4);
 }
 
@@ -231,4 +233,18 @@ const rateTone = computed(() =>
     color: var(--tt-text);
 }
 
+.holding-row__detail-value.holding-row__rate--up {
+    color: var(--tt-success);
+}
+
+.holding-row__detail-value.holding-row__rate--down {
+    color: var(--tt-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .holding-row__detail-wrap,
+    .holding-row__chevron {
+        transition: none;
+    }
+}
 </style>
