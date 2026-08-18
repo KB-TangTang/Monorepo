@@ -1226,10 +1226,11 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 | `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
 | `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
 
-## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170)
+## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170) · 투표 (이슈 #171)
 
-기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그리고 그 반대인 혐의 인정까지.
-**투표(#171)와 개표·확정(#172)은 여기 없다.**
+기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그 반대인 혐의 인정, 그리고 배심원 투표까지.
+**개표·확정(#172)은 여기 없다.** 표를 모아 결과를 정하는 배치가 아직 없어서
+`status` 는 마감이 지나도 `VOTING` 에 머문다.
 
 | 메서드 | 경로 | 인증 | 권한 | 응답 |
 |---|---|---|---|---|
@@ -1237,6 +1238,7 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 | GET | `/api/group-challenges/trials/{indictmentId}/transactions` | Bearer | **피고 본인만** | `TrialTransactions` |
 | POST | `/api/group-challenges/trials/{indictmentId}/defense` | Bearer | 피고 본인만 | `null` |
 | POST | `/api/group-challenges/trials/{indictmentId}/confession` | Bearer | 피고 본인만 | `null` |
+| POST | `/api/group-challenges/trials/{indictmentId}/votes` | Bearer | **피고를 뺀 그룹 참여자** | `null` |
 
 ### `GroupTrialDetail` — 재판 화면 한 벌
 
@@ -1251,7 +1253,9 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
   limitAmount, currentAmount, exceededAmount,
   createdAt, defenseDeadline, voteDeadline,
   defense: { content, actualBurdenAmount, deductionAmount, imageUrls[], createdAt } | null,
-  myVerdict, voteCount, totalVoters }
+  myVerdict, voteCount, totalVoters,
+  guiltyCount, innocentCount,                                    // 개표 전 null
+  comments: [ { comment, createdAt } ] | null }                  // 개표 전 null
 ```
 
 - 마감 두 개는 **#169 와 같은 계산값**이다 (`created_at + defense-hours` / `+ vote-hours`). 컬럼이 없다.
@@ -1259,6 +1263,14 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
   「내용 없는 변론」을 구분할 수 없게 된다.
 - `myVerdict` 는 안 던졌으면 NULL, **피고 본인은 항상 NULL** 이다. `totalVoters` = 참여자 − 피고 1명.
   #170 이 이 세 필드를 함께 채운다 — 서브쿼리가 이미 있어 비용이 0 이고 #171 은 쓰는 쪽만 만들면 된다.
+- **`guiltyCount`·`innocentCount`·`comments` 는 개표 후에만 값이 있다.**
+  `status` 가 `DEFENSE_WAIT`·`VOTING` 이면 셋 다 **`null`** 이다 — **`0` 이 아니다.**
+  「아직 모른다」와 「0표」를 구분해야 해서 서버 타입도 `int` 가 아니라 `Integer` 다.
+  투표 중에 비율이 보이면 이기는 쪽에 표가 몰리고, 코멘트 문장에는 어느 쪽에 던졌는지가 드러나
+  숫자를 가린 의미가 없어진다. 프론트에서 `?? 0` 으로 뭉개면 정책이 무너진다.
+  마스킹 판단은 `GroupTrialService#isCounted` **한 곳**에만 있다 — #172 는 그 메서드만 고치면 된다.
+- **누가 투표했는지는 어떤 필드로도 내려가지 않는다.** 배심원 명단은 비공개이고 `comments[]` 에도
+  `userId`·닉네임이 없다. 진행 상황은 `voteCount / totalVoters`(몇 명이 던졌나)까지만 공개한다.
 - `categoryName` 이 NULL 이면 총소비 챌린지다.
 - `currentAmount` 는 **무죄 감액이 반영된 결산 구간 소비액**이고, 동시에 **실제 부담금 입력의 상한**이다.
 - `accused.mine` 은 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 `mine`** 이다.
@@ -1334,6 +1346,32 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 - 상태 UPDATE 는 `WHERE ... AND status='DEFENSE_WAIT'` 라 **멱등**이다. 같은 요청을 두 번 보내면
   두 번째는 `DEFENSE_NOT_ALLOWED` 다.
 
+### 투표 — `POST .../votes` (이슈 #171)
+
+```json
+{ "verdict": "GUILTY", "comment": "그건 좀 아니지" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `verdict` | string | O | `GUILTY` · `INNOCENT` 둘 중 하나 |
+| `comment` | string | X | 익명 한줄. **최대 40자** (`VoteService.COMMENT_MAX_LENGTH`) |
+
+- 응답 본문이 없다. 던진 뒤 화면은 **재판 상세를 다시 읽어** 그린다 — 여기서 표수를 돌려주면
+  개표 전 비공개 정책을 이 한 곳에서 뚫는다.
+- `comment` 가 공백만이면 **`NULL` 로 저장**한다. 빈 문자열로 넣으면 개표 후 코멘트 목록에
+  이유 없는 빈 줄이 생긴다.
+- **수정·취소가 없다.** 한 재판에 한 표이고 두 번째 요청은 `VOTE_ALREADY_EXISTS` 다.
+  바꿀 수 있으면 마감 직전 눈치싸움이 생긴다. PK `(group_id, user_id, indictment_id)` 가
+  마지막 방어선이다.
+- **알림·채팅 이벤트를 발행하지 않는다.** 투표 한 건마다 알리면 누가 언제 던졌는지가 채팅에 남아
+  익명이 깨진다. 개표 알림은 #172 의 `VerdictConfirmed` 몫이다.
+- **개표하지 않는다.** 마지막 한 표가 들어와도 `status` 는 `VOTING` 그대로다.
+  표가 다 모였다고 즉시 확정하면 마감 전에 결과가 나와 남은 사람이 투표할 이유가 없어진다.
+- 마감 판정은 컬럼이 아니라 `created_at + defense-hours + vote-hours` 계산값이다.
+  개표 배치가 없으므로 **마감이 지나도 `status` 는 `VOTING` 이다** — 상태만 믿으면 마감 후 표가 들어온다.
+- **마이그레이션 0건.** `tbl_vote` 는 `db/schema.sql` 에 이미 있다.
+
 ### 기간결산 소비액 공식이 바뀌었다 — #168 · #169 응답에도 영향
 
 기간평가(`PERIOD`) 소비액을 `SUM(daily_amount)` 에서 아래로 통일했다. #170 이 변론 화면용 소비액을
@@ -1383,6 +1421,11 @@ GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
 | `INVALID_BURDEN_AMOUNT` | 400 | 음수이거나 `currentAmount` 초과 |
 | `TOO_MANY_IMAGES` | 400 | 4장 이상 |
 | `IMAGE_TOO_LARGE` | 400 | 장당 5MB 초과 |
+| `VOTE_NOT_ALLOWED` | 400 | `status != VOTING` 이거나 투표 마감 시각이 지남 |
+| `CANNOT_VOTE_OWN_TRIAL` | 400 | 피고 본인이 자기 재판에 투표 |
+| `VOTE_ALREADY_EXISTS` | 400 | 이미 투표함 (수정 경로 없음) |
+| `INVALID_VERDICT` | 400 | `GUILTY`·`INNOCENT` 가 아님 |
+| `COMMENT_TOO_LONG` | 400 | 코멘트 40자 초과 |
 
 > ⚠ `IMAGE_TOO_LARGE` 는 **업무 검증보다 먼저** 난다. 컨트롤러가 파일을 바이트로 읽기 전에
 > `requireWithinLimit` 을 걸기 때문에, 없는 기소에 5MB 넘는 이미지를 보내면 `TRIAL_NOT_FOUND`
