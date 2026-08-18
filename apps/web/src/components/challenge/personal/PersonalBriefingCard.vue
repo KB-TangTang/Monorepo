@@ -6,6 +6,8 @@ import { formatWon, calculatePersonalMissionProgress } from '@/services/personal
 const props = defineProps({
     missionTitle: { type: String, default: '' },
     missionContent: { type: String, default: '' },
+    missionType: { type: String, default: '' },
+    missionBadge: { type: String, default: '수사 브리핑' },
     categoryName: { type: String, required: true },
     alibiCondition: { type: String, required: true },
     currentAmount: { type: Number, default: null },
@@ -22,6 +24,7 @@ const progress = computed(() =>
 
 const remaining = computed(() => props.limitAmount - props.currentAmount);
 const hasSpendingProgress = computed(() => props.currentAmount !== null);
+const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 </script>
 
 <template>
@@ -29,7 +32,9 @@ const hasSpendingProgress = computed(() => props.currentAmount !== null);
         <div class="briefing-card__stamp" aria-hidden="true">탕탕</div>
 
         <div class="briefing-card__badges">
-            <span class="briefing-card__badge briefing-card__badge--danger">수사 브리핑</span>
+            <span class="briefing-card__badge briefing-card__badge--danger">{{
+                missionBadge
+            }}</span>
         </div>
 
         <div v-if="missionTitle" class="briefing-card__mission">
@@ -72,7 +77,12 @@ const hasSpendingProgress = computed(() => props.currentAmount !== null);
             </div>
         </div>
 
-        <div v-if="hasSpendingProgress" class="briefing-card__gauge-section">
+        <div v-if="isAbsoluteMission" class="briefing-card__no-spend">
+            현재까지 {{ categoryName }} 지출
+            <strong>{{ formatWon(currentAmount) }}</strong>
+            <span>· 자정까지 0원이면 인정</span>
+        </div>
+        <div v-else-if="hasSpendingProgress" class="briefing-card__gauge-section">
             <div class="briefing-card__gauge-wrap">
                 <img
                     :src="tangiSceneWatch"
@@ -234,6 +244,21 @@ const hasSpendingProgress = computed(() => props.currentAmount !== null);
     margin-top: var(--tt-space-3);
     border-top: 1px dashed var(--tt-border-divider);
     padding-top: 14px;
+}
+
+.briefing-card__no-spend {
+    margin-top: var(--tt-space-3);
+    padding: var(--tt-space-3);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    background: var(--tt-bg-fill);
+    border-top: 1px dashed var(--tt-border-divider);
+    border-radius: var(--tt-radius-sm);
+}
+
+.briefing-card__no-spend strong {
+    color: var(--tt-success);
+    font-family: var(--tt-font-mono);
 }
 
 .briefing-card__target-only {

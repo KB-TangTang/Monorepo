@@ -7,7 +7,6 @@ import {
     MOCK_WATCHLIST_META,
     MOCK_WEEKLY_VERDICT,
     MOCK_MONTHLY_SCORE,
-    MOCK_COMMON_MISSION,
 } from '@/fixtures/personalChallenge';
 import { MOCK_PERSONAL_MISSION_PROFILE } from '@/fixtures/personalMission';
 import {
@@ -78,12 +77,14 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         watchlistMeta: MOCK_WATCHLIST_META,
         monthlyScore: MOCK_MONTHLY_SCORE,
         dataRequirements: MOCK_DATA_REQUIREMENTS,
-        commonMission: MOCK_COMMON_MISSION,
         weeklyVerdict: MOCK_WEEKLY_VERDICT,
     }),
 
     getters: {
         hasEnoughData(state) {
+            if (state.categoryAnalysis !== null) {
+                return state.categoryAnalysis.relativeEligible === true;
+            }
             return hasEnoughPersonalMissionData(state.profile);
         },
 

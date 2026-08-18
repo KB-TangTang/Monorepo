@@ -56,9 +56,12 @@ export function toHomeMission(mission) {
     const limitAmount = Math.max(Number(mission.targetValue) || 0, 0);
     const spentAmount = Math.max(Number(mission.currentAmount) || 0, 0);
     const progressRate = limitAmount > 0 ? Math.round((spentAmount / limitAmount) * 100) : 0;
+    const isAbsoluteMission = mission.missionType === 'ABSOLUTE';
 
     return {
         title: mission.missionTitle || mission.missionContent || '오늘의 메인 챌린지',
+        isAbsoluteMission,
+        categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
         limitAmount,
         spentAmount,
         remainingAmount: Math.max(limitAmount - spentAmount, 0),
