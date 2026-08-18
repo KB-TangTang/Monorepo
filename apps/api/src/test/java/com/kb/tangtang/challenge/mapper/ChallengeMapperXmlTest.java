@@ -42,6 +42,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToEvaluate"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToJudge"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupsToClose"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
         assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
     }
@@ -84,6 +85,27 @@ class ChallengeMapperXmlTest {
                 "<= 로 바꾸면 평가 배치가 마지막 날 기소를 만들기 전에 그룹이 JUDGING 으로 빠진다");
     }
 
+    /**
+     * 미확정 재판이 남은 그룹을 확정해 버리면 그 재판이 유죄로 끝났을 때 깎였어야 할 목숨이
+     * 순위에 반영되지 못한다. {@code final_*} 3개는 write-once 라 되돌릴 수도 없다(이슈 #172).
+     *
+     * <p>조건이 빠져도 SQL 은 정상 실행되고 화면도 멀쩡해 보인다 — 마지막 재판 결과만 조용히
+     * 사라질 뿐이라 SQL 모양으로 못박는다.
+     */
+    @Test
+    @DisplayName("최종 확정 대상은 미확정 재판이 없는 그룹으로 좁혀져 있다")
+    void findGroupsToCloseWaitsForOpenTrials() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = sqlOf(configuration,
+                ChallengeGroupMapper.class.getName() + ".findGroupsToClose");
+
+        assertTrue(sql.contains("NOT EXISTS"),
+                "조건이 없으면 재판이 끝나기 전에 최종 결과가 확정된다");
+        assertTrue(sql.contains("i.status IN ('DEFENSE_WAIT', 'VOTING')"),
+                "미확정 두 상태가 모두 있어야 한다 — 하나만 빼면 그 재판 결과가 순위에서 사라진다");
+    }
+
     @Test
     @DisplayName("GroupMemberMapper XML 이 파싱되고 모든 구문이 등록된다")
     void parsesGroupMemberMapper() throws Exception {
@@ -94,6 +116,22 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findByGroupIds"));
         assertTrue(configuration.hasStatement(namespace + ".findUserIdsByGroupId"));
         assertTrue(configuration.hasStatement(namespace + ".decreaseLife"));
+        assertTrue(configuration.hasStatement(namespace + ".finalizeMember"));
+    }
+
+    /**
+     * {@code final_*} 3개는 write-once 다. 조건이 빠지면 배치를 다시 돌릴 때 값이 다시 쓰이고,
+     * 그 사이 확정된 재판 때문에 <b>이미 사용자에게 보여 준 순위·완주 여부가 뒤집힌다.</b>
+     */
+    @Test
+    @DisplayName("최종 결과 확정은 이미 확정된 참여자를 덮어쓰지 않는다")
+    void finalizeMemberIsWriteOnce() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupMemberMapper.xml");
+
+        String sql = sqlOf(configuration, GroupMemberMapper.class.getName() + ".finalizeMember");
+
+        assertTrue(sql.contains("final_outcome IS NULL"),
+                "조건이 없으면 확정된 순위가 배치 재실행으로 뒤집힌다");
     }
 
     /**

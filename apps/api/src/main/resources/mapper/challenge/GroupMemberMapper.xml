@@ -58,4 +58,23 @@
            AND user_id = #{userId}
            AND lives_count &gt; 0
     </update>
+
+    <!--
+      최종 결과 확정 (이슈 #172). JUDGING → CLOSED 배치만 호출한다.
+
+      ⚠ final_outcome IS NULL 이 write-once 장치다. 빼면 배치를 다시 돌릴 때마다 값이 다시 쓰이고,
+        그 사이 확정된 재판 때문에 이미 보여 준 순위가 뒤집힌다.
+
+      세 컬럼을 한 문장으로 적는다 — 등수만 있고 판정이 빈 중간 상태를 화면이 읽으면 안 된다.
+      updated_at 은 ON UPDATE CURRENT_TIMESTAMP 라 따로 쓰지 않는다.
+    -->
+    <update id="finalizeMember">
+        UPDATE tbl_group_member
+           SET final_outcome = #{finalOutcome},
+               final_rank = #{finalRank},
+               final_charge_amount = #{finalChargeAmount}
+         WHERE group_id = #{groupId}
+           AND user_id = #{userId}
+           AND final_outcome IS NULL
+    </update>
 </mapper>

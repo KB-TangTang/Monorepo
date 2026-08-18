@@ -4,7 +4,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 개표 배치의 실행 주기만 담당한다 (이슈 #172).
+ * 개표 · 최종 확정 배치의 실행 주기만 담당한다 (이슈 #172).
  *
  * <p>판정 로직을 두지 않는다 — DEV 수동 트리거와 단위 테스트가
  * {@link GroupVerdictBatchService} 를 직접 부른다.
@@ -27,8 +27,16 @@ public class GroupVerdictScheduler {
         this.batchService = batchService;
     }
 
+    /**
+     * <p>개표를 먼저 돌리고 최종 확정을 뒤에 둔다. 마지막 재판이 방금 끝난 그룹이 같은 틱에서
+     * 확정되게 하기 위한 순서다 — 자세한 이유는 {@link GroupVerdictBatchService} 주석 참고.
+     *
+     * <p>두 배치를 한 메서드에 묶은 것은 그 순서를 보장하기 위해서다. {@code @Scheduled} 를
+     * 따로 달면 실행 순서가 스레드 풀에 달리고, 최종 확정이 개표보다 먼저 도는 틱이 생긴다.
+     */
     @Scheduled(fixedDelayString = "${challenge.trial.verdict.fixed-delay-ms}")
     public void confirmDueVerdicts() {
         batchService.confirmDueVerdicts();
+        batchService.finalizeJudgingGroups();
     }
 }

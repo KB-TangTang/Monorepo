@@ -1,9 +1,12 @@
 package com.kb.tangtang.challenge.service;
 
 import com.kb.tangtang.challenge.client.TangiVerdictClient;
+import com.kb.tangtang.challenge.domain.ChallengeGroup;
+import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.VerdictDecision;
 import com.kb.tangtang.challenge.domain.VerdictTallyRow;
+import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,7 +15,18 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 개표 배치 (이슈 #172). {@code VOTING} 인 기소를 모아 판결을 확정한다.
+ * 개표 · 최종 확정 배치 (이슈 #172). 한 틱에서 두 가지를 순서대로 한다.
+ *
+ * <pre>
+ *   VOTING  → GUILTY / INNOCENT   {@link #confirmDueVerdicts}    개표
+ *   JUDGING → CLOSED              {@link #finalizeJudgingGroups} 최종 결과 확정
+ * </pre>
+ *
+ * <p><b>순서가 의미를 갖는다.</b> 최종 확정은 미확정 재판이 하나도 없는 그룹만 집는데,
+ * 개표를 먼저 돌리면 마지막 재판이 방금 끝난 그룹이 <b>같은 틱에서</b> 확정된다.
+ * 순서를 뒤집으면 1분을 더 기다린다.
+ *
+ * <p>{@code VOTING} 인 기소를 모아 판결을 확정한다.
  *
  * <p>대상은 「투표 마감이 지났거나, 투표할 사람이 전부 던졌거나」 둘 중 하나다. 마감만 보면
  * 전원이 일찍 투표를 끝낸 재판도 30시간을 채워야 결과가 나오고, 그 사이 화면은 「투표 완료」인
@@ -45,18 +59,24 @@ public class GroupVerdictBatchService {
             "판사 탕이가 판결하지 못해, 무죄 추정 원칙에 따라 무죄로 확정했어요.";
 
     private final IndictmentMapper indictmentMapper;
+    private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupVerdictTransitionService transitionService;
+    private final GroupFinalizeService finalizeService;
     private final TangiVerdictClient tangiVerdictClient;
     private final int defenseHours;
     private final int voteHours;
 
     public GroupVerdictBatchService(IndictmentMapper indictmentMapper,
+                                    ChallengeGroupMapper challengeGroupMapper,
                                     GroupVerdictTransitionService transitionService,
+                                    GroupFinalizeService finalizeService,
                                     TangiVerdictClient tangiVerdictClient,
                                     @Value("${challenge.trial.defense-hours}") int defenseHours,
                                     @Value("${challenge.trial.vote-hours}") int voteHours) {
         this.indictmentMapper = indictmentMapper;
+        this.challengeGroupMapper = challengeGroupMapper;
         this.transitionService = transitionService;
+        this.finalizeService = finalizeService;
         this.tangiVerdictClient = tangiVerdictClient;
         this.defenseHours = defenseHours;
         this.voteHours = voteHours;
@@ -90,6 +110,40 @@ public class GroupVerdictBatchService {
         }
         log.info("개표 배치 완료 대상={} 확정={}", due.size(), confirmed);
         return confirmed;
+    }
+
+    /**
+     * 재판이 전부 끝난 {@code JUDGING} 그룹의 최종 결과를 확정한다 (단계 3).
+     *
+     * <p><b>날짜를 받지 않는다.</b> {@code JUDGING} 자체가 이미 종료를 뜻해서 조회에 날짜 조건이
+     * 없다 — 종료일 판정은 {@code ACTIVE → JUDGING} 전이가 이미 했다. 쓰지 않을 기준일을 받으면
+     * 「날짜에 따라 결과가 달라지는 배치」로 읽힌다.
+     *
+     * <p>{@code findGroupsToClose} 가 미확정 재판이 남은 그룹을 걸러 내므로, 여기서 다시
+     * 재판 상태를 보지 않는다.
+     *
+     * @return 실제로 확정된 그룹 수. 이미 다른 실행이 확정한 그룹은 세지 않는다
+     */
+    public int finalizeJudgingGroups() {
+        List<ChallengeGroup> ready = challengeGroupMapper.findGroupsToClose(
+                ChallengeGroupStatus.JUDGING.name());
+        if (ready.isEmpty()) {
+            return 0;
+        }
+
+        int closed = 0;
+        for (ChallengeGroup group : ready) {
+            try {
+                if (finalizeService.finalizeGroup(group)) {
+                    closed++;
+                }
+            } catch (RuntimeException e) {
+                /* 한 그룹의 실패가 나머지를 막지 않는다. 다음 틱이 다시 집어 간다 */
+                log.error("그룹 챌린지 최종 확정 실패 groupId={}", group.getId(), e);
+            }
+        }
+        log.info("최종 확정 배치 완료 대상={} 확정={}", ready.size(), closed);
+        return closed;
     }
 
     /**

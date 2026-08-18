@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.domain.GroupMember;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -37,4 +38,26 @@ public interface GroupMemberMapper {
      * @return 바꾼 행 수. 이미 0목숨이면 0 이다(정상. 탈락 여부는 종료 후 확정 배치가 정한다)
      */
     int decreaseLife(@Param("groupId") Long groupId, @Param("userId") Long userId);
+
+    /**
+     * 최종 결과 확정 — {@code final_*} 3개를 한 번에 적는다 (이슈 #172).
+     *
+     * <p><b>{@code final_outcome IS NULL} 조건이 write-once 장치다.</b> 이미 확정된 참여자는
+     * 0 행이 바뀌고 값이 보존된다. 조건이 없으면 배치가 두 번 도는 사이 재판이 하나 더 확정됐을 때
+     * 앞서 사용자에게 보여 준 순위·완주 여부가 조용히 뒤집힌다.
+     *
+     * <p>세 값을 나눠 쓰지 않는다. 등수만 들어가고 판정이 비는 중간 상태를 화면이 읽으면
+     * 「완주인지 탈락인지 모르는 1위」가 뜬다.
+     *
+     * @param finalOutcome      {@code SURVIVED} · {@code ELIMINATED}
+     *                          ({@code FinalOutcome} 의 이름 그대로. CHECK 제약이 검사한다)
+     * @param finalRank         생존자는 소비액 오름차순, 탈락자는 전원 공동 최하위
+     * @param finalChargeAmount 무죄 감액이 반영된 기간 전체 실효 소비액
+     * @return 바꾼 행 수. 0 이면 이미 확정됐다는 뜻이다(정상. 배치 재실행)
+     */
+    int finalizeMember(@Param("groupId") Long groupId,
+                       @Param("userId") Long userId,
+                       @Param("finalOutcome") String finalOutcome,
+                       @Param("finalRank") Integer finalRank,
+                       @Param("finalChargeAmount") BigDecimal finalChargeAmount);
 }

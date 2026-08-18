@@ -1,10 +1,13 @@
 package com.kb.tangtang.challenge.service;
 
 import com.kb.tangtang.challenge.client.TangiVerdictClient;
+import com.kb.tangtang.challenge.domain.ChallengeGroup;
+import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.VerdictDecision;
 import com.kb.tangtang.challenge.domain.VerdictMethod;
 import com.kb.tangtang.challenge.domain.VerdictTallyRow;
+import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,11 +27,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * 개표 배치 (이슈 #172).
+ * 개표 · 최종 확정 배치 (이슈 #172).
  *
- * <p>개표 규칙 자체는 {@link VerdictDeciderTest} 가 본다. 여기서 지키는 것은 <b>배치의 안전
- * 장치</b>다 — 동률일 때만 LLM 을 부르는가, LLM 이 죽어도 재판이 끝나는가, 한 건의 실패가
- * 나머지를 막지 않는가.
+ * <p>개표 규칙 자체는 {@link VerdictDeciderTest} 가, 확정 판정은 {@link GroupFinalizeServiceTest}
+ * 가 본다. 여기서 지키는 것은 <b>배치의 안전 장치</b>다 — 동률일 때만 LLM 을 부르는가,
+ * LLM 이 죽어도 재판이 끝나는가, 한 건의 실패가 나머지를 막지 않는가.
  */
 @ExtendWith(MockitoExtension.class)
 class GroupVerdictBatchServiceTest {
@@ -37,11 +40,14 @@ class GroupVerdictBatchServiceTest {
     private static final int VOTE_HOURS = 24;
 
     @Mock private IndictmentMapper indictmentMapper;
+    @Mock private ChallengeGroupMapper challengeGroupMapper;
     @Mock private GroupVerdictTransitionService transitionService;
+    @Mock private GroupFinalizeService finalizeService;
     @Mock private TangiVerdictClient tangiVerdictClient;
 
     private GroupVerdictBatchService service() {
-        return new GroupVerdictBatchService(indictmentMapper, transitionService, tangiVerdictClient,
+        return new GroupVerdictBatchService(indictmentMapper, challengeGroupMapper,
+                transitionService, finalizeService, tangiVerdictClient,
                 DEFENSE_HOURS, VOTE_HOURS);
     }
 
@@ -180,6 +186,59 @@ class GroupVerdictBatchServiceTest {
         service().confirmDueVerdicts();
 
         verify(transitionService, never()).confirm(any(), any());
+    }
+
+    /* ── 최종 확정 (JUDGING → CLOSED) ───────────────────────────────────────── */
+
+    private static ChallengeGroup group(long id) {
+        ChallengeGroup group = new ChallengeGroup();
+        group.setId(id);
+        return group;
+    }
+
+    private void readyToClose(ChallengeGroup... groups) {
+        when(challengeGroupMapper.findGroupsToClose(ChallengeGroupStatus.JUDGING.name()))
+                .thenReturn(List.of(groups));
+    }
+
+    /**
+     * 상태 문자열을 배치가 직접 넘긴다. {@code ACTIVE} 를 넘기면 아직 재판이 끝나지 않은 그룹을
+     * 확정해 버리므로 값 자체가 안전장치다.
+     */
+    @Test
+    @DisplayName("JUDGING 그룹만 최종 확정 대상으로 조회한다")
+    void finalizeQueriesJudgingOnly() {
+        when(challengeGroupMapper.findGroupsToClose(ChallengeGroupStatus.JUDGING.name()))
+                .thenReturn(List.of());
+
+        assertEquals(0, service().finalizeJudgingGroups());
+
+        verify(challengeGroupMapper).findGroupsToClose(ChallengeGroupStatus.JUDGING.name());
+        verifyNoInteractions(finalizeService);
+    }
+
+    /** 그룹 단위 트랜잭션이라 앞 그룹은 이미 커밋됐다. 예외가 튀면 나머지가 1분을 더 기다린다. */
+    @Test
+    @DisplayName("한 그룹의 확정 실패가 나머지를 막지 않는다")
+    void oneGroupFailureDoesNotStopTheRest() {
+        readyToClose(group(1L), group(2L));
+        when(finalizeService.finalizeGroup(any()))
+                .thenThrow(new IllegalStateException("DB 오류"))
+                .thenReturn(true);
+
+        assertEquals(1, service().finalizeJudgingGroups());
+
+        verify(finalizeService, times(2)).finalizeGroup(any());
+    }
+
+    /** 다른 인스턴스가 먼저 확정한 그룹은 세지 않는다. 로그의 「확정=n」이 실제 전이 수여야 한다. */
+    @Test
+    @DisplayName("이미 확정된 그룹은 확정 건수에 세지 않는다")
+    void doesNotCountAlreadyClosed() {
+        readyToClose(group(1L), group(2L));
+        when(finalizeService.finalizeGroup(any())).thenReturn(false, true);
+
+        assertEquals(1, service().finalizeJudgingGroups());
     }
 
     private VerdictDecision capturedDecision() {

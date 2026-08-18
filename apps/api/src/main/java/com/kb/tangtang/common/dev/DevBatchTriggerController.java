@@ -111,8 +111,12 @@ public class DevBatchTriggerController implements DevBatchTriggerControllerDocs 
              * NOW() 비교이거나 「투표할 사람이 전부 던졌는가」다. 뒤쪽 조건 덕에 전원 투표만 끝내면
              * 마감을 기다리지 않고 바로 확인할 수 있어 시연에서 시간을 조작할 일이 거의 없다.
              * 연속으로 두 번 눌러 목숨이 한 번만 깎이는지(멱등) 확인하는 용도로도 쓴다.
+             *
+             * 스케줄러와 같이 최종 확정(JUDGING → CLOSED)까지 이어 돌린다 —
+             * group-challenge-status 와 같은 이유다. 반환값은 둘의 합이다.
              */
-            case "group-trial-verdict" -> groupVerdictBatchService.confirmDueVerdicts();
+            case "group-trial-verdict" -> groupVerdictBatchService.confirmDueVerdicts()
+                    + groupVerdictBatchService.finalizeJudgingGroups();
             case "fixed-expense-payment-reminders" -> {
                 if (date != null) {
                     throw new BusinessException("INVALID_REQUEST",
