@@ -38,7 +38,7 @@ const rateTone = computed(() =>
 </script>
 
 <template>
-    <li class="holding-row">
+    <li class="holding-row" :class="{ expanded }">
         <button
             type="button"
             class="holding-row__trigger"
@@ -110,6 +110,13 @@ const rateTone = computed(() =>
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
     overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 0fr;
+    transition: grid-template-rows 0.25s ease;
+}
+
+.holding-row.expanded {
+    grid-template-rows: auto 1fr;
 }
 
 .holding-row__trigger {
@@ -194,6 +201,7 @@ const rateTone = computed(() =>
 
 .holding-row__detail {
     padding: 0 var(--tt-space-4) var(--tt-space-4);
+    overflow: hidden;
 }
 
 .holding-row__detail-row {
@@ -215,16 +223,4 @@ const rateTone = computed(() =>
     color: var(--tt-text);
 }
 
-.holding-slide-enter-active,
-.holding-slide-leave-active {
-    max-height: 240px;
-    overflow: hidden;
-    transition: all 0.25s ease;
-}
-
-.holding-slide-enter-from,
-.holding-slide-leave-to {
-    max-height: 0;
-    opacity: 0;
-}
 </style>
