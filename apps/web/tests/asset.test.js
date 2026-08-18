@@ -10,6 +10,8 @@ import {
     getSparklinePoints,
     getBarHeights,
     getSignedPercent,
+    getHoldingCost,
+    getHoldingAveragePrice,
 } from '../src/utils/asset.js';
 
 test('formatWon 은 금액 뒤에 "원"을 붙인다', () => {
@@ -21,6 +23,20 @@ test('formatWon 은 금액 뒤에 "원"을 붙인다', () => {
 test('formatSignedWon 은 증감 방향에 따라 화살표를 붙인다', () => {
     assert.equal(formatSignedWon(320000), '▲ 320,000원');
     assert.equal(formatSignedWon(-50000), '▼ 50,000원');
+});
+
+test('getHoldingCost 는 평가금액에서 평가손익을 뺀 매입금액을 반환한다', () => {
+    assert.equal(getHoldingCost(127537500, 25783750), 101753750);
+    assert.equal(getHoldingCost(90000000, -5000000), 95000000);
+});
+
+test('getHoldingAveragePrice 는 매입금액을 보유수량으로 나눈다', () => {
+    assert.equal(getHoldingAveragePrice(101753750, 475), 214218.42105263158);
+});
+
+test('getHoldingAveragePrice 는 보유수량이 0이하이면 0으로 나누지 않고 0을 반환한다', () => {
+    assert.equal(getHoldingAveragePrice(101753750, 0), 0);
+    assert.equal(getHoldingAveragePrice(101753750, -1), 0);
 });
 
 test('formatCompactWon 은 1만/1억 경계에서 단위를 바꾼다', () => {

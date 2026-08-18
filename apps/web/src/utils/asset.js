@@ -36,6 +36,14 @@ function formatSignedPercent(rate) {
     return `${sign}${Math.abs(rate * 100).toFixed(1)}%`;
 }
 
+function getHoldingCost(amount, gainAmount) {
+    return amount - gainAmount;
+}
+
+function getHoldingAveragePrice(cost, quantity) {
+    return quantity > 0 ? cost / quantity : 0;
+}
+
 function formatCompactWon(amount) {
     const sign = amount < 0 ? '-' : '';
     const abs = Math.abs(amount);
@@ -139,4 +147,6 @@ export {
     getSparklinePoints,
     getBarHeights,
     getSignedPercent,
+    getHoldingCost,
+    getHoldingAveragePrice,
 };
