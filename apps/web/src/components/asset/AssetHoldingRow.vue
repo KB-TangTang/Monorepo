@@ -38,7 +38,7 @@ const rateTone = computed(() =>
 </script>
 
 <template>
-    <li class="holding-row" :class="{ expanded }">
+    <li class="holding-row">
         <button
             type="button"
             class="holding-row__trigger"
@@ -69,8 +69,8 @@ const rateTone = computed(() =>
             />
         </button>
 
-        <Transition name="holding-slide">
-            <div v-if="expanded" class="holding-row__detail">
+        <div class="holding-row__detail-wrap" :class="{ 'holding-row__detail-wrap--open': expanded }">
+            <div class="holding-row__detail">
                 <div class="holding-row__detail-row">
                     <span class="holding-row__detail-label">평가금액</span>
                     <span class="holding-row__detail-value">{{ formatWon(amount) }}</span>
@@ -100,7 +100,7 @@ const rateTone = computed(() =>
                     <span class="holding-row__detail-value">{{ formatWon(averagePrice) }}</span>
                 </div>
             </div>
-        </Transition>
+        </div>
     </li>
 </template>
 
@@ -110,13 +110,16 @@ const rateTone = computed(() =>
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
     overflow: hidden;
+}
+
+.holding-row__detail-wrap {
     display: grid;
-    grid-template-rows: auto 0fr;
+    grid-template-rows: 0fr;
     transition: grid-template-rows 0.25s ease;
 }
 
-.holding-row.expanded {
-    grid-template-rows: auto 1fr;
+.holding-row__detail-wrap--open {
+    grid-template-rows: 1fr;
 }
 
 .holding-row__trigger {
@@ -200,8 +203,9 @@ const rateTone = computed(() =>
 }
 
 .holding-row__detail {
-    padding: 0 var(--tt-space-4) var(--tt-space-4);
+    min-height: 0;
     overflow: hidden;
+    padding: 0 var(--tt-space-4) var(--tt-space-4);
 }
 
 .holding-row__detail-row {
