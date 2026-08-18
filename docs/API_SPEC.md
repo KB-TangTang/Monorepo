@@ -924,11 +924,13 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | GET | `/api/missions/rankings?yearMonth=YYYY-MM` | Bearer | 해당 월 상위 10명과 내 순위 |
 | GET | `/api/missions/rankings/months` | Bearer | 전체 랭킹 데이터가 있는 `YYYY-MM` 목록 |
 | GET | `/api/missions/rankings/certificate?yearMonth=YYYY-MM` | Bearer | 확정 월 명예 인증서 데이터 |
+| GET | `/api/missions/rankings/certificate/titles?yearMonth=YYYY-MM` | Bearer | 확정 월 AI 명예 타이틀 3개 |
 
 - 월 목록 응답은 `{ "yearMonths": ["2026-08", "2026-07"] }` 형식이다.
 - 프론트에서 이 목록을 기준으로 월 선택 버튼과 연도 이동을 활성화한다.
 - 인증서는 서울 시간 기준 전월 이전만 발급할 수 있다. 당월·미래 월 요청은 `CERTIFICATE_NOT_FINALIZED` 오류를 반환한다.
 - 인증서 응답은 `{ yearMonth, totalUsers, myRanking, streakDays, bestStreakDays, completedMissionCount, successMissionCount }` 형식이다.
+- AI 명예 타이틀은 매월 1일, 전월 마지막 미션 판정과 당월 미션 배정 후 생성해 저장한다. 조회 API는 `{ yearMonth, titles, source }` 형식이며 AI 생성 전·실패 시 `source: "FALLBACK"` 타이틀을 반환한다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
