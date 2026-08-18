@@ -3,6 +3,7 @@ package com.kb.tangtang.challenge.mapper;
 import com.kb.tangtang.challenge.domain.GroupChallengeDailyResult;
 import com.kb.tangtang.challenge.domain.GroupFinalizeRow;
 import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
+import com.kb.tangtang.challenge.domain.GroupRankingRow;
 import com.kb.tangtang.challenge.domain.IndictmentTarget;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import org.apache.ibatis.annotations.Mapper;
@@ -164,4 +165,45 @@ public interface GroupChallengeResultMapper {
      * @return 참여자 전원. {@code user_id} 오름차순
      */
     List<GroupFinalizeRow> findFinalConsumption(@Param("groupId") Long groupId);
+
+    /**
+     * 명예 법정 랭킹 — <b>진행 중</b> 그룹용 (이슈 #173). {@code RANK()} 로 그 자리에서 순위를 만든다.
+     *
+     * <p>정렬은 요구사항정의서 6.6 을 따른다 — 일일평가는 남은 목숨 내림차순 → 누적 소비액
+     * 오름차순, 기간평가는 누적 소비액 오름차순. 동률은 공동 순위(1, 1, 3)다.
+     *
+     * <p>소비액 두 갈래는 {@link #findFinalConsumption} 과 같은 식이다. 기간평가는
+     * 「★ 기간평가(PERIOD) 소비액 공식」 주석의 식, 일일평가는 {@code SUM(effective_amount)}.
+     * 어긋나면 진행 중 순위와 종료 후 확정 순위가 마지막 날 밤사이 이유 없이 뒤바뀐다.
+     *
+     * @param evalType 정렬 분기용. 호출부가 이미 읽은 그룹의 {@code eval_type} 을 넘긴다 —
+     *                 SQL 이 다시 읽으면 정렬 기준의 판단 주체가 둘이 된다
+     */
+    List<GroupRankingRow> findRankingActive(@Param("groupId") Long groupId,
+                                            @Param("evalType") String evalType);
+
+    /**
+     * 명예 법정 랭킹 — <b>종료(CLOSED)</b> 그룹용 (이슈 #173).
+     *
+     * <p><b>순위를 다시 계산하지 않는다.</b> {@code final_rank}·{@code final_outcome}·
+     * {@code final_charge_amount} 는 확정 배치(#172)가 write-once 로 남긴 값이고, 여기서
+     * 재계산하면 종료 후 환불·재분류로 소비액이 바뀔 때마다 이미 보여 준 순위가 뒤집힌다.
+     * 이 계약을 SQL 로 보증하기 위해 이 구문에는 <b>윈도우 함수 자체가 없다</b> —
+     * {@code ChallengeMapperXmlTest} 가 모양을 검사한다.
+     *
+     * <p>누적 소비액은 표시 전용으로 함께 내려간다({@code totalConsumption}).
+     */
+    List<GroupRankingRow> findRankingClosed(@Param("groupId") Long groupId);
+
+    /**
+     * 마지막으로 결산이 끝난 날짜 (이슈 #173). 일일평가 명예 법정의 「{날짜} 결산 반영」 부제용.
+     *
+     * <p>오늘 행은 5분 배치가 재집계하는 중이라 제외한다 — {@code challenge_date < today}.
+     * 결산 행이 아직 없으면(첫날 등) NULL 이고, 화면이 날짜 부분을 생략한다.
+     *
+     * @param today 오늘. 서비스가 {@code Clock} 으로 만든다 — SQL 의 {@code CURDATE()} 를 쓰면
+     *              테스트에서 시간을 고정할 수 없다
+     */
+    LocalDate findLastSettlementDate(@Param("groupId") Long groupId,
+                                     @Param("today") LocalDate today);
 }

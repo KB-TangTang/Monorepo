@@ -7,7 +7,7 @@
  * 목/실데이터 전환은 `services/devDataSource` 가 관리한다 (개발 전용).
  */
 import http from '@/api/http';
-import { isMockMode, notImplementedYet } from '@/services/devDataSource';
+import { isMockMode } from '@/services/devDataSource';
 import {
     MOCK_GROUPS,
     MOCK_INVITE_CODES,
@@ -24,6 +24,7 @@ import {
     MOCK_TRIAL_TRANSACTIONS,
 } from '@/fixtures/groupChallengeTrial';
 import { formatDeadlineLabel, toTrialProgress } from '@/utils/groupTrial';
+import { formatMonthDay, toRankingViewModel } from '@/utils/groupRanking';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -32,13 +33,6 @@ function clone(value) {
 /** 지금부터 `ms` 뒤의 절대시각. 목데이터의 상대 마감을 실데이터 모양으로 맞출 때 쓴다. */
 function afterNow(ms) {
     return new Date(Date.now() + ms).toISOString();
-}
-
-/** `2026-08-05` → `8월 5일`. 화면은 「8월 5일 결산」으로 읽는다. */
-function formatMonthDay(isoDate) {
-    if (!isoDate) return '';
-    const [, month, day] = isoDate.split('-');
-    return `${Number(month)}월 ${Number(day)}일`;
 }
 
 /**
@@ -251,6 +245,14 @@ function toDetailViewModel(dto) {
             profileImage: member.profileImageUrl,
             isExceeded: member.exceeded,
         })),
+        /*
+         * 종료 화면의 최종 순위 (이슈 #173). CLOSED 전에는 null 을 그대로 둔다 —
+         * 빈 배열로 채우면 `v-if="ch.finalMembers"` 가 참이 되어 빈 랭킹 표가 그려진다.
+         * `trialStats` 는 이름이 같아 스프레드로 통과한다.
+         */
+        finalMembers: dto.finalMembers
+            ? dto.finalMembers.map((m) => ({ ...m, profileImage: m.profileImageUrl }))
+            : null,
     };
 }
 
@@ -500,16 +502,18 @@ export async function submitVote(indictmentId, { verdict, comment = '' }) {
 }
 
 /**
- * 그룹 챌린지 생존/누적 순위 (명예 법정).
- * 서버 미구현 — 일일 평가 결과가 쌓여야 만들 수 있다.
+ * 명예 법정 — 생존/누적 순위 (이슈 #173). 참여자만 볼 수 있다.
+ *
+ * 실패(`GROUP_NOT_FOUND` · `GROUP_NOT_MEMBER`)는 화면이 그룹 상세로 되돌린다 —
+ * 코드를 나눠 봐야 화면이 할 수 있는 일이 같아서 여기서 구분하지 않는다.
  */
 export async function fetchGroupChallengeRanking(groupId) {
-    if (!isMockMode.value) {
-        throw notImplementedYet('명예 법정 순위');
+    if (isMockMode.value) {
+        const ranking = MOCK_CHALLENGE_RANKINGS[Number(groupId)];
+        if (!ranking) {
+            throw new Error('순위 정보를 찾을 수 없습니다.');
+        }
+        return clone(ranking);
     }
-    const ranking = MOCK_CHALLENGE_RANKINGS[Number(groupId)];
-    if (!ranking) {
-        throw new Error('순위 정보를 찾을 수 없습니다.');
-    }
-    return clone(ranking);
+    return toRankingViewModel(await http.get(`/group-challenges/${groupId}/ranking`));
 }

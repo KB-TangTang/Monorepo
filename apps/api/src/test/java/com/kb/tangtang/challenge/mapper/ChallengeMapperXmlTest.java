@@ -163,6 +163,10 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findMemberConsumption"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialTransactions"));
         assertTrue(configuration.hasStatement(namespace + ".addVerdictDeduction"));
+        assertTrue(configuration.hasStatement(namespace + ".findFinalConsumption"));
+        assertTrue(configuration.hasStatement(namespace + ".findRankingActive"));
+        assertTrue(configuration.hasStatement(namespace + ".findRankingClosed"));
+        assertTrue(configuration.hasStatement(namespace + ".findLastSettlementDate"));
     }
 
     /**
@@ -247,6 +251,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
         assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findClosedTrialStats"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialDetail"));
         assertTrue(configuration.hasStatement(namespace + ".moveToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".confirmConfession"));
@@ -393,7 +398,7 @@ class ChallengeMapperXmlTest {
     }
 
     /**
-     * 기간평가 소비액 공식이 세 곳에 같은 모양으로 있는지 본다.
+     * 기간평가 소비액 공식이 여섯 곳에 같은 모양으로 있는지 본다.
      *
      * <p><b>왜 문자열로 검사하나</b> — 상관 서브쿼리가 참조하는 바깥 별칭이 호출부마다 달라
      * ({@code r_end.user_id} · {@code m.user_id} · {@code i.user_id}) {@code <sql>} 조각 하나로
@@ -404,7 +409,7 @@ class ChallengeMapperXmlTest {
      * 「★ 기간평가(PERIOD) 소비액 공식」 주석이다. 그 주석이 원본이다.
      */
     @Test
-    @DisplayName("기간평가 소비액 공식이 세 구문에 같은 모양으로 들어 있다")
+    @DisplayName("기간평가 소비액 공식이 여섯 구문에 같은 모양으로 들어 있다")
     void periodConsumptionFormulaStaysIdentical() throws Exception {
         String formula = "GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)";
 
@@ -416,6 +421,12 @@ class ChallengeMapperXmlTest {
                 "기간평가 기소 판정이 무죄 감액을 빼지 않으면 무죄받은 사람을 다시 기소한다");
         assertTrue(sqlOf(results, resultNamespace + ".findMemberConsumption").contains(formula),
                 "그룹 상세 소비액이 감액을 반영하지 않으면 무죄 판결이 화면에 나타나지 않는다");
+        assertTrue(sqlOf(results, resultNamespace + ".findFinalConsumption").contains(formula),
+                "최종 확정 부담금이 기소 판정과 다른 식을 쓰면 「초과로 기소됐는데 완주」가 생긴다");
+        assertTrue(sqlOf(results, resultNamespace + ".findRankingActive").contains(formula),
+                "진행 중 순위의 소비액이 확정 계산과 어긋나면 종료 순간 순위가 이유 없이 바뀐다");
+        assertTrue(sqlOf(results, resultNamespace + ".findRankingClosed").contains(formula),
+                "종료 후 표시용 소비액이 다른 화면과 어긋난다");
         assertTrue(sqlOf(indictments, IndictmentMapper.class.getName() + ".findTrialDetail")
                         .contains(formula),
                 "재판 상세의 초과액·소비액이 다른 화면과 어긋난다");
@@ -462,6 +473,57 @@ class ChallengeMapperXmlTest {
                 "기간평가는 감액이 그날 금액을 넘는 게 정상이라 오탐이 뜬다");
         assertTrue(sql.contains("r.verdict_deduction_amount > 0"),
                 "환불로 daily_amount 가 음수인 날은 감액 0 인 행까지 경고에 걸린다");
+    }
+
+    /* ══ 명예 법정 랭킹 (이슈 #173) ═══════════════════════════════════════ */
+
+    /**
+     * 정렬 규칙(요구사항정의서 6.6)이 SQL 에 그대로 있는지 본다 — 일일평가는 남은 목숨
+     * DESC → 누적 소비액 ASC, 기간평가는 누적 소비액 ASC. {@code RANK()} 라 동률은
+     * 공동 순위(1, 1, 3)다 — {@code DENSE_RANK} 로 바뀌면 공동 1위 다음이 2위가 된다.
+     *
+     * <p>{@code <choose>} 분기라 파라미터 없이 바인딩하면 {@code <otherwise>}(PERIOD) 갈래가
+     * 나온다. DAILY 갈래는 {@code evalType} 을 넣어 따로 뽑는다.
+     */
+    @Test
+    @DisplayName("진행 중 랭킹은 평가 방식별 정렬로 RANK() 를 계산한다")
+    void rankingActiveSortsPerEvalType() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+        String id = GroupChallengeResultMapper.class.getName() + ".findRankingActive";
+
+        java.util.Map<String, Object> daily = new java.util.HashMap<>();
+        daily.put("groupId", 1L);
+        daily.put("evalType", "DAILY");
+        String dailySql = configuration.getMappedStatement(id)
+                .getBoundSql(daily).getSql().replaceAll("\\s+", " ");
+        assertTrue(dailySql.contains(
+                        "RANK() OVER ( ORDER BY base.lives_count DESC, base.total_consumption ASC )"),
+                "일일평가는 목숨이 먼저다 — 소비액만 보면 목숨 0 인 사람이 1위가 될 수 있다");
+
+        String periodSql = sqlOf(configuration, id);
+        assertTrue(periodSql.contains("RANK() OVER ( ORDER BY base.total_consumption ASC )"),
+                "기간평가는 누적 소비액 오름차순 하나다");
+    }
+
+    /**
+     * 종료 후 재계산 금지(#172 계약)를 SQL 모양으로 못박는다. 이 구문에 윈도우 함수가
+     * 들어오는 순간, 종료 후 환불·재분류로 소비액이 바뀔 때마다 이미 사용자에게 보여 준
+     * 순위가 뒤집힌다. 순위·완주·부담금은 확정 배치가 남긴 {@code final_*} 를 읽기만 한다.
+     */
+    @Test
+    @DisplayName("종료 랭킹은 확정 컬럼을 읽기만 하고 순위를 재계산하지 않는다")
+    void rankingClosedNeverRecalculates() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+
+        String sql = sqlOf(configuration,
+                GroupChallengeResultMapper.class.getName() + ".findRankingClosed");
+
+        assertFalse(sql.contains("OVER ("),
+                "윈도우 함수가 들어오면 종료 후 환불로 확정 순위가 뒤집힌다");
+        assertTrue(sql.contains("m.final_rank"), "순위는 확정 배치가 남긴 저장값이다");
+        assertTrue(sql.contains("m.final_outcome"), "탈락 표시의 유일한 근거다");
+        assertTrue(sql.contains("m.final_charge_amount"),
+                "부담금을 다시 계산하면 이미 정산한 금액과 어긋난다");
     }
 
     private String sqlOf(Configuration configuration, String statementId) {

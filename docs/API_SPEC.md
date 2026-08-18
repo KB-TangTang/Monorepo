@@ -1218,8 +1218,11 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 ### 아직 NULL 인 필드
 
 `settleTime` · `memoAuthor` · `memoDate` 는 근거 컬럼이 없다.
-채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #173 이다.
+채팅 미리보기는 이슈 #174, `savingsAmount`(종료 화면 절약액)는 산식이 정해지지 않았다.
 화면이 이미 NULL 을 견디도록 만들어져 있다.
+
+`trialStats` · `finalMembers` 는 #173 이 채웠다 — **`status = CLOSED` 일 때만** 값이 있고
+그 외 상태에서는 둘 다 null 이다(아래 「명예 법정」 절 참고).
 
 목록의 `finalOutcome` · `finalRank` · `finalChargeAmount` 는 **#172 가 채운다.** 그룹이
 `CLOSED` 로 확정되는 순간 값이 들어간다 — 진행 중에는 계속 `null` 이다(목숨이 0이어도
@@ -1460,6 +1463,50 @@ GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
 > ⚠ `IMAGE_TOO_LARGE` 는 **업무 검증보다 먼저** 난다. 컨트롤러가 파일을 바이트로 읽기 전에
 > `requireWithinLimit` 을 걸기 때문에, 없는 기소에 5MB 넘는 이미지를 보내면 `TRIAL_NOT_FOUND`
 > 대신 이 코드가 온다. 메모리에 거대한 파일을 올린 뒤 "없는 재판입니다" 를 답하는 것보다 낫다.
+
+## 그룹 챌린지 — 명예 법정 생존자 랭킹 · 종료 화면 (이슈 #173)
+
+| 메서드 | 경로 | 인증 | 권한 | 응답 |
+|---|---|---|---|---|
+| GET | `/api/group-challenges/{groupId}/ranking` | Bearer | 그룹 참여자 | `GroupRanking` |
+
+### `GroupRanking` — 명예 법정 화면 한 벌
+
+`{ evalType, status, limitAmount, maxLives, memo, lastSettlementDate,
+members[{ rank, userId, nickname, profileImageUrl, mine, livesCount, totalConsumption,
+finalOutcome, finalChargeAmount }] }`
+
+- 정렬은 요구사항정의서 6.6 — 일일평가는 남은 목숨 내림차순 → 누적 소비액 오름차순,
+  기간평가는 누적 소비액 오름차순. **동률은 공동 순위**다(1, 1, 3).
+- `status = CLOSED` 면 `rank` · `finalOutcome` · `finalChargeAmount` 는 확정 배치(#172)가 남긴
+  **저장값**이고 다시 계산하지 않는다 — CLOSED 쿼리에는 윈도우 함수 자체가 없다.
+  그 외 상태(`JUDGING` 포함 — 아직 `final_*` 미기록)에서는 조회 시점의 스냅샷이다.
+- `finalOutcome`(`SURVIVED`/`ELIMINATED`) · `finalChargeAmount` 는 **CLOSED 전에는 null** 이다.
+  진행 중의 목숨 0 은 「탈락 위기」이지 탈락이 아니다 — 탈락 표시 여부는 프론트가
+  `status`+`finalOutcome` 으로 정한다.
+- `totalConsumption` 은 표시 전용 재계산값이다(무죄 감액 반영). 종료 후 환불이 생기면
+  `finalChargeAmount` 와 달라질 수 있는 게 정상이다.
+- `lastSettlementDate` 는 마지막으로 결산이 끝난 날짜다 — 진행 중에는 어제까지 중 마지막 결산일
+  (오늘 행은 5분 재집계 중이라 제외), 종료 후에는 `end_date`. 결산 행이 아직 없으면 null 이고
+  화면이 날짜 부분을 생략한다.
+- 아바타 색·이니셜은 내려주지 않는다 — 프론트 `UserAvatar` 가 닉네임에서 만든다(팀 관례).
+- `trialStats` · `groupName` 은 담지 않는다 — 명예 법정 화면이 쓰지 않는다.
+
+### 종료 그룹 상세에 붙는 필드
+
+`/detail` 응답(`ChallengeGroupDetail`)에 **`status = CLOSED` 일 때만** 채워진다.
+그 외 상태에서는 둘 다 null 이다.
+
+- `finalMembers[]` = `{ userId, nickname, profileImageUrl, finalRank, finalOutcome, livesCount }` —
+  확정 배치가 남긴 `finalRank` 오름차순 **저장값**, 재계산 없음.
+- `trialStats` = `{ totalTrials, guiltyCount, innocentCount }` — 확정(`GUILTY` · `INNOCENT`)
+  재판만 센다. 진행 중 기소는 포함하지 않는다.
+- `savingsAmount`(종료 화면 절약액)는 산식이 정해지지 않아 **계속 null** 이다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 랭킹 조회 |
 
 ## 그룹 채팅 (이슈 #174)
 

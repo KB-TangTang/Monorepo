@@ -24,7 +24,7 @@
     <select id="findByGroupIds" resultType="com.kb.tangtang.challenge.domain.GroupMember">
         SELECT m.group_id, m.user_id, m.lives_count,
                m.final_outcome, m.final_rank, m.final_charge_amount,
-               u.nickname
+               u.nickname, u.profile_image_key
         FROM tbl_group_member m
         JOIN tbl_user u ON u.id = m.user_id
         WHERE m.group_id IN
