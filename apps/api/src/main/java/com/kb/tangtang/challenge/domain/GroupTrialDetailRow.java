@@ -77,6 +77,15 @@ public class GroupTrialDetailRow {
 
     private int voteCount;
 
+    /**
+     * 유죄 표수. <b>여기까지는 항상 채워진다</b> — 개표 전에 가리는 일은 서비스가 한다
+     * (이슈 #171 결정. 판단을 한 곳에 모아야 #172 가 공개 조건을 풀 때 빠뜨리지 않는다).
+     */
+    private int guiltyCount;
+
+    /** 무죄 표수. {@link #guiltyCount} 와 같은 규칙이다. */
+    private int innocentCount;
+
     /** 참여자 - 피고 1명. */
     private int totalVoters;
 

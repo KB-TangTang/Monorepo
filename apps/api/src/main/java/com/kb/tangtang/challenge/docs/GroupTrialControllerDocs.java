@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.docs;
 
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionsDto;
+import com.kb.tangtang.challenge.dto.VoteRequestDto;
 import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
 import io.swagger.annotations.Api;
@@ -38,6 +39,12 @@ public interface GroupTrialControllerDocs {
                     + "`defense` 는 아직 변론이 없으면 **NULL** 이다(빈 객체가 아니다). "
                     + "`myVerdict` 는 내가 던진 표이고 피고 본인은 항상 NULL 이다. "
                     + "`categoryId` 가 NULL 이면 총소비 챌린지다.\n\n"
+                    + "**표 분포는 개표 후에만 내려간다.** `guiltyCount`·`innocentCount`·`comments` 는 "
+                    + "`status` 가 `GUILTY`·`INNOCENT` 일 때만 값이 있고, `DEFENSE_WAIT`·`VOTING` 에서는 "
+                    + "**NULL** 이다(0 이 아니다 — 「아직 모른다」와 「0표」는 다르다). 투표 중에 비율이 "
+                    + "보이면 이기는 쪽에 표가 몰리고, 코멘트 문장에는 어느 쪽에 던졌는지가 그대로 드러난다.\n\n"
+                    + "진행 상황은 `voteCount / totalVoters`(몇 명이 던졌나)까지만 공개한다. "
+                    + "**누가 투표했는지는 어떤 필드로도 내려가지 않는다** — 배심원 명단은 비공개다.\n\n"
                     + "**결산 구간의 거래 목록은 여기 없다.** 상세는 배심원도 보므로 "
                     + "거래 목록은 아래 `/transactions` 로 분리했다.\n\n"
                     + "오류: `TRIAL_NOT_FOUND`(없거나 내가 그 그룹 사람이 아님 — 존재 노출을 막기 위해 구분하지 않는다)")
@@ -98,4 +105,27 @@ public interface GroupTrialControllerDocs {
     ApiResponse<Void> confess(
             @ApiIgnore Long userId,
             @ApiParam(value = "기소 ID", required = true) Long indictmentId);
+
+    @ApiOperation(value = "투표 (배심원 전용)",
+            notes = "같은 그룹 참여자가 유죄·무죄 한 표를 던진다. **피고 본인은 투표할 수 없다.** "
+                    + "응답 본문은 없다 — 던진 뒤 화면은 재판 상세를 다시 읽어 그린다.\n\n"
+                    + "`verdict` 는 `GUILTY` 또는 `INNOCENT`. `comment`(익명 한줄, 최대 40자)는 "
+                    + "**선택**이고 공백만 보내면 없는 것으로 저장한다.\n\n"
+                    + "**코멘트는 개표 후에만 공개된다.** 투표 중에 보여주면 문장에서 유무죄가 읽혀 "
+                    + "표 분포가 새어 나간다. 공개될 때도 **투표자를 알 수 있는 값은 함께 내려가지 않는다.**\n\n"
+                    + "**수정·취소가 없다.** 한 재판에 한 표이고 두 번째 요청은 `VOTE_ALREADY_EXISTS` 다 "
+                    + "— 바꿀 수 있으면 마감 직전 눈치싸움이 생긴다.\n\n"
+                    + "**개표는 여기서 하지 않는다.** 마지막 한 표가 들어와도 상태는 `VOTING` 그대로다. "
+                    + "결과 확정은 투표 마감 후 배치(이슈 #172)가 한 번에 한다.\n\n"
+                    + "마감 판정은 저장값이 아니라 `created_at + defense-hours + vote-hours` 계산값이다. "
+                    + "상태가 아직 `VOTING` 이어도 마감이 지났으면 `VOTE_NOT_ALLOWED` 다.\n\n"
+                    + "오류: `TRIAL_NOT_FOUND`(없거나 내가 그 그룹 사람이 아님) · "
+                    + "`VOTE_NOT_ALLOWED`(투표 기간이 아니거나 마감 지남) · "
+                    + "`CANNOT_VOTE_OWN_TRIAL`(내가 피고) · `VOTE_ALREADY_EXISTS`(이미 던짐) · "
+                    + "`INVALID_VERDICT`(GUILTY·INNOCENT 가 아님) · `COMMENT_TOO_LONG`(40자 초과)")
+    ApiResponse<Void> vote(
+            @ApiIgnore Long userId,
+            @ApiParam(value = "기소 ID", required = true) Long indictmentId,
+            @ApiParam(value = "판단(GUILTY·INNOCENT)과 익명 코멘트(선택, 40자)", required = true)
+                    VoteRequestDto request);
 }

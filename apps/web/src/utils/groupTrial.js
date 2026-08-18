@@ -89,3 +89,70 @@ export function toTrialProgress(detail) {
         },
     };
 }
+
+/**
+ * 이 재판에 지금 투표할 수 있는가 (이슈 #171).
+ *
+ * 서버가 같은 조건을 `VoteService` 에서 다시 본다 — 여기는 **화면을 헛되이 열지 않기 위한** 것이지
+ * 검증이 아니다. 이 판단을 화면 안에 흩뿌리면 조건이 하나 빠진 화면이 생긴다.
+ *
+ * **마감 시각도 본다.** 개표 배치(#172)가 없어 마감이 지나도 상태는 `VOTING` 그대로다.
+ * 상태만 보면 봉투를 열고 변론서까지 읽은 뒤 제출에서야 `VOTE_NOT_ALLOWED` 로 튕긴다.
+ * 서버도 같은 식(`created_at + defense-hours + vote-hours`)으로 계산하므로 판단이 갈리지 않는다.
+ */
+export function canVote(detail) {
+    if (!detail) return false;
+    if (detail.status !== 'VOTING') return false;
+    /* 피고는 자기 재판의 배심원이 아니다. */
+    if (detail.accused?.isMine) return false;
+    /* 이미 던졌다. 투표 수정은 지원하지 않는다 — 개표 직전 눈치싸움을 만들지 않기 위함이다. */
+    if (detail.myVerdict) return false;
+    return !isPast(detail.voteDeadline);
+}
+
+/** 마감 시각이 지났는가. 값이 없으면 「모른다」이므로 막지 않는다 — 막는 판단은 서버가 한다. */
+function isPast(isoDateTime) {
+    if (!isoDateTime) return false;
+    const at = new Date(isoDateTime).getTime();
+    return !Number.isNaN(at) && at < Date.now();
+}
+
+/**
+ * 재판 상세 → 투표 화면(`VoteVerdictView`) 이 쓰는 모양.
+ *
+ * 입력은 `toTrialDetailViewModel` 을 이미 지난 값이다. 화면은 변론서를 법정 문서처럼 그리느라
+ * 서버 계약과 다른 어휘(`defendant` · `defenseMessage` · `evidences`)를 쓴다.
+ *
+ * <b>변론이 없는 `VOTING` 재판이 존재한다.</b> 변론 마감 배치가 변론 없이 상태만 넘기기 때문이다
+ * ({@code moveExpiredDefensesToVoting}). 변론이 없다고 투표를 막으면 그 재판은 영원히 끝나지
+ * 않는다 — `hasDefense: false` 로 알리고 투표는 그대로 받는다.
+ */
+export function toVoteScreen(detail) {
+    if (!detail) return null;
+
+    const defense = detail.defense ?? null;
+
+    return {
+        ...detail,
+        defendant: {
+            userId: detail.accused?.userId ?? null,
+            nickname: detail.accused?.nickname ?? '',
+            profileImage: detail.accused?.profileImage ?? null,
+        },
+        hasDefense: defense !== null,
+        defenseMessage: defense?.content ?? '',
+        /*
+         * 실제 부담금은 「없음」과 「0원」이 다르다. 변론이 없는데 0 으로 채우면 변론서에
+         * 「실제 부담금 0원 인정 시 기준 내」라는 없는 주장이 적힌다.
+         */
+        actualCostAmount: defense?.actualBurdenAmount ?? null,
+        defenseDate: defense?.createdAt ?? null,
+        /* 증거는 이미지 URL 목록이다. 라벨(「증 제1호」)은 표시 전용이라 서버에 없다. */
+        evidences: (defense?.images ?? []).map((url, index) => ({
+            id: index + 1,
+            label: `증 제${index + 1}호`,
+            url,
+        })),
+        voteDeadlineLabel: formatDeadlineLabel(detail.voteDeadline),
+    };
+}

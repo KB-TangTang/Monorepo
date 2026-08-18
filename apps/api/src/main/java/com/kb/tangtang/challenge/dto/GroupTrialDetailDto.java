@@ -6,6 +6,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 재판 상세 한 벌 (이슈 #170).
@@ -37,7 +38,7 @@ public class GroupTrialDetailDto {
     /** 1=유죄 / 0=무죄 / NULL=미확정. */
     private Boolean result;
 
-    /** {@code VOTE} · {@code NO_VOTE} · {@code SCRATCH_LOTTERY} · {@code CONFESSION}. 확정 전 NULL. */
+    /** {@code VOTE} · {@code NO_VOTE} · {@code AI_JUDGMENT} · {@code CONFESSION}. 확정 전 NULL. */
     private String verdictMethod;
 
     /** 기소 문구. */
@@ -93,4 +94,23 @@ public class GroupTrialDetailDto {
 
     /** 참여자 - 피고 1명. */
     private int totalVoters;
+
+    /**
+     * 유죄 표수. <b>개표 전에는 NULL</b> 이다 — 투표 중에 비율이 보이면 편승 투표가 생긴다.
+     *
+     * <p>{@code int} 가 아니라 {@code Integer} 인 이유가 여기 있다. {@code int} 면 가릴 때 0 이
+     * 되어 화면이 「아직 모른다」와 「0표」를 구분할 수 없다.
+     */
+    private Integer guiltyCount;
+
+    /** 무죄 표수. {@link #guiltyCount} 와 같은 규칙이다. */
+    private Integer innocentCount;
+
+    /**
+     * 익명 한줄 코멘트 목록 (오래된 순). <b>개표 전에는 NULL</b> 이다.
+     *
+     * <p>코멘트 문장에는 유무죄가 그대로 드러나므로 투표 중에 내려보내면
+     * {@code guiltyCount} 를 가린 의미가 없어진다.
+     */
+    private List<TrialVoteCommentDto> comments;
 }

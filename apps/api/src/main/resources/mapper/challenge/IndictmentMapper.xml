@@ -86,7 +86,8 @@
     <!--
       내가 변론해야 하는 기소.
 
-      마감이 지났는지는 거르지 않는다 — 이유는 IndictmentMapper#findDefenseTodos 주석 참고.
+      마감이 지났는지는 SQL 이 거르지 않는다 — 거르는 쪽은 GroupTrialService#findMyTrials 다.
+      이유는 IndictmentMapper#findDefenseTodos 주석 참고.
       idx_ind_user_status (user_id, status) 를 탄다.
     -->
     <select id="findDefenseTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">
@@ -200,6 +201,12 @@
       ⚠ tbl_defense 를 조인하지 않는다. 증빙 이미지가 여러 장이면 행이 그만큼 늘어
         나머지 컬럼이 전부 중복된다 — 변론은 DefenseMapper 로 따로 읽는다.
 
+      ⚠ guilty_count · innocent_count 는 항상 센다. 투표 중에 이 숫자를 화면에 내려보내면
+        유무죄 비율이 그대로 새어 편승 투표가 생기므로, 가리는 일은 GroupTrialService 가
+        한 곳에서 한다(이슈 #171 결정). SQL 을 상태별로 나누면 #172 가 개표를 공개할 때
+        조건을 두 군데서 풀어야 한다. idx_vote_indictment (indictment_id, verdict) 커버링이라
+        추가 비용은 거의 없다.
+
       결산 구간 안내:
         일일평가는 r.challenge_date 하루, 기간평가는 g.start_date ~ g.end_date 다.
         기간평가에서도 challenge_date 를 함께 내려보낸다 — 기소가 붙은 행의 날짜라
@@ -228,6 +235,10 @@
                (SELECT v.verdict FROM tbl_vote v
                  WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
                (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'GUILTY')   AS guilty_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'INNOCENT') AS innocent_count,
                <include refid="totalVoters"/> AS total_voters,
                i.created_at     AS created_at
         <include refid="fromIndictment"/>

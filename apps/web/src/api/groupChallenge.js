@@ -337,6 +337,10 @@ function mockTrialDetailNow() {
  *
  * `caseNumber` · `evalLabel` · `settlementLabel` 은 서버에 없다. 사건 번호와 「일일결산」
  * 같은 문구는 표시 전용이라 서버가 내려주면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ *
+ * ⚠ `guiltyCount` · `innocentCount` · `comments` 는 **손대지 않고 그대로 통과시킨다**(이슈 #171).
+ * 개표 전에는 셋 다 `null` 로 오는데, 이것이 「아직 모른다」는 신호다. `?? 0` · `?? []` 로
+ * 채우면 투표 중인 재판이 화면에 「0 : 0 · 코멘트 없음」으로 그려져 만장일치 0표처럼 보인다.
  */
 function toTrialDetailViewModel(dto) {
     const isDaily = dto.evalType === 'DAILY';
@@ -457,6 +461,38 @@ export async function confessIndictment(indictmentId) {
         return { mocked: true };
     }
     return http.post(`/group-challenges/trials/${indictmentId}/confession`);
+}
+
+/**
+ * 투표 — 유·무죄 + 익명 한줄 코멘트 (이슈 #171).
+ *
+ * **응답 본문이 없다.** 여기서 표수를 돌려주면 「개표 전 비율 비공개」 정책이 이 한 곳에서
+ * 뚫린다. 제출 뒤 화면은 재판 상세를 다시 읽어 그린다.
+ *
+ * 코멘트는 선택이다. 서버도 trim 후 빈 값을 NULL 로 저장하지만, 빈 문자열을 실어 보내면
+ * 「코멘트를 남겼는데 안 보인다」는 오해를 만든다 — 비어 있으면 `null` 로 보낸다.
+ *
+ * 실패는 `err.code` 로 갈린다: `VOTE_ALREADY_EXISTS` · `VOTE_NOT_ALLOWED` ·
+ * `CANNOT_VOTE_OWN_TRIAL` · `INVALID_VERDICT` · `COMMENT_TOO_LONG` · `TRIAL_NOT_FOUND`.
+ *
+ * @param {number|string} indictmentId
+ * @param {{ verdict: 'GUILTY'|'INNOCENT', comment?: string }} payload
+ */
+export async function submitVote(indictmentId, { verdict, comment = '' }) {
+    if (isMockMode.value) {
+        /*
+         * 목데이터로는 투표 화면을 끝까지 걸을 수 없다. 재판 상세 픽스처의 피고가 「나」라서
+         * (`MOCK_TRIAL_DETAIL.accused.mine = true`) 투표 화면이 진입 단계에서 되돌려 보낸다.
+         * 배심원 시점 픽스처를 하나 더 두면 같은 재판이 목/실에서 다른 사람 것이 되어 더 헷갈린다 —
+         * 투표 흐름 검증은 DEV 데이터 출처 토글로 실서버를 쓴다.
+         */
+        return { mocked: true };
+    }
+    const text = (comment ?? '').trim();
+    return http.post(`/group-challenges/trials/${indictmentId}/votes`, {
+        verdict,
+        comment: text === '' ? null : text,
+    });
 }
 
 /**

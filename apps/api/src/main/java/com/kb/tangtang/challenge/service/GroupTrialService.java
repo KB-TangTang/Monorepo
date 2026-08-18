@@ -4,8 +4,10 @@ import com.kb.tangtang.challenge.domain.Defense;
 import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
+import com.kb.tangtang.challenge.domain.VoteCommentRow;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -14,9 +16,11 @@ import com.kb.tangtang.challenge.dto.TrialDefenseDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionDayDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionDto;
 import com.kb.tangtang.challenge.dto.TrialTransactionsDto;
+import com.kb.tangtang.challenge.dto.TrialVoteCommentDto;
 import com.kb.tangtang.challenge.mapper.DefenseMapper;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
+import com.kb.tangtang.challenge.mapper.VoteMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.common.util.PaymentMethodLabels;
@@ -26,7 +30,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -52,6 +58,7 @@ public class GroupTrialService {
 
     private final IndictmentMapper indictmentMapper;
     private final DefenseMapper defenseMapper;
+    private final VoteMapper voteMapper;
     private final GroupChallengeResultMapper resultMapper;
     private final ImageStorage imageStorage;
 
@@ -61,19 +68,38 @@ public class GroupTrialService {
     /** 변론 마감 후 투표를 받는 시간. */
     private final int voteHours;
 
+    /** 마감이 지났는지 판단하는 기준. 테스트가 고정 시각을 끼운다. */
+    private final Clock clock;
+
     @Autowired
     public GroupTrialService(IndictmentMapper indictmentMapper,
                              DefenseMapper defenseMapper,
+                             VoteMapper voteMapper,
                              GroupChallengeResultMapper resultMapper,
                              ImageStorage imageStorage,
                              @Value("${challenge.trial.defense-hours}") int defenseHours,
                              @Value("${challenge.trial.vote-hours}") int voteHours) {
+        this(indictmentMapper, defenseMapper, voteMapper, resultMapper, imageStorage,
+                defenseHours, voteHours, Clock.systemDefaultZone());
+    }
+
+    /** 테스트용. {@code DefenseService} · {@code VoteService} 와 같은 방식이다. */
+    GroupTrialService(IndictmentMapper indictmentMapper,
+                      DefenseMapper defenseMapper,
+                      VoteMapper voteMapper,
+                      GroupChallengeResultMapper resultMapper,
+                      ImageStorage imageStorage,
+                      int defenseHours,
+                      int voteHours,
+                      Clock clock) {
         this.indictmentMapper = indictmentMapper;
         this.defenseMapper = defenseMapper;
+        this.voteMapper = voteMapper;
         this.resultMapper = resultMapper;
         this.imageStorage = imageStorage;
         this.defenseHours = defenseHours;
         this.voteHours = voteHours;
+        this.clock = clock;
     }
 
     /**
@@ -83,25 +109,40 @@ public class GroupTrialService {
      * 서로 다른데도 컬럼 수를 억지로 맞춰야 해서, 한쪽만 고칠 때 다른 쪽이 조용히 깨진다.
      * 한 사람이 동시에 지고 있는 재판은 많아야 수십 건이라 쿼리 두 번이 부담되지 않는다.
      *
-     * <p><b>마감이 지난 건도 그대로 내려간다.</b> 걸러내는 주체는 상태 전이 배치(#170) 하나여야 한다 —
-     * 근거는 {@link IndictmentMapper#findDefenseTodos} 주석에 있다.
+     * <p><b>마감이 지난 건은 내리지 않는다.</b> TO-DO 는 「지금 처리할 수 있는 일」이고, 마감을 넘긴
+     * 재판에 변론·투표를 넣으면 {@code DefenseService} · {@code VoteService} 가 그 자리에서 거절한다.
+     * 목록에 남겨 두면 카운트다운이 {@code 00:00:00} 인 줄을 눌러 화면까지 들어간 뒤 제출에서야
+     * 튕긴다. 특히 투표는 {@code VOTING} 을 풀어 줄 개표 배치가 아직 없어(#172) <b>영원히</b> 남는다.
+     *
+     * <p>상태 전이 배치와 판단 주체가 둘이 되는 것은 맞다. 다만 배치는 {@code status} 를 옮기는
+     * 일을 하고 여기는 <b>보여줄지</b>를 정한다 — 마감을 넘긴 순간부터 배치가 돌기 전까지의 구간에서
+     * 둘의 답이 갈릴 뿐이고, 그 구간에서 옳은 답은 「보여주지 않는다」다.
      */
     @Transactional(readOnly = true)
     public List<MyTrialDto> findMyTrials(long userId) {
         List<MyTrialDto> trials = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         for (TrialTodoRow row : indictmentMapper.findDefenseTodos(userId)) {
+            LocalDateTime deadline = row.getCreatedAt().plusHours(defenseHours);
+            if (deadline.isBefore(now)) {
+                continue;
+            }
             trials.add(MyTrialDto.builder()
                     .indictmentId(row.getIndictmentId())
                     .type("accuse")
                     .challengeId(row.getChallengeId())
                     .challengeName(row.getChallengeName())
                     .amount(row.getAmount())
-                    .deadline(row.getCreatedAt().plusHours(defenseHours))
+                    .deadline(deadline)
                     .build());
         }
 
         for (TrialTodoRow row : indictmentMapper.findVoteTodos(userId)) {
+            LocalDateTime deadline = row.getCreatedAt().plusHours(defenseHours + voteHours);
+            if (deadline.isBefore(now)) {
+                continue;
+            }
             trials.add(MyTrialDto.builder()
                     .indictmentId(row.getIndictmentId())
                     .type("vote")
@@ -110,7 +151,7 @@ public class GroupTrialService {
                     .defendantNickname(row.getDefendantNickname())
                     .voteCount(row.getVoteCount())
                     .totalVoters(row.getTotalVoters())
-                    .deadline(row.getCreatedAt().plusHours(defenseHours + voteHours))
+                    .deadline(deadline)
                     .build());
         }
 
@@ -167,6 +208,9 @@ public class GroupTrialService {
      *
      * <p>변론을 따로 한 번 더 읽는다. 상세 쿼리에 조인하면 증빙 이미지 개수만큼 행이 늘어
      * 나머지 컬럼이 전부 중복된다.
+     *
+     * <p><b>표 분포와 코멘트는 개표 후에만 채운다</b>({@link #isCounted}). 매퍼는 항상 세지만
+     * 투표 중이면 여기서 NULL 로 덮는다 — 이슈 #171 의 「개표 전 비율 비공개」 정책이다.
      */
     @Transactional(readOnly = true)
     public GroupTrialDetailDto findTrialDetail(long userId, long indictmentId) {
@@ -176,6 +220,7 @@ public class GroupTrialService {
         }
 
         boolean mine = row.getUserId() != null && row.getUserId() == userId;
+        boolean counted = isCounted(row.getStatus());
         return GroupTrialDetailDto.builder()
                 .indictmentId(row.getIndictmentId())
                 .groupId(row.getGroupId())
@@ -206,7 +251,37 @@ public class GroupTrialService {
                 .myVerdict(row.getMyVerdict())
                 .voteCount(row.getVoteCount())
                 .totalVoters(row.getTotalVoters())
+                .guiltyCount(counted ? row.getGuiltyCount() : null)
+                .innocentCount(counted ? row.getInnocentCount() : null)
+                .comments(counted ? findComments(indictmentId) : null)
                 .build();
+    }
+
+    /**
+     * 표 분포와 코멘트를 내려보내도 되는 상태인가 (이슈 #171 결정).
+     *
+     * <p><b>개표 전에는 안 된다.</b> 투표 중에 유무죄 비율이 보이면 이기는 쪽에 표가 몰리고,
+     * 코멘트 문장에는 어느 쪽에 던졌는지가 그대로 드러나 숫자를 가린 의미가 없어진다.
+     * 진행 상황은 {@code voteCount / totalVoters}(몇 명이 던졌나)까지만 공개한다.
+     *
+     * <p><b>판단을 여기 한 곳에만 둔다.</b> SQL 이나 컨트롤러로 흩뿌리면 이슈 #172 가
+     * 공개 조건을 풀 때 한쪽을 빠뜨린다. #172 는 이 메서드만 보면 된다.
+     */
+    private boolean isCounted(String status) {
+        return IndictmentStatus.GUILTY.name().equals(status)
+                || IndictmentStatus.INNOCENT.name().equals(status);
+    }
+
+    /** 익명 코멘트. 비어 있는 표는 매퍼가 이미 걸러 낸다. */
+    private List<TrialVoteCommentDto> findComments(long indictmentId) {
+        List<TrialVoteCommentDto> comments = new ArrayList<>();
+        for (VoteCommentRow row : voteMapper.findCommentsByIndictmentId(indictmentId)) {
+            comments.add(TrialVoteCommentDto.builder()
+                    .comment(row.getComment())
+                    .createdAt(row.getCreatedAt())
+                    .build());
+        }
+        return comments;
     }
 
     /**

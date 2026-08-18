@@ -100,9 +100,16 @@ defineProps({
     margin-top: var(--tt-space-5);
 }
 
+/* 무대 안의 요소는 전부 `left: Npx` 절대좌표다. 무대가 부모를 따라 늘어나면
+ * 그 좌표들이 왼쪽에 그대로 남아 마스코트가 왼쪽으로 쏠린다.
+ * 무대를 240px 고정폭으로 두고 가운데 정렬해 세 씬의 기준을 하나로 맞춘다.
+ * ⚠ 아래 좌표를 손볼 때는 「무대 폭 240 · 중심 x=120」을 기준으로 계산한다. */
 .mascot-scene__stage {
-    height: 112px;
     position: relative;
+    width: 240px;
+    max-width: 100%;
+    height: 112px;
+    margin: 0 auto;
 }
 
 .mascot-scene__ground {
@@ -142,7 +149,8 @@ defineProps({
     bottom: 8px;
     width: 124px;
     height: 124px;
-    margin-left: -70px;
+    /* 탕이(64~152)+찻잔(132~175) 묶음 중심 x=120 에 후광 중심을 맞춘다 */
+    margin-left: -62px;
     border-radius: 50%;
     background: radial-gradient(circle, #DDF1E6 0%, rgba(221, 241, 230, 0) 70%);
     animation: tt-breathe 4.6s ease-in-out infinite;
@@ -244,7 +252,7 @@ defineProps({
     animation: tt-float 3.2s ease-in-out infinite;
 }
 .mascot-scene__particle--gold {
-    left: 214px; top: 26px;
+    left: 196px; top: 26px;
     width: 5px; height: 5px;
     background: rgba(245, 185, 33, 0.5);
     animation: tt-float 4.1s ease-in-out infinite;
@@ -254,7 +262,7 @@ defineProps({
 /* ── Indictment 씬 ────────────────────── */
 .mascot-scene__dash {
     position: absolute;
-    left: 176px;
+    left: 158px;
     height: 4px;
     border-radius: var(--tt-radius-full);
     animation: tt-dash 0.72s linear infinite;
@@ -280,20 +288,21 @@ defineProps({
     animation: tt-puff 0.9s ease-out infinite;
 }
 .mascot-scene__puff--1 {
-    left: 120px; bottom: 14px;
+    left: 102px; bottom: 14px;
     width: 14px; height: 14px;
     background: #DFE2EA;
 }
 .mascot-scene__puff--2 {
-    left: 134px; bottom: 12px;
+    left: 116px; bottom: 12px;
     width: 10px; height: 10px;
     background: #E5E8EF;
     animation-delay: 0.35s;
 }
 
+/* 서류(러너 기준 -6px)까지 포함한 묶음 74~168 → 중심 x=121 */
 .mascot-scene__runner {
     position: absolute;
-    left: 98px;
+    left: 80px;
     bottom: 10px;
     width: 88px;
     height: 88px;
@@ -347,16 +356,18 @@ defineProps({
     animation: tt-pulse 1.9s ease-in-out infinite;
 }
 
+/* 유·무 뱃지(21~) ~ 투표함(~219) 묶음 중심 x=120 */
 .mascot-scene__float--vote {
     left: 50%;
-    margin-left: -56px;
+    margin-left: -43px;
     bottom: 6px;
     animation: tt-float 2.4s ease-in-out infinite;
 }
 
+/* right 로 붙이면 무대가 넓어질 때 탕이와 투표함 사이가 벌어진다 — left 고정 */
 .mascot-scene__ballot-box {
     position: absolute;
-    right: 34px;
+    left: 169px;
     bottom: 12px;
     width: 50px;
     height: 40px;
@@ -389,7 +400,7 @@ defineProps({
 
 .mascot-scene__ballot-paper {
     position: absolute;
-    right: 48px;
+    left: 183px;
     bottom: 44px;
     width: 22px;
     height: 26px;
@@ -423,11 +434,11 @@ defineProps({
     animation: tt-tally 1.9s ease-out infinite;
 }
 .mascot-scene__tally--guilty {
-    left: 8px; top: 6px;
+    left: 21px; top: 6px;
     background: var(--tt-green);
 }
 .mascot-scene__tally--not-guilty {
-    left: 34px; top: 34px;
+    left: 47px; top: 34px;
     background: var(--tt-blue);
     animation-delay: 0.55s;
 }

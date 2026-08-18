@@ -359,4 +359,77 @@ class ChallengeMapperXmlTest {
         assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
                 "조인이 없으면 내가 속하지 않은 그룹의 재판이 할 일 목록에 섞인다");
     }
+
+    /* ══ 투표 (이슈 #171) ═══════════════════════════════════════════════ */
+
+    @Test
+    @DisplayName("VoteMapper XML 이 파싱되고 모든 구문이 등록된다")
+    void parsesVoteMapper() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String namespace = VoteMapper.class.getName();
+        assertTrue(configuration.hasStatement(namespace + ".insert"));
+        assertTrue(configuration.hasStatement(namespace + ".existsByIndictmentIdAndUserId"));
+        assertTrue(configuration.hasStatement(namespace + ".findCommentsByIndictmentId"));
+    }
+
+    /**
+     * 표 한 장은 {@code (group_id, user_id, indictment_id)} 복합 PK 로 식별된다.
+     * {@code group_id} 가 빠지면 NOT NULL 로 INSERT 자체가 죽고,
+     * {@code ON DUPLICATE KEY UPDATE} 가 붙으면 <b>투표 수정이 조용히 생긴다</b> —
+     * 마감 직전 눈치싸움을 막으려고 일부러 없앤 경로다(이슈 #171 결정).
+     */
+    @Test
+    @DisplayName("투표 INSERT 는 복합 PK 3개를 모두 쓰고 갱신 경로가 없다")
+    void voteInsertHasNoUpdatePath() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String sql = sqlOf(configuration, VoteMapper.class.getName() + ".insert");
+
+        assertTrue(sql.contains("group_id"), "복합 PK 의 일부라 빠지면 INSERT 가 죽는다");
+        assertTrue(sql.contains("user_id"));
+        assertTrue(sql.contains("indictment_id"));
+        assertFalse(sql.contains("ON DUPLICATE KEY"),
+                "UPSERT 로 바뀌면 재투표가 열려 개표 직전 표를 갈아탈 수 있다");
+    }
+
+    /**
+     * 코멘트는 <b>익명</b>이다. {@code tbl_user} 를 조인하거나 {@code user_id} 를 뽑는 순간
+     * 「누가 뭐라고 했는지」가 응답에 실린다. 정렬도 {@code created_at} 뿐이다 —
+     * {@code user_id} 를 tie-breaker 로 넣으면 순서에서 투표자가 읽힌다.
+     */
+    @Test
+    @DisplayName("판결 코멘트 조회는 투표자를 식별할 수 있는 컬럼을 뽑지 않는다")
+    void voteCommentsStayAnonymous() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String sql = sqlOf(configuration,
+                VoteMapper.class.getName() + ".findCommentsByIndictmentId");
+
+        assertFalse(sql.contains("tbl_user"), "닉네임을 붙이는 순간 익명이 아니다");
+        assertFalse(sql.contains("user_id"), "user_id 가 내려가면 화면이 투표자를 특정할 수 있다");
+        assertFalse(sql.contains("verdict"), "코멘트 옆에 유무죄가 붙으면 코멘트가 곧 표가 된다");
+        assertTrue(sql.contains("TRIM(comment) <> ''"),
+                "공백만 남은 코멘트가 목록에 빈 줄로 뜬다");
+    }
+
+    /**
+     * 표 분포는 SQL 이 <b>항상</b> 센다. 가리는 일은 {@code GroupTrialService#isCounted} 한 곳이
+     * 맡는다 — SQL 을 상태별로 나누면 이슈 #172 가 개표를 공개할 때 조건을 두 군데서 풀어야 하고
+     * 한쪽을 빠뜨리면 투표 중에 비율이 새어 편승 투표가 생긴다.
+     */
+    @Test
+    @DisplayName("재판 상세는 유죄·무죄 표수를 상태와 무관하게 센다")
+    void trialDetailCountsBothVerdicts() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findTrialDetail");
+
+        assertTrue(sql.contains("v.verdict = 'GUILTY') AS guilty_count"),
+                "guilty_count 가 없으면 개표 후 화면이 표 분포를 그릴 수 없다");
+        assertTrue(sql.contains("v.verdict = 'INNOCENT') AS innocent_count"),
+                "innocent_count 가 없으면 개표 후 화면이 표 분포를 그릴 수 없다");
+        assertFalse(sql.contains("i.status = 'GUILTY'"),
+                "노출 조건을 SQL 에 넣으면 #172 가 두 군데를 풀어야 한다");
+    }
 }
