@@ -706,5 +706,11 @@ class ChallengeGroupServiceTest {
                     .map(GroupMember::getUserId)
                     .toList();
         }
+
+        /** 목숨 차감(이슈 #172)은 이 테스트의 관심사가 아니다. 그룹 생성·참여만 본다. */
+        @Override
+        public int decreaseLife(Long groupId, Long userId) {
+            return 0;
+        }
     }
 }

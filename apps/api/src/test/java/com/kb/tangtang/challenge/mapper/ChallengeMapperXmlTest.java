@@ -92,6 +92,24 @@ class ChallengeMapperXmlTest {
         String namespace = GroupMemberMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".insertMember"));
         assertTrue(configuration.hasStatement(namespace + ".findByGroupIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findUserIdsByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".decreaseLife"));
+    }
+
+    /**
+     * {@code lives_count} 는 UNSIGNED 가 아니라 그냥 INT 다. 조건이 빠지면 −1 이 그대로 저장되고,
+     * 종료 후 확정 배치의 「{@code lives_count = 0} 이면 탈락」 판정이 <b>조용히 빗나간다</b> —
+     * 탈락해야 할 사람이 생존자로 순위에 오른다.
+     */
+    @Test
+    @DisplayName("목숨 차감은 0 이하로 내려가지 않는다")
+    void decreaseLifeGuardsAgainstNegative() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupMemberMapper.xml");
+
+        String sql = sqlOf(configuration, GroupMemberMapper.class.getName() + ".decreaseLife");
+
+        assertTrue(sql.contains("lives_count > 0"),
+                "조건이 없으면 목숨이 음수가 되어 탈락 판정이 어긋난다");
     }
 
     @Test
@@ -106,6 +124,28 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findDeductionOverflow"));
         assertTrue(configuration.hasStatement(namespace + ".findMemberConsumption"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialTransactions"));
+        assertTrue(configuration.hasStatement(namespace + ".addVerdictDeduction"));
+    }
+
+    /**
+     * 무죄 감액은 <b>대입이 아니라 누적</b>이어야 한다. 기간평가는 기간 전체의 기소가
+     * {@code end_date} 행 한 줄에 붙고 일일평가도 같은 행이 다시 기소될 수 있어, 대입으로 쓰면
+     * 앞선 무죄의 감액이 사라진다.
+     *
+     * <p>{@code effective_amount} 는 STORED 생성 컬럼이라 SET 절에 넣는 순간 UPDATE 가 죽는다.
+     */
+    @Test
+    @DisplayName("판결 감액은 누적이고 생성 컬럼을 건드리지 않는다")
+    void verdictDeductionAccumulates() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+
+        String sql = sqlOf(configuration,
+                GroupChallengeResultMapper.class.getName() + ".addVerdictDeduction");
+
+        assertTrue(sql.contains("verdict_deduction_amount = verdict_deduction_amount + ?"),
+                "대입으로 바꾸면 같은 행의 앞선 무죄 감액이 지워진다");
+        assertFalse(sql.contains("effective_amount"),
+                "effective_amount 는 생성 컬럼이라 UPDATE 대상이 될 수 없다");
     }
 
     /**
@@ -173,6 +213,8 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".moveToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".confirmConfession"));
         assertTrue(configuration.hasStatement(namespace + ".moveExpiredDefensesToVoting"));
+        assertTrue(configuration.hasStatement(namespace + ".findVotingToTally"));
+        assertTrue(configuration.hasStatement(namespace + ".confirmVerdict"));
     }
 
     @Test
@@ -241,6 +283,56 @@ class ChallengeMapperXmlTest {
 
         assertTrue(sql.contains("INTERVAL ? HOUR"),
                 "시간 값이 SQL 에 상수로 박히면 프로퍼티를 바꿔도 배치가 따라오지 않는다");
+    }
+
+    /**
+     * 개표 대상은 「투표 마감이 지났다 <b>OR</b> 투표할 사람이 전부 던졌다」 둘 다다(이슈 #172 결정 2).
+     *
+     * <p>앞쪽만 남으면 전원이 투표를 끝내고도 최대 30시간을 기다려야 하고, 뒤쪽만 남으면
+     * <b>한 명이라도 투표를 안 하면 재판이 영원히 끝나지 않는다.</b> 어느 쪽이 빠져도 화면에는
+     * 아무 오류가 뜨지 않고 「투표 완료」인 채로 멈춰 있을 뿐이라 SQL 모양으로 못박는다.
+     */
+    @Test
+    @DisplayName("개표 대상 조회는 마감 경과와 전원 투표를 모두 건다")
+    void tallyPicksDeadlinePassedOrEveryoneVoted() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findVotingToTally");
+
+        assertTrue(sql.contains("i.status = 'VOTING'"),
+                "VOTING 만 잡아야 혐의 인정·확정된 재판이 자동으로 빠진다");
+
+        /* 변론 + 투표 두 구간이라 파라미터가 둘이다. 하나만 남으면 마감 시점이 어긋난다 */
+        int first = sql.indexOf("INTERVAL ? HOUR");
+        assertTrue(first >= 0 && sql.indexOf("INTERVAL ? HOUR", first + 1) > first,
+                "변론·투표 시간을 각각 파라미터로 받지 않으면 마감 시점이 화면과 어긋난다");
+
+        assertTrue(sql.contains("(SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) >="),
+                "던진 표 수를 세지 않으면 조기 확정이 사라져 전원 투표해도 30시간을 기다린다");
+        assertTrue(sql.contains(
+                        "(SELECT COUNT(*) FROM tbl_group_member gm WHERE gm.group_id = i.group_id) - 1"),
+                "분모에서 피고를 빼지 않으면 전원이 투표해도 조건이 성립하지 않는다");
+    }
+
+    /**
+     * {@code WHERE status = 'VOTING'} 이 개표의 <b>멱등 근거</b>다. 배치를 두 번 돌리거나 두 인스턴스가
+     * 같은 틱을 잡으면 두 번째가 0행을 바꾸고, 서비스는 그 0 을 보고 뒤처리를 건너뛴다
+     * ({@code GroupVerdictTransitionService#confirm}). 조건이 빠지면 <b>목숨이 두 번 깎이고</b>
+     * 감액이 두 번 더해지며 알림도 두 번 나간다.
+     */
+    @Test
+    @DisplayName("판결 확정 UPDATE 는 VOTING 조건 없이 실행되지 않는다")
+    void confirmVerdictGuardsVotingStatus() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".confirmVerdict");
+
+        assertTrue(sql.contains("status = 'VOTING'"),
+                "조건이 없으면 배치가 두 번 돌 때 목숨이 두 번 깎인다");
+        assertTrue(sql.contains("result = ?"),
+                "result 를 빼면 ck_ind_result 가 UPDATE 를 거부한다");
+        assertTrue(sql.contains("ai_verdict_reason = ?"),
+                "사유를 싣지 않으면 탕이 판결 화면에 근거가 비어 보인다");
     }
 
     /**

@@ -40,4 +40,22 @@
           FROM tbl_group_member
          WHERE group_id = #{groupId}
     </select>
+
+    <!--
+      유죄 확정 시 목숨 차감 (이슈 #172).
+
+      ⚠ lives_count &gt; 0 이 음수 방어다. lives_count 는 UNSIGNED 가 아니라 그냥 INT 라
+        조건이 없으면 -1 이 그대로 저장되고, 종료 후 확정 배치의 "lives_count = 0 이면 탈락"
+        판정이 조용히 빗나간다.
+
+      읽고 빼서 쓰지 않고 SQL 한 문장으로 깎는다 — 같은 사람의 재판 두 건이 같은 틱에
+      확정되면 읽기-쓰기 사이가 겹친다.
+    -->
+    <update id="decreaseLife">
+        UPDATE tbl_group_member
+           SET lives_count = lives_count - 1
+         WHERE group_id = #{groupId}
+           AND user_id = #{userId}
+           AND lives_count &gt; 0
+    </update>
 </mapper>

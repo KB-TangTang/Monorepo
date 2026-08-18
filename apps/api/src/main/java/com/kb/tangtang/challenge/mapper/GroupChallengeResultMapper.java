@@ -7,6 +7,7 @@ import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -119,4 +120,25 @@ public interface GroupChallengeResultMapper {
                                                     @Param("userId") Long userId,
                                                     @Param("fromDate") LocalDate fromDate,
                                                     @Param("toDate") LocalDate toDate);
+
+    /**
+     * 무죄 확정 — 인정된 감액을 결산 행에 반영한다 (이슈 #172).
+     *
+     * <p>대입이 아니라 <b>누적</b>({@code = verdict_deduction_amount + #{amount}})이다. 기간평가는
+     * 기간 전체의 기소가 {@code end_date} 행 한 줄에 붙고, 일일평가도 같은 행이 다시 기소될 수
+     * 있다 — 대입으로 쓰면 앞선 무죄의 감액이 사라진다.
+     *
+     * <p><b>{@code effective_amount} 는 건드리지 않는다.</b> STORED 생성 컬럼이라 UPDATE 절에
+     * 넣으면 SQL 이 죽는다. 이 한 줄이 바뀌면 DB 가 알아서 다시 계산한다.
+     * ({@code db/migration/20260814_group_challenge_verdict_deduction.sql})
+     *
+     * <p>감액이 집계액을 넘어서는 상태는 막지 않는다 — 환불·카테고리 재분류로 실제로 생기고,
+     * {@code effective_amount} 의 {@code GREATEST(..., 0)} 가 0 으로 받아 준다.
+     * {@link #findDeductionOverflow} 가 그 상태를 로그로 남긴다.
+     *
+     * @param resultId {@code tbl_indictment.result_id}. 기소가 붙어 있던 그 행이다
+     * @return 바꾼 행 수. 결산 행이 지워졌으면 0 이다(정상 경로에서는 일어나지 않는다)
+     */
+    int addVerdictDeduction(@Param("resultId") Long resultId,
+                            @Param("amount") BigDecimal amount);
 }

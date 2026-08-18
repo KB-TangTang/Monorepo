@@ -300,4 +300,86 @@
          WHERE status = 'DEFENSE_WAIT'
            AND created_at &lt;= DATE_SUB(NOW(), INTERVAL #{defenseHours} HOUR)
     </update>
+
+    <!--
+      ── 이하 개표·판결 확정 (이슈 #172) ──────────────────────────────────
+    -->
+
+    <!--
+      개표 대상. 「투표 마감이 지났다 OR 투표할 사람이 전부 던졌다」 둘 중 하나면 잡는다.
+
+      ⚠ 조기 확정(뒤쪽 조건)이 이 배치의 핵심이다. 마감만 보면 전원이 5분 만에 투표를 끝낸
+        재판도 기소 + 30시간을 채워야 결과가 나온다. 그 사이 화면은 「투표 완료」에서 멈춰
+        있어 사용자는 서비스가 죽은 줄 안다. (팀 결정 2026-08-18)
+
+      분모는 totalVoters 조각(참여자 - 피고 1명)을 그대로 쓴다. 조건과 화면의 「n/m명 투표」가
+      다른 식을 쓰면 화면이 4/4 인데 개표가 안 되는 상태가 생긴다.
+
+      ⚠ 피고 혼자인 그룹은 totalVoters 가 0 이라 COUNT(*) &gt;= 0 이 항상 참이다 — 즉시 잡혀
+        0표 무죄로 확정된다. 의도한 동작이다. 투표할 사람이 없는 재판을 30시간 매달아 둘 이유가 없다.
+
+      마감 시각은 created_at + defense-hours + vote-hours 다(application.properties:139-146).
+      DATE_SUB 를 두 번 겹친 이유는 INTERVAL 의 피연산자에 파라미터 두 개를 더하는 식
+      (INTERVAL (? + ?) HOUR)이 드라이버·버전에 따라 타입 추론에 걸릴 수 있어서다.
+      결과는 같고 ${} 를 쓰지 않는다.
+
+      변론 유무를 보지 않는다. 무변론 재판도 그대로 투표에 올라와 있고 같은 규칙으로 개표된다
+      (팀 결정 2026-08-18 — 변론이 없다고 자동 유죄로 만들지 않는다).
+
+      LEFT JOIN tbl_defense 는 행을 늘리지 않는다 — uk_def_indictment 로 기소당 변론이 1건이다.
+      증빙 이미지는 조인하지 않는다(그쪽은 여러 장이라 행이 늘어난다).
+    -->
+    <select id="findVotingToTally" resultType="com.kb.tangtang.challenge.domain.VerdictTallyRow">
+        SELECT i.id        AS indictment_id,
+               i.group_id  AS group_id,
+               i.user_id   AS user_id,
+               i.result_id AS result_id,
+               <include refid="displayNickname"/> AS nickname,
+               i.message   AS message,
+               g.eval_type AS eval_type,
+               c.category_name AS category_name,
+               g.limit_amount  AS limit_amount,
+               <include refid="periodConsumption"/> AS current_amount,
+               <include refid="exceededAmount"/>    AS exceeded_amount,
+               d.content              AS defense_content,
+               d.actual_burden_amount AS actual_burden_amount,
+               d.deduction_amount     AS deduction_amount,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'GUILTY')   AS guilty_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'INNOCENT') AS innocent_count,
+               <include refid="totalVoters"/> AS total_voters
+        <include refid="fromIndictment"/>
+        JOIN tbl_user u ON u.id = i.user_id
+        LEFT JOIN tbl_category c ON c.id = g.category_id
+        LEFT JOIN tbl_defense d ON d.indictment_id = i.id
+        WHERE i.status = 'VOTING'
+          AND ( i.created_at &lt;= DATE_SUB(DATE_SUB(NOW(), INTERVAL #{defenseHours} HOUR),
+                                          INTERVAL #{voteHours} HOUR)
+                OR (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id)
+                     &gt;= <include refid="totalVoters"/> )
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      판결 확정.
+
+      ⚠ WHERE status = 'VOTING' 을 지우면 멱등이 깨진다. 호출부가 0행을 보고 후처리(목숨 차감·
+        감액 반영·이벤트)를 통째로 건너뛰는 구조라, 조건이 없으면 배치가 두 번 도는 것만으로
+        같은 피고의 목숨이 두 번 깎인다.
+
+      result 는 ck_ind_result 가 상태와의 조합만 허용해서 함께 쓴다(GUILTY=1 · INNOCENT=0).
+
+      ai_verdict_reason 은 AI_JUDGMENT 가 아니면 NULL 이어야 한다(ck_ind_ai_reason).
+      NULL 을 그대로 바인딩하므로 jdbcType 을 명시한다 — 없으면 드라이버가 타입을 못 정한다.
+    -->
+    <update id="confirmVerdict">
+        UPDATE tbl_indictment
+           SET status = #{status},
+               result = #{result},
+               verdict_method = #{verdictMethod},
+               ai_verdict_reason = #{aiVerdictReason,jdbcType=VARCHAR}
+         WHERE id = #{indictmentId}
+           AND status = 'VOTING'
+    </update>
 </mapper>

@@ -23,4 +23,18 @@ public interface GroupMemberMapper {
 
     /** 채팅 참여자 캐시를 채울 때 쓴다. 캐시가 살아 있으면 호출되지 않는다 */
     List<Long> findUserIdsByGroupId(@Param("groupId") long groupId);
+
+    /**
+     * 유죄 확정 — 목숨 1개 차감 (이슈 #172).
+     *
+     * <p><b>음수 방어를 SQL 이 한다</b>({@code AND lives_count > 0}). 자바에서 읽고 빼서 쓰면
+     * 읽기와 쓰기 사이에 다른 재판이 같은 사람의 목숨을 깎을 수 있다 — 하루에 재판이 여러 건
+     * 확정되는 그룹에서 실제로 겹친다.
+     *
+     * <p>「하루 1목숨」 상한을 세는 카운터는 두지 않는다. 기소가 {@code uk_ind_result} 로
+     * 결과 행당 1건뿐이라 같은 날 같은 사람이 두 번 기소될 수 없다.
+     *
+     * @return 바꾼 행 수. 이미 0목숨이면 0 이다(정상. 탈락 여부는 종료 후 확정 배치가 정한다)
+     */
+    int decreaseLife(@Param("groupId") Long groupId, @Param("userId") Long userId);
 }

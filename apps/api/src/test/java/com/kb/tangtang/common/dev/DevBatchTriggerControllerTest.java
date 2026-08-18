@@ -3,6 +3,7 @@ package com.kb.tangtang.common.dev;
 import com.kb.tangtang.challenge.service.ChallengeGroupStatusBatchService;
 import com.kb.tangtang.challenge.service.GroupChallengeEvaluationBatchService;
 import com.kb.tangtang.challenge.service.GroupTrialDeadlineBatchService;
+import com.kb.tangtang.challenge.service.GroupVerdictBatchService;
 import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderBatchService;
 import com.kb.tangtang.fixedexpense.service.FixedExpensePaymentReminderDevService;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,8 @@ class DevBatchTriggerControllerTest {
             mock(GroupChallengeEvaluationBatchService.class);
     private final GroupTrialDeadlineBatchService trialDeadlineBatchService =
             mock(GroupTrialDeadlineBatchService.class);
+    private final GroupVerdictBatchService verdictBatchService =
+            mock(GroupVerdictBatchService.class);
     private final FixedExpensePaymentReminderBatchService paymentReminderBatchService =
             mock(FixedExpensePaymentReminderBatchService.class);
     private final FixedExpensePaymentReminderDevService paymentReminderDevService =
@@ -42,6 +45,7 @@ class DevBatchTriggerControllerTest {
                 groupBatchService,
                 evaluationBatchService,
                 trialDeadlineBatchService,
+                verdictBatchService,
                 paymentReminderBatchService,
                 paymentReminderDevService);
         return MockMvcBuilders.standaloneSetup(controller)

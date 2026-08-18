@@ -278,4 +278,22 @@
            <include refid="consumptionFilter"/>
          ORDER BY t.tr_date, t.tr_time, t.id
     </select>
+
+    <!--
+      무죄 확정 시 인정된 감액 반영 (이슈 #172).
+
+      ⚠ 대입이 아니라 누적이다. 기간평가는 기간 전체의 기소가 end_date 행 한 줄에 붙고
+        일일평가도 같은 행이 다시 기소될 수 있다. 대입으로 쓰면 앞선 무죄의 감액이 사라진다.
+
+      ⚠ effective_amount 는 SET 절에 넣지 않는다. STORED 생성 컬럼이라 쓰려고 하면 SQL 이 죽는다.
+        이 컬럼만 바꾸면 DB 가 GREATEST(daily_amount - verdict_deduction_amount, 0) 로 다시 계산한다.
+        (20260814_group_challenge_verdict_deduction.sql)
+
+      감액이 집계액을 넘어도 막지 않는다 — 위 findDeductionOverflow 주석 참고.
+    -->
+    <update id="addVerdictDeduction">
+        UPDATE tbl_group_challenge_daily_result
+           SET verdict_deduction_amount = verdict_deduction_amount + #{amount}
+         WHERE id = #{resultId}
+    </update>
 </mapper>
