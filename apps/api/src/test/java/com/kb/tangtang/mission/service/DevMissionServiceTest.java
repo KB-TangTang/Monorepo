@@ -30,7 +30,7 @@ class DevMissionServiceTest {
             Instant.parse("2026-08-12T15:30:00Z"), ZoneId.of("UTC"));
 
     @Mock private RelativeMissionAssignmentMapper assignmentMapper;
-    @Mock private RelativeMissionAssignmentService assignmentService;
+    @Mock private DailyMissionAssignmentService assignmentService;
     @Mock private TodayMissionService todayMissionService;
 
     @Test
