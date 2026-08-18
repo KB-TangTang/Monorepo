@@ -86,6 +86,82 @@ test('탐지 후보 상세는 방문 이력을 한 단계씩 되돌린다', () =
     );
 });
 
+/*
+ * 그룹챌린지 판결 플로우 회귀 방지 (이슈 #172).
+ *
+ * 홈 →(push) 상세 →(push) 재판현황 →(push) 최종판결 →(push) 판결상세 순으로 쌓인 뒤
+ * 판결 화면의 「그룹 화면으로 돌아가기」가 `push` 면 상세가 스택 맨 위에 다시 얹힌다.
+ * 그 상태에서 상세의 뒤로가기가 `router.back()` 이면 방금 본 판결문으로 되돌아간다.
+ */
+const RETURNS_TO_DETAIL = [
+    ['재판 진행 현황', 'src/views/challenge/group/judgment/TrialProgressView.vue'],
+    ['최종 판결', 'src/views/challenge/group/judgment/VerdictResultView.vue'],
+    ['판결 상세', 'src/views/challenge/group/judgment/VerdictDetailView.vue'],
+    ['탕이 판결 결과', 'src/views/challenge/group/judgment/GroupAiVerdictResultView.vue'],
+];
+
+for (const [label, path] of RETURNS_TO_DETAIL) {
+    test(`${label} 화면은 그룹 상세로 replace 로 돌아간다`, () => {
+        const src = source(path);
+        assert.ok(
+            !/router\.push\(\s*\{[^}]*groupChallengeDetail/s.test(src),
+            `${path}: 상세로 push 하고 있다 — 판결 플로우 위에 상세가 다시 쌓인다`,
+        );
+        assert.ok(
+            /router\.replace\(\s*\{[^}]*groupChallengeDetail/s.test(src),
+            `${path}: 상세로 돌아가는 replace 가 없다`,
+        );
+    });
+}
+
+test('공용 뒤로가기 헤더는 @back 을 건 화면에 목적지를 넘긴다', () => {
+    /*
+     * `defineEmits` 가 없으면 `@back` 은 선언되지 않은 리스너로 루트 엘리먼트에 흘러가
+     * **버튼을 눌러도 호출되지 않는다.** 위 RETURNS_TO_DETAIL 검사는 소스만 보기 때문에
+     * 이 회귀를 잡지 못한다 — 헤더가 emit 을 잃으면 replace 는 죽은 코드가 된다.
+     */
+    const src = source('src/components/common/BaseBackHeader.vue');
+
+    assert.match(src, /defineEmits\(\['back'\]\)/, 'BaseBackHeader 가 back 을 emit 하지 않는다');
+    assert.ok(
+        /onBack/.test(src),
+        'BaseBackHeader 가 부모 리스너 유무를 보지 않는다 — router.back() 과 부모 이동이 겹친다',
+    );
+});
+
+test('재판 종착 화면의 좌상단은 뒤로가기가 아니라 닫기다', () => {
+    /*
+     * 탕이 판결 결과 뒤에는 판사봉 애니메이션(`groupAiVerdict`)밖에 없다.
+     * 화살표를 두면 판결을 확인한 사용자가 방금 본 연출을 다시 본다.
+     */
+    const src = source('src/views/challenge/group/judgment/GroupAiVerdictResultView.vue');
+
+    assert.ok(src.includes('nav-action="close"'), '탕이 판결 결과 헤더가 아직 뒤로가기 화살표다');
+    assert.ok(src.includes('@close="goGroupHome"'), '닫기가 그룹 상세로 연결되지 않았다');
+
+    /* 닫기는 히스토리를 밟지 않는다 — 헤더가 router.back() 을 부르면 X 를 눌러도 애니메이션이 돈다. */
+    const header = source('src/components/challenge/group/DefenseCourtHeader.vue');
+    assert.match(
+        header,
+        /navAction === 'close'\)\s*\{\s*emit\('close'\);\s*return;/,
+        'DefenseCourtHeader 의 닫기가 router.back() 을 함께 부른다',
+    );
+});
+
+test('그룹챌린지 상세의 뒤로가기는 히스토리가 아니라 그룹챌린지 홈으로 간다', () => {
+    const src = source('src/views/challenge/group/GroupChallengeDetailView.vue');
+
+    assert.ok(
+        !/function goBack\(\) \{\s*router\.back\(\);\s*\}/.test(src),
+        '상세가 router.back() 이면 재판·판결 플로우로 되돌아간다',
+    );
+    assert.match(
+        src,
+        /function goBack\(\) \{\s*router\.push\(\{ name: 'groupChallenge' \}\);\s*\}/,
+        '상세 뒤로가기는 그룹챌린지 홈으로 명시 이동해야 한다',
+    );
+});
+
 test('월간 소비 리포트와 챌린지 리포트에는 좌상단 뒤로가기를 표시하지 않는다', () => {
     const monthlyReport = source('src/views/report/MonthlyConsumptionReportView.vue');
     const challengeReport = source('src/views/challenge/report/ChallengeReportView.vue');

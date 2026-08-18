@@ -32,8 +32,13 @@ onMounted(async () => {
     verdict.value = toVerdictScreen(loaded);
 });
 
+/*
+ * 판결 플로우 위에 상세가 다시 쌓이지 않도록 `replace` 로 돌아간다(이슈 #172).
+ * 헤더 X 와 하단 「그룹 화면으로 돌아가기」가 같은 곳으로 간다 — 이 화면은 재판의 종착점이라
+ * 뒤로 갈 곳이 판사봉 애니메이션(`groupAiVerdict`)뿐이다.
+ */
 function goGroupHome() {
-    router.push({ name: 'groupChallengeDetail', params: { id: route.params.id } });
+    router.replace({ name: 'groupChallengeDetail', params: { id: route.params.id } });
 }
 
 function goDetail() {
@@ -43,7 +48,7 @@ function goDetail() {
 
 <template>
     <main v-if="verdict" class="result-page">
-        <DefenseCourtHeader>
+        <DefenseCourtHeader nav-action="close" @close="goGroupHome">
             <template #nav-right
                 ><span class="result-page__case">{{ verdict.caseNumber }}</span></template
             >

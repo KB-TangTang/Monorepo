@@ -58,8 +58,23 @@ function goDetail() {
     });
 }
 
+/*
+ * 헤더 뒤로가기와 하단 CTA 는 역할이 다르다(이슈 #172).
+ *
+ * 이 화면으로 오는 push 진입로는 `TrialProgressView.goVerdict:92` 하나뿐이라
+ * (나머지 `verdictRouteName` 사용처는 잘못 들어온 화면을 고치는 `replace` 다)
+ * 히스토리는 항상 `상세 → 재판 진행 현황 → 최종 판결` 이다. 화살표는 한 단계만 되돌린다.
+ */
 function goBack() {
-    router.push({
+    router.back();
+}
+
+/*
+ * 하단 CTA 는 플로우 탈출이라 목적지를 명시한다. `push` 면 판결 위에 상세가 다시 얹혀
+ * 상세에서 뒤로가기를 눌렀을 때 방금 본 판결문이 나온다.
+ */
+function goGroupHome() {
+    router.replace({
         name: 'groupChallengeDetail',
         params: { id: route.params.id },
     });
@@ -74,7 +89,9 @@ function goBack() {
             <BaseBackHeader title="최종 판결" @back="goBack" />
             <div class="verdict-result__badges">
                 <span class="verdict-result__badge badge--eval">{{ verdict.evalLabel }}</span>
-                <span class="verdict-result__badge" :class="statusBadge.cls">{{ statusBadge.label }}</span>
+                <span class="verdict-result__badge" :class="statusBadge.cls">{{
+                    statusBadge.label
+                }}</span>
             </div>
         </div>
 
@@ -97,13 +114,19 @@ function goBack() {
             >
                 <span>판결 세부 정보 보기</span>
                 <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-                    <path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    <path
+                        d="M1 1l5 5-5 5"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
                 </svg>
             </button>
             <button
                 type="button"
                 class="verdict-result__btn verdict-result__btn--primary"
-                @click="goBack"
+                @click="goGroupHome"
             >
                 그룹 화면으로 돌아가기
             </button>
