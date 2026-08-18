@@ -266,6 +266,19 @@
     color: var(--tt-text);
 }
 
+.summary-card__value--group {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--tt-fs-body);
+    line-height: var(--tt-lh-snug);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.summary-card__value--success {
+    color: var(--tt-success);
+}
+
 .summary-card__amount {
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-section);
