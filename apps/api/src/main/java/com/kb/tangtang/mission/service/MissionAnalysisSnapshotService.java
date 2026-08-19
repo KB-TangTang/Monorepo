@@ -44,12 +44,8 @@ public class MissionAnalysisSnapshotService {
             return toDto(pendingSnapshots);
         }
 
-        boolean alreadyQualified = missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null;
-        if (!alreadyQualified && missionCategoryAnalysisService.hasInitialQualification(userId)) {
-            missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock));
-            alreadyQualified = true;
-        }
-        MissionCategoryAnalysisDto analysis = alreadyQualified
+        boolean qualified = ensureRelativeMissionQualification(userId);
+        MissionCategoryAnalysisDto analysis = qualified
                 ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId)
                 : missionCategoryAnalysisService.getCategoryAnalysis(userId);
         if (analysis.getTopCategories().isEmpty()) {
@@ -63,6 +59,18 @@ public class MissionAnalysisSnapshotService {
 
         missionAnalysisSnapshotMapper.insertSnapshots(newSnapshots);
         return toDto(newSnapshots);
+    }
+
+    @Transactional
+    public boolean ensureRelativeMissionQualification(long userId) {
+        if (missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null) {
+            return true;
+        }
+        if (!missionCategoryAnalysisService.hasInitialQualification(userId)) {
+            return false;
+        }
+        missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock).withNano(0));
+        return true;
     }
 
     @Transactional
