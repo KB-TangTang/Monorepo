@@ -6,6 +6,7 @@ import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
+import com.kb.tangtang.user.dto.PersonalMissionUnlockDto;
 import com.kb.tangtang.user.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -296,6 +297,25 @@ public class UserService {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
         return meOf(userId);
+    }
+
+    /** 데이터 부족을 거친 사용자에게만 맞춤 미션 개시 안내를 예약한다. */
+    @Transactional
+    public PersonalMissionUnlockDto syncPersonalMissionUnlock(long userId, Boolean enoughData) {
+        if (enoughData == null) {
+            throw new BusinessException("INVALID_REQUEST", "데이터 충족 여부가 필요합니다.");
+        }
+        userMapper.syncPersonalMissionUnlockStatus(userId, enoughData);
+        UserDto user = findActive(userId);
+        return PersonalMissionUnlockDto.from(user.getPersonalMissionUnlockStatus());
+    }
+
+    /** 맞춤 미션 개시 안내를 확인 처리한다. 이미 확인한 요청도 성공하는 멱등 연산이다. */
+    @Transactional
+    public PersonalMissionUnlockDto acknowledgePersonalMissionUnlock(long userId) {
+        userMapper.acknowledgePersonalMissionUnlock(userId);
+        UserDto user = findActive(userId);
+        return PersonalMissionUnlockDto.from(user.getPersonalMissionUnlockStatus());
     }
 
     /** 조회 → URL 조립 → DTO. 네 곳이 같은 일을 하므로 여기 모은다. */

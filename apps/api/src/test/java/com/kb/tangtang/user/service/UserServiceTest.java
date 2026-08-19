@@ -4,6 +4,7 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
+import com.kb.tangtang.user.domain.PersonalMissionUnlockStatus;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.mapper.UserMapper;
@@ -73,6 +74,7 @@ class UserServiceTest {
                 .name(name)
                 .status("ACTIVE")
                 .difficultyId(1L)
+                .personalMissionUnlockStatus(PersonalMissionUnlockStatus.UNTRACKED)
                 .build();
     }
 
@@ -406,6 +408,58 @@ class UserServiceTest {
 
         assertEquals("NOT_FOUND", ex.getCode());
         verify(userMapper, never()).findById(anyLong());
+    }
+
+    /* ── 맞춤 미션 개시 안내 (이슈 #129) ───────────────── */
+
+    @Test
+    @DisplayName("데이터 부족 상태를 동기화하면 서버 상태를 돌려준다")
+    void syncPersonalMissionUnlockInsufficient() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.INSUFFICIENT);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.syncPersonalMissionUnlock(USER_ID, false);
+
+        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID, false);
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, result.getStatus());
+        assertFalse(result.isShowUnlock());
+    }
+
+    @Test
+    @DisplayName("부족 상태를 거친 뒤 데이터가 충족되면 개시 안내를 노출한다")
+    void syncPersonalMissionUnlockPending() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.PENDING);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.syncPersonalMissionUnlock(USER_ID, true);
+
+        assertTrue(result.isShowUnlock());
+    }
+
+    @Test
+    @DisplayName("개시 안내 확인은 SEEN 상태를 돌려주며 재노출하지 않는다")
+    void acknowledgePersonalMissionUnlock() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.SEEN);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.acknowledgePersonalMissionUnlock(USER_ID);
+
+        verify(userMapper).acknowledgePersonalMissionUnlock(USER_ID);
+        assertEquals(PersonalMissionUnlockStatus.SEEN, result.getStatus());
+        assertFalse(result.isShowUnlock());
+    }
+
+    @Test
+    @DisplayName("데이터 충족 여부가 없으면 상태를 변경하지 않는다")
+    void syncPersonalMissionUnlockRequiresEnoughData() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.syncPersonalMissionUnlock(USER_ID, null));
+
+        assertEquals("INVALID_REQUEST", exception.getCode());
+        verify(userMapper, never()).syncPersonalMissionUnlockStatus(anyLong(), eq(false));
     }
 
     @Test

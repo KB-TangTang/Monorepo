@@ -6,18 +6,18 @@ import { formatWon } from '@/services/personalMissionFlow';
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
     difficulty: { type: Object, required: true },
+    loading: { type: Boolean, default: false },
+    errorMessage: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:modelValue', 'set-difficulty', 'view-mission']);
 
 function chooseDifficulty() {
     emit('set-difficulty');
-    emit('update:modelValue', false);
 }
 
 function viewMission() {
     emit('view-mission');
-    emit('update:modelValue', false);
 }
 </script>
 
@@ -72,8 +72,18 @@ function viewMission() {
                 </div>
             </section>
 
-            <BaseButton size="lg" block @click="chooseDifficulty">난이도 설정하기</BaseButton>
-            <button class="mission-unlock__later" type="button" @click="viewMission">
+            <p v-if="errorMessage" class="mission-unlock__error" role="alert">
+                {{ errorMessage }}
+            </p>
+            <BaseButton size="lg" block :loading="loading" @click="chooseDifficulty">
+                난이도 설정하기
+            </BaseButton>
+            <button
+                class="mission-unlock__later"
+                type="button"
+                :disabled="loading"
+                @click="viewMission"
+            >
                 지금 미션 보기
             </button>
         </div>
@@ -186,6 +196,12 @@ function viewMission() {
     background: transparent;
     border: 0;
     cursor: pointer;
+}
+
+.mission-unlock__error {
+    margin: 0 0 var(--tt-space-3);
+    color: var(--tt-danger);
+    font-size: var(--tt-fs-caption);
 }
 
 @media (max-width: 359px) {

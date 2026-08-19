@@ -45,4 +45,5 @@ public class UserDto {
     /* 튜토리얼 완료 시각. NULL 이면 아직 안 봤다는 뜻이다. (이슈 #128) */
     private java.time.LocalDateTime tutorialSeenAt;       // 메인(개인·대법원) MC_01_05
     private java.time.LocalDateTime groupTutorialSeenAt;  // 그룹(지방법원) GC_01_01
+    private com.kb.tangtang.user.domain.PersonalMissionUnlockStatus personalMissionUnlockStatus;
 }
