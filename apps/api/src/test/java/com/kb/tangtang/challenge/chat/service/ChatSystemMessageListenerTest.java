@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.chat.service;
 
 import com.kb.tangtang.challenge.chat.domain.ChatSystemMessageSpec;
 import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
+import com.kb.tangtang.challenge.chat.domain.ChatVerdictInfo;
 import com.kb.tangtang.challenge.domain.GroupTrialEvents;
 import com.kb.tangtang.notification.domain.NotificationType;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -72,11 +74,64 @@ class ChatSystemMessageListenerTest {
     @Test
     @DisplayName("판결 확정은 판결 카드 종류로 남기고 GROUP_JUDGMENT 로 알린다")
     void verdictUsesJudgmentType() {
-        listener.onVerdictConfirmed(new GroupTrialEvents.VerdictConfirmed(7L, 55L, "3만원 감액"));
+        listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
+                7L, 55L, "3만원 감액", false, 2, 4, 0));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
                 "3만원 감액", ChatSystemType.VERDICT_CONFIRMED,
-                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_JUDGMENT)));
+                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_JUDGMENT,
+                ChatVerdictInfo.byVote(false, 2, 4, 0))));
+    }
+
+    @Test
+    @DisplayName("유죄 판결은 표 분포와 차감된 목숨을 함께 싣는다 — 화면이 문구를 파싱하지 않게")
+    void guiltyVerdictCarriesVotesAndLives() {
+        listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
+                7L, 55L, "절약왕님 재판 — 유죄. 목숨 1개가 차감됐어요.", true, 4, 2, 1));
+
+        ChatVerdictInfo verdict = captureSpec().verdict();
+        assertEquals(ChatVerdictInfo.Outcome.GUILTY, verdict.outcome());
+        assertEquals(4, verdict.guiltyVotes());
+        assertEquals(2, verdict.innocentVotes());
+        assertEquals(1, verdict.livesLost());
+    }
+
+    @Test
+    @DisplayName("남은 목숨이 없어 못 깎은 유죄는 livesLost 가 0 이다 — 화면이 「1 차감」을 적으면 거짓말이 된다")
+    void guiltyWithoutRemainingLifeCarriesZero() {
+        listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
+                7L, 55L, "절약왕님 재판 — 유죄. 남은 목숨이 없어요.", true, 3, 1, 0));
+
+        ChatVerdictInfo verdict = captureSpec().verdict();
+        assertEquals(ChatVerdictInfo.Outcome.GUILTY, verdict.outcome());
+        assertEquals(0, verdict.livesLost());
+    }
+
+    @Test
+    @DisplayName("혐의 인정은 표 분포를 0:0 이 아니라 비운 채 싣는다 — 0:0 은 「아무도 안 던졌다」와 구별되지 않는다")
+    void confessionCarriesNoVotes() {
+        listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byConfession(
+                7L, 55L, "절약왕님이 혐의를 인정했어요. 유죄로 확정됩니다.", 1));
+
+        ChatVerdictInfo verdict = captureSpec().verdict();
+        assertEquals(ChatVerdictInfo.Outcome.GUILTY, verdict.outcome());
+        assertNull(verdict.guiltyVotes());
+        assertNull(verdict.innocentVotes());
+        assertEquals(1, verdict.livesLost());
+    }
+
+    @Test
+    @DisplayName("판결이 아닌 시스템 메시지에는 결과 값이 없다")
+    void nonVerdictMessagesCarryNoVerdict() {
+        listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
+
+        assertNull(captureSpec().verdict());
+    }
+
+    private ChatSystemMessageSpec captureSpec() {
+        ArgumentCaptor<ChatSystemMessageSpec> spec = ArgumentCaptor.forClass(ChatSystemMessageSpec.class);
+        verify(chatMessageService).postSystemMessage(anyLong(), spec.capture());
+        return spec.getValue();
     }
 
     @Test

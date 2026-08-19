@@ -231,7 +231,7 @@ class GroupTrialControllerTest {
 
     private static class StubDefenseService extends DefenseService {
         StubDefenseService() {
-            super(null, null, null, null, null, 6);
+            super(null, null, null, null, null, null, 6);
         }
     }
 

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
 import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
+import com.kb.tangtang.challenge.chat.domain.ChatVerdictInfo;
 import com.kb.tangtang.common.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,12 +113,13 @@ public class ChatMessageStore {
     /** 참여자 메시지(TEXT). 시스템 필드 없이 저장한다 */
     public ChatMessage append(long groupId, ChatMessageType type,
                               Long senderId, String senderNickname, String content) {
-        return append(groupId, type, senderId, senderNickname, content, null, null, null);
+        return append(groupId, type, senderId, senderNickname, content, null, null, null, null);
     }
 
     public ChatMessage append(long groupId, ChatMessageType type,
                               Long senderId, String senderNickname, String content,
-                              ChatSystemType systemType, String deepLink, String caseNo) {
+                              ChatSystemType systemType, String deepLink, String caseNo,
+                              ChatVerdictInfo verdict) {
         Long seq = redis.opsForValue().increment(ChatRedisKeys.seq(groupId));
         if (seq == null) {
             // 사용자 입력 문제가 아니라 Redis 연결·명령 실패이므로 400 이 아닌 500 이다.
@@ -125,7 +127,7 @@ public class ChatMessageStore {
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
         ChatMessage message = new ChatMessage(seq, type, senderId, senderNickname,
-                content, LocalDateTime.now(), systemType, deepLink, caseNo);
+                content, LocalDateTime.now(), systemType, deepLink, caseNo, verdict);
         redis.opsForList().rightPush(ChatRedisKeys.messages(groupId), toJson(message));
         if (seq == 1L) {
             // 이 방의 첫 메시지 — seq·messages 키가 INCR·RPUSH 로 방금 새로 생겼다.

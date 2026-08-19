@@ -79,9 +79,11 @@ public class GroupVerdictTransitionService {
             return false;
         }
 
-        String summary = decision.isGuilty() ? applyGuilty(row) : applyInnocent(row);
-        events.publishEvent(new GroupTrialEvents.VerdictConfirmed(
-                row.getGroupId(), row.getIndictmentId(), summary));
+        int livesLost = decision.isGuilty() ? deductLifeForGuilty(row.getGroupId(), row.getUserId()) : 0;
+        String summary = decision.isGuilty() ? guiltySummary(row, livesLost) : applyInnocent(row);
+        events.publishEvent(GroupTrialEvents.VerdictConfirmed.byVote(
+                row.getGroupId(), row.getIndictmentId(), summary, decision.isGuilty(),
+                row.getGuiltyCount(), row.getInnocentCount(), livesLost));
 
         log.info("판결 확정 indictmentId={} groupId={} userId={} {} / {}",
                 row.getIndictmentId(), row.getGroupId(), row.getUserId(),
@@ -90,16 +92,32 @@ public class GroupVerdictTransitionService {
     }
 
     /**
-     * 유죄 — 목숨 1개 차감.
+     * 유죄 확정의 공통 후처리 — 목숨 1개 차감.
+     *
+     * <p><b>유죄가 확정되는 경로는 둘이다</b> — 개표(이 클래스)와 혐의 인정
+     * ({@link DefenseService#confess}). 차감을 두 벌로 두면 한쪽만 고쳐지므로 여기 한 곳에 둔다.
+     * 실제로 이슈 #305 가 그 상태였다 — 혐의 인정 경로가 이 후처리를 타지 못해 목숨이 그대로였고,
+     * 일일평가 탈락 판정이 {@code lives_count = 0} 만 보기 때문에 혐의를 인정한 참여자는
+     * 유죄를 몇 번 받아도 탈락하지 않았다.
      *
      * <p>이미 0목숨이면 0행이 바뀐다. 오류가 아니다 — 남은 목숨이 없어도 판결 자체는 성립하고,
-     * 탈락 판정은 종료 후 확정 배치가 {@code lives_count = 0} 으로 따로 내린다.
-     * 대신 문구를 갈라 「차감됐어요」라고 거짓말하지 않는다.
+     * 탈락 판정은 종료 후 확정 배치가 따로 내린다.
+     *
+     * <p>호출자의 트랜잭션에 참여한다. 판결 UPDATE 가 되돌아가면 차감도 함께 되돌아가야 한다.
+     *
+     * @return 실제로 깎인 목숨 수. 남은 목숨이 없었으면 0
      */
-    private String applyGuilty(VerdictTallyRow row) {
-        int decreased = groupMemberMapper.decreaseLife(row.getGroupId(), row.getUserId());
+    public int deductLifeForGuilty(long groupId, long userId) {
+        int decreased = groupMemberMapper.decreaseLife(groupId, userId);
         if (decreased == 0) {
-            log.info("목숨 차감 없음 groupId={} userId={} — 남은 목숨이 0", row.getGroupId(), row.getUserId());
+            log.info("목숨 차감 없음 groupId={} userId={} — 남은 목숨이 0", groupId, userId);
+        }
+        return decreased;
+    }
+
+    /** 유죄 문구. 남은 목숨이 없었으면 「차감됐어요」라고 거짓말하지 않는다. */
+    private String guiltySummary(VerdictTallyRow row, int livesLost) {
+        if (livesLost == 0) {
             return nickname(row) + "님 재판 — 유죄. 남은 목숨이 없어요.";
         }
         return nickname(row) + "님 재판 — 유죄. 목숨 1개가 차감됐어요.";

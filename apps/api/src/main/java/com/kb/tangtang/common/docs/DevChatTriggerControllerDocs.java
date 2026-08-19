@@ -12,10 +12,11 @@ public interface DevChatTriggerControllerDocs {
 
     @ApiOperation(value = "[DEV] 재판 시스템 메시지 트리거",
             notes = "**로컬에서만 동작한다.** `DevEnvironmentGuard` 가 `app.env` 로 막는다. 인증도 필요하다.\n\n"
-                    + "재판 이벤트 발행부(이슈 #169~#172)가 붙기 전까지, 같은 이벤트를 직접 쏴서 채팅방에 "
-                    + "시스템 메시지가 정상 렌더링되는지 확인하는 용도다. 발행부가 붙으면 이 컨트롤러는 지운다.\n\n"
+                    + "같은 이벤트를 직접 쏴서 채팅방에 시스템 메시지가 정상 렌더링되는지 확인하는 용도다. "
+                    + "발행부가 붙은 뒤에도 남겨 둔다 - 카드만 확인하려고 실제 재판을 한 판 돌릴 필요는 없다.\n\n"
                     + "kind: `VIOLATION`(소비 위반 적발) · `TRIAL_OPENED`(재판 개시, 기본값) · "
-                    + "`DEFENSE`(변론 등록) · `VERDICT`(판결 확정)")
+                    + "`DEFENSE`(변론 등록) · `VERDICT_GUILTY`(유죄 판결, `VERDICT` 도 같다) · "
+                    + "`VERDICT_INNOCENT`(무죄 판결) · `VERDICT_CONFESSION`(혐의 인정 - 표 분포 없음)")
     ApiResponse<Void> publish(
             @ApiIgnore Long userId,
             @ApiParam(value = "그룹 ID", required = true, example = "1") long groupId,

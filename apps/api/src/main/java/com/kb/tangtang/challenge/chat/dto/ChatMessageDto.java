@@ -1,6 +1,7 @@
 package com.kb.tangtang.challenge.chat.dto;
 
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
+import com.kb.tangtang.challenge.chat.domain.ChatVerdictInfo;
 
 import java.time.LocalDateTime;
 
@@ -17,6 +18,8 @@ public class ChatMessageDto {
     private final String systemType;
     private final String deepLink;
     private final String caseNo;
+    /* 판결 확정 메시지에만 있다. 화면이 도장과 「투표 4:2 · 목숨 1 차감」을 그리는 값이다(이슈 #304) */
+    private final ChatVerdictInfo verdict;
 
     private ChatMessageDto(ChatMessage m) {
         this.messageId = m.getMessageId();
@@ -28,6 +31,7 @@ public class ChatMessageDto {
         this.systemType = m.getSystemType() == null ? null : m.getSystemType().name();
         this.deepLink = m.getDeepLink();
         this.caseNo = m.getCaseNo();
+        this.verdict = m.getVerdict();
     }
 
     public static ChatMessageDto from(ChatMessage m) {
@@ -43,4 +47,5 @@ public class ChatMessageDto {
     public String getSystemType() { return systemType; }
     public String getDeepLink() { return deepLink; }
     public String getCaseNo() { return caseNo; }
+    public ChatVerdictInfo getVerdict() { return verdict; }
 }

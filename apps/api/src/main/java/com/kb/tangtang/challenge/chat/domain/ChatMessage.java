@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
  *
  * <p>SYSTEM 메시지는 senderId 와 senderNickname 이 null 이고, 대신
  * {@code systemType} · {@code deepLink} · {@code caseNo} 를 갖는다. TEXT 메시지는 그 반대다.
- * 세 값은 나중에 추가돼서 <b>이전에 저장된 메시지에는 없다</b> — 읽을 때 null 로 복원되므로
+ * {@code verdict} 는 그중에서도 판결 확정 메시지에만 있다.
+ * 네 값은 나중에 추가돼서 <b>이전에 저장된 메시지에는 없다</b> — 읽을 때 null 로 복원되므로
  * 화면은 값이 없을 때도 그려질 수 있어야 한다.
  */
 public class ChatMessage {
@@ -27,6 +28,7 @@ public class ChatMessage {
     private final ChatSystemType systemType;
     private final String deepLink;
     private final String caseNo;
+    private final ChatVerdictInfo verdict;
 
     @JsonCreator
     public ChatMessage(@JsonProperty("messageId") long messageId,
@@ -37,7 +39,8 @@ public class ChatMessage {
                        @JsonProperty("sentAt") LocalDateTime sentAt,
                        @JsonProperty("systemType") ChatSystemType systemType,
                        @JsonProperty("deepLink") String deepLink,
-                       @JsonProperty("caseNo") String caseNo) {
+                       @JsonProperty("caseNo") String caseNo,
+                       @JsonProperty("verdict") ChatVerdictInfo verdict) {
         this.messageId = messageId;
         this.type = type;
         this.senderId = senderId;
@@ -47,13 +50,14 @@ public class ChatMessage {
         this.systemType = systemType;
         this.deepLink = deepLink;
         this.caseNo = caseNo;
+        this.verdict = verdict;
     }
 
     /** 참여자 메시지(TEXT) — 시스템 필드가 없다 */
     public static ChatMessage of(long messageId, ChatMessageType type, Long senderId,
                                   String senderNickname, String content, LocalDateTime sentAt) {
         return new ChatMessage(messageId, type, senderId, senderNickname, content, sentAt,
-                null, null, null);
+                null, null, null, null);
     }
 
     public long getMessageId() { return messageId; }
@@ -65,4 +69,7 @@ public class ChatMessage {
     public ChatSystemType getSystemType() { return systemType; }
     public String getDeepLink() { return deepLink; }
     public String getCaseNo() { return caseNo; }
+
+    /** 판결 확정 메시지에만 있다. 나머지는 null */
+    public ChatVerdictInfo getVerdict() { return verdict; }
 }
