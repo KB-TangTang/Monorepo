@@ -22,6 +22,8 @@ import {
     fetchMissionStreak,
     fetchTodayMission,
     reassignTodayMission as requestTodayMissionReassignment,
+    syncPersonalMissionUnlock as requestPersonalMissionUnlockSync,
+    acknowledgePersonalMissionUnlock as requestPersonalMissionUnlockAcknowledge,
 } from '@/api/personalMission';
 import { CHALLENGE_CONSENT_STATE } from '@/services/challengeConsent';
 import { normalizeMonthlyScore } from '@/services/missionMonthlyScore';
@@ -70,6 +72,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         pendingVerdict: null,
         courtMode: 'supreme',
         isHydrated: false,
+        missionUnlockStatus: 'UNTRACKED',
 
         /* mock 데이터 (API 교체 대상) */
         briefing: MOCK_TODAY_BRIEFING,
@@ -82,7 +85,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
     getters: {
         hasEnoughData(state) {
-            if (state.categoryAnalysis !== null) {
+        if (state.categoryAnalysis != null) {
                 return state.categoryAnalysis.relativeEligible === true;
             }
             return hasEnoughPersonalMissionData(state.profile);
@@ -192,6 +195,18 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         async loadMissionMonthlyScore() {
             const monthlyScore = await fetchMissionMonthlyScore();
             this.monthlyScore = normalizeMonthlyScore(monthlyScore);
+        },
+
+        async syncMissionUnlock() {
+            const result = await requestPersonalMissionUnlockSync(this.hasEnoughData);
+            this.missionUnlockStatus = result.status;
+            return Boolean(result.showUnlock);
+        },
+
+        async acknowledgeMissionUnlock() {
+            const result = await requestPersonalMissionUnlockAcknowledge();
+            this.missionUnlockStatus = result.status;
+            return result;
         },
 
         async loadPendingVerdict() {

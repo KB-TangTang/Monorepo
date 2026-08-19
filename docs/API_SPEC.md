@@ -658,6 +658,26 @@
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
 
+## 맞춤 미션 개시 안내 (이슈 #129)
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/main-challenge/mission-unlock/status` | Bearer | 현재 데이터 충족 여부를 동기화하고 안내 노출 여부 조회 |
+| PATCH | `/api/main-challenge/mission-unlock/acknowledge` | Bearer | 맞춤 미션 개시 안내 확인 처리 |
+
+상태는 `tbl_user.personal_mission_unlock_status` 한 컬럼에서
+`UNTRACKED → INSUFFICIENT → PENDING → SEEN` 순서로 전이한다. 처음부터 데이터가 충분한 사용자는
+`UNTRACKED`에 머물러 안내가 뜨지 않는다. `INSUFFICIENT`를 거친 사용자가 데이터 조건을 충족하면
+`PENDING`과 `showUnlock=true`를 반환하며, 확인 후에는 `SEEN`이라 다른 기기에서도 다시 뜨지 않는다.
+
+```json
+// POST request
+{ "enoughData": true }
+
+// response data
+{ "status": "PENDING", "showUnlock": true }
+```
+
 ## 오늘의 개인 미션 조회 (이슈 #160)
 
 | 메서드 | 경로 | 인증 | 설명 |
