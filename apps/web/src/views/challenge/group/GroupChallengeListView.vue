@@ -12,6 +12,7 @@ import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { fetchMyGroupChallenges } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import mascotCheering from '@/assets/images/emotions/09_cheering.png';
+import { entryState } from '@/utils/groupChallengeNavigation';
 
 const route = useRoute();
 const router = useRouter();
@@ -33,9 +34,7 @@ const STATUS_BY_TAB = {
 };
 
 /* 참여·생성 직후처럼 특정 탭을 열어야 하는 이동이 있다. 그때 ?tab= 으로 넘긴다. */
-const activeTab = ref(
-    Object.hasOwn(STATUS_BY_TAB, route.query.tab) ? route.query.tab : 'active',
-);
+const activeTab = ref(Object.hasOwn(STATUS_BY_TAB, route.query.tab) ? route.query.tab : 'active');
 
 const LIST_BY_TAB = {
     'pre-start': preStartList,
@@ -70,12 +69,22 @@ function goBack() {
     router.push({ name: 'groupChallenge' });
 }
 
+/* 초대 화면도 진입로가 셋이라 같은 표시를 남긴다(이슈 #303) */
 function handleInvite(challenge) {
-    router.push({ name: 'groupChallengeInvite', params: { groupId: challenge.id } });
+    router.push({
+        name: 'groupChallengeInvite',
+        params: { groupId: challenge.id },
+        state: entryState('groupChallengeList'),
+    });
 }
 
+/* 상세의 뒤로가기가 홈이 아니라 이 목록으로 돌아오도록 진입 표시를 남긴다(이슈 #303) */
 function goToDetail(challenge) {
-    router.push({ name: 'groupChallengeDetail', params: { id: challenge.id } });
+    router.push({
+        name: 'groupChallengeDetail',
+        params: { id: challenge.id },
+        state: entryState('groupChallengeList'),
+    });
 }
 
 /*

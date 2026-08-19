@@ -19,6 +19,7 @@ import { ArrowPathIcon } from '@heroicons/vue/24/outline';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import courtDistrictImg from '@/assets/images/court/court_district.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
+import { entryState } from '@/utils/groupChallengeNavigation';
 
 const router = useRouter();
 
@@ -61,9 +62,7 @@ async function loadMyTrials() {
     }
 }
 
-const todoItems = computed(() =>
-    myTrials.value.filter((item) => !doneIds.value.includes(item.id)),
-);
+const todoItems = computed(() => myTrials.value.filter((item) => !doneIds.value.includes(item.id)));
 
 const hasTodo = computed(() => todoItems.value.length > 0);
 const allDone = computed(() => todoItems.value.length === 0 && doneIds.value.length > 0);
@@ -82,7 +81,9 @@ let toastTimer = null;
 function flash(msg) {
     clearTimeout(toastTimer);
     toast.value = msg;
-    toastTimer = setTimeout(() => { toast.value = null; }, 1800);
+    toastTimer = setTimeout(() => {
+        toast.value = null;
+    }, 1800);
 }
 
 /* ── 판사 탕이 말풍선 ─────────────────── */
@@ -129,7 +130,7 @@ const devStateLabel = computed(() => DEV_STATES[devStateIndex.value]);
 function cycleDevState() {
     devStateIndex.value = (devStateIndex.value + 1) % DEV_STATES.length;
     if (devStateIndex.value === 1) {
-        doneIds.value = myTrials.value.map(i => i.id);
+        doneIds.value = myTrials.value.map((i) => i.id);
     } else if (devStateIndex.value === 2) {
         doneIds.value = [];
         devStateIndex.value = 0;
@@ -186,7 +187,12 @@ function goToCreate() {
  * 목록 카드처럼 채팅 영역을 따로 두지는 않는다. 홈 카드에는 대화 미리보기가 없어 나눌 자리가 없다.
  */
 function goToDetail(challenge) {
-    router.push({ name: 'groupChallengeDetail', params: { id: challenge.id } });
+    router.push({
+        name: 'groupChallengeDetail',
+        params: { id: challenge.id },
+        /* 상세가 스크롤 위치까지 되살리며 여기로 돌아오게 한다(이슈 #303) */
+        state: entryState('groupChallenge'),
+    });
 }
 
 function progressPercent(challenge) {
@@ -271,7 +277,8 @@ function livesColor(challenge) {
                     <div class="gc-challenge-card__top">
                         <span class="gc-challenge-card__name">{{ ch.groupName }}</span>
                         <span class="gc-challenge-card__info">
-                            {{ ch.evalType === 'DAILY' ? '일일결산' : '기간평가' }} · {{ ch.currentDay }}일차
+                            {{ ch.evalType === 'DAILY' ? '일일결산' : '기간평가' }} ·
+                            {{ ch.currentDay }}일차
                         </span>
                     </div>
                     <div class="gc-challenge-card__progress">
@@ -281,10 +288,7 @@ function livesColor(challenge) {
                                 :style="{ width: progressPercent(ch) + '%' }"
                             />
                         </div>
-                        <span
-                            class="gc-challenge-card__lives"
-                            :style="{ color: livesColor(ch) }"
-                        >
+                        <span class="gc-challenge-card__lives" :style="{ color: livesColor(ch) }">
                             {{ ch.livesCount }}/{{ ch.maxLives }}
                         </span>
                     </div>
@@ -327,21 +331,13 @@ function livesColor(challenge) {
         <GroupJoinCodeSheet v-model="showJoinSheet" />
 
         <!-- ===== 튜토리얼 오버레이 ===== -->
-        <GroupTutorialOverlay
-            v-model="showTutorial"
-            @complete="onTutorialComplete"
-        />
+        <GroupTutorialOverlay v-model="showTutorial" @complete="onTutorialComplete" />
 
         <!-- DEV: 데이터 출처 전환 -->
         <DevDataSourceFab />
 
         <!-- DEV: TO-DO 상태 전환 (데이터 출처 버튼 위에 쌓는다) -->
-        <button
-            v-if="isDev"
-            type="button"
-            class="gc-dev-fab"
-            @click="cycleDevState"
-        >
+        <button v-if="isDev" type="button" class="gc-dev-fab" @click="cycleDevState">
             <ArrowPathIcon class="gc-dev-fab__icon" />
             {{ devStateLabel }}
         </button>
@@ -361,7 +357,7 @@ function livesColor(challenge) {
 .gc-dev-fab {
     position: fixed;
     right: 16px;
-    bottom: calc(var(--tt-tabbar-height) + 56px);   /* DevDataSourceFab 위에 쌓는다 */
+    bottom: calc(var(--tt-tabbar-height) + 56px); /* DevDataSourceFab 위에 쌓는다 */
     height: 32px;
     padding: 0 12px;
     border-radius: var(--tt-radius-full);
@@ -402,7 +398,7 @@ function livesColor(challenge) {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, #1E2338 0%, #232842 60%, #283050 100%);
+    background: linear-gradient(180deg, #1e2338 0%, #232842 60%, #283050 100%);
 }
 .gc-header__glow {
     position: absolute;
@@ -504,8 +500,13 @@ function livesColor(challenge) {
     box-shadow: 0 2px 6px rgba(156, 123, 84, 0.15);
 }
 @keyframes gc-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
 }
 .gc-header__speech {
     flex: 1;
@@ -719,8 +720,14 @@ function livesColor(challenge) {
 }
 
 @keyframes tt-toastin {
-    0% { transform: translateY(10px); opacity: 0; }
-    100% { transform: none; opacity: 1; }
+    0% {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    100% {
+        transform: none;
+        opacity: 1;
+    }
 }
 
 @media (max-width: 390px) {

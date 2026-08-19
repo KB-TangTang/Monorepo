@@ -21,6 +21,7 @@ import GroupDetailRankingTable from '@/components/challenge/group/GroupDetailRan
 
 import { ChevronRightIcon } from '@heroicons/vue/24/solid';
 import mascotChat from '@/assets/images/emotions/57_chat.png';
+import { entryState, resolveBack } from '@/utils/groupChallengeNavigation';
 
 const route = useRoute();
 const router = useRouter();
@@ -84,7 +85,11 @@ const statusBadges = computed(() => {
     }
     return [
         { label: '진행 중', bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' },
-        { label: `DAY ${ch.value.currentDay} / ${ch.value.totalDays}`, bg: 'var(--tt-ink)', color: 'var(--tt-gold)' },
+        {
+            label: `DAY ${ch.value.currentDay} / ${ch.value.totalDays}`,
+            bg: 'var(--tt-ink)',
+            color: 'var(--tt-gold)',
+        },
     ];
 });
 
@@ -110,11 +115,21 @@ function formatDate(iso) {
 /*
  * 네비게이션
  *
- * 뒤로가기는 히스토리를 믿지 않고 그룹챌린지 홈으로 명시 이동한다(이슈 #172).
- * 재판·판결 플로우가 이 화면 뒤에 쌓여 있어 `router.back()` 이면 방금 본 판결문으로 되돌아간다.
+ * 뒤로가기는 **진입한 화면이 바로 앞에 있다고 확인된 경우에만** 히스토리를 되돌린다(이슈 #303).
+ * 확인은 홈·목록이 push 할 때 남긴 history.state 로 한다 — 규칙은 utils/groupChallengeNavigation.
+ *
+ * 무조건 `router.back()` 으로 바꾸면 안 된다. 판결 플로우가 `replace` 로 이 화면에 돌아오므로
+ * 그때 앞 항목은 방금 본 재판 화면이다(이슈 #172 가 홈 하드코딩을 넣은 이유). 그 경우는
+ * 표시가 없어 종전대로 홈으로 나간다.
  */
 function goBack() {
-    router.push({ name: 'groupChallenge' });
+    const target = resolveBack(window.history.state, 'groupChallenge');
+
+    if (target.type === 'back') {
+        router.back();
+        return;
+    }
+    router.push({ name: target.name });
 }
 
 function goToList() {
@@ -126,7 +141,12 @@ function goToRanking() {
 }
 
 function goToInvite() {
-    router.push({ name: 'groupChallengeInvite', params: { groupId: ch.value.id } });
+    router.push({
+        name: 'groupChallengeInvite',
+        params: { groupId: ch.value.id },
+        /* 초대 화면의 뒤로가기가 홈이 아니라 이 상세로 돌아오게 한다(이슈 #303) */
+        state: entryState('groupChallengeDetail'),
+    });
 }
 
 function goToChat() {
@@ -172,11 +192,7 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
             <div class="gc-detail__deco gc-detail__deco--lg"></div>
 
             <!-- 내비게이션 헤더 -->
-            <ChallengePageHeader
-                title="그룹 챌린지"
-                class="gc-detail__nav"
-                @back="goBack"
-            >
+            <ChallengePageHeader title="그룹 챌린지" class="gc-detail__nav" @back="goBack">
                 <template v-if="isClosed" #action>
                     <span class="gc-detail__nav-right" @click="goToRanking">최종 순위</span>
                 </template>
@@ -204,10 +220,7 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
             <!-- 종료: 시상대 + 결과 + 약속 + 순위 + 재판 기록 -->
             <template v-if="isClosed">
                 <!-- 시상대 (3명 이상일 때) -->
-                <GroupDetailPodium
-                    v-if="ch.finalMembers?.length >= 3"
-                    :members="ch.finalMembers"
-                />
+                <GroupDetailPodium v-if="ch.finalMembers?.length >= 3" :members="ch.finalMembers" />
 
                 <!-- 최종 결과 요약 -->
                 <div class="gc-detail__result-card">
@@ -228,7 +241,9 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
                             <span class="gc-detail__result-label">최종 순위</span>
                             <span class="gc-detail__result-value">
                                 {{ ch.finalRank }}위
-                                <span class="gc-detail__result-total">/ {{ ch.memberCount }}명</span>
+                                <span class="gc-detail__result-total"
+                                    >/ {{ ch.memberCount }}명</span
+                                >
                             </span>
                         </div>
                         <div v-if="ch.savingsAmount" class="gc-detail__result-stat">
@@ -270,15 +285,16 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
                 >
                     <div class="gc-detail__trial-link-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor" width="19" height="19">
-                            <path d="M17.29 5.71a1 1 0 0 0-1.41 0L13.5 8.09l-1.8-1.8a1 1 0 0 0-1.41 1.42l.38.38-5.3 5.3a1 1 0 0 0 0 1.41l2.83 2.83a1 1 0 0 0 1.41 0l5.3-5.3.38.38a1 1 0 0 0 1.42-1.42l-1.8-1.8 2.38-2.37a1 1 0 0 0 0-1.41ZM9.7 15.22 7.78 13.3l4.6-4.6 1.91 1.92ZM18 19H3v2h15Z" />
+                            <path
+                                d="M17.29 5.71a1 1 0 0 0-1.41 0L13.5 8.09l-1.8-1.8a1 1 0 0 0-1.41 1.42l.38.38-5.3 5.3a1 1 0 0 0 0 1.41l2.83 2.83a1 1 0 0 0 1.41 0l5.3-5.3.38.38a1 1 0 0 0 1.42-1.42l-1.8-1.8 2.38-2.37a1 1 0 0 0 0-1.41ZM9.7 15.22 7.78 13.3l4.6-4.6 1.91 1.92ZM18 19H3v2h15Z"
+                            />
                         </svg>
                     </div>
                     <div class="gc-detail__trial-link-body">
                         <span class="gc-detail__trial-link-title">재판 기록 보기</span>
                         <span class="gc-detail__trial-link-sub">
-                            이 챌린지 재판 {{ ch.trialStats.totalTrials }}건
-                            · 무죄 {{ ch.trialStats.innocentCount }}
-                            · 유죄 {{ ch.trialStats.guiltyCount }}
+                            이 챌린지 재판 {{ ch.trialStats.totalTrials }}건 · 무죄
+                            {{ ch.trialStats.innocentCount }} · 유죄 {{ ch.trialStats.guiltyCount }}
                         </span>
                     </div>
                     <ChevronRightIcon class="gc-detail__trial-link-arrow" />
@@ -375,22 +391,18 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
                     그룹 목록으로
                 </button>
             </div>
-
         </div>
 
         <!-- 채팅 플로팅 버튼 (종료 제외) -->
-        <div
-            v-if="!isClosed"
-            class="gc-detail__chat-fab"
-            @click="goToChat"
-        >
+        <div v-if="!isClosed" class="gc-detail__chat-fab" @click="goToChat">
             <div class="gc-detail__chat-fab-circle">
-                <img :src="mascotChat" alt="채팅" class="gc-detail__chat-fab-img">
+                <img :src="mascotChat" alt="채팅" class="gc-detail__chat-fab-img" />
             </div>
             <span
                 class="gc-detail__chat-fab-badge"
                 :class="{ 'gc-detail__chat-fab-badge--zero': !unreadCount }"
-            >{{ unreadCount }}</span>
+                >{{ unreadCount }}</span
+            >
         </div>
     </div>
 </template>
@@ -418,7 +430,9 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ── 히어로 영역 ── */
@@ -439,7 +453,7 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
     right: -26px;
     width: 132px;
     height: 132px;
-    background: #E9EEFB;
+    background: #e9eefb;
 }
 
 /* ── 네비게이션 (ChallengePageHeader) ── */
