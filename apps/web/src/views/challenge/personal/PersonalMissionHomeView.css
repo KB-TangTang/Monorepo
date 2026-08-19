@@ -214,9 +214,19 @@
     box-shadow: var(--tt-elevation-2);
 }
 
+.personal-home__common-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-2);
+    color: var(--tt-text-hint);
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-bold);
+}
+
 .personal-home__common-badge {
     background: var(--tt-bg-fill);
-    color: #6b6f82;
+    color: var(--tt-text-muted);
     font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
@@ -224,10 +234,19 @@
 }
 
 .personal-home__common-title {
-    font-size: var(--tt-fs-label);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
-    margin-top: 9px;
+    margin-top: var(--tt-space-3);
     letter-spacing: -0.01em;
+}
+
+.personal-home__common-description {
+    margin-top: var(--tt-space-1);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-semibold);
+    line-height: 1.45;
+    word-break: keep-all;
 }
 
 .personal-home__common-status {

@@ -56,9 +56,12 @@ export function toHomeMission(mission) {
     const limitAmount = Math.max(Number(mission.targetValue) || 0, 0);
     const spentAmount = Math.max(Number(mission.currentAmount) || 0, 0);
     const progressRate = limitAmount > 0 ? Math.round((spentAmount / limitAmount) * 100) : 0;
+    const isAbsoluteMission = mission.missionType === 'ABSOLUTE';
 
     return {
         title: mission.missionTitle || mission.missionContent || '오늘의 메인 챌린지',
+        isAbsoluteMission,
+        categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
         limitAmount,
         spentAmount,
         remainingAmount: Math.max(limitAmount - spentAmount, 0),
@@ -78,6 +81,31 @@ export function toHomeReportSummary(report) {
         month: Number(report.period.split('-')[1]),
         savedAmount: Number(report.savedAmount) || 0,
         topCategoryName: topCategory?.categoryName ?? null,
+    };
+}
+
+export function getHomeReportEmptyCopy(status) {
+    if (status === 'not-agreed') {
+        return {
+            title: '챌린지를 시작해 보세요',
+            description: '참여 후 소비습관 변화를 기록해 드릴게요',
+        };
+    }
+    if (status === 'preparing') {
+        return {
+            title: '첫 리포트를 준비 중이에요',
+            description: '한 달의 기록이 모이면 결과를 알려드릴게요',
+        };
+    }
+    if (status === 'error') {
+        return {
+            title: '리포트를 불러오지 못했어요',
+            description: '자세히 보기에서 다시 확인해 주세요',
+        };
+    }
+    return {
+        title: '아직 확정된 절감 결과가 없어요',
+        description: '챌린지를 완료하면 변화가 기록돼요',
     };
 }
 

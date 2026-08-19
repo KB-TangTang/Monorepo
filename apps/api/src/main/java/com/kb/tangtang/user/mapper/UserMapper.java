@@ -58,6 +58,20 @@ public interface UserMapper {
                              @Param("seenAt") java.time.LocalDateTime seenAt);
 
     /**
+     * 맞춤 미션 개시 안내 상태를 한 문장으로 전이시킨다(이슈 #315 (1)).
+     *
+     * 자격 판정은 **요청이 아니라 DB 가 한다** - 같은 행의 `relative_mission_qualified_at`
+     * 을 CASE 안에서 직접 본다. 이 컬럼은 `MissionAnalysisSnapshotService.markQualified()`
+     * 가 `IS NULL` 가드로 한 번만 박는 되돌릴 수 없는 래치라, 한번 얻은 자격은 사라지지 않는다.
+     * 덕분에 `PENDING` 에서 자격을 잃는 전이가 아예 생기지 않는다(이슈 #315 (2)).
+     *
+     * @return 바뀐 행 수. 0 이면 그 사용자가 없거나 ACTIVE 가 아니다.
+     */
+    int syncPersonalMissionUnlockStatus(@Param("id") Long id);
+
+    int acknowledgePersonalMissionUnlock(@Param("id") Long id);
+
+    /**
      * 회원 탈퇴. 상태 변경 · 식별정보 익명화 · 유니크 키 비우기를 한 문장으로 한다.
      * (DECISIONS.md 2026-08-13 회원 탈퇴)
      *

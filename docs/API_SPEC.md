@@ -658,6 +658,26 @@
 - 등급은 화면에 표시하지 않는다 (DECISIONS.md 2026-08-06).
 - 재동의 흐름은 「동의」 절의 *철회한 동의를 다시 켜기* 를 따른다.
 
+## 맞춤 미션 개시 안내 (이슈 #129)
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/main-challenge/mission-unlock/status` | Bearer | 안내 상태 동기화 후 노출 여부 조회. **요청 본문 없음** - 자격 판정은 서버가 한다 |
+| PATCH | `/api/main-challenge/mission-unlock/acknowledge` | Bearer | 맞춤 미션 개시 안내 확인 처리 |
+
+상태는 `tbl_user.personal_mission_unlock_status` 한 컬럼에서
+`UNTRACKED → INSUFFICIENT → PENDING → SEEN` 순서로 전이한다. 처음부터 데이터가 충분한 사용자는
+`UNTRACKED`에 머물러 안내가 뜨지 않는다. `INSUFFICIENT`를 거친 사용자가 데이터 조건을 충족하면
+`PENDING`과 `showUnlock=true`를 반환하며, 확인 후에는 `SEEN`이라 다른 기기에서도 다시 뜨지 않는다.
+
+```json
+// POST request
+{ "enoughData": true }
+
+// response data
+{ "status": "PENDING", "showUnlock": true }
+```
+
 ## 오늘의 개인 미션 조회 (이슈 #160)
 
 | 메서드 | 경로 | 인증 | 설명 |
@@ -776,9 +796,11 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 ```
 
 - `SUCCESS`로 확정된 미션만 점수에 포함한다. `FAIL`, `PENDING`은 0점이다.
-- 기본 점수는 배정 당시 `difficulty_id`가 참조하는 `tbl_mission_difficulty.score`를 사용한다.
+- 상대형 기본 점수는 배정 당시 `difficulty_id`가 참조하는 `tbl_mission_difficulty.score`를 사용한다.
+- 절대형 미션은 난이도와 관계없이 성공 시 기본 50점을 부여한다.
 - 전날 미션과 해당일 미션이 모두 `SUCCESS`이면 해당일 점수에 연속 성공 보너스 5점을 더한다.
 - 전날 미션이 `FAIL`이거나 배정 이력이 없으면 연속 성공으로 계산하지 않는다.
+- 절대형도 연속 성공일에 포함하며, 전날 미션이 성공이면 기존 연속 성공 보너스 5점을 더한다.
 - 월간 점수는 해당 월 확정 미션 이력 전체를 다시 합산해 `tbl_monthly_ranking.total_score`에 갱신하므로 배치 재실행에도 중복 반영되지 않는다.
 - `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
@@ -938,7 +960,9 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|---|
 | GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
 
-응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
+응답은 `{ analysisStartDate, analysisEndDate, transactionCount, cumulativeTransactionCount, requiredCumulativeTransactionCount, topCategories }` 다.
+`transactionCount`는 최근 28일 분석 건수이고, `cumulativeTransactionCount`는 최초 영구 자격에
+사용하는 실제 누적 유효 소비 건수다. 화면은 `requiredCumulativeTransactionCount`와 비교해 진행도를 표시한다.
 `topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, rotationAssignDate, rotationResult, missionRound }` 형태다.
 
 - 응답의 상위 카테고리는 매일 재산정한 목록이 아니라 아직 소진 중인 현재 분석 주기의 스냅샷이다.
@@ -947,13 +971,15 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - `missionRound`는 이번 배정 또는 다음 배정이 해당 카테고리의 몇 번째 수사인지를 나타낸다. 해당 카테고리로 배정된 전체 이력 수를 세고, 현재 주기에서 아직 `WAITING`이면 다음 예정 회차를 위해 1을 더한다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
-- 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
+- 최초 상대형 미션 자격은 기간과 무관하게 누적 유효 소비가 50건 이상일 때 획득한다.
 - 최초 자격 획득 시 `tbl_user.relative_mission_qualified_at`을 기록한다. 이 값은 챌린지 동의를 철회해도 유지한다.
-- 자격 획득 후에는 최근 28일 거래가 50건 미만이어도 현재 존재하는 소비로 상위 카테고리를 다시 집계한다.
-- 자격 획득 후라도 최근 28일에 상대형 미션 대상 카테고리의 양수 소비가 전혀 없으면 스냅샷을 만들 수 없다.
+- 자격 획득 후에는 최근 28일 거래 건수를 자격 조건으로 다시 검사하지 않는다.
+- 상대형 후보 카테고리는 최근 28일에 유효 소비 3건 이상, 서로 다른 소비일 2일 이상,
+  환불 반영 순소비금액이 양수인 카테고리다. 조건을 만족한 카테고리 중 소비금액 상위 3개를 선정한다.
+- 후보 카테고리가 없으면 영구 자격은 유지하고 그날은 절대형 미션으로 대체한다.
 - 미션 대상은 `tbl_mission_pool`에 `RELATIVE` 행이 존재하는 소분류다. 현재 정책은 15개다.
 - 환불은 거래 건수에서 제외하고 순소비금액에서 차감한다.
-- 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
+- 상대형 후보 조건을 만족하는 카테고리가 없으면 `topCategories=[]`를 반환한다.
 - 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
 - `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
 
@@ -983,7 +1009,20 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - `assignmentReason=LOW_SPENDING_NO_SPEND`를 저장하여 월 1회 절대형과 구분하고 다음 안내를 표시한다.
   `평소 {카테고리} 지출이 이미 낮아 금액을 더 나누기 어려워요. 오늘은 {카테고리} 하루 쉬기에 도전해볼까요?`
 - 미션 저장과 스냅샷 `assigned_date` 갱신은 하나의 사용자별 트랜잭션으로 처리한다.
-- 절대형 미션 우선 배정은 후속 이슈 범위이며, 절대형 배정일에는 이 배치를 호출하지 않아야 한다.
+
+### 절대형 미션 자동 배정 (이슈 #292)
+
+- 상대형 자격을 얻지 못한 사용자는 자격 획득 전까지 매일 절대형 미션을 받는다.
+- 콜드스타트 절대형 카테고리는 날짜를 기준으로 고정 계산하며, 같은 날에는 모든 콜드스타트
+  사용자가 같은 카테고리의 공통 미션을 받는다.
+- 상대형 자격 여부와 무관하게 월 1회 전체 단속일에는 절대형 미션을 우선 배정한다.
+- 전체 단속 날짜와 카테고리는 연월을 기준으로 고정 계산하므로 모든 사용자와 서버에서 같고,
+  재기동·복구 배치에도 바뀌지 않는다.
+- 절대형 후보는 `mission_type=ABSOLUTE`이면서 `limit_price=0`인 무지출 미션만 사용한다.
+- `targetValue=0`, `targetRate=null`로 저장한다. 선택 카테고리의 배정일 전 28일 양수 일별
+  순소비 평균을 `baseAmount`로 저장하고, 계산할 소비가 없으면 `null`로 둔다.
+- 배정 사유는 콜드스타트 `COLD_START`, 월간 전체 단속 `MONTHLY_RANDOM`으로 구분한다.
+- 절대형 배정은 상대형 분석 스냅샷을 소진하지 않는다.
 
 ## 그룹 챌린지 — 생성·초대·참여·조회 (이슈 #151)
 
@@ -1218,18 +1257,46 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 ### 아직 NULL 인 필드
 
 `settleTime` · `memoAuthor` · `memoDate` 는 근거 컬럼이 없다.
-채팅 미리보기는 이슈 #174, `trialStats` · `finalMembers` · `savingsAmount`(종료 화면)는 #172 · #173 이다.
+채팅 미리보기는 이슈 #174, `savingsAmount`(종료 화면 절약액)는 산식이 정해지지 않았다.
 화면이 이미 NULL 을 견디도록 만들어져 있다.
+
+`trialStats` · `finalMembers` 는 #173 이 채웠다 — **`status = CLOSED` 일 때만** 값이 있고
+그 외 상태에서는 둘 다 null 이다(아래 「명예 법정」 절 참고).
+
+목록의 `finalOutcome` · `finalRank` · `finalChargeAmount` 는 **#172 가 채운다.** 그룹이
+`CLOSED` 로 확정되는 순간 값이 들어간다 — 진행 중에는 계속 `null` 이다(목숨이 0이어도
+「탈락 위기」까지만 표시한다. 최종 판정은 확정 배치 한 곳에서만 일어난다).
 
 | 코드 | HTTP | 상황 |
 |---|---|---|
 | `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
 | `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
 
-## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170)
+## 그룹 챌린지 — 소비 재판 변론 · 혐의 인정 (이슈 #170) · 투표 (이슈 #171) · 개표 (이슈 #172)
 
-기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그리고 그 반대인 혐의 인정까지.
-**투표(#171)와 개표·확정(#172)은 여기 없다.**
+기소 안내 → 실제 부담금 입력 → 변론 작성 → 제출, 그 반대인 혐의 인정, 배심원 투표, 그리고 개표까지.
+
+**개표에는 엔드포인트가 없다.** 확정은 1분마다 도는 배치(`GroupVerdictScheduler`)가 하고,
+화면은 같은 `GroupTrialDetail` 을 다시 읽어 `status` 가 `GUILTY`·`INNOCENT` 로 바뀐 것을 본다.
+확정 시점에는 그룹 채팅 시스템 메시지와 `GROUP_JUDGMENT` 알림이 함께 나간다.
+
+개표 규칙은 다음과 같다(요구사항정의서 6.5).
+
+| 표 | 결과 | `verdictMethod` |
+|---|---|---|
+| 유죄 > 무죄 | `GUILTY` | `VOTE` |
+| 무죄 > 유죄 | `INNOCENT` | `VOTE` |
+| 아무도 안 던짐 | `INNOCENT` (무죄 추정) | `NO_VOTE` |
+| 동률 | 판사 탕이(LLM)가 판단 | `AI_JUDGMENT` |
+| 혐의 인정 | `GUILTY` | `CONFESSION` |
+
+- 확정 시점은 **「투표 마감(기소 + 30시간)이 지났거나, 던질 사람이 전부 던졌거나」** 다.
+  전원 투표가 끝나면 마감을 기다리지 않는다.
+- 유죄면 `lives_count` 가 1 줄고(0 아래로는 안 내려간다), 무죄면 변론에 적은 `deductionAmount`
+  만큼 그 구간 소비액이 깎인다.
+- **판사 탕이 호출이 실패하면 무죄로 확정한다.** 0표 무죄 추정과 같은 기준이다. 이때
+  `aiVerdictReason` 에 실패 안내 문구가 들어가고 `verdictMethod` 는 `AI_JUDGMENT` 다
+  (사유를 담으려면 그래야 한다 — `ck_ind_ai_reason`). 재시도는 하지 않는다.
 
 | 메서드 | 경로 | 인증 | 권한 | 응답 |
 |---|---|---|---|---|
@@ -1237,6 +1304,7 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 | GET | `/api/group-challenges/trials/{indictmentId}/transactions` | Bearer | **피고 본인만** | `TrialTransactions` |
 | POST | `/api/group-challenges/trials/{indictmentId}/defense` | Bearer | 피고 본인만 | `null` |
 | POST | `/api/group-challenges/trials/{indictmentId}/confession` | Bearer | 피고 본인만 | `null` |
+| POST | `/api/group-challenges/trials/{indictmentId}/votes` | Bearer | **피고를 뺀 그룹 참여자** | `null` |
 
 ### `GroupTrialDetail` — 재판 화면 한 벌
 
@@ -1245,13 +1313,16 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 
 ```
 { indictmentId, groupId, groupName, status, result, verdictMethod, message,
+  aiVerdictReason,                                               // 개표 전 null
   accused: { userId, nickname, profileImageUrl, mine },
   evalType, challengeDate, startDate, endDate,
   categoryId, categoryName,
   limitAmount, currentAmount, exceededAmount,
   createdAt, defenseDeadline, voteDeadline,
   defense: { content, actualBurdenAmount, deductionAmount, imageUrls[], createdAt } | null,
-  myVerdict, voteCount, totalVoters }
+  myVerdict, voteCount, totalVoters,
+  guiltyCount, innocentCount,                                    // 개표 전 null
+  comments: [ { comment, createdAt } ] | null }                  // 개표 전 null
 ```
 
 - 마감 두 개는 **#169 와 같은 계산값**이다 (`created_at + defense-hours` / `+ vote-hours`). 컬럼이 없다.
@@ -1259,6 +1330,19 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
   「내용 없는 변론」을 구분할 수 없게 된다.
 - `myVerdict` 는 안 던졌으면 NULL, **피고 본인은 항상 NULL** 이다. `totalVoters` = 참여자 − 피고 1명.
   #170 이 이 세 필드를 함께 채운다 — 서브쿼리가 이미 있어 비용이 0 이고 #171 은 쓰는 쪽만 만들면 된다.
+- **`guiltyCount`·`innocentCount`·`comments`·`aiVerdictReason` 은 개표 후에만 값이 있다.**
+  `status` 가 `DEFENSE_WAIT`·`VOTING` 이면 넷 다 **`null`** 이다 — **`0` 이 아니다.**
+  「아직 모른다」와 「0표」를 구분해야 해서 서버 타입도 `int` 가 아니라 `Integer` 다.
+  투표 중에 비율이 보이면 이기는 쪽에 표가 몰리고, 코멘트 문장에는 어느 쪽에 던졌는지가 드러나
+  숫자를 가린 의미가 없어진다. 프론트에서 `?? 0` 으로 뭉개면 정책이 무너진다.
+  `aiVerdictReason` 을 같은 줄에 세운 이유는 **AI 판결이 동률일 때만 나오기 때문**이다 —
+  사유가 보이는 것만으로 「지금 2:2」가 드러난다.
+  마스킹 판단은 `GroupTrialService#isCounted` **한 곳**에만 있다.
+- `verdictMethod` 는 확정 전 `null`, 확정 후 `VOTE`·`NO_VOTE`·`AI_JUDGMENT`·`CONFESSION` 중
+  하나다. `aiVerdictReason` 은 **`AI_JUDGMENT` 일 때만** 값이 있다(최대 300자). 화면은
+  이 문장을 요약하지 않고 그대로 띄운다.
+- **누가 투표했는지는 어떤 필드로도 내려가지 않는다.** 배심원 명단은 비공개이고 `comments[]` 에도
+  `userId`·닉네임이 없다. 진행 상황은 `voteCount / totalVoters`(몇 명이 던졌나)까지만 공개한다.
 - `categoryName` 이 NULL 이면 총소비 챌린지다.
 - `currentAmount` 는 **무죄 감액이 반영된 결산 구간 소비액**이고, 동시에 **실제 부담금 입력의 상한**이다.
 - `accused.mine` 은 Lombok 이 `isMine()` 으로 만들지만 **JSON 키는 `mine`** 이다.
@@ -1334,6 +1418,32 @@ mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
 - 상태 UPDATE 는 `WHERE ... AND status='DEFENSE_WAIT'` 라 **멱등**이다. 같은 요청을 두 번 보내면
   두 번째는 `DEFENSE_NOT_ALLOWED` 다.
 
+### 투표 — `POST .../votes` (이슈 #171)
+
+```json
+{ "verdict": "GUILTY", "comment": "그건 좀 아니지" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `verdict` | string | O | `GUILTY` · `INNOCENT` 둘 중 하나 |
+| `comment` | string | X | 익명 한줄. **최대 40자** (`VoteService.COMMENT_MAX_LENGTH`) |
+
+- 응답 본문이 없다. 던진 뒤 화면은 **재판 상세를 다시 읽어** 그린다 — 여기서 표수를 돌려주면
+  개표 전 비공개 정책을 이 한 곳에서 뚫는다.
+- `comment` 가 공백만이면 **`NULL` 로 저장**한다. 빈 문자열로 넣으면 개표 후 코멘트 목록에
+  이유 없는 빈 줄이 생긴다.
+- **수정·취소가 없다.** 한 재판에 한 표이고 두 번째 요청은 `VOTE_ALREADY_EXISTS` 다.
+  바꿀 수 있으면 마감 직전 눈치싸움이 생긴다. PK `(group_id, user_id, indictment_id)` 가
+  마지막 방어선이다.
+- **알림·채팅 이벤트를 발행하지 않는다.** 투표 한 건마다 알리면 누가 언제 던졌는지가 채팅에 남아
+  익명이 깨진다. 개표 알림은 #172 의 `VerdictConfirmed` 몫이다.
+- **개표하지 않는다.** 마지막 한 표가 들어와도 `status` 는 `VOTING` 그대로다.
+  표가 다 모였다고 즉시 확정하면 마감 전에 결과가 나와 남은 사람이 투표할 이유가 없어진다.
+- 마감 판정은 컬럼이 아니라 `created_at + defense-hours + vote-hours` 계산값이다.
+  개표 배치가 없으므로 **마감이 지나도 `status` 는 `VOTING` 이다** — 상태만 믿으면 마감 후 표가 들어온다.
+- **마이그레이션 0건.** `tbl_vote` 는 `db/schema.sql` 에 이미 있다.
+
 ### 기간결산 소비액 공식이 바뀌었다 — #168 · #169 응답에도 영향
 
 기간평가(`PERIOD`) 소비액을 `SUM(daily_amount)` 에서 아래로 통일했다. #170 이 변론 화면용 소비액을
@@ -1383,10 +1493,59 @@ GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
 | `INVALID_BURDEN_AMOUNT` | 400 | 음수이거나 `currentAmount` 초과 |
 | `TOO_MANY_IMAGES` | 400 | 4장 이상 |
 | `IMAGE_TOO_LARGE` | 400 | 장당 5MB 초과 |
+| `VOTE_NOT_ALLOWED` | 400 | `status != VOTING` 이거나 투표 마감 시각이 지남 |
+| `CANNOT_VOTE_OWN_TRIAL` | 400 | 피고 본인이 자기 재판에 투표 |
+| `VOTE_ALREADY_EXISTS` | 400 | 이미 투표함 (수정 경로 없음) |
+| `INVALID_VERDICT` | 400 | `GUILTY`·`INNOCENT` 가 아님 |
+| `COMMENT_TOO_LONG` | 400 | 코멘트 40자 초과 |
 
 > ⚠ `IMAGE_TOO_LARGE` 는 **업무 검증보다 먼저** 난다. 컨트롤러가 파일을 바이트로 읽기 전에
 > `requireWithinLimit` 을 걸기 때문에, 없는 기소에 5MB 넘는 이미지를 보내면 `TRIAL_NOT_FOUND`
 > 대신 이 코드가 온다. 메모리에 거대한 파일을 올린 뒤 "없는 재판입니다" 를 답하는 것보다 낫다.
+
+## 그룹 챌린지 — 명예 법정 생존자 랭킹 · 종료 화면 (이슈 #173)
+
+| 메서드 | 경로 | 인증 | 권한 | 응답 |
+|---|---|---|---|---|
+| GET | `/api/group-challenges/{groupId}/ranking` | Bearer | 그룹 참여자 | `GroupRanking` |
+
+### `GroupRanking` — 명예 법정 화면 한 벌
+
+`{ evalType, status, limitAmount, maxLives, memo, lastSettlementDate,
+members[{ rank, userId, nickname, profileImageUrl, mine, livesCount, totalConsumption,
+finalOutcome, finalChargeAmount }] }`
+
+- 정렬은 요구사항정의서 6.6 — 일일평가는 남은 목숨 내림차순 → 누적 소비액 오름차순,
+  기간평가는 누적 소비액 오름차순. **동률은 공동 순위**다(1, 1, 3).
+- `status = CLOSED` 면 `rank` · `finalOutcome` · `finalChargeAmount` 는 확정 배치(#172)가 남긴
+  **저장값**이고 다시 계산하지 않는다 — CLOSED 쿼리에는 윈도우 함수 자체가 없다.
+  그 외 상태(`JUDGING` 포함 — 아직 `final_*` 미기록)에서는 조회 시점의 스냅샷이다.
+- `finalOutcome`(`SURVIVED`/`ELIMINATED`) · `finalChargeAmount` 는 **CLOSED 전에는 null** 이다.
+  진행 중의 목숨 0 은 「탈락 위기」이지 탈락이 아니다 — 탈락 표시 여부는 프론트가
+  `status`+`finalOutcome` 으로 정한다.
+- `totalConsumption` 은 표시 전용 재계산값이다(무죄 감액 반영). 종료 후 환불이 생기면
+  `finalChargeAmount` 와 달라질 수 있는 게 정상이다.
+- `lastSettlementDate` 는 마지막으로 결산이 끝난 날짜다 — 진행 중에는 어제까지 중 마지막 결산일
+  (오늘 행은 5분 재집계 중이라 제외), 종료 후에는 `end_date`. 결산 행이 아직 없으면 null 이고
+  화면이 날짜 부분을 생략한다.
+- 아바타 색·이니셜은 내려주지 않는다 — 프론트 `UserAvatar` 가 닉네임에서 만든다(팀 관례).
+- `trialStats` · `groupName` 은 담지 않는다 — 명예 법정 화면이 쓰지 않는다.
+
+### 종료 그룹 상세에 붙는 필드
+
+`/detail` 응답(`ChallengeGroupDetail`)에 **`status = CLOSED` 일 때만** 채워진다.
+그 외 상태에서는 둘 다 null 이다.
+
+- `finalMembers[]` = `{ userId, nickname, profileImageUrl, finalRank, finalOutcome, livesCount }` —
+  확정 배치가 남긴 `finalRank` 오름차순 **저장값**, 재계산 없음.
+- `trialStats` = `{ totalTrials, guiltyCount, innocentCount }` — 확정(`GUILTY` · `INNOCENT`)
+  재판만 센다. 진행 중 기소는 포함하지 않는다.
+- `savingsAmount`(종료 화면 절약액)는 산식이 정해지지 않아 **계속 null** 이다.
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
+| `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 랭킹 조회 |
 
 ## 그룹 채팅 (이슈 #174)
 
@@ -1396,7 +1555,7 @@ GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount, dayIndex, daysLeft }` |
-| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo}], hasMore }` |
+| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo,verdict}], hasMore }` |
 | POST | `/api/groups/{groupId}/chat/read` | Bearer | 없음 (호출한 사용자의 안 읽은 수를 0으로 초기화) |
 
 - `before`·`after` 는 `messageId` 기준 페이징이다. **둘을 동시에 주면 `INVALID_REQUEST`.** 둘 다 없으면
@@ -1413,8 +1572,15 @@ GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
     **화면이 카드 모양을 고르는 기준이다.** 문구를 파싱해 종류를 알아내지 말 것 — 문구가 바뀌면 깨진다.
   - `deepLink` - "재판 보러가기" 가 여는 라우터 경로(`/challenge/group/{groupId}/trial/{indictmentId}`)
   - `caseNo` - 표시용 사건번호(`2026-재판-0729`). 서버도 이 값을 다시 파싱하지 않는다
-  - **세 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
-    (프론트는 문구만 있는 pill 로 떨어뜨린다).
+  - `verdict` - **`systemType` 이 `VERDICT_CONFIRMED` 인 메시지에만** 있다. 나머지는 `null`.
+    `{ outcome, guiltyVotes, innocentVotes, livesLost }` 이며 화면이 도장과
+    「투표 4:2 · 목숨 1 차감」을 그리는 값이다.
+    - `outcome` - `GUILTY` · `INNOCENT`. **도장은 이 값으로 고른다.** 문구에서 "유죄" 를 찾지 말 것
+    - `guiltyVotes`·`innocentVotes` - 확정 시점의 표. **투표 절차가 없던 판결(혐의 인정)은 `null`** 이다.
+      `0:0` 은 「아무도 던지지 않아 무죄 추정으로 끝났다」라서 `null` 과 뜻이 다르다 — 뭉개지 말 것
+    - `livesLost` - 이 판결로 깎인 목숨. 무죄면 `0`, **유죄여도 남은 목숨이 없었으면 `0`** 이다
+  - **네 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
+    (프론트는 문구만 있는 pill 로 떨어뜨리고, 판결 카드는 중립 도장을 찍는다).
   - `content` 는 **본문만** 담는다. "판결이 확정됐어요" 같은 제목은 넣지 않는다 — 채팅 카드는
     `systemType` 이, 알림은 `NotificationType` 이 각자 제목을 갖고 있어 같은 문장이 두 번 나온다.
 - `dayIndex` 는 시작일을 1일차로 세는 진행 일차(시작 전이면 `0`), `daysLeft` 는 종료일까지 남은 날

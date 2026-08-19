@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
+import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
 import PersonalCourtHeader from '@/components/challenge/personal/PersonalCourtHeader.vue';
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
@@ -19,7 +20,6 @@ import { useConsentStore } from '@/stores/consent';
 import { useAuthStore } from '@/stores/auth';
 import {
     formatCourtDate,
-    calculateDataProgress,
     formatWon,
     formatMissionAssignmentSummary,
     toWatchCategoryModel,
@@ -27,8 +27,10 @@ import {
 } from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
+import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
+import insufficientTangi from '@/assets/images/emotions/03_gentle_smile.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
 
 const router = useRouter();
@@ -48,6 +50,12 @@ const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
 const devActionMessage = ref('');
+const isMissionUnlockOpen = ref(false);
+const isMissionUnlockAcknowledging = ref(false);
+const missionUnlockError = ref('');
+const hasPendingMissionUnlock = ref(false);
+const isMissionUnlockPreview = ref(false);
+const isMissionUnlockDifficultyFlow = ref(false);
 
 const courtDate = computed(() => formatCourtDate());
 const shortDate = computed(() => {
@@ -55,9 +63,55 @@ const shortDate = computed(() => {
     return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 });
 
-const dataProgress = computed(() => calculateDataProgress(store.dataRequirements));
+const cumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
+    return Number.isFinite(count) && count >= 0 ? count : null;
+});
+const requiredCumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.requiredCumulativeTransactionCount);
+    return Number.isFinite(count) && count > 0 ? count : null;
+});
+const qualificationProgress = computed(() => {
+    if (
+        cumulativeTransactionCount.value === null ||
+        requiredCumulativeTransactionCount.value === null
+    ) {
+        return 0;
+    }
+    return Math.min(
+        Math.round(
+            (cumulativeTransactionCount.value / requiredCumulativeTransactionCount.value) * 100,
+        ),
+        100,
+    );
+});
+
+/*
+ * 맞춤 미션 개시 안내 동기화. **실패를 삼킨다**(이슈 #314).
+ *
+ * 이건 장식성 넛지다. 동의·오늘 미션·카테고리 분석·연속일수·월간 점수가 전부 정상으로 로드돼도
+ * 이 호출 하나가 실패하면 바깥 try 가 페이지를 통째로 에러 화면으로 만들었다.
+ * 실제로 2026-08-19 EC2 가 그 상태였다 — #311 의 마이그레이션이 적용되지 않아 이 API 가 500 이었고,
+ * 그 컬럼이 공용 조회 목록에 있어 사용자 조회 전체가 함께 죽었다.
+ *
+ * 안내를 못 띄우는 것과 화면을 못 그리는 것은 무게가 다르다. 실패하면 안내만 생략한다.
+ */
+async function syncMissionUnlockQuietly() {
+    try {
+        hasPendingMissionUnlock.value = await store.syncMissionUnlock();
+    } catch (err) {
+        hasPendingMissionUnlock.value = false;
+        console.error('[PersonalMissionHome] 맞춤 미션 개시 안내 상태를 가져오지 못했다.', err);
+    }
+}
 const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
 const weeklyVerdictModel = computed(() => toWeeklyVerdictModel(store.missionStreak));
+const selectedUnlockDifficulty = computed(
+    () =>
+        PERSONAL_MISSION_DIFFICULTIES.find(
+            (difficulty) => difficulty.id === store.selectedDifficultyId,
+        ) ?? PERSONAL_MISSION_DIFFICULTIES[1],
+);
 
 /*
  * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
@@ -89,6 +143,7 @@ onMounted(async () => {
                 store.loadMissionStreak(),
                 store.loadMissionMonthlyScore(),
             ]);
+            await syncMissionUnlockQuietly();
         }
     } catch (err) {
         store.consentState = 'ERROR';
@@ -104,6 +159,11 @@ onMounted(async () => {
 
     if (!hasSeenPersonalTutorial()) {
         showTutorial.value = true;
+        return;
+    }
+
+    if (hasPendingMissionUnlock.value) {
+        isMissionUnlockOpen.value = true;
         return;
     }
 
@@ -127,10 +187,15 @@ async function handleAgree() {
             store.loadMissionStreak(),
             store.loadMissionMonthlyScore(),
         ]);
+        await syncMissionUnlockQuietly();
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {
                 showTutorial.value = true;
+            });
+        } else if (hasPendingMissionUnlock.value) {
+            afterOverlayClosed(() => {
+                isMissionUnlockOpen.value = true;
             });
         }
     } catch (err) {
@@ -147,6 +212,46 @@ async function handleAgree() {
  */
 async function onTutorialComplete() {
     await markPersonalTutorialSeen();
+    if (hasPendingMissionUnlock.value) {
+        afterOverlayClosed(() => {
+            isMissionUnlockOpen.value = true;
+        });
+    }
+}
+
+async function acknowledgeMissionUnlock(destination) {
+    if (isMissionUnlockAcknowledging.value) return;
+
+    if (destination === 'difficulty') {
+        isMissionUnlockDifficultyFlow.value = true;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(openTangiSheet);
+        return;
+    }
+
+    if (isMissionUnlockPreview.value) {
+        isMissionUnlockPreview.value = false;
+        isMissionUnlockOpen.value = false;
+        return;
+    }
+
+    isMissionUnlockAcknowledging.value = true;
+    missionUnlockError.value = '';
+    try {
+        await store.acknowledgeMissionUnlock();
+        hasPendingMissionUnlock.value = false;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(() => {
+            if (store.hasPendingVerdict) {
+                isVerdictOpen.value = true;
+            }
+        });
+    } catch (err) {
+        missionUnlockError.value =
+            err.message ?? '안내 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+    } finally {
+        isMissionUnlockAcknowledging.value = false;
+    }
 }
 
 function openTangiSheet() {
@@ -154,10 +259,22 @@ function openTangiSheet() {
 }
 
 async function handleProsecutorConfirm(prosecutorId) {
+    if (isMissionUnlockDifficultyFlow.value && isMissionUnlockPreview.value) {
+        isMissionUnlockDifficultyFlow.value = false;
+        isMissionUnlockPreview.value = false;
+        devActionMessage.value = '맞춤 사건 개시와 담당 탕이 선택 흐름을 미리 확인했어요.';
+        return;
+    }
+
     try {
         const user = await store.saveProsecutorDifficulty(prosecutorId);
         authStore.mergeUser(user);
-        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 오늘 미션 재배정을 누르면 새 난이도가 적용됩니다.`;
+        if (isMissionUnlockDifficultyFlow.value) {
+            await store.acknowledgeMissionUnlock();
+            hasPendingMissionUnlock.value = false;
+            isMissionUnlockDifficultyFlow.value = false;
+        }
+        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 내일 배정분부터 적용됩니다.`;
     } catch (err) {
         devActionMessage.value = err.message ?? '담당 검사 난이도를 저장하지 못했어요.';
     }
@@ -214,6 +331,16 @@ function showWithdrawnWithoutMissionDemo() {
     store.setDemoWithdrawnWithoutMission();
 }
 
+function showInsufficientDemo() {
+    store.setDemoInsufficient();
+}
+
+function showMissionUnlockDemo() {
+    isMissionUnlockPreview.value = true;
+    missionUnlockError.value = '';
+    isMissionUnlockOpen.value = true;
+}
+
 async function reassignTodayMission() {
     if (isReassigning.value) return;
     isReassigning.value = true;
@@ -241,6 +368,14 @@ async function reassignTodayMission() {
             @agree="handleAgree"
             @later="handleConsentLater"
         />
+        <PersonalMissionUnlockSheet
+            v-model="isMissionUnlockOpen"
+            :difficulty="selectedUnlockDifficulty"
+            :loading="isMissionUnlockAcknowledging"
+            :error-message="missionUnlockError"
+            @set-difficulty="acknowledgeMissionUnlock('difficulty')"
+            @view-mission="acknowledgeMissionUnlock('mission')"
+        />
         <PersonalTangiSheet
             v-model="isTangiSheetOpen"
             :current-prosecutor-id="store.selectedProsecutorId"
@@ -254,9 +389,13 @@ async function reassignTodayMission() {
             @acknowledge="handleVerdictAcknowledge"
         />
 
-        <!-- 헤더: 기본 모드 (active / verdict) -->
+        <!-- 오늘 미션이 있는 화면은 법원·담당 탕이 헤더를 동일하게 유지한다. -->
         <PersonalCourtHeader
-            v-if="store.screenState === 'active' || store.screenState === 'verdict'"
+            v-if="
+                store.screenState === 'active' ||
+                store.screenState === 'verdict' ||
+                store.screenState === 'insufficient'
+            "
             :court-image="courtSupreme"
             :date="courtDate"
             :prosecutor-image="store.selectedProsecutor?.image"
@@ -271,15 +410,6 @@ async function reassignTodayMission() {
             :date="shortDate"
             compact
             compact-title="수사할 증거가<br>없습니다"
-        />
-
-        <!-- 헤더: 축소 모드 (insufficient) -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'insufficient'"
-            :court-image="courtSupreme"
-            :date="shortDate"
-            compact
-            compact-title="아직 수사할 증거가<br>모이지 않았습니다"
         />
 
         <!-- 철회 후 오늘 미션 없음: 법원·날짜·알림 헤더는 기본 크기로 유지 -->
@@ -331,6 +461,8 @@ async function reassignTodayMission() {
                 <PersonalBriefingCard
                     :mission-title="store.todayBriefing.missionTitle"
                     :mission-content="store.todayBriefing.missionContent"
+                    :mission-type="store.todayBriefing.missionType"
+                    :mission-badge="store.todayBriefing.missionBadge"
                     :category-name="store.todayBriefing.categoryName"
                     :alibi-condition="store.todayBriefing.alibiCondition"
                     :current-amount="store.todayBriefing.currentAmount"
@@ -383,9 +515,44 @@ async function reassignTodayMission() {
 
             <!-- 화면 05: 증거 부족 -->
             <template v-else-if="store.screenState === 'insufficient'">
+                <!-- 오늘 수행할 절대형 미션을 가장 먼저 보여준다. -->
+                <div class="personal-home__common-mission">
+                    <div class="personal-home__common-meta">
+                        <span class="personal-home__common-badge">{{
+                            store.todayBriefing.missionBadge
+                        }}</span>
+                        <span>오늘의 공통 사건</span>
+                    </div>
+                    <div class="personal-home__common-title">
+                        {{ store.todayBriefing.missionTitle }}
+                    </div>
+                    <div class="personal-home__common-description">
+                        {{ store.todayBriefing.missionContent }}
+                    </div>
+                    <div class="personal-home__common-status">
+                        <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--tt-success)"
+                            stroke-width="2.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <circle cx="12" cy="12" r="8.5" />
+                            <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+                        </svg>
+                        <span>
+                            현재까지 {{ store.todayBriefing.categoryName }} 지출
+                            <b>{{ formatWon(store.todayBriefing.currentAmount) }}</b>
+                        </span>
+                    </div>
+                </div>
+
                 <div class="personal-home__insufficient-banner">
                     <img
-                        :src="store.selectedProsecutor?.image"
+                        :src="insufficientTangi"
                         alt=""
                         class="personal-home__insufficient-tangi"
                     />
@@ -412,49 +579,23 @@ async function reassignTodayMission() {
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="var(--tt-success)"
-                                    stroke-width="3"
+                                    stroke-width="2.6"
                                     stroke-linecap="round"
                                     stroke-linejoin="round"
                                 >
-                                    <path d="M5 12.5l4.5 4.5L19 7" />
+                                    <path d="M5 12.5l4 4L19 7" />
                                 </svg>
                             </span>
                             <span class="personal-home__condition-label">계좌 연동</span>
                             <span
                                 class="personal-home__condition-value personal-home__condition-value--done"
-                                >완료</span
                             >
+                                완료
+                            </span>
                         </div>
                         <div class="personal-home__condition">
                             <span
                                 class="personal-home__condition-icon personal-home__condition-icon--progress"
-                            >
-                                <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="var(--tt-accent-deep)"
-                                    stroke-width="2.2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                >
-                                    <circle cx="12" cy="12" r="8" />
-                                    <path d="M12 8v4.5l3 1.8" />
-                                </svg>
-                            </span>
-                            <span class="personal-home__condition-label"
-                                >최근 28일 소비 데이터</span
-                            >
-                            <span
-                                class="personal-home__condition-value personal-home__condition-value--progress"
-                            >
-                                {{ store.dataRequirements.availableDays }}일째
-                            </span>
-                        </div>
-                        <div class="personal-home__condition">
-                            <span
-                                class="personal-home__condition-icon personal-home__condition-icon--pending"
                             >
                                 <svg
                                     width="14"
@@ -470,49 +611,24 @@ async function reassignTodayMission() {
                                     <circle cx="18" cy="12" r="1" />
                                 </svg>
                             </span>
-                            <span class="personal-home__condition-label">전체 소비 50건 확보</span>
+                            <span class="personal-home__condition-label">전체 소비 건수 확보</span>
                             <span
-                                class="personal-home__condition-value personal-home__condition-value--pending"
+                                class="personal-home__condition-value personal-home__condition-value--progress"
                             >
-                                {{ store.dataRequirements.transactionCount }} /
-                                {{ store.dataRequirements.requiredTransactionCount }}
+                                {{ cumulativeTransactionCount }} /
+                                {{ requiredCumulativeTransactionCount }}
                             </span>
                         </div>
                     </div>
-                    <div class="personal-home__progress-bar">
+                    <div class="personal-home__progress-bar" aria-hidden="true">
                         <div
                             class="personal-home__progress-fill"
-                            :style="{ width: dataProgress + '%' }"
+                            :style="{ width: qualificationProgress + '%' }"
                         ></div>
                     </div>
                     <button type="button" class="personal-home__link-more" @click="linkAccount">
                         계좌 더 연동하기 ›
                     </button>
-                </div>
-
-                <div class="personal-home__common-mission">
-                    <span class="personal-home__common-badge">공통 사건 · 절대형</span>
-                    <div class="personal-home__common-title">{{ store.commonMission.title }}</div>
-                    <div class="personal-home__common-status">
-                        <svg
-                            width="15"
-                            height="15"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="var(--tt-success)"
-                            stroke-width="2.4"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <circle cx="12" cy="12" r="8.5" />
-                            <path d="M8.5 12.5l2.5 2.5 4.5-5" />
-                        </svg>
-                        <span>
-                            현재까지 {{ store.commonMission.category }} 지출
-                            <b>{{ formatWon(store.commonMission.currentAmount) }}</b>
-                            · 인정 시 +{{ store.commonMission.rewardPoints }}점
-                        </span>
-                    </div>
                 </div>
             </template>
         </main>
@@ -533,6 +649,12 @@ async function reassignTodayMission() {
                 {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
             </button>
             <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
+            <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
+                데이터 부족 화면
+            </button>
+            <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
+                맞춤 사건 개시 안내
+            </button>
             <button
                 type="button"
                 class="personal-home__dev-btn"

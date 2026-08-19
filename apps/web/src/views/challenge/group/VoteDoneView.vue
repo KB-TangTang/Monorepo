@@ -7,34 +7,45 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
-import UserAvatar from '@/components/common/UserAvatar.vue';
-import { MOCK_VOTE_DETAIL } from '@/fixtures/groupChallengeDetail';
+import { fetchTrialDetail } from '@/api/groupChallenge';
 import okayImg from '@/assets/images/emotions/41_okay.png';
 
 const route = useRoute();
 const router = useRouter();
 
-/* ── 목데이터 ─────────────────────────── */
 const detail = ref(null);
 
-onMounted(() => {
-    const id = Number(route.params.indictmentId);
-    detail.value = MOCK_VOTE_DETAIL[id] ?? null;
-    if (!detail.value) {
+onMounted(async () => {
+    try {
+        detail.value = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
         router.replace({ name: 'groupChallenge' });
     }
 });
 
-/* 투표 제출 후이므로 현재 유저(나)도 투표 완료 상태로 표시 */
+/*
+ * 제출 직후라 서버가 내 표를 이미 세었다. 그래도 `myVerdict` 로 확인하고 더한다 —
+ * 되돌아온 사용자(뒤로가기 · 새로고침)에게 무조건 +1 하면 한 명이 더 던진 것처럼 보인다.
+ *
+ * **표 분포(유죄 n : 무죄 m)는 여기에 없다.** 개표 전에는 서버가 아예 내려주지 않는다.
+ */
 const votedCount = computed(() => {
     if (!detail.value) return 0;
-    return detail.value.voteCount + 1; // 내 투표 반영
+    const counted = detail.value.voteCount ?? 0;
+    return detail.value.myVerdict ? counted : counted + 1;
 });
 
 function goBack() {
     router.replace({
         name: 'groupChallengeDetail',
         params: { id: route.params.id },
+    });
+}
+
+function goToProgress() {
+    router.replace({
+        name: 'trialProgress',
+        params: { id: route.params.id, indictmentId: route.params.indictmentId },
     });
 }
 </script>
@@ -91,61 +102,24 @@ function goBack() {
 
                 <div class="vote-done__card-divider"></div>
 
-                <div class="vote-done__grid">
-                    <div v-for="m in detail.members" :key="m.userId" class="vote-done__member">
-                        <span
-                            class="vote-done__avatar-wrap"
-                            :class="{
-                                'vote-done__avatar-wrap--pending': !m.voted && m.userId !== 1,
-                            }"
-                        >
-                            <UserAvatar
-                                :image-url="m.profileImage"
-                                :name="m.nickname"
-                                :color="m.avatarColor"
-                                :size="26"
-                            />
-                        </span>
-
-                        <span
-                            class="vote-done__name"
-                            :class="{ 'vote-done__name--pending': !m.voted && m.userId !== 1 }"
-                        >
-                            {{ m.nickname }}
-                        </span>
-
-                        <!-- 도장 (투표 완료) -->
-                        <svg
-                            v-if="m.voted || m.userId === 1"
-                            class="vote-done__seal"
-                            :style="{ transform: `rotate(${m.userId * 5 - 10}deg)` }"
-                            width="30"
-                            height="30"
-                            viewBox="0 0 30 30"
-                        >
-                            <circle
-                                cx="15"
-                                cy="15"
-                                r="12.3"
-                                fill="none"
-                                stroke="#C24B31"
-                                stroke-width="2.4"
-                            />
-                            <path
-                                d="M15 3.4V26.6M15 15.4l8.4 8.4"
-                                stroke="#C24B31"
-                                stroke-width="2.4"
-                            />
-                        </svg>
-                        <!-- 미투표 점선 원 -->
-                        <div v-else class="vote-done__seal-empty"></div>
-                    </div>
-                </div>
+                <!--
+                  ⚠ 여기에 **누가 투표했는지 보여주는 목록을 다시 만들지 말 것**(이슈 #171).
+                  원래는 멤버별 도장 그리드가 있었다. 「배심원 명단은 공개하지 않는다」는 정책에
+                  어긋나고, 서버는 그 데이터를 어떤 필드로도 내려주지 않는다.
+                  진행 상황은 「몇 명이 던졌나」까지가 전부다.
+                -->
+                <p class="vote-done__card-note">
+                    누가 어떤 판결을 냈는지는 공개되지 않아요.<br>
+                    남은 배심원 {{ Math.max(0, detail.totalVoters - votedCount) }}명의 투표가 끝나면 결과가 열려요.
+                </p>
             </div>
         </div>
 
         <!-- ===== 하단 버튼 ===== -->
         <div class="vote-done__footer">
+            <BaseButton variant="ghost" size="lg" block @click="goToProgress">
+                재판 진행 현황 보기
+            </BaseButton>
             <BaseButton variant="dark" size="lg" block @click="goBack">
                 그룹 화면으로 돌아가기
             </BaseButton>
@@ -344,72 +318,20 @@ function goBack() {
     margin: 14px 0 12px;
 }
 
-/* ── 멤버 그리드 ─────────────────────── */
-.vote-done__grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 9px 22px;
-}
-
-.vote-done__member {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.vote-done__avatar-wrap {
-    flex: none;
-    display: inline-flex;
-    border-radius: var(--tt-radius-full);
-}
-
-/*
- * 미투표 멤버 표시. 원래는 점선 원 + 흐린 이니셜(git show 8e4651b)로 옆 도장 자리의 점선 원
- * (.vote-done__seal-empty, 아래)과 짝을 이뤘는데, UserAvatar 통일 과정에서 래퍼의
- * opacity 하나로 대체되며 사진도 그냥 흐려지기만 하는 상태가 됐다. 점선 원을 래퍼에 복원하고
- * 아바타(사진/이니셜)만 :deep 으로 흐리게 해 원래 조합을 되살린다.
- * 색은 tokens.css 의 --tt-border-divider(#D4D9E2, 쿨톤)가 가장 가깝지만 같은 화면의
- * .vote-done__seal-empty 가 이미 웜톤 #d8d3c8 을 하드코딩해 쓰고 있어(고치지 말 것 목록) 짝을
- * 맞추려 원래 값을 그대로 유지한다.
- */
-.vote-done__avatar-wrap--pending {
-    border: 1.5px dashed #d8d3c8;
-}
-
-.vote-done__avatar-wrap--pending :deep(.user-avatar) {
-    opacity: 0.55;
-}
-
-.vote-done__name {
+/* ── 익명 안내 ───────────────────────── */
+.vote-done__card-note {
     font-size: 12px;
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text);
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.vote-done__name--pending {
-    color: var(--tt-text-hint, #a6a9b6);
-}
-
-.vote-done__seal {
-    flex: none;
-}
-
-.vote-done__seal-empty {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    border: 1.5px dashed #d8d3c8;
-    flex: none;
+    line-height: 1.6;
+    font-weight: var(--tt-fw-medium);
+    color: var(--tt-text-hint, #8a8fa3);
 }
 
 /* ── 하단 버튼 ───────────────────────── */
 .vote-done__footer {
     flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding: 12px var(--tt-screen-padding) 18px;
     background: var(--tt-bg-subtle);
 }

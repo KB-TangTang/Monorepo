@@ -4,6 +4,7 @@ import {
     formatWatchlistMissionRound,
     formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    getMissionBadge,
     toMissionVerdictModel,
     toWatchCategoryModel,
     toTodayMissionBriefing,
@@ -82,9 +83,9 @@ test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', (
     const briefing = toTodayMissionBriefing({
         missionTitle: '카페 지출 줄이기',
         missionContent: '오늘 카페 지출을 목표 안으로 지켜요.',
+        missionType: 'RELATIVE',
         categoryName: '카페/간식',
         parentCategoryName: '식비',
-        missionType: 'RELATIVE',
         targetValue: '5500.60',
         currentAmount: '1200.00',
         difficultyName: 'NORMAL',
@@ -96,6 +97,7 @@ test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', (
     assert.deepEqual(briefing, {
         missionTitle: '카페 지출 줄이기',
         missionContent: '오늘 카페 지출을 목표 안으로 지켜요.',
+        missionType: 'RELATIVE',
         categoryName: '카페/간식',
         alibiCondition: '오늘 5,501원 이하',
         currentAmount: 1200,
@@ -104,7 +106,28 @@ test('오늘 미션 응답을 브리핑 카드 표시 모델로 변환한다', (
         difficultyName: 'NORMAL',
         assignDate: '2026-08-13',
         assignmentReason: '최근 카페 지출이 늘었어요.',
+        missionBadge: '수사 브리핑',
     });
+});
+
+test('절대형 미션을 전체 단속과 콜드스타트 공통 사건으로 구분한다', () => {
+    assert.equal(getMissionBadge('ABSOLUTE', 'MONTHLY_RANDOM'), '전체 단속 · 절대형');
+    assert.equal(getMissionBadge('ABSOLUTE', 'COLD_START'), '공통 사건 · 절대형');
+
+    const briefing = toTodayMissionBriefing({
+        missionTitle: '무지출 명령 · 카페',
+        missionContent: '오늘 카페·간식 결제를 0원으로 만든다.',
+        missionType: 'ABSOLUTE',
+        categoryName: '카페/간식',
+        targetValue: '0.00',
+        currentAmount: '0.00',
+        assignmentReason: 'MONTHLY_RANDOM',
+    });
+
+    assert.equal(briefing.missionType, 'ABSOLUTE');
+    assert.equal(briefing.missionBadge, '전체 단속 · 절대형');
+    assert.equal(briefing.limitAmount, 0);
+    assert.equal(briefing.currentAmount, 0);
 });
 
 test('상위 소비 카테고리를 비중과 최근 미션 날짜·결과로 변환한다', () => {
@@ -124,7 +147,7 @@ test('상위 소비 카테고리를 비중과 최근 미션 날짜·결과로 �
     });
 
     assert.deepEqual(model, {
-        period: '7/16 – 8/12',
+        period: '7/16 ~ 8/12',
         items: [
             {
                 categoryId: 18,

@@ -1,12 +1,15 @@
 package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupChallengeDailyResult;
+import com.kb.tangtang.challenge.domain.GroupFinalizeRow;
 import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
+import com.kb.tangtang.challenge.domain.GroupRankingRow;
 import com.kb.tangtang.challenge.domain.IndictmentTarget;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -119,4 +122,88 @@ public interface GroupChallengeResultMapper {
                                                     @Param("userId") Long userId,
                                                     @Param("fromDate") LocalDate fromDate,
                                                     @Param("toDate") LocalDate toDate);
+
+    /**
+     * 무죄 확정 — 인정된 감액을 결산 행에 반영한다 (이슈 #172).
+     *
+     * <p>대입이 아니라 <b>누적</b>({@code = verdict_deduction_amount + #{amount}})이다. 기간평가는
+     * 기간 전체의 기소가 {@code end_date} 행 한 줄에 붙고, 일일평가도 같은 행이 다시 기소될 수
+     * 있다 — 대입으로 쓰면 앞선 무죄의 감액이 사라진다.
+     *
+     * <p><b>{@code effective_amount} 는 건드리지 않는다.</b> STORED 생성 컬럼이라 UPDATE 절에
+     * 넣으면 SQL 이 죽는다. 이 한 줄이 바뀌면 DB 가 알아서 다시 계산한다.
+     * ({@code db/migration/20260814_group_challenge_verdict_deduction.sql})
+     *
+     * <p>감액이 집계액을 넘어서는 상태는 막지 않는다 — 환불·카테고리 재분류로 실제로 생기고,
+     * {@code effective_amount} 의 {@code GREATEST(..., 0)} 가 0 으로 받아 준다.
+     * {@link #findDeductionOverflow} 가 그 상태를 로그로 남긴다.
+     *
+     * @param resultId {@code tbl_indictment.result_id}. 기소가 붙어 있던 그 행이다
+     * @return 바꾼 행 수. 결산 행이 지워졌으면 0 이다(정상 경로에서는 일어나지 않는다)
+     */
+    int addVerdictDeduction(@Param("resultId") Long resultId,
+                            @Param("amount") BigDecimal amount);
+
+    /**
+     * 최종 확정 배치가 볼 참여자별 판정 재료 (이슈 #172). 그룹 하나당 한 번 호출한다.
+     *
+     * <p><b>소비액 식을 평가 주기별로 가르는 것이 핵심이다.</b> 기간평가는
+     * 「★ 기간평가(PERIOD) 소비액 공식」 주석의 식({@code GREATEST(SUM(daily_amount -
+     * verdict_deduction_amount), 0)})을 그대로 쓴다. {@code SUM(effective_amount)} 로 바꾸면
+     * 행마다 걸린 {@code GREATEST(...,0)} 가 환불 음수 행을 0 으로 깎아 합계가 부풀고,
+     * <b>기소를 만든 {@link #findOverLimitPeriod} 와 값이 달라진다</b> — 「한도 초과로 기소됐는데
+     * 최종 판정은 완주」 같은 상태가 생긴다.
+     *
+     * <p>일일평가는 반대로 {@code SUM(effective_amount)} 가 맞다. 하루씩 따로 판정하는 평가라
+     * 클램프도 하루 단위로 걸려야 한다. 어차피 탈락 여부는 목숨으로 정해지고 이 값은
+     * 순위·표시용이다.
+     *
+     * <p>집계 행이 하나도 없는 참여자도 0 으로 내려온다 — 스칼라 서브쿼리 + {@code COALESCE} 다.
+     * 빠지면 그 사람의 {@code final_*} 가 영영 NULL 로 남는다.
+     *
+     * @param groupId 확정할 그룹
+     * @return 참여자 전원. {@code user_id} 오름차순
+     */
+    List<GroupFinalizeRow> findFinalConsumption(@Param("groupId") Long groupId);
+
+    /**
+     * 명예 법정 랭킹 — <b>진행 중</b> 그룹용 (이슈 #173). {@code RANK()} 로 그 자리에서 순위를 만든다.
+     *
+     * <p>정렬은 요구사항정의서 6.6 을 따른다 — 일일평가는 남은 목숨 내림차순 → 누적 소비액
+     * 오름차순, 기간평가는 누적 소비액 오름차순. 동률은 공동 순위(1, 1, 3)다.
+     *
+     * <p>소비액 두 갈래는 {@link #findFinalConsumption} 과 같은 식이다. 기간평가는
+     * 「★ 기간평가(PERIOD) 소비액 공식」 주석의 식, 일일평가는 {@code SUM(effective_amount)}.
+     * 어긋나면 진행 중 순위와 종료 후 확정 순위가 마지막 날 밤사이 이유 없이 뒤바뀐다.
+     *
+     * @param evalType 정렬 분기용. 호출부가 이미 읽은 그룹의 {@code eval_type} 을 넘긴다 —
+     *                 SQL 이 다시 읽으면 정렬 기준의 판단 주체가 둘이 된다
+     */
+    List<GroupRankingRow> findRankingActive(@Param("groupId") Long groupId,
+                                            @Param("evalType") String evalType);
+
+    /**
+     * 명예 법정 랭킹 — <b>종료(CLOSED)</b> 그룹용 (이슈 #173).
+     *
+     * <p><b>순위를 다시 계산하지 않는다.</b> {@code final_rank}·{@code final_outcome}·
+     * {@code final_charge_amount} 는 확정 배치(#172)가 write-once 로 남긴 값이고, 여기서
+     * 재계산하면 종료 후 환불·재분류로 소비액이 바뀔 때마다 이미 보여 준 순위가 뒤집힌다.
+     * 이 계약을 SQL 로 보증하기 위해 이 구문에는 <b>윈도우 함수 자체가 없다</b> —
+     * {@code ChallengeMapperXmlTest} 가 모양을 검사한다.
+     *
+     * <p>누적 소비액은 표시 전용으로 함께 내려간다({@code totalConsumption}).
+     */
+    List<GroupRankingRow> findRankingClosed(@Param("groupId") Long groupId);
+
+    /**
+     * 마지막으로 결산이 끝난 날짜 (이슈 #173). 일일평가 명예 법정의 「{날짜} 결산 반영」 부제용.
+     *
+     * <p>오늘 행은 5분 배치가 재집계하는 중이라 제외한다 — {@code challenge_date < today}.
+     * 결산 행이 아직 없으면(첫날 등) NULL 이고, 화면이 날짜 부분을 생략한다.
+     *
+     * @param today 오늘. 서비스가 {@code Clock} 으로 만든다 — SQL 의 {@code CURDATE()} 를 쓰면
+     *              테스트에서 시간을 고정할 수 없다
+     */
+    LocalDate findLastSettlementDate(@Param("groupId") Long groupId,
+                                     @Param("today") LocalDate today);
 }

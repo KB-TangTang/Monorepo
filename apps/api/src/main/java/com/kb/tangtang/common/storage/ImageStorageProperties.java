@@ -23,6 +23,18 @@ public class ImageStorageProperties {
     private String localBaseUrl;
 
     /**
+     * S3 버킷 이름. **`image.storage=local` 일 때는 비어 있는 것이 정상이다** — 그래서 기본값을
+     * 빈 문자열로 둔다. 여기서 값을 필수로 만들면 S3 를 쓰지 않는 팀원 전원이 버킷 이름을
+     * 채워야 기동된다. 비어 있는지 검사는 s3 를 실제로 고를 때 {@link ImageStorageConfig} 가 한다.
+     */
+    @Value("${image.s3.bucket:}")
+    private String s3Bucket;
+
+    /** S3 리전. 버킷과 달리 팀이 서울 리전으로 고정이라 기본값을 둔다. */
+    @Value("${image.s3.region:ap-northeast-2}")
+    private String s3Region;
+
+    /**
      * 정규화된 절대경로 문자열을 돌려준다. **정규화는 이 한 곳에서만 한다** —
      * ServletConfig(정적 리소스 핸들러)와 LocalImageStorage 가 각자 정규화하면, Windows 의
      * java.io.tmpdir 이 `\` 로 끝나는 탓에 `image.local.dir=${java.io.tmpdir}/tangtang-images`
@@ -43,5 +55,21 @@ public class ImageStorageProperties {
 
     public void setLocalBaseUrl(String localBaseUrl) {
         this.localBaseUrl = localBaseUrl;
+    }
+
+    public String getS3Bucket() {
+        return s3Bucket;
+    }
+
+    public void setS3Bucket(String s3Bucket) {
+        this.s3Bucket = s3Bucket;
+    }
+
+    public String getS3Region() {
+        return s3Region;
+    }
+
+    public void setS3Region(String s3Region) {
+        this.s3Region = s3Region;
     }
 }

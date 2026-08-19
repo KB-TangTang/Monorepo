@@ -1,17 +1,44 @@
 <script setup>
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
 import GroupAiVerdictResultCard from '@/components/challenge/group/GroupAiVerdictResultCard.vue';
 import GroupTieScoreCard from '@/components/challenge/group/GroupTieScoreCard.vue';
-import { getAiVerdict } from '@/fixtures/groupChallengeAiVerdict';
+import { fetchTrialDetail } from '@/api/groupChallenge';
+import { isAiVerdict, toVerdictScreen, verdictRouteName } from '@/utils/groupTrial';
 
 const route = useRoute();
 const router = useRouter();
-const verdict = getAiVerdict(route.query.outcome);
+const verdict = ref(null);
 
+/* 판결은 서버에서 다시 읽는다. 앞 화면이 쿼리로 넘겨주면 URL 조작으로 결과가 바뀐다(이슈 #172). */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
+        router.replace({ name: 'groupChallenge' });
+        return;
+    }
+
+    if (!isAiVerdict(loaded)) {
+        router.replace({
+            name: verdictRouteName(loaded) ?? 'trialProgress',
+            params: route.params,
+        });
+        return;
+    }
+    verdict.value = toVerdictScreen(loaded);
+});
+
+/*
+ * 판결 플로우 위에 상세가 다시 쌓이지 않도록 `replace` 로 돌아간다(이슈 #172).
+ * 헤더 X 와 하단 「그룹 화면으로 돌아가기」가 같은 곳으로 간다 — 이 화면은 재판의 종착점이라
+ * 뒤로 갈 곳이 판사봉 애니메이션(`groupAiVerdict`)뿐이다.
+ */
 function goGroupHome() {
-    router.push({ name: 'groupChallenge' });
+    router.replace({ name: 'groupChallengeDetail', params: { id: route.params.id } });
 }
 
 function goDetail() {
@@ -20,8 +47,8 @@ function goDetail() {
 </script>
 
 <template>
-    <main class="result-page">
-        <DefenseCourtHeader>
+    <main v-if="verdict" class="result-page">
+        <DefenseCourtHeader nav-action="close" @close="goGroupHome">
             <template #nav-right
                 ><span class="result-page__case">{{ verdict.caseNumber }}</span></template
             >

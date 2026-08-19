@@ -6,10 +6,10 @@
  */
 
 /*
- * 연동 계좌에서 최근 28일 소비 데이터와 전체 소비 50건이 확보됐는지 확인
+ * 서버 분석 응답이 없을 때 사용하는 레거시 프로필 판정.
  *
  * 요구사항:
- * 두 조건을 모두 충족해야 개인 맞춤 미션을 제공
+ * 실제 영구 자격은 서버가 누적 유효 소비 50건으로 판정한다.
  */
 export function hasEnoughPersonalMissionData(profile) {
     return (
@@ -17,6 +17,14 @@ export function hasEnoughPersonalMissionData(profile) {
         profile.transactionCount >= profile.requiredTransactionCount
     );
 }
+
+/*
+ * shouldShowPersonalMissionUnlock 은 2026-08-19 에 지웠다(이슈 #315 (3)).
+ * 실제 게이트는 서버가 쥐고 있다 - tbl_user.personal_mission_unlock_status 가 PENDING 일 때만
+ * showUnlock=true 가 내려온다. 여기 남아 있던 규칙은 어디서도 호출되지 않아
+ * 테스트만 그것을 붙들고 있었고, 정작 서버 상태 전이에는 테스트가 없었다.
+ * 노출 판단은 stores/personalMission.js 의 syncMissionUnlock() 한 곳에서만 한다.
+ */
 
 export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     if (targetAmount <= 0) {
@@ -38,6 +46,7 @@ export function toTodayMissionBriefing(mission) {
     return {
         missionTitle: mission.missionTitle ?? '',
         missionContent: mission.missionContent ?? '',
+        missionType: mission.missionType ?? '',
         categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
         alibiCondition: isRelativeMission
             ? `오늘 ${formatWon(targetAmount)} 이하`
@@ -48,7 +57,15 @@ export function toTodayMissionBriefing(mission) {
         difficultyName: mission.difficultyName ?? '',
         assignDate: mission.assignDate ?? '',
         assignmentReason: mission.assignmentReason ?? '',
+        missionBadge: getMissionBadge(mission.missionType, mission.assignmentReason),
     };
+}
+
+export function getMissionBadge(missionType, assignmentReason) {
+    if (missionType !== 'ABSOLUTE') {
+        return '수사 브리핑';
+    }
+    return assignmentReason === 'MONTHLY_RANDOM' ? '전체 단속 · 절대형' : '공통 사건 · 절대형';
 }
 
 export function formatWon(amount) {
@@ -189,7 +206,7 @@ function formatLocalDateKey(date) {
 
 function formatAnalysisPeriod(startDate, endDate) {
     if (!startDate || !endDate) return '';
-    return `${formatShortDate(startDate)} – ${formatShortDate(endDate)}`;
+    return `${formatShortDate(startDate)} ~ ${formatShortDate(endDate)}`;
 }
 
 function formatShortDate(dateValue) {

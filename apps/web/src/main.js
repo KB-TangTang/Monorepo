@@ -11,6 +11,7 @@ import StateError from '@/components/common/StateError.vue';
 import { refreshSession } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { isBackendUnreachable } from '@/utils/auth';
+import { installStaleChunkRecovery } from '@/utils/staleChunk';
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -62,6 +63,12 @@ if (backendUnreachable) {
             }),
     }).mount('#app');
 } else {
+    /*
+     * 재배포로 사라진 청크에서 복구한다(이슈 #320).
+     * app.use(router) 가 그 자리에서 초기 내비게이션을 시작하므로 그 전에 건다.
+     */
+    installStaleChunkRecovery(router);
+
     app.use(router);
     // 초기 내비게이션이 끝난 뒤 마운트해 첫 화면 깜빡임을 막는다
     await router.isReady();

@@ -4,6 +4,15 @@ export function fetchTodayMission() {
     return http.get('/missions/today');
 }
 
+/* 자격 판정은 서버가 한다 - 보낼 본문이 없다(이슈 #315 (1)). */
+export function syncPersonalMissionUnlock() {
+    return http.post('/main-challenge/mission-unlock/status');
+}
+
+export function acknowledgePersonalMissionUnlock() {
+    return http.patch('/main-challenge/mission-unlock/acknowledge');
+}
+
 export function fetchMissionStreak() {
     return http.get('/missions/streak');
 }

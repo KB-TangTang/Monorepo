@@ -20,6 +20,8 @@ const {
     fetchMissionRankingMonths,
     fetchMissionRankings,
     fetchTodayMission,
+    syncPersonalMissionUnlock,
+    acknowledgePersonalMissionUnlock,
 } =
     await import('../src/api/personalMission.js');
 
@@ -59,6 +61,23 @@ test('오늘 개인 미션은 today mission API로 조회한다', async () => {
 
     assert.equal(stub.calls[0].method, 'get');
     assert.equal(stub.calls[0].args[0], '/missions/today');
+});
+
+/* 동기화는 본문을 보내지 않는다 - 자격 판정은 서버가 한다(이슈 #315 (1)). */
+test('맞춤 미션 개시 상태를 서버와 동기화하고 확인 처리한다', async () => {
+    stub.reset();
+
+    await syncPersonalMissionUnlock();
+    await acknowledgePersonalMissionUnlock();
+
+    assert.deepEqual(stub.calls[0], {
+        method: 'post',
+        args: ['/main-challenge/mission-unlock/status'],
+    });
+    assert.deepEqual(stub.calls[1], {
+        method: 'patch',
+        args: ['/main-challenge/mission-unlock/acknowledge'],
+    });
 });
 
 test('개인 미션 월간 점수는 monthly score API로 조회한다', async () => {

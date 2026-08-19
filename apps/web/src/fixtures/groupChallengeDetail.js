@@ -747,15 +747,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=1 · 배달 소비 줄이기 · 일일결산 생존 순위 ──────────── */
     1: {
         groupId: 1,
-        groupName: '배달 소비 줄이기',
         evalType: 'DAILY',
         lastSettlementDate: '8월 6일',
 
-        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
-
         memo: '하루 배달 1회 이하, 커피는 허용',
-        memoAuthor: '유현',
-        memoDate: '7월 30일',
 
         podium: [
             { rank: 1, userId: 1, ...AVATAR[1], isMe: true },
@@ -784,10 +779,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
                 isMe: false, livesCount: 1, maxLives: 7,
                 isEliminated: false, statusLabel: '1', statusType: 'danger',
             },
+            /* 진행 중의 목숨 0 은 「탈락」이 아니라 「탈락 위기」다 — 탈락 확정은 CLOSED 에서만. */
             {
                 rank: 5, userId: 6, ...AVATAR[6],
                 isMe: false, livesCount: 0, maxLives: 7,
-                isEliminated: true, statusLabel: '탈락', statusType: 'eliminated',
+                isEliminated: false, statusLabel: '탈락 위기', statusType: 'danger',
             },
         ],
     },
@@ -795,15 +791,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=4 · 택시 대신 지하철 · 일일결산 생존 순위 ─────────── */
     4: {
         groupId: 4,
-        groupName: '택시 대신 지하철',
         evalType: 'DAILY',
         lastSettlementDate: '8월 5일',
 
-        trialStats: { totalTrials: 1, guiltyCount: 0, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
@@ -838,16 +829,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=5 · 편의점 간식 줄이기 · 기간결산 누적 순위 ─────── */
     5: {
         groupId: 5,
-        groupName: '편의점 간식 줄이기',
         evalType: 'PERIOD',
         limitAmount: 30000,
         lastSettlementDate: '8월 7일',
 
-        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -886,15 +872,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=6 · 편의점 커피 끊기 · 최종 순위 ─────────────────── */
     6: {
         groupId: 6,
-        groupName: '편의점 커피 끊기',
         evalType: 'DAILY',
         lastSettlementDate: '7월 28일',
 
-        trialStats: { totalTrials: 2, guiltyCount: 1, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
@@ -939,15 +920,10 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=7 · 주말 배달 금지령 · 최종 순위 ─────────────────── */
     7: {
         groupId: 7,
-        groupName: '주말 배달 금지령',
         evalType: 'DAILY',
         lastSettlementDate: '7월 14일',
 
-        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -987,16 +963,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=8 · 카페비 방어단 · 7월 · 기간결산 최종 순위 ──────── */
     8: {
         groupId: 8,
-        groupName: '카페비 방어단 · 7월',
         evalType: 'PERIOD',
         limitAmount: 50000,
         lastSettlementDate: '7월 1일',
 
-        trialStats: { totalTrials: 1, guiltyCount: 1, innocentCount: 0 },
-
         memo: '카페는 주 3회까지만!',
-        memoAuthor: '준서',
-        memoDate: '6월 22일',
 
         podium: [
             { rank: 1, userId: 1, ...AVATAR[1], isMe: true },
@@ -1027,16 +998,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=11 · 배달비 절약 도전 · 기간결산 누적 순위 ─────── */
     11: {
         groupId: 11,
-        groupName: '배달비 절약 도전',
         evalType: 'PERIOD',
         limitAmount: 50000,
         lastSettlementDate: '8월 7일',
 
-        trialStats: { totalTrials: 0, guiltyCount: 0, innocentCount: 0 },
-
         memo: '배달은 주 2회까지!',
-        memoAuthor: '나',
-        memoDate: '7월 30일',
 
         podium: [
             { rank: 1, userId: 2, ...AVATAR[2], isMe: false },
@@ -1067,16 +1033,11 @@ export const MOCK_CHALLENGE_RANKINGS = {
     /* ── id=12 · 간식비 절약 · 7월 · 기간결산 최종 순위 ──────── */
     12: {
         groupId: 12,
-        groupName: '간식비 절약 · 7월',
         evalType: 'PERIOD',
         limitAmount: 40000,
         lastSettlementDate: '7월 8일',
 
-        trialStats: { totalTrials: 3, guiltyCount: 2, innocentCount: 1 },
-
         memo: null,
-        memoAuthor: null,
-        memoDate: null,
 
         podium: [
             { rank: 1, userId: 3, ...AVATAR[3], isMe: false },
@@ -1106,249 +1067,5 @@ export const MOCK_CHALLENGE_RANKINGS = {
                 isMe: false, currentAmount: 48600, usagePercent: 122,
             },
         ],
-    },
-};
-
-/* ────────────────────────────────────────────────────────────
- * 3. MOCK_VOTE_DETAIL — 투표 화면(VoteVerdictView) 데이터
- *    indictmentId 기준으로 조회한다.
- *    피고인 변론 + 증거 + 투표 현황을 하나로 합친 DTO.
- * ──────────────────────────────────────────────────────────── */
-
-export const MOCK_VOTE_DETAIL = {
-    /* ── indictmentId=102 · 민지 · 배달 소비 줄이기 ── */
-    102: {
-        indictmentId: 102,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        limitAmount: 15000,
-        currentAmount: 27490,
-        exceededAmount: 12490,
-
-        /* 피고인 정보 */
-        defendant: {
-            userId: 5,
-            ...AVATAR[5],
-        },
-
-        /* 변론 내용 */
-        defenseMessage: '친구들 네 명과 다같이 주문해서 결제만 제 카드로 했고, 제가 실제로 부담한 금액은 8,000원이에요. 영수증과 친구들이 보내준 송금 내역을 함께 첨부했으니 확인 부탁드려요. 다음부터는 미리 한도를 정할게요.',
-        actualCostAmount: 8000,
-        defenseDate: '2026-08-06',
-
-        /* 증거 자료 */
-        evidences: [
-            { id: 1, label: '증 제1호 · 배달앱 결제 영수증', fileName: 'receipt.jpg' },
-            { id: 2, label: '증 제2호 · 친구 3인 송금 내역', fileName: 'transfer.png' },
-        ],
-
-        /* 마감 카운트다운 (초 단위, 페이지 진입 기준) */
-        deadlineSeconds: 134 * 60,
-
-        /* 투표 현황 */
-        voteCount: 3,
-        totalVoters: 5,
-        members: [
-            { userId: 1, ...AVATAR[1], voted: false },
-            { userId: 2, ...AVATAR[2], voted: true },
-            { userId: 3, ...AVATAR[3], voted: true },
-            { userId: 4, ...AVATAR[4], voted: true },
-            { userId: 6, ...AVATAR[6], voted: false },
-        ],
-    },
-
-    /* ── indictmentId=104 · 유현 · 배달 소비 줄이기 ── */
-    104: {
-        indictmentId: 104,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        limitAmount: 15000,
-        currentAmount: 16800,
-        exceededAmount: 1800,
-
-        defendant: {
-            userId: 2,
-            ...AVATAR[2],
-        },
-
-        defenseMessage: '퇴근길에 편의점에서 도시락이랑 음료를 샀는데, 집에 밥이 없어서 어쩔 수 없었어요. 내일은 미리 준비하겠습니다.',
-        actualCostAmount: 16800,
-        defenseDate: '2026-08-05',
-
-        evidences: [
-            { id: 1, label: '증 제1호 · 편의점 영수증', fileName: 'receipt_conv2.jpg' },
-        ],
-
-        deadlineSeconds: 52 * 60,
-
-        voteCount: 0,
-        totalVoters: 3,
-        members: [
-            { userId: 1, ...AVATAR[1], voted: false },
-            { userId: 3, ...AVATAR[3], voted: false },
-            { userId: 5, ...AVATAR[5], voted: false },
-        ],
-    },
-
-    /* ── indictmentId=201 · 하은 · 택시 대신 지하철 ── */
-    201: {
-        indictmentId: 201,
-        challengeId: 4,
-        challengeName: '택시 대신 지하철',
-        evalType: 'DAILY',
-        limitAmount: 8000,
-        currentAmount: 9200,
-        exceededAmount: 1200,
-
-        defendant: {
-            userId: 6,
-            ...AVATAR[6],
-        },
-
-        defenseMessage: '비가 많이 와서 안전 상 택시를 탔어요. 대중교통이 지연되는 바람에 불가피한 선택이었습니다.',
-        actualCostAmount: 9200,
-        defenseDate: '2026-08-04',
-
-        evidences: [
-            { id: 1, label: '증 제1호 · 택시 영수증', fileName: 'taxi_receipt.jpg' },
-        ],
-
-        deadlineSeconds: 21 * 60 * 60 + 40 * 60,
-
-        voteCount: 1,
-        totalVoters: 2,
-        members: [
-            { userId: 1, ...AVATAR[1], voted: false },
-            { userId: 3, ...AVATAR[3], voted: true },
-        ],
-    },
-
-    /* ── indictmentId=103 · 준서 · 배달 소비 줄이기 ── */
-    103: {
-        indictmentId: 103,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        limitAmount: 15000,
-        currentAmount: 24120,
-        exceededAmount: 9120,
-
-        defendant: {
-            userId: 3,
-            ...AVATAR[3],
-        },
-
-        defenseMessage: '점심에 팀 회식을 해서 제 카드로 결제했어요. 4인분이라 실제 부담은 6,000원입니다.',
-        actualCostAmount: 6000,
-        defenseDate: '2026-08-03',
-
-        evidences: [],
-
-        deadlineSeconds: 4 * 60 * 60 + 18 * 60,
-
-        voteCount: 2,
-        totalVoters: 3,
-        members: [
-            { userId: 1, ...AVATAR[1], voted: false },
-            { userId: 2, ...AVATAR[2], voted: true },
-            { userId: 5, ...AVATAR[5], voted: true },
-        ],
-    },
-
-    /* ── indictmentId=301 · placeholder ── */
-    301: {
-        indictmentId: 301,
-        challengeId: 5,
-        challengeName: '편의점 간식 줄이기',
-        evalType: 'PERIOD',
-        limitAmount: 30000,
-        currentAmount: 35400,
-        exceededAmount: 5400,
-
-        defendant: {
-            userId: 5,
-            ...AVATAR[5],
-        },
-
-        defenseMessage: '회사 야근 중에 편의점에서 간식을 샀는데, 팀원들이 같이 먹을 거라 제가 대신 결제했어요. 제 몫은 3,000원 정도입니다.',
-        actualCostAmount: 3000,
-        defenseDate: '2026-08-06',
-
-        evidences: [
-            { id: 1, label: '증 제1호 · 편의점 영수증', fileName: 'receipt_conv.jpg' },
-            { id: 2, label: '증 제2호 · 팀 채팅 캡처', fileName: 'chat_capture.png' },
-        ],
-
-        deadlineSeconds: 52 * 60 * 60,
-
-        voteCount: 2,
-        totalVoters: 5,
-        members: [
-            { userId: 1, ...AVATAR[1], voted: false },
-            { userId: 2, ...AVATAR[2], voted: true },
-            { userId: 3, ...AVATAR[3], voted: true },
-            { userId: 4, ...AVATAR[4], voted: false },
-            { userId: 6, ...AVATAR[6], voted: false },
-        ],
-    },
-};
-
-/* ────────────────────────────────────────────────────────────
- * 4. MOCK_VERDICT_RESULT — 최종 판결 결과 (VerdictResultView / VerdictDetailView)
- *    indictmentId 기준. outcome: 'INNOCENT' | 'GUILTY'
- * ──────────────────────────────────────────────────────────── */
-
-export const MOCK_VERDICT_RESULT = {
-    /* ── 103: 무죄 ── */
-    103: {
-        indictmentId: 103,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0803',
-        outcome: 'INNOCENT',
-
-        defendant: { userId: 3, ...AVATAR[3] },
-
-        innocentVotes: 4,
-        guiltyVotes: 2,
-        totalVoters: 6,
-
-        /* 판결 상세 */
-        detail: {
-            judgmentDate: '6월 19일',
-            currentAmount: 37400,
-            limitAmount: 25000,
-            actualCostAmount: 8000,
-            reason: '변론과 실제 부담금, 익명 투표 결과를 반영했어요.',
-        },
-    },
-
-    /* ── 102: 유죄 (시나리오용) ── */
-    102: {
-        indictmentId: 102,
-        challengeId: 1,
-        challengeName: '배달 소비 줄이기',
-        evalType: 'DAILY',
-        evalLabel: '일일결산',
-        caseNumber: '2026-재판-0805',
-        outcome: 'GUILTY',
-
-        defendant: { userId: 5, ...AVATAR[5] },
-
-        innocentVotes: 2,
-        guiltyVotes: 4,
-        totalVoters: 6,
-
-        detail: {
-            judgmentDate: '6월 19일',
-            currentAmount: 37400,
-            limitAmount: 25000,
-            actualCostAmount: 8000,
-            reason: '변론과 실제 부담금, 익명 투표 결과를 반영했어요.',
-        },
     },
 };

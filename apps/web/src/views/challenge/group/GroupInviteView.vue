@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vue';
 import GroupSummonCard from '@/components/challenge/group/GroupSummonCard.vue';
 import { fetchGroupDetail } from '@/api/groupChallenge';
+import { resolveBack } from '@/utils/groupChallengeNavigation';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,7 +20,7 @@ const headerBadges = computed(() => {
     ];
 });
 
-const cardVariant = computed(() => isPostCreate.value ? 'solid' : 'outline');
+const cardVariant = computed(() => (isPostCreate.value ? 'solid' : 'outline'));
 
 const infoText = computed(() => {
     if (isPostCreate.value) {
@@ -28,7 +29,7 @@ const infoText = computed(() => {
     return '초대 코드를 공유하면 배심원이 입장해요.<br><b>최대 6명</b>까지 함께할 수 있어요.';
 });
 
-const subLinkText = computed(() => isPostCreate.value ? '그룹 화면으로' : '나중에 초대하기');
+const subLinkText = computed(() => (isPostCreate.value ? '그룹 화면으로' : '나중에 초대하기'));
 
 onMounted(async () => {
     try {
@@ -49,9 +50,7 @@ async function handleShare() {
         if (navigator.share) {
             await navigator.share(shareData);
         } else {
-            await navigator.clipboard.writeText(
-                `${shareData.text}\n${shareData.url}`
-            );
+            await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
             alert('초대 링크가 클립보드에 복사되었습니다.');
         }
     } catch {
@@ -59,8 +58,19 @@ async function handleShare() {
     }
 }
 
+/*
+ * 진입로가 셋이다 — 상세·목록·생성 완료. 홈으로 하드코딩돼 있어 어디서 들어와도 홈으로
+ * 나갔다(이슈 #303). 상세·목록은 push 하며 표시를 남기므로 그 자리로 되돌아가고,
+ * **생성 완료는 표시가 없어 홈으로 나간다** — 방금 만든 폼으로 되돌아가면 안 되기 때문이다.
+ */
 function goBack() {
-    router.push({ name: 'groupChallenge' });
+    const target = resolveBack(window.history.state, 'groupChallenge');
+
+    if (target.type === 'back') {
+        router.back();
+        return;
+    }
+    router.push({ name: target.name });
 }
 </script>
 
@@ -83,10 +93,7 @@ function goBack() {
 
             <!-- 소환장 카드 -->
             <div class="giv-card-area">
-                <GroupSummonCard
-                    :invite-code="group.inviteCode"
-                    :variant="cardVariant"
-                />
+                <GroupSummonCard :invite-code="group.inviteCode" :variant="cardVariant" />
             </div>
         </div>
 

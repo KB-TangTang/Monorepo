@@ -4,6 +4,7 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.user.domain.TutorialType;
+import com.kb.tangtang.user.domain.PersonalMissionUnlockStatus;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.mapper.UserMapper;
@@ -15,9 +16,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -28,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -69,6 +74,7 @@ class UserServiceTest {
                 .name(name)
                 .status("ACTIVE")
                 .difficultyId(1L)
+                .personalMissionUnlockStatus(PersonalMissionUnlockStatus.UNTRACKED)
                 .build();
     }
 
@@ -404,6 +410,67 @@ class UserServiceTest {
         verify(userMapper, never()).findById(anyLong());
     }
 
+    /* ── 맞춤 미션 개시 안내 (이슈 #129) ───────────────── */
+
+    @Test
+    @DisplayName("데이터 부족 상태를 동기화하면 서버 상태를 돌려준다")
+    void syncPersonalMissionUnlockInsufficient() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.INSUFFICIENT);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.syncPersonalMissionUnlock(USER_ID);
+
+        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID);
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, result.getStatus());
+        assertFalse(result.isShowUnlock());
+    }
+
+    @Test
+    @DisplayName("부족 상태를 거친 뒤 데이터가 충족되면 개시 안내를 노출한다")
+    void syncPersonalMissionUnlockPending() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.PENDING);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.syncPersonalMissionUnlock(USER_ID);
+
+        assertTrue(result.isShowUnlock());
+    }
+
+    @Test
+    @DisplayName("개시 안내 확인은 SEEN 상태를 돌려주며 재노출하지 않는다")
+    void acknowledgePersonalMissionUnlock() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.SEEN);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.acknowledgePersonalMissionUnlock(USER_ID);
+
+        verify(userMapper).acknowledgePersonalMissionUnlock(USER_ID);
+        assertEquals(PersonalMissionUnlockStatus.SEEN, result.getStatus());
+        assertFalse(result.isShowUnlock());
+    }
+
+    /*
+     * 이슈 #315 (1). 예전에는 클라이언트가 보낸 enoughData 를 그대로 믿어
+     * false → true 를 연달아 쏘면 자격 없이 안내를 열 수 있었다.
+     * 이제 서비스는 사용자 식별자만 넘기고 판정은 매퍼가 DB 안에서 한다.
+     */
+    @Test
+    @DisplayName("UNTRACKED 사용자를 동기화해도 서버가 준 상태만 그대로 돌려준다")
+    void syncPersonalMissionUnlockKeepsUntracked() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.UNTRACKED);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
+
+        var result = service.syncPersonalMissionUnlock(USER_ID);
+
+        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID);
+        assertEquals(PersonalMissionUnlockStatus.UNTRACKED, result.getStatus());
+        assertFalse(result.isShowUnlock());
+    }
+
     @Test
     @DisplayName("갱신된 행이 없으면 NOT_FOUND — 탈퇴·차단 사용자도 여기로 떨어진다")
     void updateNameMissingUser() {
@@ -491,6 +558,57 @@ class UserServiceTest {
         ArgumentCaptor<String> storedKey = ArgumentCaptor.forClass(String.class);
         verify(imageStorage).store(any(), storedKey.capture());
         verify(imageStorage).delete(storedKey.getValue());
+    }
+
+    /* ── 옛 이미지 삭제 시점 (이슈 #162) ──────────────────── */
+
+    @Test
+    @DisplayName("트랜잭션 안에서는 옛 이미지를 커밋 전에 지우지 않는다 — 커밋이 깨지면 사진만 사라진다")
+    void deferredDeleteWaitsForCommit() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteProfileImage(USER_ID);
+
+            verify(imageStorage, never()).delete(anyString());
+
+            /* 커밋이 끝난 시점을 흉내 낸다 — 이때 비로소 지워야 한다. */
+            runAfterCommit();
+            verify(imageStorage).delete("profile/7/old.jpg");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("커밋 뒤 삭제가 실패해도 예외를 밖으로 내보내지 않는다 — 이미 성공한 요청이 500 이 되면 안 된다")
+    void deferredDeleteSwallowsFailure() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+        doThrow(new RuntimeException("S3 연결 실패")).when(imageStorage).delete(anyString());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteProfileImage(USER_ID);
+
+            assertDoesNotThrow(UserServiceTest::runAfterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /** 등록된 동기화 콜백의 afterCommit 을 직접 돌린다. 실제 트랜잭션 매니저 없이 시점만 흉내 낸다. */
+    private static void runAfterCommit() {
+        for (TransactionSynchronization synchronization :
+                TransactionSynchronizationManager.getSynchronizations()) {
+            synchronization.afterCommit();
+        }
     }
 
     @Test

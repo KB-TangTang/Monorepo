@@ -85,15 +85,23 @@ const showVoteStats = computed(() =>
     isVoting.value && (trial.value?.vote?.totalVoters ?? 0) > 0,
 );
 
+/*
+ * 다수결로 끝난 재판은 판결문으로, 동률이라 판사 탕이가 판결한 재판은 동점 안내로 간다(이슈 #172).
+ * 판정은 `toTrialProgress` 가 서버 상태를 보고 미리 해 둔다.
+ */
 function goVerdict() {
     router.push({
-        name: 'verdictResult',
+        name: trial.value?.verdictRoute ?? 'verdictResult',
         params: route.params,
     });
 }
 
+/*
+ * 상세로 돌아갈 때 `replace` 를 쓴다(이슈 #172). `push` 면 판결 플로우 위에 상세가 다시 쌓여
+ * 상세에서 뒤로가기를 눌렀을 때 방금 본 재판 화면이 나온다. 변론 플로우(`DefenseDoneView`)와 같은 관례.
+ */
 function goBack() {
-    router.push({
+    router.replace({
         name: 'groupChallengeDetail',
         params: { id: route.params.id },
     });

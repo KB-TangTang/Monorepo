@@ -59,7 +59,9 @@
                 AND mp.mission_type = 'RELATIVE'
           )
         GROUP BY c.id, p.category_name, c.category_name
-        HAVING total_amount > 0
+        HAVING SUM(CASE WHEN t.is_refund = 0 THEN 1 ELSE 0 END) >= 3
+           AND COUNT(DISTINCT CASE WHEN t.is_refund = 0 THEN t.tr_date END) >= 2
+           AND total_amount > 0
         ORDER BY total_amount DESC, transaction_count DESC, c.id ASC
         LIMIT #{limit}
     </select>

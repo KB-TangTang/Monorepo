@@ -13,4 +13,5 @@ public class MissionPoolItem {
     private Long id;
     private String missionTitle;
     private String missionContent;
+    private Long categoryId;
 }

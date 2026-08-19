@@ -1,1 +1,0 @@
-UPDATE tbl_user SET created_at = '2026-01-12 14:29:14' WHERE id = 19;

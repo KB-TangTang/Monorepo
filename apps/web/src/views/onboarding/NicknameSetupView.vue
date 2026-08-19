@@ -113,7 +113,7 @@ async function onSubmit() {
                 <input
                     ref="fileInput"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png"
                     class="nickname-setup__file"
                     @change="onPickImage"
                 />

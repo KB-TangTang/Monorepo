@@ -37,7 +37,10 @@ const titleText = computed(() => isDaily.value ? '생존 순위' : '누적 혐�
 const dateLabel = computed(() => {
     if (!data.value) return '';
     if (isDaily.value) {
-        return `남은 목숨 기준 · ${data.value.lastSettlementDate} 결산 반영`;
+        /* 결산 행이 아직 없으면(시작 첫날) 날짜가 빈 문자열로 온다 — 날짜 부분을 생략한다. */
+        return data.value.lastSettlementDate
+            ? `남은 목숨 기준 · ${data.value.lastSettlementDate} 결산 반영`
+            : '남은 목숨 기준';
     }
     return '기간 누적 소비 기준 · 적게 쓴 순';
 });

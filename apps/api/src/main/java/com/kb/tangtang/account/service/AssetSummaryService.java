@@ -5,7 +5,6 @@ import com.kb.tangtang.account.dto.AssetSummaryDto;
 import com.kb.tangtang.account.dto.AssetTrendItemDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -47,7 +46,12 @@ public class AssetSummaryService {
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
+    /*
+     * @Transactional 을 일부러 안 둔다. compositionCalculator.compute() 가 이제
+     * InvestmentPriceRefresher 를 거쳐 토스에 블로킹 HTTP 호출을 할 수 있는데(QA 지적사항),
+     * 여기 트랜잭션을 걸면 그 호출이 끝날 때까지 DB 커넥션을 붙잡아 풀을 고갈시킬 수 있다.
+     * 아래 쿼리들은 각자 독립적인 조회·단건 갱신이라 하나의 트랜잭션으로 묶일 필요가 없다.
+     */
     public AssetSummaryDto getSummary(long userId, String rawBaseDate) {
         LocalDateTime asOf = LocalDateTime.now(clock);
         YearMonth baseMonth = YearMonth.from(AssetBaseDateParser.parse(rawBaseDate, asOf.toLocalDate()));

@@ -18,21 +18,21 @@ public class DevMissionService {
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
 
     private final RelativeMissionAssignmentMapper assignmentMapper;
-    private final RelativeMissionAssignmentService assignmentService;
+    private final DailyMissionAssignmentService assignmentService;
     private final TodayMissionService todayMissionService;
     private final String appEnv;
     private final Clock clock;
 
     @Autowired
     public DevMissionService(RelativeMissionAssignmentMapper assignmentMapper,
-                             RelativeMissionAssignmentService assignmentService,
+                             DailyMissionAssignmentService assignmentService,
                              TodayMissionService todayMissionService,
                              @Value("${app.env:local}") String appEnv) {
         this(assignmentMapper, assignmentService, todayMissionService, appEnv, Clock.system(SEOUL_ZONE));
     }
 
     protected DevMissionService(RelativeMissionAssignmentMapper assignmentMapper,
-                                RelativeMissionAssignmentService assignmentService,
+                                DailyMissionAssignmentService assignmentService,
                                 TodayMissionService todayMissionService,
                                 String appEnv,
                                 Clock clock) {

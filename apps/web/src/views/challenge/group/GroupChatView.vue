@@ -237,10 +237,12 @@ watch(
 
 <template>
     <div class="chat-view">
-        <GroupChatHeader
-            :room-info="store.roomInfo"
-            @open-menu="showToast('준비 중인 기능입니다')"
-        />
+        <!--
+          우상단 「더보기」 버튼은 2026-08-19 에 걷어냈다(이슈 #331).
+          #125 목업 UI 시절의 자리였는데 연결된 메뉴가 없어 누르면 「준비 중인 기능입니다」만 떴다.
+          방 나가기는 GroupFinalizeService 의 deleteRoom 순서 문제와 얽혀 있어 따로 다룬다.
+        -->
+        <GroupChatHeader :room-info="store.roomInfo" />
 
         <!-- 종료된 챌린지: 대화가 챌린지 종료와 함께 이미 삭제됐다 -->
         <div v-if="store.closed" class="chat-view__closed">
@@ -257,6 +259,21 @@ watch(
             <div ref="chatScrollEl" class="chat-view__scroll" @scroll="handleScroll">
                 <div v-if="store.loading && store.messages.length === 0" class="chat-view__loading">
                     메시지를 불러오는 중...
+                </div>
+
+                <!--
+                  로드에 성공했는데 메시지가 0건인 방(이슈 #323).
+                  이 분기가 없어 새로 만든 방이 아무 문구 없는 흰 화면이었다.
+                -->
+                <div v-else-if="store.messages.length === 0" class="chat-view__empty">
+                    <p class="chat-view__empty-title">아직 오간 말이 없어요</p>
+                    <p class="chat-view__empty-desc">
+                        {{
+                            store.isEnded
+                                ? '이 챌린지는 끝났어요.'
+                                : '첫 마디를 남겨 재판을 열어보세요.'
+                        }}
+                    </p>
                 </div>
 
                 <template v-for="item in groupedMessages" :key="item.key">
@@ -340,6 +357,25 @@ watch(
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-semibold);
     padding: var(--tt-space-6) 0;
+}
+
+/* 빈 방(이슈 #323). 스크롤 영역이 flex 라 auto 마진으로 가운데에 세운다. */
+.chat-view__empty {
+    margin: auto 0;
+    text-align: center;
+    padding: var(--tt-space-6) var(--tt-screen-padding);
+}
+
+.chat-view__empty-title {
+    color: var(--tt-text);
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+}
+
+.chat-view__empty-desc {
+    margin-top: var(--tt-space-2);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
 }
 
 .chat-view__closed {

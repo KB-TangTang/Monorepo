@@ -1,6 +1,8 @@
 package com.kb.tangtang.user.mapper;
 
 import com.kb.tangtang.config.RootConfig;
+import com.kb.tangtang.mission.mapper.MissionAnalysisSnapshotMapper;
+import com.kb.tangtang.user.domain.PersonalMissionUnlockStatus;
 import com.kb.tangtang.user.dto.RefreshTokenDto;
 import com.kb.tangtang.user.dto.UserDto;
 import org.junit.jupiter.api.Disabled;
@@ -40,6 +42,10 @@ class UserMapperTest {
 
     @Autowired
     private RefreshTokenMapper refreshTokenMapper;
+
+    /** 맞춤 미션 자격 래치(relative_mission_qualified_at)를 심기 위해서만 쓴다. */
+    @Autowired
+    private MissionAnalysisSnapshotMapper missionAnalysisSnapshotMapper;
 
     @Test
     @DisplayName("사용자를 넣고 소셜 ID 로 다시 찾는다")
@@ -228,5 +234,101 @@ class UserMapperTest {
 
         assertEquals("sub-withdraw-3_withdrawn_" + user.getId(),
                 userMapper.findById(user.getId()).getProviderUserId());
+    }
+
+    /* ── 맞춤 미션 개시 안내 상태 전이 (이슈 #315 (1)(2)) ─────────────
+     *
+     * 이 전이는 SQL 의 CASE 안에서만 일어난다. 자바 쪽에 분기가 없으므로
+     * 실제 DB 로 돌리지 않으면 아무것도 검증되지 않는다.
+     */
+
+    private UserDto 사용자_생성(String providerUserId) {
+        UserDto user = UserDto.builder()
+                .socialProvider("GOOGLE").providerUserId(providerUserId)
+                .status("ACTIVE").difficultyId(2L)
+                .build();
+        userMapper.insert(user);
+        return user;
+    }
+
+    private PersonalMissionUnlockStatus 동기화후_상태(long userId) {
+        userMapper.syncPersonalMissionUnlockStatus(userId);
+        return userMapper.findById(userId).getPersonalMissionUnlockStatus();
+    }
+
+    @Test
+    @DisplayName("자격이 없으면 UNTRACKED → INSUFFICIENT 로 내려간다")
+    void 개시안내_자격없음_부족처리() {
+        UserDto user = 사용자_생성("sub-unlock-1");
+        assertEquals(PersonalMissionUnlockStatus.UNTRACKED,
+                userMapper.findById(user.getId()).getPersonalMissionUnlockStatus());
+
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, 동기화후_상태(user.getId()));
+    }
+
+    @Test
+    @DisplayName("부족을 거친 뒤 자격을 얻으면 INSUFFICIENT → PENDING 으로 열린다")
+    void 개시안내_자격획득_예약() {
+        UserDto user = 사용자_생성("sub-unlock-2");
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, 동기화후_상태(user.getId()));
+
+        missionAnalysisSnapshotMapper.markQualified(user.getId(), LocalDateTime.now());
+
+        assertEquals(PersonalMissionUnlockStatus.PENDING, 동기화후_상태(user.getId()));
+    }
+
+    /**
+     * 이슈 #315 (1). 예전에는 클라이언트가 보낸 enoughData 를 그대로 믿어
+     * false → true 를 연달아 쏘면 자격 없이 PENDING 까지 갈 수 있었다.
+     * 이제는 같은 호출을 몇 번 반복해도 자격 래치가 없으면 INSUFFICIENT 에서 멈춘다.
+     */
+    @Test
+    @DisplayName("자격 없이 몇 번을 호출해도 PENDING 으로 올라가지 못한다")
+    void 개시안내_자격없이_반복호출해도_안열린다() {
+        UserDto user = 사용자_생성("sub-unlock-3");
+
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, 동기화후_상태(user.getId()));
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, 동기화후_상태(user.getId()));
+        assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, 동기화후_상태(user.getId()));
+    }
+
+    /**
+     * 이슈 #315 (2). 자격 래치는 markQualified 가 IS NULL 가드로 한 번만 박고 지우지 않는다.
+     * 그래서 PENDING 이 INSUFFICIENT 로 되돌아가는 전이 자체가 생기지 않는다.
+     */
+    @Test
+    @DisplayName("PENDING 은 다시 동기화해도 되돌아가지 않는다")
+    void 개시안내_PENDING_되돌아가지_않는다() {
+        UserDto user = 사용자_생성("sub-unlock-4");
+        동기화후_상태(user.getId());
+        missionAnalysisSnapshotMapper.markQualified(user.getId(), LocalDateTime.now());
+        assertEquals(PersonalMissionUnlockStatus.PENDING, 동기화후_상태(user.getId()));
+
+        assertEquals(PersonalMissionUnlockStatus.PENDING, 동기화후_상태(user.getId()));
+    }
+
+    @Test
+    @DisplayName("기능 도입 전부터 자격이 있던 사용자에게는 안내를 띄우지 않는다")
+    void 개시안내_기존자격자_보호() {
+        UserDto user = 사용자_생성("sub-unlock-5");
+        missionAnalysisSnapshotMapper.markQualified(user.getId(), LocalDateTime.now());
+
+        assertEquals(PersonalMissionUnlockStatus.UNTRACKED, 동기화후_상태(user.getId()));
+    }
+
+    @Test
+    @DisplayName("확인 처리는 PENDING 일 때만 SEEN 이 된다 - 멱등")
+    void 개시안내_확인처리() {
+        UserDto user = 사용자_생성("sub-unlock-6");
+        동기화후_상태(user.getId());
+        missionAnalysisSnapshotMapper.markQualified(user.getId(), LocalDateTime.now());
+        동기화후_상태(user.getId());
+
+        assertEquals(1, userMapper.acknowledgePersonalMissionUnlock(user.getId()));
+        assertEquals(PersonalMissionUnlockStatus.SEEN,
+                userMapper.findById(user.getId()).getPersonalMissionUnlockStatus());
+
+        assertEquals(0, userMapper.acknowledgePersonalMissionUnlock(user.getId()));
+        assertEquals(PersonalMissionUnlockStatus.SEEN, 동기화후_상태(user.getId()));
     }
 }

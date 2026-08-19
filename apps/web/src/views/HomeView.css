@@ -285,6 +285,17 @@
     font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 금액에는 단위를 붙인다(이슈 #323). 같은 화면의 다른 금액은 전부 「0원」인데
+ * 순자산만 「1,244,200」으로 나가 무엇을 세는 숫자인지 알 수 없었다.
+ * 숫자는 mono 로 두고 단위만 본문 서체로 돌린다 - GroupDetailInkCard 와 같은 방식이다.
+ */
+.summary-card__unit {
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+}
+
 .summary-card__empty-message {
     display: block;
     margin-top: var(--tt-space-4);
@@ -441,6 +452,12 @@
     font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
     white-space: nowrap;
+}
+
+.home-habit-card__content--empty strong {
+    font-family: var(--tt-font-sans);
+    font-size: var(--tt-fs-section);
+    white-space: normal;
 }
 
 .home-habit-card__content strong b {

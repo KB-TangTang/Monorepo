@@ -14,6 +14,7 @@ public class MissionCategoryAnalysisDto {
     private LocalDate analysisStartDate;
     private LocalDate analysisEndDate;
     private int transactionCount;
-    private boolean relativeEligible;
+    private int cumulativeTransactionCount;
+    private int requiredCumulativeTransactionCount;
     private List<MissionCategoryRankDto> topCategories;
 }

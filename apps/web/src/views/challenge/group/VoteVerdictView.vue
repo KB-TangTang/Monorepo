@@ -9,40 +9,75 @@ import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import BaseModal from '@/components/common/BaseModal.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
-import { MOCK_VOTE_DETAIL } from '@/fixtures/groupChallengeDetail';
+import { fetchTrialDetail, submitVote as postVote } from '@/api/groupChallenge';
+import { canVote, toVoteScreen, verdictRouteName } from '@/utils/groupTrial';
 import judgingImg from '@/assets/images/emotions/48_judging.png';
 import verdictImg from '@/assets/images/emotions/49_verdict.png';
 
 const route = useRoute();
 const router = useRouter();
 
-/* ── 목데이터 로드 ─────────────────────── */
+const trialParams = computed(() => ({
+    id: route.params.id,
+    indictmentId: route.params.indictmentId,
+}));
+
+/* ── 재판 상세 로드 ────────────────────── */
 const detail = ref(null);
 
-onMounted(() => {
-    const id = Number(route.params.indictmentId);
-    detail.value = MOCK_VOTE_DETAIL[id] ?? null;
-    if (!detail.value) {
+/*
+ * 투표할 수 없는 재판이면 다른 화면으로 보낸다.
+ *
+ * **이미 확정된 재판은 판결 화면으로 보낸다**(이슈 #172). 개표 배치가 생기기 전에는 확정된
+ * 재판이 없어 전부 진행 현황으로 보냈는데, 알림을 늦게 눌러 개표가 끝난 뒤 들어온 사람에게는
+ * 그게 「타임라인만 보고 판결은 못 보는」 막다른 길이 된다.
+ * 아직 투표 중인데 내가 이미 던졌다면 진행 현황이 맞다.
+ */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
+        /* 참여자가 아니거나 없는 재판이다. 서버가 존재 자체를 알려주지 않으므로 홈으로 되돌린다. */
         router.replace({ name: 'groupChallenge' });
+        return;
     }
+
+    if (!canVote(loaded)) {
+        router.replace({
+            name: verdictRouteName(loaded) ?? 'trialProgress',
+            params: trialParams.value,
+        });
+        return;
+    }
+
+    detail.value = toVoteScreen(loaded);
+    syncRemaining();
+    countdownTimer = setInterval(syncRemaining, 1000);
 });
 
 /* ── 마감 카운트다운 ───────────────────── */
 const remainingSeconds = ref(0);
 let countdownTimer = null;
 
-onMounted(() => {
-    if (detail.value) {
-        remainingSeconds.value = detail.value.deadlineSeconds;
+/*
+ * 매 초 1씩 빼지 않고 **절대 마감시각과의 차이를 다시 계산한다.** 모바일은 화면이 꺼지면
+ * setInterval 을 멈추므로, 빼기만 하면 잠깐 잠들었다 돌아온 사용자에게 남은 시간이 부풀어 보인다.
+ */
+function syncRemaining() {
+    const deadline = detail.value?.voteDeadline;
+    if (!deadline) {
+        remainingSeconds.value = 0;
+        return;
     }
-    countdownTimer = setInterval(() => {
-        if (remainingSeconds.value > 0) remainingSeconds.value--;
-    }, 1000);
-});
+    const diff = Math.floor((new Date(deadline).getTime() - Date.now()) / 1000);
+    remainingSeconds.value = Math.max(0, diff);
+}
 
 onUnmounted(() => {
     clearInterval(countdownTimer);
     clearTimeout(phaseTimer);
+    clearTimeout(toastTimer);
 });
 
 const deadlineLabel = computed(() => {
@@ -114,31 +149,83 @@ function openFinalModal() {
     showFinalModal.value = true;
 }
 
-function submitVote() {
-    finalModalRef.value?.releaseHistory?.();
-    confirmSheetRef.value?.releaseHistory?.();
-    showFinalModal.value = false;
-    showConfirmSheet.value = false;
+const submitting = ref(false);
 
-    const params = {
-        id: route.params.id,
-        indictmentId: route.params.indictmentId,
-    };
+/*
+ * 던지고 나서 화면을 넘긴다. 히스토리 되감기를 먼저 하면 서버가 거절했을 때 되돌아올 자리가 없다.
+ */
+async function submitVote() {
+    if (submitting.value) return;
+    submitting.value = true;
+
+    try {
+        await postVote(route.params.indictmentId, {
+            verdict: verdict.value,
+            comment: comment.value,
+        });
+    } catch (err) {
+        submitting.value = false;
+        closeOverlays();
+        /*
+         * 이미 던졌거나 투표 기간이 지났다. 같은 화면에 붙잡아 두면 계속 다시 누른다 —
+         * 안내하고 진행 현황으로 보낸다. `VOTE_NOT_ALLOWED` 는 마감 후 제출에도 온다.
+         */
+        if (['VOTE_ALREADY_EXISTS', 'VOTE_NOT_ALLOWED', 'CANNOT_VOTE_OWN_TRIAL'].includes(err.code)) {
+            flash(err.message ?? '투표할 수 없는 재판이에요.');
+            setTimeout(() => {
+                router.replace({ name: 'trialProgress', params: trialParams.value });
+            }, 1200);
+            return;
+        }
+        flash(err.message ?? '판결 제출에 실패했어요. 잠시 후 다시 시도해주세요.');
+        return;
+    }
+
+    closeOverlays();
 
     /* 오버레이가 pushState 한 히스토리 항목 2개를 되돌려 VoteVerdict 위치로 복귀한 뒤,
      * VoteVerdict 을 VoteDone 으로 교체한다.
      * 이래야 뒤로가기 시 투표 화면이 다시 나타나지 않는다. */
+    const params = trialParams.value;
     window.addEventListener('popstate', () => {
         router.replace({ name: 'voteDone', params });
     }, { once: true });
     window.history.go(-2);
 }
 
-/* ── 날짜 포맷 ─────────────────────────── */
+function closeOverlays() {
+    finalModalRef.value?.releaseHistory?.();
+    confirmSheetRef.value?.releaseHistory?.();
+    showFinalModal.value = false;
+    showConfirmSheet.value = false;
+}
+
+/* ── 토스트 ────────────────────────────── */
+const toast = ref(null);
+let toastTimer = null;
+
+function flash(message) {
+    clearTimeout(toastTimer);
+    toast.value = message;
+    toastTimer = setTimeout(() => { toast.value = null; }, 2400);
+}
+
+/* ── 표시 포맷 ─────────────────────────── */
+/** 금액은 BigDecimal 이라 문자열로 올 수 있다. `null` 은 「없음」이라 0 으로 채우지 않는다. */
+function won(amount) {
+    if (amount === null || amount === undefined) return '';
+    return Number(amount).toLocaleString();
+}
+
 function formatDefenseDate(iso) {
+    if (!iso) return '';
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
     return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
+
+/** 인장에 찍히는 한 글자. 서버는 닉네임만 준다. */
+const defendantInitial = computed(() => detail.value?.defendant?.nickname?.charAt(0) ?? '');
 </script>
 
 <template>
@@ -241,30 +328,52 @@ function formatDefenseDate(iso) {
                             <div class="vote-page__doc-heading">변 론 요 지 서</div>
                             <div class="vote-page__doc-meta">
                                 <div>사&nbsp;&nbsp;&nbsp;&nbsp;건&nbsp;:&nbsp;{{ detail.challengeName }} · {{ detail.evalType === 'DAILY' ? '일일결산' : '기간평가' }}</div>
-                                <div>피&nbsp;고&nbsp;인&nbsp;:&nbsp;{{ detail.defendant.nickname }}&nbsp;&nbsp;<span class="vote-page__doc-muted">(초과액 {{ detail.exceededAmount.toLocaleString() }}원)</span></div>
+                                <div>피&nbsp;고&nbsp;인&nbsp;:&nbsp;{{ detail.defendant.nickname }}&nbsp;&nbsp;<span class="vote-page__doc-muted">(초과액 {{ won(detail.exceededAmount) }}원)</span></div>
                             </div>
-                            <div class="vote-page__doc-intro">위 사건에 관하여 피고인은 다음과 같이 변론합니다.</div>
-                            <div class="vote-page__doc-label">다&nbsp;음</div>
-                            <div class="vote-page__doc-para">
-                                <span class="vote-page__doc-num">1.</span>
-                                <span class="vote-page__doc-text--bold">{{ detail.defenseMessage }}</span>
-                            </div>
-                            <div class="vote-page__doc-para">
-                                <span class="vote-page__doc-num">2.</span>
-                                <span>기소 거래는 {{ detail.currentAmount.toLocaleString() }}원이며,
-                                    <b class="vote-page__doc-text--bold">실제 부담금 {{ detail.actualCostAmount.toLocaleString() }}원</b> 인정 시
-                                    <template v-if="detail.actualCostAmount <= detail.limitAmount">
-                                        기준 내 · <b class="vote-page__doc-text--green">{{ (detail.limitAmount - detail.actualCostAmount).toLocaleString() }}원 여유</b>입니다.
-                                    </template>
-                                    <template v-else>
-                                        기준 초과 · <b class="vote-page__doc-text--red">{{ (detail.actualCostAmount - detail.limitAmount).toLocaleString() }}원 초과</b>입니다.
-                                    </template>
-                                </span>
-                            </div>
+
+                            <!--
+                              변론 마감 배치가 변론 없이 상태만 VOTING 으로 넘긴 재판이다.
+                              변론서를 지어내지 않고 그 사실을 그대로 적는다 — 투표는 그대로 받는다.
+                            -->
+                            <template v-if="!detail.hasDefense">
+                                <div class="vote-page__doc-intro">피고인은 변론 기간 내에 변론서를 제출하지 않았습니다.</div>
+                                <div class="vote-page__doc-label">다&nbsp;음</div>
+                                <div class="vote-page__doc-para">
+                                    <span class="vote-page__doc-num">1.</span>
+                                    <span>기소 거래는 {{ won(detail.currentAmount) }}원으로 기준 {{ won(detail.limitAmount) }}원을
+                                        <b class="vote-page__doc-text--red">{{ won(detail.exceededAmount) }}원 초과</b>했습니다.</span>
+                                </div>
+                                <div class="vote-page__doc-para">
+                                    <span class="vote-page__doc-num">2.</span>
+                                    <span class="vote-page__doc-muted">제출된 변론과 증거가 없습니다. 기소 내용만으로 판결해주세요.</span>
+                                </div>
+                            </template>
+
+                            <template v-else>
+                                <div class="vote-page__doc-intro">위 사건에 관하여 피고인은 다음과 같이 변론합니다.</div>
+                                <div class="vote-page__doc-label">다&nbsp;음</div>
+                                <div class="vote-page__doc-para">
+                                    <span class="vote-page__doc-num">1.</span>
+                                    <span class="vote-page__doc-text--bold">{{ detail.defenseMessage }}</span>
+                                </div>
+                                <div class="vote-page__doc-para">
+                                    <span class="vote-page__doc-num">2.</span>
+                                    <span>기소 거래는 {{ won(detail.currentAmount) }}원이며,
+                                        <b class="vote-page__doc-text--bold">실제 부담금 {{ won(detail.actualCostAmount) }}원</b> 인정 시
+                                        <template v-if="Number(detail.actualCostAmount) <= Number(detail.limitAmount)">
+                                            기준 내 · <b class="vote-page__doc-text--green">{{ won(detail.limitAmount - detail.actualCostAmount) }}원 여유</b>입니다.
+                                        </template>
+                                        <template v-else>
+                                            기준 초과 · <b class="vote-page__doc-text--red">{{ won(detail.actualCostAmount - detail.limitAmount) }}원 초과</b>입니다.
+                                        </template>
+                                    </span>
+                                </div>
+                            </template>
+
                             <div class="vote-page__doc-spacer"></div>
                             <div class="vote-page__doc-date">{{ formatDefenseDate(detail.defenseDate) }}</div>
                             <div class="vote-page__doc-sign">
-                                피고인&nbsp;&nbsp;{{ detail.defendant.nickname }}<span class="vote-page__doc-seal">{{ detail.defendant.initial }}</span>
+                                피고인&nbsp;&nbsp;{{ detail.defendant.nickname }}<span class="vote-page__doc-seal">{{ defendantInitial }}</span>
                             </div>
                             <div class="vote-page__doc-court">탕탕 법정 귀중</div>
                         </div>
@@ -286,7 +395,7 @@ function formatDefenseDate(iso) {
                                     class="vote-page__doc-ev-thumb"
                                     @click="zoomEvidence = ev"
                                 >
-                                    <span class="vote-page__doc-ev-file">{{ ev.fileName }}</span>
+                                    <img :src="ev.url" :alt="ev.label" class="vote-page__doc-ev-img">
                                 </div>
                             </div>
                             <div class="vote-page__doc-spacer"></div>
@@ -361,7 +470,7 @@ function formatDefenseDate(iso) {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                     </div>
                     <div class="vote-page__zoom-img">
-                        <span class="vote-page__zoom-file">{{ zoomEvidence.fileName }}</span>
+                        <img :src="zoomEvidence.url" :alt="zoomEvidence.label" class="vote-page__zoom-file">
                     </div>
                     <div class="vote-page__zoom-label">{{ zoomEvidence.label }}</div>
                     <div class="vote-page__zoom-hint">화면을 누르면 닫혀요</div>
@@ -445,12 +554,20 @@ function formatDefenseDate(iso) {
                     variant="dark"
                     size="lg"
                     block
+                    :disabled="submitting"
                     @click="submitVote"
                 >
-                    확인
+                    {{ submitting ? '제출 중…' : '확인' }}
                 </BaseButton>
             </template>
         </BaseModal>
+
+        <!-- ===== 토스트 (제출 실패 안내) ===== -->
+        <Teleport to="body">
+            <Transition name="tt-toast">
+                <div v-if="toast" class="vote-page__toast">{{ toast }}</div>
+            </Transition>
+        </Teleport>
     </div>
 </template>
 
@@ -935,10 +1052,12 @@ function formatDefenseDate(iso) {
     border-radius: 6px;
 }
 
-.vote-page__doc-ev-file {
-    font-family: var(--tt-font-mono);
-    font-size: 10px;
-    color: #98917F;
+/* 썸네일은 잘라 채우고(cover), 줌 오버레이에서 전체를 본다. */
+.vote-page__doc-ev-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
 }
 
 .vote-page__doc-ev-footer {
@@ -1109,10 +1228,43 @@ function formatDefenseDate(iso) {
     box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.7);
 }
 
+/* 증거는 영수증 사진이라 세로가 길다. 잘라내면 금액이 사라지므로 contain 으로 전부 보여준다. */
 .vote-page__zoom-file {
-    font-family: var(--tt-font-mono);
-    font-size: 11px;
-    color: #98917F;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+/* ── 토스트 ───────────────────────────── */
+.vote-page__toast {
+    position: fixed;
+    left: 22px;
+    right: 22px;
+    bottom: 96px;
+    /* 모달·바텀시트보다 위에 떠야 한다. 제출 실패 안내는 그 둘이 열린 채로 나온다. */
+    z-index: calc(var(--tt-z-modal, 60) + 1);
+    background: rgba(35, 40, 66, 0.94);
+    color: var(--tt-text-inverse);
+    font-size: 12.5px;
+    font-weight: var(--tt-fw-bold);
+    line-height: 1.5;
+    text-align: center;
+    padding: 11px 16px;
+    border-radius: var(--tt-radius-full);
+    pointer-events: none;
+}
+
+.tt-toast-enter-active {
+    animation: vote-toast-in 0.22s ease-out both;
+}
+
+.tt-toast-leave-active {
+    animation: vote-toast-in 0.18s ease-in reverse both;
+}
+
+@keyframes vote-toast-in {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: none; opacity: 1; }
 }
 
 .vote-page__zoom-label {

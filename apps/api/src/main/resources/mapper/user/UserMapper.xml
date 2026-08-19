@@ -10,7 +10,8 @@
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
         id, social_provider, provider_user_id, email, nickname, social_name, profile_image_key,
-        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
+        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at,
+        personal_mission_unlock_status
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -97,6 +98,38 @@
                                              ELSE group_tutorial_seen_at END
          WHERE id     = #{id}
            AND status = 'ACTIVE'
+    </update>
+
+    <!--
+      자격 여부를 요청 본문에서 받지 않고 같은 행의 relative_mission_qualified_at 으로 판정한다.
+      (이슈 #315 (1) - 예전에는 클라이언트가 보낸 enoughData 를 그대로 믿어,
+       false → true 를 연달아 쏘면 자격 없이 안내를 열 수 있었다)
+
+      UNTRACKED + 자격 보유 → ELSE 로 떨어져 UNTRACKED 로 남는다. 기능이 붙기 전부터
+      자격이 있던 사용자에게 「새로 열렸어요」를 띄우지 않기 위한 기존 동작이며 그대로 둔다.
+    -->
+    <update id="syncPersonalMissionUnlockStatus">
+        UPDATE tbl_user
+           SET personal_mission_unlock_status =
+               CASE
+                   WHEN personal_mission_unlock_status = 'UNTRACKED'
+                        AND relative_mission_qualified_at IS NULL
+                       THEN 'INSUFFICIENT'
+                   WHEN personal_mission_unlock_status = 'INSUFFICIENT'
+                        AND relative_mission_qualified_at IS NOT NULL
+                       THEN 'PENDING'
+                   ELSE personal_mission_unlock_status
+               END
+         WHERE id = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <update id="acknowledgePersonalMissionUnlock">
+        UPDATE tbl_user
+           SET personal_mission_unlock_status = 'SEEN'
+         WHERE id = #{id}
+           AND status = 'ACTIVE'
+           AND personal_mission_unlock_status = 'PENDING'
     </update>
 
     <!--

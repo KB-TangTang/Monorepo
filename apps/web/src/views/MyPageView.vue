@@ -317,7 +317,7 @@ async function confirmLogout() {
                 <input
                     ref="photoInput"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png"
                     class="my-page__file"
                     @change="onPickPhoto"
                 />
