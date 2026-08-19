@@ -273,25 +273,28 @@ onBeforeUnmount(stopProgressAnimation);
 
                 <h2 class="challenge-card__title">{{ challenge.title }}</h2>
 
-                <p v-if="challenge.isAbsoluteMission" class="challenge-card__summary">
-                    오늘 {{ challenge.categoryName }} 무지출 ·
-                    <strong>현재 {{ formatHomeAmount(challenge.spentAmount) }}원</strong>
-                </p>
-                <p v-else class="challenge-card__summary">
+                <p class="challenge-card__summary">
                     선고 한도 {{ formatHomeAmount(challenge.limitAmount) }}원 ·
-                    <strong>{{ formatHomeAmount(challenge.remainingAmount) }}원 남음</strong>
+                    <strong v-if="challenge.isAbsoluteMission">
+                        <template v-if="challenge.spentAmount > 0">
+                            {{ formatHomeAmount(challenge.exceededAmount) }}원 초과
+                        </template>
+                        <template v-else>현재 위반 없음</template>
+                    </strong>
+                    <strong v-else>
+                        {{ formatHomeAmount(challenge.remainingAmount) }}원 남음
+                    </strong>
                 </p>
 
-                <div v-if="!challenge.isAbsoluteMission" class="challenge-card__progress-info">
+                <div class="challenge-card__progress-info">
                     <span>
-                        {{ formatHomeAmount(challenge.spentAmount) }} /
+                        {{ formatHomeAmount(challenge.spentAmount) }}원 /
                         {{ formatHomeAmount(challenge.limitAmount) }}원
                     </span>
                     <strong>{{ animatedProgress }}%</strong>
                 </div>
 
                 <div
-                    v-if="!challenge.isAbsoluteMission"
                     class="challenge-card__progress"
                     role="progressbar"
                     :aria-label="`${challenge.title} 진행률`"
