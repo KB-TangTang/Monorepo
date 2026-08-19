@@ -69,10 +69,16 @@ class DefenseServiceTest {
         return service(NOW);
     }
 
+    /**
+     * {@link DefenseWriter} 는 <b>mock 이 아니라 실물</b>을 넘긴다. 저장 세 문장이 그쪽으로
+     * 옮겨졌을 뿐(이슈 #318) 순서·롤백 계약은 그대로라, mock 으로 바꾸면 이 파일의 검증이
+     * 통째로 무의미해진다. 트랜잭션 프록시가 실제로 붙는지는 {@code DefenseWriterTest} 가 본다.
+     */
     private DefenseService service(LocalDateTime now) {
         Clock clock = Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(),
                 ZoneId.systemDefault());
-        return new DefenseService(indictmentMapper, defenseMapper, imageStorage, imageProcessor,
+        return new DefenseService(indictmentMapper, defenseMapper,
+                new DefenseWriter(defenseMapper, indictmentMapper), imageStorage, imageProcessor,
                 events, verdictTransition, DEFENSE_HOURS, clock);
     }
 
@@ -328,6 +334,26 @@ class DefenseServiceTest {
                 callDefense("억울합니다", BigDecimal.ZERO, List.of()).getCode());
         /* 롤백될 트랜잭션에서 채팅 메시지가 나가면 없던 변론이 그룹 채팅에 남는다 */
         verify(events, never()).publishEvent(any(GroupTrialEvents.DefenseRegistered.class));
+    }
+
+    /**
+     * 업로드가 트랜잭션 밖으로 나오면서(이슈 #318) 생긴 경로다. 저장이 롤백돼도 <b>이미 S3 에
+     * 올라간 사진은 트랜잭션이 되돌려 주지 않는다</b> — 참조 없는 고아로 남으므로 직접 지운다.
+     * 위 {@code rollsBackWhenStatusAlreadyMoved} 는 사진 0장이라 이 경로를 지나가지 않는다.
+     */
+    @Test
+    @DisplayName("저장 단계가 롤백되면 이미 올린 증빙 사진을 지운다")
+    void deletesUploadedImagesWhenPersistFails() {
+        given(defendableRow());
+        when(imageProcessor.toBoundedJpeg(any())).thenReturn(new byte[] {9});
+        when(indictmentMapper.moveToVoting(INDICTMENT_ID)).thenReturn(0);
+
+        assertEquals("DEFENSE_NOT_ALLOWED",
+                callDefense("영수증 첨부", BigDecimal.ZERO, List.of(new byte[] {1})).getCode());
+
+        ArgumentCaptor<String> uploaded = ArgumentCaptor.forClass(String.class);
+        verify(imageStorage).store(any(), uploaded.capture());
+        verify(imageStorage).delete(uploaded.getValue());
     }
 
     @Test
