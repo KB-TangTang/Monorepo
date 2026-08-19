@@ -45,6 +45,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -138,11 +141,18 @@ class FinancialSyncServiceImplTest {
                         .build());
         eventPublisher = mock(ApplicationEventPublisher.class);
 
+        /*
+         * collectAll() 이 이제 6개 소스를 병렬로 모은다(성능 개선). 대부분의 테스트는 순서·타임라인을
+         * 검증하므로 여기서는 호출 스레드에서 그대로 실행하는 직렬 실행기를 쓴다 — 결과는 실제 병렬
+         * 실행과 같고(각 소스가 서로 다른 SyncBundle 필드만 쓴다) 테스트는 결정적으로 유지된다.
+         * 병렬 실행 자체(스레드 안전성)는 아래 collectAllRunsSourcesInParallelWithoutDataCorruption 이
+         * 진짜 스레드풀로 따로 검증한다.
+         */
         service = new FinancialSyncServiceImpl(
                 client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
                 syncHistoryMapper, transactionCategorizationService, eventPublisher,
-                clock, new TransactionTemplate(recordingTransactionManager()));
+                clock, new TransactionTemplate(recordingTransactionManager()), Runnable::run);
 
         when(scenarioKeyProvider.resolve(1L)).thenReturn("1");
         // 이번 테스트는 BANK 만 데이터가 있고 나머지 5개 소스는 빈 목록으로 둔다.
@@ -707,5 +717,106 @@ class FinancialSyncServiceImplTest {
 
         verify(client).getCardApprovals("1", 1L, "2026-08");
         verify(client, never()).getCardApprovals(eq("1"), eq(1L), isNull());
+    }
+
+    /** setUp() 의 직렬 실행기(Runnable::run)와 달리 여기서만 진짜 스레드풀을 쓴다 — 병렬 실행 자체를 검증한다. */
+    private FinancialSyncServiceImpl serviceWithRealExecutor(ExecutorService executor) {
+        return new FinancialSyncServiceImpl(
+                client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
+                investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
+                syncHistoryMapper, transactionCategorizationService, eventPublisher,
+                Clock.fixed(Instant.parse("2026-08-12T01:00:00Z"), ZoneId.of("Asia/Seoul")),
+                new TransactionTemplate(recordingTransactionManager()), executor);
+    }
+
+    @Test
+    @DisplayName("6개 소스를 진짜 스레드풀로 병렬 수집해도 소스별 데이터가 서로 섞이거나 유실되지 않는다")
+    void collectAllRunsSourcesInParallelWithoutDataCorruption() throws InterruptedException {
+        when(client.getDeposits("1")).thenReturn(List.of(
+                DepositSyncDto.builder().depositAccountId(201L).institutionCode("0004")
+                        .institutionName("KB국민은행").productName("KB 적금")
+                        .accountNoMasked("110-***-999999").balance(new BigDecimal("1000000")).build()));
+        when(client.getDepositTransactions(eq("1"), eq(201L))).thenReturn(List.of(
+                DepositTransactionSyncDto.builder()
+                        .transactionId(7001L).transactedAt("2026-08-05T09:00:00+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("300000")).description("납입")
+                        .build()));
+        when(client.getStockAsset("1")).thenReturn(
+                StockAssetSyncDto.builder().accountId(301L).institutionName("KB증권")
+                        .currency("KRW").cashBalance(new BigDecimal("50000")).build());
+        when(client.getSecuritiesTransactions(eq("1"), eq(301L))).thenReturn(List.of(
+                SecuritiesTransactionSyncDto.builder()
+                        .transactionId(8001L).transactedAt("2026-08-06T10:00:00+09:00")
+                        .transTypeCode("02").securityProductName("삼성전자")
+                        .transactionAmount(new BigDecimal("700000")).build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("KAKAO")
+                        .providerName("카카오페이").walletName("카카오페이 머니")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of(
+                PayMoneyTransactionSyncDto.builder()
+                        .transactionId(6001L).transactedAt("2026-06-12T18:00:01+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("150000")).build()));
+        when(client.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
+                        .cardTypeCode("01").currency("KRW").build()));
+        when(client.getCardApprovals(eq("1"), eq(1L), isNull())).thenReturn(List.of(
+                CardApprovalSyncDto.builder().approvalId(1L).approvalNo("APV-CREDIT-1")
+                        .approvedAt("2026-08-10T12:00:00+09:00").approvedAmount(new BigDecimal("30000"))
+                        .rawJson(null).build()));
+        when(client.getCardBills(anyString(), anyLong())).thenReturn(List.of());
+        when(cardMapper.update(any())).thenReturn(0);
+        doAnswer(inv -> {
+            Card c = inv.getArgument(0);
+            c.setId(100L);
+            return 1;
+        }).when(cardMapper).insert(any());
+
+        ExecutorService realExecutor = Executors.newFixedThreadPool(6);
+        FinancialSyncResultDto result;
+        try {
+            result = serviceWithRealExecutor(realExecutor).sync(1L);
+        } finally {
+            realExecutor.shutdown();
+            realExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals("COMPLETED", result.getStatus());
+        /* 소스마다 결과가 5건(BANK/DEPOSIT/SECURITIES/PAYMONEY/CARD_CREDIT) — 경합으로 유실되거나
+           다른 스레드가 쓴 값이 섞였다면 이 개수나 아래 소스별 단언 중 하나가 깨진다. */
+        verify(transactionMapper, times(5)).insert(any());
+        verify(transactionMapper).insert(argThat(t ->
+                "BANK".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-9001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "DEPOSIT".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-7001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "SECURITIES".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-8001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "PAYMONEY".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-6001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "CARD_CREDIT".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("APV-CREDIT-1")));
+    }
+
+    @Test
+    @DisplayName("진짜 스레드풀로 병렬 수집해도 실패한 소스 이름이 실패 이력에 정확히 남는다")
+    void sourceFailureIsAttributedCorrectlyUnderRealParallelExecution() throws InterruptedException {
+        when(client.getCards("1")).thenThrow(
+                new BusinessException("EXTERNAL_API_UNAVAILABLE", "목서버 응답 없음"));
+
+        ExecutorService realExecutor = Executors.newFixedThreadPool(6);
+        BusinessException thrown;
+        try {
+            FinancialSyncServiceImpl parallelService = serviceWithRealExecutor(realExecutor);
+            thrown = assertThrows(BusinessException.class, () -> parallelService.sync(1L));
+        } finally {
+            realExecutor.shutdown();
+            realExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals("EXTERNAL_API_UNAVAILABLE", thrown.getCode());
+        verify(connectedAccountMapper, never()).insert(any());
+        verify(transactionMapper, never()).insert(any());
+        verify(syncHistoryMapper).insert(argThat(h ->
+                "FAILED".equals(h.getStatus()) && "CARD".equals(h.getFailedSource())));
     }
 }

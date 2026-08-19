@@ -40,6 +40,7 @@ import com.kb.tangtang.transaction.service.TransactionCategorizationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 /**
  * 이슈 #147 — 금융 동기화 오케스트레이터.
@@ -135,6 +139,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
+    private final Executor syncExecutor;
 
     /**
      * ⚠ 생성자가 둘이라 **@Autowired 로 어느 쪽을 쓸지 명시해야 한다** (AccountLinkService 와 같은 이유).
@@ -154,11 +159,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                                     FinancialSyncHistoryMapper syncHistoryMapper,
                                     TransactionCategorizationService transactionCategorizationService,
                                     ApplicationEventPublisher eventPublisher,
-                                    TransactionTemplate transactionTemplate) {
+                                    TransactionTemplate transactionTemplate,
+                                    @Qualifier("financialSyncExecutor") Executor syncExecutor) {
         this(client, scenarioKeyProvider, connectedAccountMapper, loanMapper, investmentHoldingMapper,
                 cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
                 transactionCategorizationService, eventPublisher,
-                Clock.systemDefaultZone(), transactionTemplate);
+                Clock.systemDefaultZone(), transactionTemplate, syncExecutor);
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
@@ -174,7 +180,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                              TransactionCategorizationService transactionCategorizationService,
                              ApplicationEventPublisher eventPublisher,
                              Clock clock,
-                             TransactionTemplate transactionTemplate) {
+                             TransactionTemplate transactionTemplate,
+                             Executor syncExecutor) {
         this.client = client;
         this.scenarioKeyProvider = scenarioKeyProvider;
         this.connectedAccountMapper = connectedAccountMapper;
@@ -188,12 +195,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.transactionTemplate = transactionTemplate;
+        this.syncExecutor = syncExecutor;
     }
 
     @Override
     public FinancialSyncResultDto sync(long userId) {
         LocalDateTime startedAt = LocalDateTime.now(clock);
         String scenarioKey = scenarioKeyProvider.resolve(userId);
+        SyncScope scope = buildSyncScope(userId);
         MonthlyFetchCursor monthlyCursor = buildMonthlyFetchCursor(userId);
         /*
          * 사용자가 직접 해제한(is_active=0) 계좌는 동기화가 되살리면 안 된다(이슈 #199 최종 리뷰).
@@ -203,18 +212,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          */
         Set<String> inactiveAccountKeys = new HashSet<>(connectedAccountMapper.findInactiveKeysByUser(userId));
 
-        /*
-         * 지금 처리 중인 소스를 담아 두는 커서. 실패 이력에 소스명을 남겨야 하는데 예외 자체에는
-         * 그 정보가 없다. 인스턴스 필드로 두면 싱글턴 빈이라 동시 요청끼리 서로 덮어쓰므로
-         * 호출마다 새로 만든 지역 객체를 넘긴다.
-         */
-        SourceCursor cursor = new SourceCursor();
         SyncBundle bundle;
         try {
-            bundle = collectAll(scenarioKey, cursor, monthlyCursor);
-        } catch (BusinessException e) {
-            recordFailure(userId, cursor.value, e.getMessage(), startedAt);
-            throw e;
+            bundle = collectAll(scenarioKey, monthlyCursor, scope);
+        } catch (SourceCollectionException e) {
+            recordFailure(userId, e.source, e.getCause().getMessage(), startedAt);
+            throw (BusinessException) e.getCause();
         }
 
         /*
@@ -290,6 +293,20 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return new MonthlyFetchCursor(accounts, cards);
     }
 
+    private SyncScope buildSyncScope(long userId) {
+        Set<String> institutionCodes = new HashSet<>();
+        Set<String> institutionNames = new HashSet<>();
+        for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
+            if (account.getBankCode() != null) {
+                institutionCodes.add(account.getBankCode());
+            }
+            if (account.getBankName() != null) {
+                institutionNames.add(account.getBankName());
+            }
+        }
+        return new SyncScope(institutionCodes, institutionNames);
+    }
+
     /** lastSyncAt 이 속한 달부터 오늘(clock 기준)이 속한 달까지, 오름차순으로. */
     private List<YearMonth> monthsSince(LocalDateTime lastSyncAt) {
         YearMonth start = YearMonth.from(lastSyncAt);
@@ -327,55 +344,124 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return merged;
     }
 
-    /** 전부 트랜잭션 밖. 하나라도 실패하면 즉시 BusinessException 이 올라간다(fail-fast). */
-    private SyncBundle collectAll(String scenarioKey, SourceCursor cursor, MonthlyFetchCursor monthlyCursor) {
+    /**
+     * 전부 트랜잭션 밖. BANK/DEPOSIT/SECURITIES/LOAN/PAY_MONEY/CARD 6개 소스는 서로 결과를
+     * 참조하지 않고 {@link SyncBundle} 의 서로 다른 필드에만 쓰므로 병렬로 돌린다 — 목서버
+     * 왕복이 순차로 쌓이던 게 가장 느린 소스 하나 수준으로 줄어든다.
+     *
+     * ⚠ 각 소스는 자기 필드만 쓰고 다른 소스의 필드는 절대 건드리지 않는다. 여러 스레드가 SyncBundle
+     *   하나를 같이 채워도 안전한 건 이 "쓰기 대상 분리" 때문이다 — 필드가 겹치면 별도 동기화가
+     *   필요해진다.
+     *
+     * 하나라도 실패하면 {@link SourceCollectionException} 으로 감싸 올라간다(fail-fast였던 예전과
+     * 달리, 병렬이라 실패한 소스 하나 때문에 다른 소스 호출이 취소되지는 않는다 — 이미 동시에
+     * 날아간 뒤라 취소할 수 없고, 실패든 성공이든 결과는 collectAll() 을 벗어나지 못하므로 실질적인
+     * 차이는 없다).
+     */
+    private SyncBundle collectAll(String scenarioKey, MonthlyFetchCursor monthlyCursor, SyncScope scope) {
         SyncBundle bundle = new SyncBundle();
 
-        cursor.value = "BANK";
+        CompletableFuture<Void> bank = collectAsync("BANK",
+                () -> collectBank(scenarioKey, bundle, monthlyCursor, scope));
+        CompletableFuture<Void> deposit = collectAsync("DEPOSIT",
+                () -> collectDeposit(scenarioKey, bundle, scope));
+        CompletableFuture<Void> securities = collectAsync("SECURITIES",
+                () -> collectSecurities(scenarioKey, bundle, scope));
+        CompletableFuture<Void> loan = collectAsync("LOAN",
+                () -> collectLoan(scenarioKey, bundle, scope));
+        CompletableFuture<Void> payMoney = collectAsync("PAY_MONEY",
+                () -> collectPayMoney(scenarioKey, bundle, scope));
+        CompletableFuture<Void> card = collectAsync("CARD",
+                () -> collectCard(scenarioKey, bundle, monthlyCursor, scope));
+
+        try {
+            CompletableFuture.allOf(bank, deposit, securities, loan, payMoney, card).join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof SourceCollectionException) {
+                throw (SourceCollectionException) e.getCause();
+            }
+            throw e;
+        }
+
+        return bundle;
+    }
+
+    /** action 이 던지는 BusinessException 에 source 이름을 붙여 감싼다 — 실패 이력에 남길 소스명이다. */
+    private CompletableFuture<Void> collectAsync(String source, Runnable action) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                action.run();
+            } catch (BusinessException e) {
+                throw new SourceCollectionException(source, e);
+            }
+        }, syncExecutor);
+    }
+
+    private void collectBank(String scenarioKey, SyncBundle bundle, MonthlyFetchCursor monthlyCursor,
+                             SyncScope scope) {
         for (BankAccountSyncDto account : client.getBankAccounts(scenarioKey)) {
+            if (!scope.includesCode(account.getInstitutionCode())) {
+                continue;
+            }
             bundle.bankAccounts.add(account);
             bundle.bankTransactions.put(account.getAccountId(),
                     fetchBankTransactions(scenarioKey, account.getAccountId(), monthlyCursor));
         }
+    }
 
-        cursor.value = "DEPOSIT";
+    private void collectDeposit(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (DepositSyncDto deposit : client.getDeposits(scenarioKey)) {
+            if (!scope.includesCode(deposit.getInstitutionCode())) {
+                continue;
+            }
             bundle.deposits.add(deposit);
             bundle.depositTransactions.put(deposit.getDepositAccountId(),
                     client.getDepositTransactions(scenarioKey, deposit.getDepositAccountId()));
         }
+    }
 
-        cursor.value = "SECURITIES";
+    private void collectSecurities(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         StockAssetSyncDto stock = client.getStockAsset(scenarioKey);
-        if (stock != null) {
+        if (stock != null && scope.includesName(stock.getInstitutionName())) {
             bundle.stock = stock;
             bundle.securitiesTransactions.put(stock.getAccountId(),
                     client.getSecuritiesTransactions(scenarioKey, stock.getAccountId()));
         }
+    }
 
-        cursor.value = "LOAN";
+    private void collectLoan(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (LoanSyncDto loan : client.getLoans(scenarioKey)) {
+            if (!scope.includesCode(loan.getInstitutionCode())) {
+                continue;
+            }
             bundle.loans.add(loan);
             bundle.loanTransactions.put(loan.getLoanId(),
                     client.getLoanTransactions(scenarioKey, loan.getLoanId()));
         }
+    }
 
-        cursor.value = "PAY_MONEY";
+    private void collectPayMoney(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (PayMoneySyncDto payMoney : client.getPayMoney(scenarioKey)) {
+            if (!scope.includesCode(payMoney.getProviderCode())) {
+                continue;
+            }
             bundle.payMoney.add(payMoney);
             bundle.payMoneyTransactions.put(payMoney.getPayMoneyId(),
                     client.getPayMoneyTransactions(scenarioKey, payMoney.getPayMoneyId()));
         }
+    }
 
-        cursor.value = "CARD";
+    private void collectCard(String scenarioKey, SyncBundle bundle, MonthlyFetchCursor monthlyCursor,
+                             SyncScope scope) {
         for (CardSyncDto card : client.getCards(scenarioKey)) {
+            if (!scope.includesCode(card.getInstitutionCode())) {
+                continue;
+            }
             bundle.cards.add(card);
             bundle.cardApprovals.put(card.getCardId(),
                     fetchCardApprovals(scenarioKey, card.getCardId(), card.getCardNoMasked(), monthlyCursor));
             bundle.cardBills.put(card.getCardId(), client.getCardBills(scenarioKey, card.getCardId()));
         }
-
-        return bundle;
     }
 
     private void recordFailure(long userId, String failedSource, String failReason,
@@ -957,9 +1043,35 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
-    /** collectAll 이 지금 어느 소스를 처리 중인지. 호출마다 새로 만들어 넘긴다(싱글턴 빈이라 필드 금지). */
-    private static final class SourceCursor {
-        private String value;
+    /**
+     * collectAll() 의 병렬 소스 중 하나가 실패했을 때 어느 소스였는지 실어 올리는 래퍼.
+     * 스레드마다 자기가 맡은 소스 이름을 아는 채로 던지므로 SourceCursor 같은 공유 상태가 필요 없다.
+     */
+    private static final class SourceCollectionException extends RuntimeException {
+        private final String source;
+
+        private SourceCollectionException(String source, BusinessException cause) {
+            super(cause);
+            this.source = source;
+        }
+    }
+
+    private static final class SyncScope {
+        private final Set<String> institutionCodes;
+        private final Set<String> institutionNames;
+
+        private SyncScope(Set<String> institutionCodes, Set<String> institutionNames) {
+            this.institutionCodes = institutionCodes;
+            this.institutionNames = institutionNames;
+        }
+
+        private boolean includesCode(String code) {
+            return institutionCodes.isEmpty() || institutionCodes.contains(code);
+        }
+
+        private boolean includesName(String name) {
+            return institutionNames.isEmpty() || institutionNames.contains(name);
+        }
     }
 
     /**
