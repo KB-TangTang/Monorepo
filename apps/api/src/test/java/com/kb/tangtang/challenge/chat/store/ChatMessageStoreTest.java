@@ -1,17 +1,23 @@
 package com.kb.tangtang.challenge.chat.store;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.kb.tangtang.challenge.chat.domain.ChatMessage;
 import com.kb.tangtang.challenge.chat.domain.ChatMessageType;
+import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
+import com.kb.tangtang.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -20,8 +26,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -46,6 +54,35 @@ class ChatMessageStoreTest {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
         lenient().when(redisTemplate.opsForSet()).thenReturn(setOps);
         store = new ChatMessageStore(redisTemplate);
+    }
+
+    /** append 는 이제 Lua 스크립트 한 번으로 끝난다. 목에서는 그 반환값만 흉내 낸다 */
+    @SuppressWarnings("unchecked")
+    private void whenScriptReturns(Long seq) {
+        lenient().when(redisTemplate.execute(any(RedisScript.class), anyList(),
+                any(Object.class), any(Object.class))).thenReturn(seq);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> capturedKeys() {
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(redisTemplate).execute(any(RedisScript.class), captor.capture(),
+                any(Object.class), any(Object.class));
+        return captor.getValue();
+    }
+
+    /**
+     * 스크립트에 넘어간 ARGV. [0]=번호 자리를 비운 JSON, [1]=잘라 낼 위치.
+     *
+     * <p>가변인자는 캡터가 원소별로 하나씩 받는다 — {@code Object[]} 로 잡으면 배열째 들어와
+     * 캐스팅에서 깨진다.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> capturedArgs() {
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(redisTemplate).execute(any(RedisScript.class), anyList(),
+                captor.capture(), captor.capture());
+        return captor.getAllValues().stream().map(String::valueOf).toList();
     }
 
     @Test
@@ -91,15 +128,84 @@ class ChatMessageStoreTest {
     }
 
     @Test
-    @DisplayName("append 는 seq 를 발급해 messageId 로 쓰고 JSON 을 RPUSH 한다")
-    void appendIncrementsSeqAndPushes() {
-        when(valueOps.increment("chat:seq:7")).thenReturn(42L);
+    @DisplayName("append 는 번호 발급과 저장을 스크립트 하나로 한다 (seq · messages 순서)")
+    void appendRunsSingleScript() {
+        whenScriptReturns(42L);
 
         ChatMessage saved = store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
 
         assertEquals(42L, saved.getMessageId());
         assertEquals(ChatMessageType.TEXT, saved.getType());
-        verify(listOps).rightPush(eqKey("chat:messages:7"), anyString());
+        assertEquals(List.of("chat:seq:7", "chat:messages:7"), capturedKeys(),
+                "KEYS 순서가 스크립트(INCR KEYS[1] · RPUSH KEYS[2])와 반대면 방이 통째로 망가진다");
+        verify(listOps, never()).rightPush(anyString(), anyString());
+    }
+
+    /*
+     * 이 테스트가 이 파일에서 가장 중요하다.
+     *
+     * 스크립트는 JSON 앞부분을 잘라 내고 실제 번호를 끼워 넣는데, 자를 위치를 호출부가 넘긴다.
+     * 그 위치가 한 글자만 어긋나도 **읽을 수 없는 JSON 이 방에 영구히 남는다** — List 는 중간
+     * 삭제가 없어 되돌릴 수 없고, 그 방의 조회는 그때부터 통째로 실패한다.
+     *
+     * 목으로는 Lua 가 실행되지 않으므로, 스크립트가 하는 계산을 그대로 재현해 결과를 되읽는다.
+     */
+    @Test
+    @DisplayName("스크립트가 잘라 낼 위치가 맞다 — 잘라 붙인 JSON 이 같은 메시지로 되읽힌다")
+    void appendBodyIsCutAtTheRightOffset() throws Exception {
+        whenScriptReturns(42L);
+
+        store.append(GROUP_ID, ChatMessageType.SYSTEM, null, null, "판결이 확정됐어요",
+                ChatSystemType.VERDICT_CONFIRMED, "/group-challenges/7/trial/55", "2026-재판-0055");
+
+        List<String> args = capturedArgs();
+        String body = args.get(0);
+        int offset = Integer.parseInt(args.get(1));
+
+        /* 스크립트 본문과 같은 조립: '{"messageId":' .. seq .. ',' .. string.sub(body, offset) */
+        String stored = "{\"messageId\":42," + body.substring(offset - 1);
+
+        ChatMessage read = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(stored, ChatMessage.class);
+
+        assertEquals(42L, read.getMessageId());
+        assertEquals("판결이 확정됐어요", read.getContent());
+        assertEquals(ChatSystemType.VERDICT_CONFIRMED, read.getSystemType());
+        assertEquals("2026-재판-0055", read.getCaseNo());
+    }
+
+    /*
+     * 사용자가 채팅에 messageId 를 그대로 쳐도 스크립트는 본문을 뒤지지 않는다.
+     * 문자열을 패턴으로 찾아 바꾸는 방식이었다면 여기서 엉뚱한 자리가 치환된다.
+     */
+    @Test
+    @DisplayName("본문에 messageId 라고 적어도 잘라 내는 위치는 변하지 않는다")
+    void appendIgnoresLookalikeContent() throws Exception {
+        whenScriptReturns(7L);
+
+        store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "{\"messageId\":0,장난");
+
+        List<String> args = capturedArgs();
+        String stored = "{\"messageId\":7," + args.get(0).substring(Integer.parseInt(args.get(1)) - 1);
+
+        ChatMessage read = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(stored, ChatMessage.class);
+
+        assertEquals(7L, read.getMessageId());
+        assertEquals("{\"messageId\":0,장난", read.getContent());
+    }
+
+    @Test
+    @DisplayName("스크립트가 번호를 못 주면 저장하지 않고 500 을 낸다")
+    void appendFailsWhenScriptReturnsNull() {
+        whenScriptReturns(null);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕"));
+
+        assertEquals("CHAT_SEQ_FAILED", e.getCode());
     }
 
     @Test
@@ -180,7 +286,7 @@ class ChatMessageStoreTest {
     @Test
     @DisplayName("append 는 INCR 결과가 1이면 members 키의 잔여 TTL 을 messages·seq 키에 복제한다")
     void appendCopiesMembersTtlOnFirstMessage() {
-        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
+        whenScriptReturns(1L);
         when(redisTemplate.getExpire("chat:members:7", TimeUnit.SECONDS)).thenReturn(3600L);
 
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
@@ -192,7 +298,7 @@ class ChatMessageStoreTest {
     @Test
     @DisplayName("append 는 INCR 결과가 2 이상이면 TTL 을 다시 걸지 않는다")
     void appendSkipsTtlOnSubsequentMessages() {
-        when(valueOps.increment("chat:seq:7")).thenReturn(2L);
+        whenScriptReturns(2L);
 
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
 
@@ -207,7 +313,7 @@ class ChatMessageStoreTest {
     @Test
     @DisplayName("append 는 members 키 잔여 TTL 이 0 이하면(-1 무기한, -2 키 없음) 하한 TTL 로 만료를 건다")
     void appendFallsBackToMinimumTtlWhenMembersTtlNotPositive() {
-        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
+        whenScriptReturns(1L);
         when(redisTemplate.getExpire("chat:members:7", TimeUnit.SECONDS)).thenReturn(-1L, -2L);
 
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
@@ -252,15 +358,33 @@ class ChatMessageStoreTest {
     @Test
     @DisplayName("저장 JSON 의 sentAt 은 숫자 배열이 아니라 ISO-8601 문자열이다")
     void appendStoresIsoTimestamp() {
-        when(valueOps.increment("chat:seq:7")).thenReturn(1L);
-        org.mockito.ArgumentCaptor<String> jsonCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
-
+        whenScriptReturns(1L);
         store.append(GROUP_ID, ChatMessageType.TEXT, 3L, "절약왕", "안녕");
 
-        verify(listOps).rightPush(eqKey("chat:messages:7"), jsonCaptor.capture());
-        String json = jsonCaptor.getValue();
+        /* 저장은 스크립트가 한다. 검사 대상은 RPUSH 인자가 아니라 스크립트에 넘긴 JSON 이다 */
+        String json = capturedArgs().get(0);
         assertTrue(json.matches(".*\"sentAt\":\"\\d{4}-\\d{2}-\\d{2}T[0-9:.]+\".*"),
                 "sentAt 이 ISO 문자열이 아니다: " + json);
+    }
+
+    /*
+     * 필드를 추가한 판을 배포했다가 되돌리는 경우다. 옛 코드가 새 필드를 모른다고 예외를 던지면
+     * read 가 페이지 전체를 매핑하므로 그 방의 조회가 통째로 실패하고, List 는 중간 삭제가 없어
+     * TTL 이 끝날 때까지 복구되지 않는다.
+     */
+    @Test
+    @DisplayName("모르는 필드가 섞여 있어도 나머지를 읽는다 — 되돌린 배포가 방을 잠그지 않게")
+    void readsMessagesWithUnknownFields() {
+        String fromNewerVersion = "{\"messageId\":1,\"type\":\"SYSTEM\",\"content\":\"판결이 확정됐어요\","
+                + "\"sentAt\":\"2026-08-19T09:00:00\",\"systemType\":\"VERDICT_CONFIRMED\","
+                + "\"verdict\":{\"outcome\":\"GUILTY\",\"livesLost\":1}}";
+        when(listOps.range("chat:messages:7", -50L, -1L)).thenReturn(List.of(fromNewerVersion));
+
+        List<ChatMessage> messages = store.findRecent(GROUP_ID, 50);
+
+        assertEquals(1, messages.size());
+        assertEquals("판결이 확정됐어요", messages.get(0).getContent());
+        assertEquals(ChatSystemType.VERDICT_CONFIRMED, messages.get(0).getSystemType());
     }
 
     @Test

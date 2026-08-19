@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.chat.store;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -10,6 +11,8 @@ import com.kb.tangtang.common.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +35,13 @@ import java.util.stream.Collectors;
  * seq 는 1부터 INCR 되고 List 는 append 전용(중간 삭제 없음)이라
  * <b>messageId = N 인 메시지는 항상 인덱스 N-1</b> 에 있다. 페이징이 이 대응에 기대고 있다.
  * 메시지를 중간에서 지우는 기능을 넣는다면 이 전제가 깨진다.
+ *
+ * <p><b>그 전제는 한때 실제로 깨져 있었다</b>(2026-08-19 발견). INCR 과 RPUSH 를 따로 보내던
+ * 시절, 같은 방에 동시에 append 하면 번호를 먼저 받은 쪽이 나중에 밀어 넣을 수 있었다 —
+ * 두 스레드가 37·38 을 받고 38 이 먼저 RPUSH 되면 List 는 {@code …,38,37} 이 된다.
+ * 재현 조건은 드물지 않다. 시스템 메시지 리스너가 {@code @Async} 라, 한 그룹에서 여러 재판이
+ * 같은 배치 틱에 확정되면 그대로 동시 append 다.
+ * 그래서 두 명령을 <b>스크립트 하나로 묶어</b> 원자적으로 실행한다 ({@link #APPEND_SCRIPT}).
  */
 @Component
 public class ChatMessageStore {
@@ -58,6 +68,28 @@ public class ChatMessageStore {
     private static final Duration NOTIFY_COOLDOWN = Duration.ofSeconds(30);
 
     /**
+     * 번호 발급과 저장을 한 번에 한다. {@code KEYS[1]}=seq · {@code KEYS[2]}=messages,
+     * {@code ARGV[1]}=번호 자리를 비워 둔 JSON · {@code ARGV[2]}=그 자리 다음 글자의 위치.
+     *
+     * <p>JSON 을 스크립트가 만들지 않고 <b>앞부분만 갈아 끼우는</b> 이유는, 메시지 본문에 무엇이
+     * 들어오든 문자열을 뒤지지 않기 위해서다. 사용자가 채팅에 {@code "messageId"} 를 그대로 쳐도
+     * 스크립트는 그것을 보지 않는다 — 자르는 위치를 호출부가 길이로 넘겨 주기 때문이다.
+     * 그 위치가 항상 맞는 근거는 {@code ChatMessage} 의 {@code @JsonPropertyOrder} 다.
+     */
+    private static final RedisScript<Long> APPEND_SCRIPT = new DefaultRedisScript<>("""
+            local seq = redis.call('INCR', KEYS[1])
+            local body = string.sub(ARGV[1], tonumber(ARGV[2]))
+            redis.call('RPUSH', KEYS[2], '{"messageId":' .. seq .. ',' .. body)
+            return seq
+            """, Long.class);
+
+    /**
+     * 스크립트가 잘라 낼 앞부분. {@code toJson} 이 이 모양으로 시작하지 않으면 저장을 포기한다 —
+     * 어긋난 채로 밀어 넣으면 <b>읽을 수 없는 JSON 이 방에 영구히 남는다</b>(List 는 중간 삭제가 없다).
+     */
+    private static final String ID_PLACEHOLDER = "{\"messageId\":0,";
+
+    /**
      * 타임스탬프를 숫자 배열이 아니라 ISO-8601 문자열로 저장한다.
      * 기본 설정이면 {@code sentAt} 이 {@code [2026,8,16,14,43,11,138088000]} 로 들어가
      * redis-cli 로 들여다볼 때 읽을 수 없고, 다른 언어에서 이 키를 읽을 때도 걸린다.
@@ -66,7 +98,20 @@ public class ChatMessageStore {
      */
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            /*
+             * 모르는 필드를 만나도 읽는다.
+             *
+             * 필드가 빠진 옛 메시지는 이미 견디지만(전부 null 허용), 반대 방향은 못 견디고 있었다 —
+             * 필드를 하나 추가한 판을 배포했다가 되돌리면, 그 사이 저장된 메시지의 새 필드를
+             * 옛 코드가 모른다. fromJson 이 예외를 던지고 read 가 페이지 전체를 매핑하므로
+             * **그 방의 조회가 통째로 500 이 된다.** List 는 중간 삭제가 없어 손으로 지우지 않는 한
+             * TTL 이 끝날 때까지 계속 실패한다.
+             *
+             * 2026-08-19 에 실제로 재현했다. 판결 결과 필드(verdict)를 넣은 판으로 메시지를 쌓은 뒤
+             * 그 필드가 없는 판으로 되돌리자 방이 열리지 않았다.
+             */
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private final StringRedisTemplate redis;
 
@@ -118,17 +163,27 @@ public class ChatMessageStore {
     public ChatMessage append(long groupId, ChatMessageType type,
                               Long senderId, String senderNickname, String content,
                               ChatSystemType systemType, String deepLink, String caseNo) {
-        Long seq = redis.opsForValue().increment(ChatRedisKeys.seq(groupId));
+        /* 번호는 스크립트가 채운다. 0 은 그 자리를 비워 두는 표시일 뿐 저장되지 않는다 */
+        ChatMessage draft = new ChatMessage(0L, type, senderId, senderNickname,
+                content, LocalDateTime.now(), systemType, deepLink, caseNo);
+        String body = toJson(draft);
+        if (!body.startsWith(ID_PLACEHOLDER)) {
+            log.error("메시지 JSON 의 첫 필드가 messageId 가 아니다 groupId={} json={}", groupId, body);
+            throw new BusinessException("CHAT_APPEND_FAILED", "메시지를 저장하지 못했어요.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        Long seq = redis.execute(APPEND_SCRIPT,
+                List.of(ChatRedisKeys.seq(groupId), ChatRedisKeys.messages(groupId)),
+                body, String.valueOf(ID_PLACEHOLDER.length() + 1));
         if (seq == null) {
             // 사용자 입력 문제가 아니라 Redis 연결·명령 실패이므로 400 이 아닌 500 이다.
             throw new BusinessException("CHAT_SEQ_FAILED", "메시지 번호를 발급하지 못했어요.",
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        ChatMessage message = new ChatMessage(seq, type, senderId, senderNickname,
-                content, LocalDateTime.now(), systemType, deepLink, caseNo);
-        redis.opsForList().rightPush(ChatRedisKeys.messages(groupId), toJson(message));
+        ChatMessage message = draft.withMessageId(seq);
         if (seq == 1L) {
-            // 이 방의 첫 메시지 — seq·messages 키가 INCR·RPUSH 로 방금 새로 생겼다.
+            // 이 방의 첫 메시지 — seq·messages 키가 위 스크립트로 방금 새로 생겼다.
             // append 는 verifyCanEnter → memberIdsOf 를 거친 뒤에만 호출되므로 members 키(TTL 앵커)는
             // 항상 살아 있다는 전제 위에서, 그 잔여 TTL 을 그대로 복제한다.
             // 앵커가 없거나(-2) 무기한(-1)이면 하한으로 대신 건다 — 여기서 건너뛰면 영구 키가 된다.

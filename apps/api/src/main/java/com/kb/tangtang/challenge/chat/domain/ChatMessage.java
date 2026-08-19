@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.chat.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.time.LocalDateTime;
 
@@ -15,7 +16,12 @@ import java.time.LocalDateTime;
  * {@code systemType} · {@code deepLink} · {@code caseNo} 를 갖는다. TEXT 메시지는 그 반대다.
  * 세 값은 나중에 추가돼서 <b>이전에 저장된 메시지에는 없다</b> — 읽을 때 null 로 복원되므로
  * 화면은 값이 없을 때도 그려질 수 있어야 한다.
+ *
+ * <p><b>{@code messageId} 가 JSON 의 첫 필드라는 것은 계약이다</b>({@code @JsonPropertyOrder}).
+ * {@link com.kb.tangtang.challenge.chat.store.ChatMessageStore} 의 저장 스크립트가 그 자리를
+ * 잘라 내고 실제 번호를 끼워 넣는다 — 순서가 바뀌면 저장되는 JSON 이 깨진다.
  */
+@JsonPropertyOrder("messageId")
 public class ChatMessage {
 
     private final long messageId;
@@ -65,4 +71,15 @@ public class ChatMessage {
     public ChatSystemType getSystemType() { return systemType; }
     public String getDeepLink() { return deepLink; }
     public String getCaseNo() { return caseNo; }
+
+    /**
+     * 번호만 바꾼 사본. 저장 스크립트가 발급한 번호를 되돌려 받을 때 쓴다.
+     *
+     * <p>{@code sentAt} 을 다시 만들지 않는 것이 핵심이다 — 새로 만들면 Redis 에 저장된 시각과
+     * 호출부가 브로드캐스트하는 시각이 미세하게 어긋난다.
+     */
+    public ChatMessage withMessageId(long newMessageId) {
+        return new ChatMessage(newMessageId, type, senderId, senderNickname, content, sentAt,
+                systemType, deepLink, caseNo);
+    }
 }
