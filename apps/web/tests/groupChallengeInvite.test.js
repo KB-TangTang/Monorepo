@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+    createdSubtitle,
     formatIssuedDate,
     formatJoinDeadline,
     inviteBadges,
@@ -21,6 +22,10 @@ import {
 function source(path) {
     return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
+
+const INVITE_VIEW = 'src/views/challenge/group/GroupInviteView.vue';
+const CREATE_VIEW = 'src/views/challenge/group/GroupCreateView.vue';
+const INVITE_HEADER = 'src/components/challenge/group/GroupInviteHeader.vue';
 
 const RECRUITING = {
     status: 'RECRUITING',
@@ -118,8 +123,6 @@ test('닫힌 방에는 초대를 권하지 않는다', () => {
 
 /* ── 화면이 규칙을 실제로 쓰는지 ─────────────────────────────────── */
 
-const INVITE_VIEW = 'src/views/challenge/group/GroupInviteView.vue';
-
 test('초대 화면은 뱃지·안내를 하드코딩하지 않는다', () => {
     const src = source(INVITE_VIEW);
 
@@ -153,8 +156,8 @@ test('생성 완료 직후에는 상단이 × 다', () => {
  * 생성 화면이 push 가 아니라 replace 로 들어와야 그 자리가 덮인다.
  */
 test('생성 화면은 초대 화면으로 replace 한다 — push 면 뒤로가기가 위자드로 돌아간다', () => {
-    const src = source('src/views/challenge/group/GroupCreateView.vue');
-    const goToInvite = src.match(/function goToInvite\(\)\s*\{[\s\S]*?\n\}/);
+    const src = source(CREATE_VIEW);
+    const goToInvite = src.match(/function goToInvite\([^)]*\)\s*\{[\s\S]*?\n\}/);
 
     assert.ok(goToInvite, 'goToInvite 를 찾지 못했다');
     assert.match(goToInvite[0], /router\.replace\(/);
@@ -162,9 +165,60 @@ test('생성 화면은 초대 화면으로 replace 한다 — push 면 뒤로가
 });
 
 test('초대 화면 헤더는 두 가지 상단 아이콘을 모두 갖고 있다', () => {
-    const src = source('src/components/challenge/group/GroupInviteHeader.vue');
+    const src = source(INVITE_HEADER);
 
     assert.match(src, /XMarkIcon/);
     assert.match(src, /ChevronLeftIcon/);
     assert.match(src, /navMode/);
+});
+
+/* ── 생성 완료 화면 통합 ─────────────────────────────────────────── */
+
+test('생성 완료 한 줄에 그룹 이름과 시작일이 함께 들어간다', () => {
+    const line = createdSubtitle({ ...RECRUITING, groupName: '배달 소비 줄이기' });
+
+    assert.equal(line, '배달 소비 줄이기 · 8월 1일부터 시작해요');
+});
+
+test('시작일을 못 읽으면 그룹 이름만 남긴다 — 「· 부터 시작해요」 같은 반쪽 문장을 만들지 않는다', () => {
+    assert.equal(createdSubtitle({ groupName: '배달 소비 줄이기' }), '배달 소비 줄이기');
+    assert.equal(createdSubtitle(null), '');
+});
+
+/*
+ * 그룹 이름은 사용자가 적은 값이다. inviteNotice 와 달리 `<b>` 를 섞지 않는 이유가 그것이다 —
+ * 헤더가 v-html 로 그리면 이름에 넣은 태그가 그대로 실행된다.
+ */
+test('생성 완료 한 줄에는 태그를 섞지 않는다', () => {
+    const line = createdSubtitle({ ...RECRUITING, groupName: '<img src=x onerror=alert(1)>' });
+
+    assert.doesNotMatch(line, /<b>/);
+    assert.match(source(INVITE_HEADER), /class="gih-subtitle">\{\{ subtitle \}\}/);
+});
+
+/*
+ * 축하만 보여주고 「친구 초대하기」를 한 번 더 누르게 하던 4단계 화면을 없앴다.
+ * 그 화면이 알려주던 초대 마감·인원은 초대 화면이 실데이터로 이미 보여준다.
+ */
+test('생성 위자드에 성공 화면이 남아 있지 않다', () => {
+    const src = source(CREATE_VIEW);
+
+    assert.doesNotMatch(src, /currentStep\.value = 4/, '4단계로 넘어가는 코드가 남아 있다');
+    assert.doesNotMatch(src, /gcv-success/, '성공 화면 마크업·스타일이 남아 있다');
+    assert.doesNotMatch(src, /celebration/, '탕이는 초대 화면으로 옮겼다');
+});
+
+test('생성에 성공하면 화면을 갈아타지 않고 곧바로 초대 화면으로 간다', () => {
+    const src = source(CREATE_VIEW);
+    const handleCreate = src.match(/async function handleCreate\(\)\s*\{[\s\S]*?\n\}/);
+
+    assert.ok(handleCreate, 'handleCreate 를 찾지 못했다');
+    assert.match(handleCreate[0], /goToInvite\(created\.groupId\)/);
+});
+
+test('축하 문구와 탕이는 생성 완료로 들어왔을 때만 나온다', () => {
+    const src = source(INVITE_VIEW);
+
+    assert.match(src, /isPostCreate\.value \? '그룹을 제대로<br>만들었어요!' : '배심원을/);
+    assert.match(src, /isPostCreate\.value \? celebrationImg : ''/);
 });

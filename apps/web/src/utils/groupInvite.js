@@ -81,6 +81,22 @@ export function inviteNotice(group) {
     return `${when} 초대할 수 있어요. 지금 <b>${left}자리</b> 남았어요.`;
 }
 
+/**
+ * 생성 완료 직후 헤더에 붙는 한 줄. `배달 소비 줄이기 · 8월 1일부터 시작해요`.
+ *
+ * 그룹 이름이 그대로 들어가는 **사용자 입력 문자열**이다. `inviteNotice` 와 달리 `<b>` 를
+ * 섞지 않는 이유가 그것이다 — v-html 로 그려지면 이름에 넣은 태그가 실행된다.
+ */
+export function createdSubtitle(group) {
+    if (!group) return '';
+
+    const name = group.groupName ?? '';
+    const start = formatMonthDay(group.startDate);
+    if (!start) return name;
+
+    return `${name} · ${start}부터 시작해요`;
+}
+
 function memberCount(group) {
     return group.memberCount ?? group.members?.length ?? 0;
 }

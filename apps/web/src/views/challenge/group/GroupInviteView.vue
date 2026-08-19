@@ -5,7 +5,8 @@ import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vu
 import GroupSummonCard from '@/components/challenge/group/GroupSummonCard.vue';
 import { fetchGroupDetail } from '@/api/groupChallenge';
 import { resolveBack } from '@/utils/groupChallengeNavigation';
-import { inviteBadges, inviteNotice, isInviteOpen } from '@/utils/groupInvite';
+import { createdSubtitle, inviteBadges, inviteNotice, isInviteOpen } from '@/utils/groupInvite';
+import celebrationImg from '@/assets/images/emotions/10_celebration.png';
 
 const route = useRoute();
 const router = useRouter();
@@ -14,13 +15,23 @@ const group = ref(null);
 
 /*
  * 생성 완료 직후인지. 되돌아갈 앞 화면이 「방금 끝낸 생성 위자드」라 다른 진입로와 다르게
- * 다뤄야 한다 — 상단 버튼도, 하단 링크 문구도 여기서 갈린다.
+ * 다뤄야 한다 — 상단 버튼도, 축하 문구도, 하단 링크 문구도 여기서 갈린다.
  */
 const isPostCreate = computed(() => route.query.from === 'create');
 
 const headerBadges = computed(() => inviteBadges(group.value));
 const noticeText = computed(() => inviteNotice(group.value));
 const canInvite = computed(() => isInviteOpen(group.value));
+
+/*
+ * 생성 완료는 따로 화면을 두지 않는다. 축하만 보여주고 버튼을 한 번 더 누르게 하면
+ * 그 화면이 하는 일이 「다음」밖에 없다. 축하 문구·탕이를 이 화면 머리로 가져와 한 번에 끝낸다.
+ */
+const headerTitle = computed(() =>
+    isPostCreate.value ? '그룹을 제대로<br>만들었어요!' : '배심원을<br>초대해주세요!',
+);
+const headerSubtitle = computed(() => (isPostCreate.value ? createdSubtitle(group.value) : ''));
+const headerMascot = computed(() => (isPostCreate.value ? celebrationImg : ''));
 
 const subLinkText = computed(() => (isPostCreate.value ? '그룹 화면으로' : '나중에 초대하기'));
 
@@ -89,7 +100,9 @@ function leaveScreen() {
     <div class="giv-page">
         <GroupInviteHeader
             nav-label="친구 초대"
-            title="배심원을<br>초대해주세요!"
+            :title="headerTitle"
+            :subtitle="headerSubtitle"
+            :mascot="headerMascot"
             :badges="headerBadges"
             :nav-mode="isPostCreate ? 'close' : 'back'"
             @back="leaveScreen()"

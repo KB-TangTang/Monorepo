@@ -9,6 +9,10 @@ import { ChevronLeftIcon, XMarkIcon } from '@heroicons/vue/24/solid';
  */
 defineProps({
     title: { type: String, required: true },
+    /**
+     * 제목 아래 한 줄. 그룹 이름 같은 **사용자 입력이 들어오므로 v-html 로 그리지 않는다.**
+     * 강조가 필요하면 문구가 아니라 스타일로 준다.
+     */
     subtitle: { type: String, default: '' },
     badges: { type: Array, default: () => [] },
     navLabel: { type: String, default: '' },
@@ -17,6 +21,8 @@ defineProps({
         default: 'back',
         validator: (v) => ['back', 'close'].includes(v),
     },
+    /** 축하 상황에 제목 옆에 세울 마스코트 이미지 경로. 없으면 자리를 차지하지 않는다 */
+    mascot: { type: String, default: '' },
 });
 
 const emit = defineEmits(['back']);
@@ -52,7 +58,11 @@ const emit = defineEmits(['back']);
         </div>
 
         <div class="gih-meta">
-            <h2 class="gih-title" v-html="title" />
+            <div class="gih-meta__text">
+                <h2 class="gih-title" v-html="title" />
+                <p v-if="subtitle" class="gih-subtitle">{{ subtitle }}</p>
+            </div>
+            <img v-if="mascot" :src="mascot" class="gih-mascot" alt="" aria-hidden="true" />
         </div>
     </header>
 </template>
@@ -150,6 +160,15 @@ const emit = defineEmits(['back']);
     padding-top: 14px;
     position: relative;
     z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.gih-meta__text {
+    flex: 1;
+    /* 그룹 이름이 길어도 마스코트를 화면 밖으로 밀어내지 않게 한다 */
+    min-width: 0;
 }
 
 .gih-title {
@@ -158,5 +177,33 @@ const emit = defineEmits(['back']);
     color: var(--tt-text-inverse);
     line-height: 1.3;
     letter-spacing: -0.01em;
+}
+
+.gih-subtitle {
+    margin-top: 8px;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-inverse);
+    opacity: 0.7;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+/* ── mascot ─────────────────────────────── */
+.gih-mascot {
+    flex: none;
+    width: 88px;
+    height: 88px;
+    object-fit: contain;
+    /* 헤더 아래 모서리에 발을 걸치게 내린다 — 헤더가 잘라내지 않도록 z-index 로 띄운다 */
+    margin-bottom: -14px;
+    filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.3));
+    animation: tt-float 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gih-mascot {
+        animation: none;
+    }
 }
 </style>
