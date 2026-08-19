@@ -1,6 +1,7 @@
 package com.kb.tangtang.mission.service;
 
 import com.kb.tangtang.mission.mapper.AbsoluteMissionAssignmentMapper;
+import com.kb.tangtang.mission.dto.RelativeMissionAssignmentDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -48,12 +49,27 @@ class DailyMissionAssignmentServiceTest {
     void qualifiedUserGetsRelativeMissionOnOrdinaryDay() {
         LocalDate date = LocalDate.of(2026, 8, 18);
         when(absoluteMapper.isRelativeMissionQualified(7L)).thenReturn(true);
+        when(relativeService.assign(7L, date)).thenReturn(
+                RelativeMissionAssignmentDto.builder().assigned(true).assignDate(date).build());
         DailyMissionAssignmentService service = service();
 
         service.assign(7L, date);
 
         verify(relativeService).assign(7L, date);
         verifyNoInteractions(absoluteService);
+    }
+
+    @Test
+    void qualifiedUserGetsAbsoluteMissionWhenRecentRelativeDataIsInsufficient() {
+        LocalDate date = LocalDate.of(2026, 8, 18);
+        when(absoluteMapper.isRelativeMissionQualified(7L)).thenReturn(true);
+        when(relativeService.assign(7L, date)).thenReturn(RelativeMissionAssignmentDto.skipped(date));
+        DailyMissionAssignmentService service = service();
+
+        service.assign(7L, date);
+
+        verify(absoluteService).assign(
+                7L, date, AbsoluteMissionAssignmentService.INSUFFICIENT_RELATIVE_DATA);
     }
 
     private DailyMissionAssignmentService service() {

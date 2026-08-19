@@ -13,7 +13,6 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionCategoryAnalysisServiceTest {
@@ -75,10 +74,22 @@ class MissionCategoryAnalysisServiceTest {
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
-        assertFalse(result.isRelativeEligible());
+        assertEquals(49, result.getCumulativeTransactionCount());
+        assertEquals(50, result.getRequiredCumulativeTransactionCount());
         assertTrue(result.getTopCategories().isEmpty());
         assertEquals(0, mapper.sumConsumptionCallCount);
         assertEquals(0, mapper.findTopCategoriesCallCount);
+    }
+
+    @Test
+    @DisplayName("최초 영구 자격은 최근 28일 분석 결과와 무관하게 누적 유효 소비 50건으로 판정한다")
+    void initialQualificationDependsOnlyOnCumulativeTransactions() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.allTransactionCount = 50;
+        mapper.transactionCount = 0;
+        mapper.topCategories = List.of();
+
+        assertTrue(service(mapper).hasInitialQualification(USER_ID));
     }
 
     @Test
@@ -90,7 +101,6 @@ class MissionCategoryAnalysisServiceTest {
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
-        assertFalse(result.isRelativeEligible());
         assertEquals(49, result.getTransactionCount());
         assertTrue(result.getTopCategories().isEmpty());
         assertEquals(0, mapper.sumConsumptionCallCount);
@@ -101,6 +111,7 @@ class MissionCategoryAnalysisServiceTest {
     @DisplayName("최초 자격 획득 사용자는 최근 28일 거래가 50건 미만이어도 분석한다")
     void qualifiedUserAnalyzesWithFewerThanFiftyTransactions() {
         FakeMapper mapper = new FakeMapper();
+        mapper.allTransactionCount = 12;
         mapper.transactionCount = 12;
         mapper.totalConsumption = new BigDecimal("300000");
         mapper.topCategories = List.of(row(17L, "식비", "배달앱", "120000", 4));
@@ -108,7 +119,7 @@ class MissionCategoryAnalysisServiceTest {
         MissionCategoryAnalysisDto result = service(mapper)
                 .getCategoryAnalysisForQualifiedUser(USER_ID);
 
-        assertTrue(result.isRelativeEligible());
+        assertEquals(12, result.getCumulativeTransactionCount());
         assertEquals(12, result.getTransactionCount());
         assertEquals("배달앱", result.getTopCategories().get(0).getCategoryName());
         assertEquals(1, mapper.findTopCategoriesCallCount);
@@ -125,7 +136,6 @@ class MissionCategoryAnalysisServiceTest {
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
-        assertTrue(result.isRelativeEligible());
         assertEquals(LocalDate.of(2026, 7, 14), result.getAnalysisStartDate());
         assertEquals(LocalDate.of(2026, 8, 10), result.getAnalysisEndDate());
         assertEquals("배달앱", result.getTopCategories().get(0).getCategoryName());
@@ -144,7 +154,6 @@ class MissionCategoryAnalysisServiceTest {
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
-        assertTrue(result.isRelativeEligible());
         assertEquals(1, mapper.findTopCategoriesCallCount);
     }
 
@@ -181,7 +190,6 @@ class MissionCategoryAnalysisServiceTest {
 
         MissionCategoryAnalysisDto result = service(mapper).getCategoryAnalysis(USER_ID);
 
-        assertFalse(result.isRelativeEligible());
         assertTrue(result.getTopCategories().isEmpty());
         assertEquals(1, mapper.findTopCategoriesCallCount);
         assertEquals(0, mapper.sumConsumptionCallCount);

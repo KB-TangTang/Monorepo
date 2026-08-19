@@ -45,6 +45,20 @@ public class MissionCategoryAnalysisService {
         return getCategoryAnalysis(userId, false);
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasInitialQualification(long userId) {
+        return getCumulativeTransactionCount(userId) >= MIN_TRANSACTION_COUNT;
+    }
+
+    @Transactional(readOnly = true)
+    public int getCumulativeTransactionCount(long userId) {
+        return missionCategoryAnalysisMapper.countAllConsumptionTransactions(userId);
+    }
+
+    public int getRequiredCumulativeTransactionCount() {
+        return MIN_TRANSACTION_COUNT;
+    }
+
     private MissionCategoryAnalysisDto getCategoryAnalysis(long userId, boolean requireInitialQualification) {
         LocalDate endDateExclusive = LocalDate.now(clock);
         LocalDate startDate = endDateExclusive.minusDays(ANALYSIS_DAYS);
@@ -57,13 +71,15 @@ public class MissionCategoryAnalysisService {
         boolean requirementsMet = allTransactionCount >= MIN_TRANSACTION_COUNT;
 
         if (requireInitialQualification && !requirementsMet) {
-            return result(startDate, analysisEndDate, transactionCount, false, List.of());
+            return result(startDate, analysisEndDate, transactionCount,
+                    allTransactionCount, List.of());
         }
 
         List<CategorySpending> spendingRows = missionCategoryAnalysisMapper.findTopCategorySpending(
                 userId, startDate, endDateExclusive, TOP_CATEGORY_LIMIT);
         if (spendingRows.isEmpty()) {
-            return result(startDate, analysisEndDate, transactionCount, false, List.of());
+            return result(startDate, analysisEndDate, transactionCount,
+                    allTransactionCount, List.of());
         }
 
         BigDecimal totalConsumption = zeroIfNull(
@@ -72,19 +88,21 @@ public class MissionCategoryAnalysisService {
         List<MissionCategoryRankDto> topCategories = createTopCategories(
                 userId, spendingRows, totalConsumption);
 
-        return result(startDate, analysisEndDate, transactionCount, true, topCategories);
+        return result(startDate, analysisEndDate, transactionCount,
+                allTransactionCount, topCategories);
     }
 
     private MissionCategoryAnalysisDto result(LocalDate startDate,
                                               LocalDate endDate,
                                               int transactionCount,
-                                              boolean relativeEligible,
+                                              int cumulativeTransactionCount,
                                               List<MissionCategoryRankDto> topCategories) {
         return MissionCategoryAnalysisDto.builder()
                 .analysisStartDate(startDate)
                 .analysisEndDate(endDate)
                 .transactionCount(transactionCount)
-                .relativeEligible(relativeEligible)
+                .cumulativeTransactionCount(cumulativeTransactionCount)
+                .requiredCumulativeTransactionCount(MIN_TRANSACTION_COUNT)
                 .topCategories(topCategories)
                 .build();
     }

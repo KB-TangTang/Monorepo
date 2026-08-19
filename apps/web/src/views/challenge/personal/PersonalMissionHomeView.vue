@@ -30,6 +30,7 @@ import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChal
 import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
+import insufficientTangi from '@/assets/images/emotions/03_gentle_smile.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
 
 const router = useRouter();
@@ -53,6 +54,8 @@ const isMissionUnlockOpen = ref(false);
 const isMissionUnlockAcknowledging = ref(false);
 const missionUnlockError = ref('');
 const hasPendingMissionUnlock = ref(false);
+const isMissionUnlockPreview = ref(false);
+const isMissionUnlockDifficultyFlow = ref(false);
 
 const courtDate = computed(() => formatCourtDate());
 const shortDate = computed(() => {
@@ -60,11 +63,28 @@ const shortDate = computed(() => {
     return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 });
 
-/*
- * 맞춤 사건이 열리는 조건. 서버가 진행도를 주지 않으므로 조건만 적는다(이슈 #313).
- * 값을 붙이지 않는 것이 요점이라 문자열 배열로 둔다.
- */
-const unlockConditions = ['계좌 연동', '최근 28일 소비 데이터', '전체 소비 50건 확보'];
+const cumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
+    return Number.isFinite(count) && count >= 0 ? count : null;
+});
+const requiredCumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.requiredCumulativeTransactionCount);
+    return Number.isFinite(count) && count > 0 ? count : null;
+});
+const qualificationProgress = computed(() => {
+    if (
+        cumulativeTransactionCount.value === null ||
+        requiredCumulativeTransactionCount.value === null
+    ) {
+        return 0;
+    }
+    return Math.min(
+        Math.round(
+            (cumulativeTransactionCount.value / requiredCumulativeTransactionCount.value) * 100,
+        ),
+        100,
+    );
+});
 
 /*
  * 맞춤 미션 개시 안내 동기화. **실패를 삼킨다**(이슈 #314).
@@ -201,6 +221,20 @@ async function onTutorialComplete() {
 
 async function acknowledgeMissionUnlock(destination) {
     if (isMissionUnlockAcknowledging.value) return;
+
+    if (destination === 'difficulty') {
+        isMissionUnlockDifficultyFlow.value = true;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(openTangiSheet);
+        return;
+    }
+
+    if (isMissionUnlockPreview.value) {
+        isMissionUnlockPreview.value = false;
+        isMissionUnlockOpen.value = false;
+        return;
+    }
+
     isMissionUnlockAcknowledging.value = true;
     missionUnlockError.value = '';
     try {
@@ -208,9 +242,7 @@ async function acknowledgeMissionUnlock(destination) {
         hasPendingMissionUnlock.value = false;
         isMissionUnlockOpen.value = false;
         afterOverlayClosed(() => {
-            if (destination === 'difficulty') {
-                router.push({ name: 'personalMissionChallengeDifficulty' });
-            } else if (store.hasPendingVerdict) {
+            if (store.hasPendingVerdict) {
                 isVerdictOpen.value = true;
             }
         });
@@ -227,10 +259,22 @@ function openTangiSheet() {
 }
 
 async function handleProsecutorConfirm(prosecutorId) {
+    if (isMissionUnlockDifficultyFlow.value && isMissionUnlockPreview.value) {
+        isMissionUnlockDifficultyFlow.value = false;
+        isMissionUnlockPreview.value = false;
+        devActionMessage.value = '맞춤 사건 개시와 담당 탕이 선택 흐름을 미리 확인했어요.';
+        return;
+    }
+
     try {
         const user = await store.saveProsecutorDifficulty(prosecutorId);
         authStore.mergeUser(user);
-        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 오늘 미션 재배정을 누르면 새 난이도가 적용됩니다.`;
+        if (isMissionUnlockDifficultyFlow.value) {
+            await store.acknowledgeMissionUnlock();
+            hasPendingMissionUnlock.value = false;
+            isMissionUnlockDifficultyFlow.value = false;
+        }
+        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 내일 배정분부터 적용됩니다.`;
     } catch (err) {
         devActionMessage.value = err.message ?? '담당 검사 난이도를 저장하지 못했어요.';
     }
@@ -287,6 +331,16 @@ function showWithdrawnWithoutMissionDemo() {
     store.setDemoWithdrawnWithoutMission();
 }
 
+function showInsufficientDemo() {
+    store.setDemoInsufficient();
+}
+
+function showMissionUnlockDemo() {
+    isMissionUnlockPreview.value = true;
+    missionUnlockError.value = '';
+    isMissionUnlockOpen.value = true;
+}
+
 async function reassignTodayMission() {
     if (isReassigning.value) return;
     isReassigning.value = true;
@@ -335,9 +389,13 @@ async function reassignTodayMission() {
             @acknowledge="handleVerdictAcknowledge"
         />
 
-        <!-- 헤더: 기본 모드 (active / verdict) -->
+        <!-- 오늘 미션이 있는 화면은 법원·담당 탕이 헤더를 동일하게 유지한다. -->
         <PersonalCourtHeader
-            v-if="store.screenState === 'active' || store.screenState === 'verdict'"
+            v-if="
+                store.screenState === 'active' ||
+                store.screenState === 'verdict' ||
+                store.screenState === 'insufficient'
+            "
             :court-image="courtSupreme"
             :date="courtDate"
             :prosecutor-image="store.selectedProsecutor?.image"
@@ -352,15 +410,6 @@ async function reassignTodayMission() {
             :date="shortDate"
             compact
             compact-title="수사할 증거가<br>없습니다"
-        />
-
-        <!-- 헤더: 축소 모드 (insufficient) -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'insufficient'"
-            :court-image="courtSupreme"
-            :date="shortDate"
-            compact
-            compact-title="아직 수사할 증거가<br>모이지 않았습니다"
         />
 
         <!-- 철회 후 오늘 미션 없음: 법원·날짜·알림 헤더는 기본 크기로 유지 -->
@@ -466,71 +515,19 @@ async function reassignTodayMission() {
 
             <!-- 화면 05: 증거 부족 -->
             <template v-else-if="store.screenState === 'insufficient'">
-                <div class="personal-home__insufficient-banner">
-                    <img
-                        :src="store.selectedProsecutor?.image"
-                        alt=""
-                        class="personal-home__insufficient-tangi"
-                    />
-                    <div class="personal-home__insufficient-text">
-                        <div class="personal-home__insufficient-title">
-                            증거(소비 기록)가 모이는 동안<br />공통 사건을 배정해 드려요
-                        </div>
-                        <div class="personal-home__insufficient-sub">
-                            증거가 쌓이면 요주의 대상 3곳을 뽑아 맞춤 사건이 열려요.
-                        </div>
-                    </div>
-                </div>
-
-                <!--
-                  「맞춤 사건이 열리는 조건」 — 조건만 적고 진행도는 적지 않는다(이슈 #313).
-
-                  예전에는 「19일째」·「12 / 50」과 진행 막대를 그렸는데, 그 값이 전부
-                  MOCK_DATA_REQUIREMENTS 픽스처였다. 이 화면은 hasEnoughData 가 목 프로필을 보던
-                  시절에 도달 불가능한 분기였다가, #311 이 서버의 relativeEligible 을 보게 되면서
-                  실사용자에게 열렸다 — 그 순간부터 자기 데이터와 무관한 고정 숫자를 보여주게 됐다.
-
-                  서버가 주는 값(/api/missions/categoryAnalysis)은 「이번 회차 스냅샷이 있는가」뿐이라
-                  진행도를 만들 근거가 없다. 지어내느니 조건만 보여준다.
-                  진행도를 되살리려면 서버가 실제 확보 건수를 내려줘야 한다 → 이슈 #315
-                -->
-                <div class="personal-home__conditions-card">
-                    <div class="personal-home__conditions-title">맞춤 사건이 열리는 조건</div>
-                    <div class="personal-home__conditions-list">
-                        <div
-                            v-for="condition in unlockConditions"
-                            :key="condition"
-                            class="personal-home__condition"
-                        >
-                            <span
-                                class="personal-home__condition-icon personal-home__condition-icon--pending"
-                            >
-                                <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="var(--tt-text-muted)"
-                                    stroke-width="2.6"
-                                    stroke-linecap="round"
-                                >
-                                    <circle cx="12" cy="12" r="1" />
-                                </svg>
-                            </span>
-                            <span class="personal-home__condition-label">{{ condition }}</span>
-                        </div>
-                    </div>
-                    <button type="button" class="personal-home__link-more" @click="linkAccount">
-                        계좌 더 연동하기 ›
-                    </button>
-                </div>
-
+                <!-- 오늘 수행할 절대형 미션을 가장 먼저 보여준다. -->
                 <div class="personal-home__common-mission">
-                    <span class="personal-home__common-badge">{{
-                        store.todayBriefing.missionBadge
-                    }}</span>
+                    <div class="personal-home__common-meta">
+                        <span class="personal-home__common-badge">{{
+                            store.todayBriefing.missionBadge
+                        }}</span>
+                        <span>오늘의 공통 사건</span>
+                    </div>
                     <div class="personal-home__common-title">
                         {{ store.todayBriefing.missionTitle }}
+                    </div>
+                    <div class="personal-home__common-description">
+                        {{ store.todayBriefing.missionContent }}
                     </div>
                     <div class="personal-home__common-status">
                         <svg
@@ -549,9 +546,89 @@ async function reassignTodayMission() {
                         <span>
                             현재까지 {{ store.todayBriefing.categoryName }} 지출
                             <b>{{ formatWon(store.todayBriefing.currentAmount) }}</b>
-                            · 자정까지 0원이면 인정
                         </span>
                     </div>
+                </div>
+
+                <div class="personal-home__insufficient-banner">
+                    <img
+                        :src="insufficientTangi"
+                        alt=""
+                        class="personal-home__insufficient-tangi"
+                    />
+                    <div class="personal-home__insufficient-text">
+                        <div class="personal-home__insufficient-title">
+                            증거(소비 기록)가 모이는 동안<br />공통 사건을 배정해 드려요
+                        </div>
+                        <div class="personal-home__insufficient-sub">
+                            증거가 쌓이면 요주의 대상 3곳을 뽑아 맞춤 사건이 열려요.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="personal-home__conditions-card">
+                    <div class="personal-home__conditions-title">맞춤 사건이 열리는 조건</div>
+                    <div class="personal-home__conditions-list">
+                        <div class="personal-home__condition">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--done"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-success)"
+                                    stroke-width="2.6"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M5 12.5l4 4L19 7" />
+                                </svg>
+                            </span>
+                            <span class="personal-home__condition-label">계좌 연동</span>
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--done"
+                            >
+                                완료
+                            </span>
+                        </div>
+                        <div class="personal-home__condition">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--progress"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-text-muted)"
+                                    stroke-width="2.6"
+                                    stroke-linecap="round"
+                                >
+                                    <circle cx="6" cy="12" r="1" />
+                                    <circle cx="12" cy="12" r="1" />
+                                    <circle cx="18" cy="12" r="1" />
+                                </svg>
+                            </span>
+                            <span class="personal-home__condition-label">전체 소비 건수 확보</span>
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--progress"
+                            >
+                                {{ cumulativeTransactionCount }} /
+                                {{ requiredCumulativeTransactionCount }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="personal-home__progress-bar" aria-hidden="true">
+                        <div
+                            class="personal-home__progress-fill"
+                            :style="{ width: qualificationProgress + '%' }"
+                        ></div>
+                    </div>
+                    <button type="button" class="personal-home__link-more" @click="linkAccount">
+                        계좌 더 연동하기 ›
+                    </button>
                 </div>
             </template>
         </main>
@@ -572,6 +649,12 @@ async function reassignTodayMission() {
                 {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
             </button>
             <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
+            <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
+                데이터 부족 화면
+            </button>
+            <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
+                맞춤 사건 개시 안내
+            </button>
             <button
                 type="button"
                 class="personal-home__dev-btn"

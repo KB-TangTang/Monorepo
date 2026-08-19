@@ -73,6 +73,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         courtMode: 'supreme',
         isHydrated: false,
         missionUnlockStatus: 'UNTRACKED',
+        demoScreenState: null,
 
         /* mock 데이터 (API 교체 대상) */
         briefing: MOCK_TODAY_BRIEFING,
@@ -85,10 +86,21 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
     getters: {
         hasEnoughData(state) {
-        if (state.categoryAnalysis != null) {
-                return state.categoryAnalysis.relativeEligible === true;
+            if (state.categoryAnalysis != null) {
+                const cumulativeCount = Number(state.categoryAnalysis.cumulativeTransactionCount);
+                const requiredCount = Number(
+                    state.categoryAnalysis.requiredCumulativeTransactionCount,
+                );
+                if (Number.isFinite(cumulativeCount) && Number.isFinite(requiredCount)) {
+                    return cumulativeCount >= requiredCount;
+                }
+                return false;
             }
             return hasEnoughPersonalMissionData(state.profile);
+        },
+
+        hasRelativeMissionCandidates(state) {
+            return (state.categoryAnalysis?.topCategories ?? []).length > 0;
         },
 
         isAccountLinked(state) {
@@ -115,6 +127,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             if (this.consentState === null) return 'loading';
             if (this.consentState === 'ERROR') return 'error';
             if (this.consentState === CHALLENGE_CONSENT_STATE.FIRST) return 'consent';
+            if (this.demoScreenState !== null) return this.demoScreenState;
             if (
                 this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN &&
                 !this.todayMission &&
@@ -197,10 +210,22 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.monthlyScore = normalizeMonthlyScore(monthlyScore);
         },
 
+        /*
+         * 맞춤 미션 개시 안내를 띄울지 정하는 유일한 자리다(이슈 #315 (2)(3)).
+         *
+         * 서버가 자격을 스스로 판정하므로 보낼 것이 없다 - 요청 본문이 사라졌다(#315 (1)).
+         *
+         * 영구 자격을 얻어도 최근 28일 후보 카테고리가 없으면 상대형 미션은 아직 만들 수 없다.
+         * 이때 안내를 소비하지 않고 미뤘다가 topCategories 가 생기면 띄운다.
+         */
         async syncMissionUnlock() {
-            const result = await requestPersonalMissionUnlockSync(this.hasEnoughData);
+            const result = await requestPersonalMissionUnlockSync();
             this.missionUnlockStatus = result.status;
-            return Boolean(result.showUnlock);
+            return (
+                Boolean(result.showUnlock) &&
+                this.hasEnoughData &&
+                this.hasRelativeMissionCandidates
+            );
         },
 
         async acknowledgeMissionUnlock() {
@@ -283,16 +308,39 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.pendingVerdict = null;
             this.courtMode = 'supreme';
             this.isHydrated = true;
+            this.demoScreenState = null;
         },
 
         setDemoWithdrawnWithoutMission() {
             this.hasAgreed = false;
             this.consentState = CHALLENGE_CONSENT_STATE.WITHDRAWN;
             this.todayMission = null;
+            this.demoScreenState = null;
+        },
+
+        setDemoInsufficient() {
+            this.hasAgreed = true;
+            this.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
+            this.demoScreenState = 'insufficient';
+            this.dataRequirements = {
+                ...this.dataRequirements,
+                accountLinked: true,
+            };
+            this.categoryAnalysis = {
+                ...this.categoryAnalysis,
+                topCategories: [],
+            };
+            this.missionStreak = null;
+            this.monthlyScore = {
+                score: 0,
+                topPercent: null,
+            };
+            this.pendingVerdict = null;
         },
 
         /* 데모용: 판정 테스트 */
         setDemoVerdict(verdict) {
+            this.demoScreenState = null;
             this.pendingVerdict = verdict;
         },
     },

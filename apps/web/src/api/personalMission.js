@@ -4,8 +4,9 @@ export function fetchTodayMission() {
     return http.get('/missions/today');
 }
 
-export function syncPersonalMissionUnlock(enoughData) {
-    return http.post('/main-challenge/mission-unlock/status', { enoughData });
+/* 자격 판정은 서버가 한다 - 보낼 본문이 없다(이슈 #315 (1)). */
+export function syncPersonalMissionUnlock() {
+    return http.post('/main-challenge/mission-unlock/status');
 }
 
 export function acknowledgePersonalMissionUnlock() {

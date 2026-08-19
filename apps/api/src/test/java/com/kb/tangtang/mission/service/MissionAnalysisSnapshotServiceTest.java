@@ -77,6 +77,9 @@ class MissionAnalysisSnapshotServiceTest {
         MissionCategoryAnalysisDto result;
         int callCount;
         int qualifiedCallCount;
+        int qualificationCheckCount;
+        boolean initiallyQualified;
+        int cumulativeTransactionCount = 50;
 
         StubCategoryAnalysisService() {
             super((MissionCategoryAnalysisMapper) null);
@@ -92,6 +95,22 @@ class MissionAnalysisSnapshotServiceTest {
         public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
             qualifiedCallCount++;
             return result;
+        }
+
+        @Override
+        public boolean hasInitialQualification(long userId) {
+            qualificationCheckCount++;
+            return initiallyQualified;
+        }
+
+        @Override
+        public int getCumulativeTransactionCount(long userId) {
+            return cumulativeTransactionCount;
+        }
+
+        @Override
+        public int getRequiredCumulativeTransactionCount() {
+            return 50;
         }
     }
 
@@ -127,6 +146,7 @@ class MissionAnalysisSnapshotServiceTest {
     void createsSnapshotsFromCategoryAnalysis() {
         FakeSnapshotMapper mapper = new FakeSnapshotMapper();
         StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.initiallyQualified = true;
         analysisService.result = eligibleAnalysis(List.of(
                 category(1, 18L, "쇼핑", "패션", "325429", 4, "17.89"),
                 category(2, 40L, "문화/여가", "취미", "227436", 5, "12.50"),
@@ -144,8 +164,8 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(new BigDecimal("325429"), mapper.insertedSnapshots.get(0).getSpendingAmount());
         assertEquals(new BigDecimal("17.89"), mapper.insertedSnapshots.get(0).getSpendingRatio());
         assertEquals(4, mapper.insertedSnapshots.get(0).getTransactionCount());
-        assertEquals(1, analysisService.callCount);
-        assertEquals(0, analysisService.qualifiedCallCount);
+        assertEquals(1, analysisService.qualifiedCallCount);
+        assertEquals(0, analysisService.callCount);
         assertEquals(TODAY.atStartOfDay(), mapper.markedQualifiedAt);
     }
 
@@ -174,7 +194,6 @@ class MissionAnalysisSnapshotServiceTest {
         FakeSnapshotMapper mapper = new FakeSnapshotMapper();
         StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
         analysisService.result = MissionCategoryAnalysisDto.builder()
-                .relativeEligible(false)
                 .topCategories(List.of())
                 .build();
 
@@ -187,10 +206,30 @@ class MissionAnalysisSnapshotServiceTest {
     }
 
     @Test
+    @DisplayName("누적 50건을 충족하면 최근 28일 후보가 없어도 영구 자격을 기록한다")
+    void recordsQualificationEvenWhenRecentCategoryAnalysisIsUnavailable() {
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.initiallyQualified = true;
+        analysisService.result = MissionCategoryAnalysisDto.builder()
+                .topCategories(List.of())
+                .build();
+
+        MissionAnalysisSnapshotDto result = service(mapper, analysisService)
+                .getOrCreateSnapshot(USER_ID);
+
+        assertFalse(result.isAvailable());
+        assertEquals(TODAY.atStartOfDay(), mapper.markedQualifiedAt);
+        assertEquals(1, analysisService.qualifiedCallCount);
+        assertTrue(mapper.insertedSnapshots.isEmpty());
+    }
+
+    @Test
     @DisplayName("분석된 카테고리가 두 개면 존재하는 두 행만 저장한다")
     void insertsOnlyExistingCategories() {
         FakeSnapshotMapper mapper = new FakeSnapshotMapper();
         StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.initiallyQualified = true;
         analysisService.result = eligibleAnalysis(List.of(
                 category(1, 18L, "쇼핑", "패션", "325429", 4, "17.89"),
                 category(2, 40L, "문화/여가", "취미", "227436", 5, "12.50")));
@@ -227,7 +266,6 @@ class MissionAnalysisSnapshotServiceTest {
 
     private MissionCategoryAnalysisDto eligibleAnalysis(List<MissionCategoryRankDto> categories) {
         return MissionCategoryAnalysisDto.builder()
-                .relativeEligible(true)
                 .topCategories(categories)
                 .build();
     }

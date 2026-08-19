@@ -1,6 +1,5 @@
 package com.kb.tangtang.user.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.exception.CommonExceptionAdvice;
 import com.kb.tangtang.user.domain.PersonalMissionUnlockStatus;
 import com.kb.tangtang.user.dto.PersonalMissionUnlockDto;
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -38,18 +36,35 @@ class PersonalMissionUnlockControllerTest {
                 .build();
     }
 
+    /** 이슈 #315 (1) - 본문 없이 호출된다. 자격 판정은 서버 몫이다. */
     @Test
     void syncReturnsPendingUnlock() throws Exception {
-        when(userService.syncPersonalMissionUnlock(USER_ID, true)).thenReturn(
+        when(userService.syncPersonalMissionUnlock(USER_ID)).thenReturn(
                 PersonalMissionUnlockDto.from(PersonalMissionUnlockStatus.PENDING));
 
-        mockMvc.perform(post("/api/main-challenge/mission-unlock/status")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(new ObjectMapper().writeValueAsString(java.util.Map.of("enoughData", true))))
+        mockMvc.perform(post("/api/main-challenge/mission-unlock/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.showUnlock").value(true));
+    }
+
+    /**
+     * 옛 프론트가 아직 {"enoughData": true} 를 보내도 400 이 나면 안 된다.
+     * 백엔드(EC2)와 프론트(Vercel)가 따로 배포돼 잠깐 버전이 엇갈릴 수 있다.
+     * 본문은 무시되고 서버 판정만 반영된다.
+     */
+    @Test
+    void syncIgnoresLegacyRequestBody() throws Exception {
+        when(userService.syncPersonalMissionUnlock(USER_ID)).thenReturn(
+                PersonalMissionUnlockDto.from(PersonalMissionUnlockStatus.INSUFFICIENT));
+
+        mockMvc.perform(post("/api/main-challenge/mission-unlock/status")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"enoughData\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("INSUFFICIENT"))
+                .andExpect(jsonPath("$.data.showUnlock").value(false));
     }
 
     @Test

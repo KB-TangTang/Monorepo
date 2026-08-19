@@ -45,15 +45,15 @@ public class MissionAnalysisSnapshotService {
         }
 
         boolean alreadyQualified = missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null;
+        if (!alreadyQualified && missionCategoryAnalysisService.hasInitialQualification(userId)) {
+            missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock));
+            alreadyQualified = true;
+        }
         MissionCategoryAnalysisDto analysis = alreadyQualified
                 ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId)
                 : missionCategoryAnalysisService.getCategoryAnalysis(userId);
-        if (!analysis.isRelativeEligible() || analysis.getTopCategories().isEmpty()) {
+        if (analysis.getTopCategories().isEmpty()) {
             return MissionAnalysisSnapshotDto.empty();
-        }
-
-        if (!alreadyQualified) {
-            missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock));
         }
 
         LocalDate cycleStartDate = LocalDate.now(clock);
@@ -79,7 +79,10 @@ public class MissionAnalysisSnapshotService {
                     .analysisStartDate(today.minusDays(28))
                     .analysisEndDate(today.minusDays(1))
                     .transactionCount(0)
-                    .relativeEligible(false)
+                    .cumulativeTransactionCount(
+                            missionCategoryAnalysisService.getCumulativeTransactionCount(userId))
+                    .requiredCumulativeTransactionCount(
+                            missionCategoryAnalysisService.getRequiredCumulativeTransactionCount())
                     .topCategories(List.of())
                     .build();
         }
@@ -107,7 +110,10 @@ public class MissionAnalysisSnapshotService {
                 .analysisStartDate(cycleStartDate.minusDays(28))
                 .analysisEndDate(cycleStartDate.minusDays(1))
                 .transactionCount(transactionCount)
-                .relativeEligible(true)
+                .cumulativeTransactionCount(
+                        missionCategoryAnalysisService.getCumulativeTransactionCount(userId))
+                .requiredCumulativeTransactionCount(
+                        missionCategoryAnalysisService.getRequiredCumulativeTransactionCount())
                 .topCategories(categories)
                 .build();
     }
