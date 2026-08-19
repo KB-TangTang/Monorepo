@@ -147,7 +147,7 @@ test('상위 소비 카테고리를 비중과 최근 미션 날짜·결과로 �
     });
 
     assert.deepEqual(model, {
-        period: '7/16 – 8/12',
+        period: '7/16 ~ 8/12',
         items: [
             {
                 categoryId: 18,

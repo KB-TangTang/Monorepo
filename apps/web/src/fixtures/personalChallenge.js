@@ -78,7 +78,7 @@ export const MOCK_WEEKLY_WATCHLIST = [
 ];
 
 export const MOCK_WATCHLIST_META = {
-    weekRange: '7/29 – 8/4',
+    weekRange: '7/29 ~ 8/4',
     currentIndex: 2,
     totalCount: 3,
     comment: '"이번 주는 배달앱·카페/간식·택시를 지켜보겠습니다."',

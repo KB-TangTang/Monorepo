@@ -44,6 +44,14 @@ function getHoldingAveragePrice(cost, quantity) {
     return quantity > 0 ? cost / quantity : 0;
 }
 
+/*
+ * 도넛 중앙처럼 폭이 좁은 자리에 쓴다(이슈 #326).
+ *
+ * 만 단위에 콤마를 넣지 않는다 - formatAssetHomeWon 과 표기를 맞추기 위해서다.
+ * 예전에는 같은 1913만이 순자산 카드에서 「1913만원」, 바로 아래 도넛 중앙에서
+ * 「1,913만원」으로 갈렸다.
+ * 억 단위(`1.9억원`)는 좁은 원 안에 들어가야 해서 축약형을 그대로 둔다.
+ */
 function formatCompactWon(amount) {
     const sign = amount < 0 ? '-' : '';
     const abs = Math.abs(amount);
@@ -55,7 +63,7 @@ function formatCompactWon(amount) {
         if (man >= 10000) {
             return `${sign}${(abs / EOK).toFixed(1)}억원`;
         }
-        return `${sign}${man.toLocaleString('ko-KR')}만원`;
+        return `${sign}${man}만원`;
     }
     return formatWon(amount);
 }
