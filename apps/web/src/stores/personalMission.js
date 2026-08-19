@@ -85,7 +85,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
 
     getters: {
         hasEnoughData(state) {
-        if (state.categoryAnalysis != null) {
+            if (state.categoryAnalysis != null) {
                 return state.categoryAnalysis.relativeEligible === true;
             }
             return hasEnoughPersonalMissionData(state.profile);
@@ -197,10 +197,20 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.monthlyScore = normalizeMonthlyScore(monthlyScore);
         },
 
+        /*
+         * 맞춤 미션 개시 안내를 띄울지 정하는 유일한 자리다(이슈 #315 (2)(3)).
+         *
+         * 서버가 자격을 스스로 판정하므로 보낼 것이 없다 - 요청 본문이 사라졌다(#315 (1)).
+         *
+         * 서버 상태(PENDING)와 화면 상태가 어긋날 수 있다. 자격 래치는 한 번 박히면 안 풀리는데,
+         * 최근 28일 소비가 비면 relativeEligible 이 false 로 내려와 화면은 「증거 부족」이 된다.
+         * 그 위에 「맞춤 미션이 열렸어요」를 띄우면 두 화면이 정면으로 모순된다.
+         * 이때는 띄우지 않고 미룬다 - 서버 상태는 PENDING 그대로라 데이터가 다시 차면 그때 뜬다.
+         */
         async syncMissionUnlock() {
-            const result = await requestPersonalMissionUnlockSync(this.hasEnoughData);
+            const result = await requestPersonalMissionUnlockSync();
             this.missionUnlockStatus = result.status;
-            return Boolean(result.showUnlock);
+            return Boolean(result.showUnlock) && this.hasEnoughData;
         },
 
         async acknowledgeMissionUnlock() {

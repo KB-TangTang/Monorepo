@@ -18,18 +18,13 @@ export function hasEnoughPersonalMissionData(profile) {
     );
 }
 
-/**
- * 맞춤 미션 개시 안내의 순수 판단 규칙.
- * 영속 상태는 서버가 관리하고, 이 함수는 화면 노출 조건을 한 곳에 기록한다.
+/*
+ * shouldShowPersonalMissionUnlock 은 2026-08-19 에 지웠다(이슈 #315 (3)).
+ * 실제 게이트는 서버가 쥐고 있다 - tbl_user.personal_mission_unlock_status 가 PENDING 일 때만
+ * showUnlock=true 가 내려온다. 여기 남아 있던 규칙은 어디서도 호출되지 않아
+ * 테스트만 그것을 붙들고 있었고, 정작 서버 상태 전이에는 테스트가 없었다.
+ * 노출 판단은 stores/personalMission.js 의 syncMissionUnlock() 한 곳에서만 한다.
  */
-export function shouldShowPersonalMissionUnlock({
-    hasAgreed,
-    hasEnoughData,
-    wasDataInsufficient,
-    hasSeenDataUnlock,
-}) {
-    return hasAgreed && hasEnoughData && wasDataInsufficient && !hasSeenDataUnlock;
-}
 
 export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     if (targetAmount <= 0) {

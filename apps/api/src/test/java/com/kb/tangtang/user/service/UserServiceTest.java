@@ -415,9 +415,9 @@ class UserServiceTest {
         row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.INSUFFICIENT);
         when(userMapper.findById(USER_ID)).thenReturn(row);
 
-        var result = service.syncPersonalMissionUnlock(USER_ID, false);
+        var result = service.syncPersonalMissionUnlock(USER_ID);
 
-        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID, false);
+        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID);
         assertEquals(PersonalMissionUnlockStatus.INSUFFICIENT, result.getStatus());
         assertFalse(result.isShowUnlock());
     }
@@ -429,7 +429,7 @@ class UserServiceTest {
         row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.PENDING);
         when(userMapper.findById(USER_ID)).thenReturn(row);
 
-        var result = service.syncPersonalMissionUnlock(USER_ID, true);
+        var result = service.syncPersonalMissionUnlock(USER_ID);
 
         assertTrue(result.isShowUnlock());
     }
@@ -448,14 +448,23 @@ class UserServiceTest {
         assertFalse(result.isShowUnlock());
     }
 
+    /*
+     * 이슈 #315 (1). 예전에는 클라이언트가 보낸 enoughData 를 그대로 믿어
+     * false → true 를 연달아 쏘면 자격 없이 안내를 열 수 있었다.
+     * 이제 서비스는 사용자 식별자만 넘기고 판정은 매퍼가 DB 안에서 한다.
+     */
     @Test
-    @DisplayName("데이터 충족 여부가 없으면 상태를 변경하지 않는다")
-    void syncPersonalMissionUnlockRequiresEnoughData() {
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.syncPersonalMissionUnlock(USER_ID, null));
+    @DisplayName("UNTRACKED 사용자를 동기화해도 서버가 준 상태만 그대로 돌려준다")
+    void syncPersonalMissionUnlockKeepsUntracked() {
+        UserDto row = user("장재한");
+        row.setPersonalMissionUnlockStatus(PersonalMissionUnlockStatus.UNTRACKED);
+        when(userMapper.findById(USER_ID)).thenReturn(row);
 
-        assertEquals("INVALID_REQUEST", exception.getCode());
-        verify(userMapper, never()).syncPersonalMissionUnlockStatus(anyLong(), eq(false));
+        var result = service.syncPersonalMissionUnlock(USER_ID);
+
+        verify(userMapper).syncPersonalMissionUnlockStatus(USER_ID);
+        assertEquals(PersonalMissionUnlockStatus.UNTRACKED, result.getStatus());
+        assertFalse(result.isShowUnlock());
     }
 
     @Test

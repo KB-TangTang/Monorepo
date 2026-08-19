@@ -662,7 +662,7 @@
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| POST | `/api/main-challenge/mission-unlock/status` | Bearer | 현재 데이터 충족 여부를 동기화하고 안내 노출 여부 조회 |
+| POST | `/api/main-challenge/mission-unlock/status` | Bearer | 안내 상태 동기화 후 노출 여부 조회. **요청 본문 없음** - 자격 판정은 서버가 한다 |
 | PATCH | `/api/main-challenge/mission-unlock/acknowledge` | Bearer | 맞춤 미션 개시 안내 확인 처리 |
 
 상태는 `tbl_user.personal_mission_unlock_status` 한 컬럼에서

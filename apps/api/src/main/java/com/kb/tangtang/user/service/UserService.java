@@ -257,13 +257,14 @@ public class UserService {
         return meOf(userId);
     }
 
-    /** 데이터 부족을 거친 사용자에게만 맞춤 미션 개시 안내를 예약한다. */
+    /**
+     * 데이터 부족을 거친 사용자에게만 맞춤 미션 개시 안내를 예약한다.
+     *
+     * 자격 판정은 매퍼가 DB 안에서 한다 - 호출자가 충족 여부를 넘기지 않는다(이슈 #315 (1)).
+     */
     @Transactional
-    public PersonalMissionUnlockDto syncPersonalMissionUnlock(long userId, Boolean enoughData) {
-        if (enoughData == null) {
-            throw new BusinessException("INVALID_REQUEST", "데이터 충족 여부가 필요합니다.");
-        }
-        userMapper.syncPersonalMissionUnlockStatus(userId, enoughData);
+    public PersonalMissionUnlockDto syncPersonalMissionUnlock(long userId) {
+        userMapper.syncPersonalMissionUnlockStatus(userId);
         UserDto user = findActive(userId);
         return PersonalMissionUnlockDto.from(user.getPersonalMissionUnlockStatus());
     }

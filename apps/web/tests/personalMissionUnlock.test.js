@@ -1,65 +1,156 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { shouldShowPersonalMissionUnlock } from '../src/services/personalMissionFlow.js';
+import { registerHooks } from 'node:module';
+import { createPinia, setActivePinia } from 'pinia';
 
 /*
- * ✅ 구현됐다 — PR #311(이슈 #129)이 시트를 개인 미션 홈에 붙였다. 아래 머리말은 그 전의 기록이다.
+ * 맞춤 미션 개시 안내(이슈 #129, PR #311). 시트는 개인 미션 홈에 붙어 동작한다.
  *
- * 무슨 일이 있었나
- *   v4 리디자인(커밋 cafafe1, #97)에서 개인챌린지 홈이 상태머신
- *   (consent / no-account / insufficient / verdict / active)으로 전면 교체되면서
- *   `shouldShowPersonalMissionUnlock` 이 사라졌다. 이 테스트만 남아 import 에서 죽었고,
- *   `PersonalMissionUnlockSheet.vue`(「NEW · 맞춤 미션 개시」 시트)도 어디서도 쓰이지 않는
- *   고아 컴포넌트가 됐다.
+ * 영속 상태는 서버가 쥔다 - tbl_user.personal_mission_unlock_status 가
+ * UNTRACKED → INSUFFICIENT → PENDING → SEEN 으로만 움직이고,
+ * showUnlock 은 PENDING 일 때만 true 다. 자격 판정도 서버가 한다(이슈 #315 (1)).
  *
- * 왜 지우지 않고 skip 인가
- *   화면과 판단 규칙이 어떤 모습이어야 하는지가 이 파일에 남아 있다. 지우면 되살릴 때
- *   조건 4개(hasAgreed · hasEnoughData · wasDataInsufficient · hasSeenDataUnlock)를
- *   다시 추론해야 한다. 반대로 실패하는 채로 두면 `npm test` 가 영구적으로 빨간불이라
- *   **새로 생긴 진짜 실패를 아무도 알아채지 못한다.**
+ * 그래서 검증할 것은 두 가지다.
+ *   1) store 가 서버 상태를 그대로 받아 노출 여부를 정하는가 (아래 store 전이 테스트)
+ *   2) 화면이 그 결과를 안전하게 다루는가 (#313 · #314 소스 검사)
  *
- * 왜 급하지 않은가
- *   미션 개시 조건이 「최근 28일 + 거래 50건」인데 계좌 연동 시 과거 내역을 함께 받아오므로
- *   대부분 연동 직후 바로 충족된다. `insufficient` 를 거치는 사용자 자체가 드물고,
- *   「부족했다가 채워지는 순간」은 더 드물다.
- *
- * 되살릴 때 필요한 것 (구현이 1줄로 안 끝나는 이유)
- *   `wasDataInsufficient`(이전에 부족했는지) · `hasSeenDataUnlock`(안내를 봤는지)을
- *   **어딘가에 저장**해야 한다. localStorage 는 쓰지 않기로 했으므로(이슈 #128, 기기를 바꾸면
- *   다시 뜬다) `tbl_user` 컬럼이 하나 더 필요하다. 즉 스키마 변경이 따라온다.
+ * 프론트에 있던 순수 규칙 shouldShowPersonalMissionUnlock 은 지웠다(이슈 #315 (3)).
+ * 아무 실행 경로도 타지 않는데 테스트만 그것을 붙들고 있어, 정작 진짜 전이는 무검증이었다.
  */
 
-test('소비 데이터가 부족했던 동의 사용자에게 데이터 충족 후 맞춤 미션 개시를 보여준다', () => {
-    assert.equal(
-        shouldShowPersonalMissionUnlock({
-            hasAgreed: true,
-            hasEnoughData: true,
-            wasDataInsufficient: true,
-            hasSeenDataUnlock: false,
-        }),
-        true,
+/*
+ * store 는 `@/api/personalMission`(→ axios + import.meta.env)과 탕이 png 를 끌고 온다.
+ * Vite 밖(node --test)에서는 둘 다 죽으므로 이 파일 안에서만 대역으로 갈아끼운다
+ * (tests/groupChatStore.test.js 와 같은 방식).
+ */
+const API_STUB_URL = new URL('./stubs/personalMissionApiStub.js', import.meta.url).href;
+const IMAGE_STUB_URL = new URL('./stubs/imageStub.js', import.meta.url).href;
+const HTTP_STUB_URL = new URL('./stubs/httpStub.js', import.meta.url).href;
+
+registerHooks({
+    resolve(specifier, context, nextResolve) {
+        if (specifier === '@/api/personalMission') {
+            return { url: API_STUB_URL, shortCircuit: true };
+        }
+        /* store 는 @/api/user 도 끌고 오는데 그쪽은 진짜 http.js 로 내려간다. */
+        if (specifier === '@/api/http') {
+            return { url: HTTP_STUB_URL, shortCircuit: true };
+        }
+        if (specifier.endsWith('.png')) {
+            return { url: IMAGE_STUB_URL, shortCircuit: true };
+        }
+        return nextResolve(specifier, context);
+    },
+});
+
+const apiStub = await import(API_STUB_URL);
+const { usePersonalMissionChallengeStore } = await import('../src/stores/personalMission.js');
+const { CHALLENGE_CONSENT_STATE } = await import('../src/services/challengeConsent.js');
+
+/*
+ * categoryAnalysis 가 hasEnoughData 의 원본이다. null 이면 목 프로필로 떨어져 항상 true 다.
+ * consentState 는 화면에 도달한 사용자(동의함)를 가정한다 - 없으면 screenState 가 'loading' 이다.
+ */
+function newStore({ relativeEligible } = { relativeEligible: true }) {
+    setActivePinia(createPinia());
+    apiStub.reset();
+    const store = usePersonalMissionChallengeStore();
+    store.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
+    store.categoryAnalysis = { relativeEligible, topCategories: [] };
+    return store;
+}
+
+/* ── 서버 상태 기반 전이 (이슈 #315 (3)) ────────────────────── */
+
+test('동기화는 자격 판정을 서버에 맡긴다 - 보내는 인자가 없다', async () => {
+    const store = newStore();
+    apiStub.setSyncResponse({ status: 'INSUFFICIENT', showUnlock: false });
+
+    await store.syncMissionUnlock();
+
+    assert.equal(apiStub.syncCalls.length, 1);
+    assert.deepEqual(
+        apiStub.syncCalls[0],
+        [],
+        '클라이언트가 충족 여부를 보내면 그것을 위조해 안내를 열 수 있다',
     );
 });
 
-test('신규 충분 데이터 사용자나 이미 확인한 사용자에게는 맞춤 미션 개시를 다시 보여주지 않는다', () => {
-    assert.equal(
-        shouldShowPersonalMissionUnlock({
-            hasAgreed: true,
-            hasEnoughData: true,
-            wasDataInsufficient: false,
-            hasSeenDataUnlock: false,
-        }),
-        false,
+test('서버가 INSUFFICIENT 를 주면 안내를 띄우지 않는다', async () => {
+    const store = newStore({ relativeEligible: false });
+    apiStub.setSyncResponse({ status: 'INSUFFICIENT', showUnlock: false });
+
+    assert.equal(await store.syncMissionUnlock(), false);
+    assert.equal(store.missionUnlockStatus, 'INSUFFICIENT');
+});
+
+test('서버가 PENDING 을 주면 안내를 띄운다', async () => {
+    const store = newStore();
+    apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
+
+    assert.equal(await store.syncMissionUnlock(), true);
+    assert.equal(store.missionUnlockStatus, 'PENDING');
+});
+
+test('UNTRACKED 는 안내 대상이 아니다 - 기능 도입 전부터 자격이 있던 사용자', async () => {
+    const store = newStore();
+    apiStub.setSyncResponse({ status: 'UNTRACKED', showUnlock: false });
+
+    assert.equal(await store.syncMissionUnlock(), false);
+    assert.equal(store.missionUnlockStatus, 'UNTRACKED');
+});
+
+test('확인하면 SEEN 이 되고 다시 뜨지 않는다', async () => {
+    const store = newStore();
+    apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
+    assert.equal(await store.syncMissionUnlock(), true);
+
+    await store.acknowledgeMissionUnlock();
+    assert.equal(store.missionUnlockStatus, 'SEEN');
+
+    apiStub.setSyncResponse({ status: 'SEEN', showUnlock: false });
+    assert.equal(await store.syncMissionUnlock(), false);
+});
+
+/*
+ * 이슈 #315 (2) - 서버 상태와 화면 상태가 어긋나는 구간.
+ *
+ * 자격 래치(relative_mission_qualified_at)는 한 번 박히면 안 풀려 서버는 PENDING 을 유지하는데,
+ * 최근 28일 소비가 비면 relativeEligible 이 false 로 내려와 화면은 「증거 부족」이 된다.
+ * 그 위에 「맞춤 미션이 열렸어요」를 겹쳐 띄우면 두 화면이 정면으로 모순된다.
+ */
+test('증거 부족 화면에서는 PENDING 이어도 안내를 겹쳐 띄우지 않는다', async () => {
+    const store = newStore({ relativeEligible: false });
+    apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
+
+    assert.equal(await store.syncMissionUnlock(), false);
+    assert.equal(store.screenState, 'insufficient');
+});
+
+test('띄우지 않은 안내는 버리지 않고 미룬다 - 데이터가 다시 차면 그때 뜬다', async () => {
+    const store = newStore({ relativeEligible: false });
+    apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
+    await store.syncMissionUnlock();
+
+    assert.equal(store.missionUnlockStatus, 'PENDING', '서버 상태를 SEEN 으로 소비하면 안 된다');
+
+    store.categoryAnalysis = { relativeEligible: true, topCategories: [] };
+    assert.equal(await store.syncMissionUnlock(), true);
+});
+
+/* ── 지운 규칙이 되살아나지 않는지 (이슈 #315 (3)) ──────────── */
+
+test('노출 판단은 store 한 곳에만 있다 - 프론트에 병행 규칙을 두지 않는다', () => {
+    const flow = readFileSync(
+        new URL('../src/services/personalMissionFlow.js', import.meta.url),
+        'utf8',
     );
-    assert.equal(
-        shouldShowPersonalMissionUnlock({
-            hasAgreed: true,
-            hasEnoughData: true,
-            wasDataInsufficient: true,
-            hasSeenDataUnlock: true,
-        }),
-        false,
+
+    assert.doesNotMatch(
+        flow,
+        /export function shouldShowPersonalMissionUnlock/,
+        '서버가 게이트를 쥐고 있다 - 프론트에 두 번째 판단 규칙이 생기면 둘이 갈린다',
     );
 });
 
