@@ -25,6 +25,7 @@ import {
     resolveAuthView,
 } from '@/utils/account';
 import { useAuthStore } from '@/stores/auth';
+import { syncFinancialAssets } from '@/api/financialSync';
 
 /**
  * 계좌 도메인 스토어 (이슈 #12). 도메인당 1개 규칙이라 연결 플로우와 연결 계좌 목록을 함께 둔다.
@@ -365,6 +366,10 @@ export const useAccountStore = defineStore('account', () => {
         });
     }
 
+    async function syncAssets() {
+        return run(async () => syncFinancialAssets());
+    }
+
     /** 즉시 조회 화면을 다시 열 때. 직전 결과가 새 결과인 것처럼 보이지 않게 한다. */
     function clearRefreshResult() {
         refreshResult.value = null;
@@ -439,6 +444,7 @@ export const useAccountStore = defineStore('account', () => {
         disconnect,
         resync,
         refresh,
+        syncAssets,
         clearRefreshResult,
         resetFlow,
     };

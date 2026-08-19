@@ -9,7 +9,7 @@
   얼굴로 이어져야 완료 화면이 결과처럼 읽힌다.
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -25,6 +25,8 @@ const store = useAccountStore();
 const auth = useAuthStore();
 const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions, exitRoute } =
     storeToRefs(store);
+const syncing = ref(true);
+const syncFailed = ref(false);
 
 /**
  * 애니메이션을 재생할지.
@@ -70,10 +72,9 @@ const failedCount = computed(
 );
 
 /* 첫 수집은 자동 동기화 배치(매일 18시)를 탄다. */
-const firstCollectLabel = computed(() => {
-    const now = new Date();
-    return now.getHours() < 18 ? '오늘 18:00' : '내일 18:00';
-});
+const firstCollectLabel = computed(() =>
+    syncing.value ? '동기화 중' : syncFailed.value ? '동기화 실패' : '방금 완료',
+);
 
 /*
  * ⚠ 플로우 상태는 **여기서만** 비운다. 예전에는 onBeforeUnmount 에서 비웠는데,
@@ -112,6 +113,18 @@ function goHome() {
     leaveFlow('home');
 }
 
+async function runInitialSync() {
+    syncing.value = true;
+    syncFailed.value = false;
+    try {
+        await store.syncAssets();
+    } catch (err) {
+        syncFailed.value = true;
+    } finally {
+        syncing.value = false;
+    }
+}
+
 /*
  * 기기/브라우저 뒤로가기 가로채기.
  *
@@ -134,6 +147,7 @@ function onPopState() {
 onMounted(() => {
     window.history.pushState({ ttLinkDone: true }, '');
     window.addEventListener('popstate', onPopState);
+    runInitialSync();
 });
 
 /* 화면을 떠나면 반드시 걷어낸다 — 남으면 다른 화면의 뒤로가기까지 이 핸들러가 가로챈다. */
@@ -167,8 +181,16 @@ onBeforeUnmount(() => {
                 </span>
             </div>
 
-            <h1 class="link-done__title">연결이 완료되었어요!</h1>
-            <p class="link-done__description">이제 거래내역을 모아<br />새는 돈을 찾아드릴게요.</p>
+            <h1 class="link-done__title">
+                {{ syncing ? '자산을 동기화하고 있어요' : '연결이 완료되었어요!' }}
+            </h1>
+            <p class="link-done__description">
+                {{
+                    syncing
+                        ? '선택한 금융기관의 자산과 거래내역을 모으고 있어요.'
+                        : '이제 거래내역을 모아 새는 돈을 찾아드릴게요.'
+                }}
+            </p>
 
             <section v-if="linkedCount" class="link-done__card">
                 <header class="link-done__card-head">
@@ -200,10 +222,13 @@ onBeforeUnmount(() => {
             <p v-if="failedCount" class="link-done__failure">
                 {{ failedCount }}곳은 연결하지 못했어요. 연결 계좌 관리에서 다시 시도할 수 있어요.
             </p>
+            <p v-if="syncFailed" class="link-done__failure">
+                자산 동기화가 끝나지 않았어요. 연결 계좌 관리에서 다시 시도할 수 있어요.
+            </p>
         </div>
 
         <div class="link-done__cta">
-            <BaseButton variant="accent" block size="lg" @click="goNext">
+            <BaseButton variant="accent" block size="lg" :disabled="syncing" @click="goNext">
                 {{ primaryLabel }}
             </BaseButton>
             <!-- 닉네임을 정하기 전에는 홈으로 갈 수 없다. 눌러도 가드가 되돌리므로 아예 감춘다. -->
