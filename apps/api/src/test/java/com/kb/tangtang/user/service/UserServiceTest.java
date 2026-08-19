@@ -57,9 +57,15 @@ class UserServiceTest {
 
     private UserService service;
 
+    /**
+     * {@link ProfileImageWriter} 는 <b>mock 이 아니라 실물</b>을 넘긴다. DB 쓰기 부분이 그쪽으로
+     * 옮겨졌을 뿐(이슈 #318) 계약은 그대로라, mock 으로 바꾸면 아래 프로필 이미지 검증이
+     * 통째로 무의미해진다. 트랜잭션 프록시가 실제로 붙는지는 {@code ProfileImageWriterTest} 가 본다.
+     */
     @BeforeEach
     void setUp() {
         service = new UserService(userMapper, profileImageUrlResolver, imageStorage, imageProcessor,
+                new ProfileImageWriter(userMapper, imageStorage),
                 consentService, refreshTokenService);
     }
 

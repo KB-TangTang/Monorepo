@@ -125,10 +125,17 @@ public class AccountLinkService {
                 .toList();
         /* 공급자가 다루지 못하는 기관은 아예 내려보내지 않는다 — 인증 수단과 같은 원칙이다. */
         Set<String> supported = client.supportedOrganizations();
+        /*
+         * 대출·페이머니도 같은 필터를 탄다. 실 CODEF 모드에서는 supportedOrganizations() 가
+         * 은행 20곳만 돌려주므로 두 업권이 자동으로 빈 배열이 된다 — 의도한 동작이다.
+         * 목 모드(제한 없음)에서만 카탈로그 전체가 그대로 내려간다.
+         */
         return InstitutionListDto.builder()
                 .banks(onlySupported(catalog.banks(connected), supported))
                 .cards(onlySupported(catalog.cards(connected), supported))
                 .securities(onlySupported(catalog.securities(connected), supported))
+                .loans(onlySupported(catalog.loans(connected), supported))
+                .payMoney(onlySupported(catalog.payMoney(connected), supported))
                 .build();
     }
 

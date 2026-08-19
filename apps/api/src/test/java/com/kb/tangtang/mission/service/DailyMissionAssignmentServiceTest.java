@@ -1,6 +1,5 @@
 package com.kb.tangtang.mission.service;
 
-import com.kb.tangtang.mission.mapper.AbsoluteMissionAssignmentMapper;
 import com.kb.tangtang.mission.dto.RelativeMissionAssignmentDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +15,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DailyMissionAssignmentServiceTest {
 
-    @Mock private AbsoluteMissionAssignmentMapper absoluteMapper;
     @Mock private AbsoluteMissionPolicy absolutePolicy;
     @Mock private AbsoluteMissionAssignmentService absoluteService;
     @Mock private RelativeMissionAssignmentService relativeService;
+    @Mock private MissionAnalysisSnapshotService snapshotService;
 
     @Test
     void monthlyInspectionTakesPriorityForEveryUser() {
@@ -30,13 +29,13 @@ class DailyMissionAssignmentServiceTest {
         service.assign(7L, date);
 
         verify(absoluteService).assign(7L, date, AbsoluteMissionAssignmentService.MONTHLY_RANDOM);
-        verifyNoInteractions(absoluteMapper, relativeService);
+        verifyNoInteractions(snapshotService, relativeService);
     }
 
     @Test
     void coldStartUserGetsDailyAbsoluteMission() {
         LocalDate date = LocalDate.of(2026, 8, 18);
-        when(absoluteMapper.isRelativeMissionQualified(7L)).thenReturn(false);
+        when(snapshotService.ensureRelativeMissionQualification(7L)).thenReturn(false);
         DailyMissionAssignmentService service = service();
 
         service.assign(7L, date);
@@ -48,7 +47,7 @@ class DailyMissionAssignmentServiceTest {
     @Test
     void qualifiedUserGetsRelativeMissionOnOrdinaryDay() {
         LocalDate date = LocalDate.of(2026, 8, 18);
-        when(absoluteMapper.isRelativeMissionQualified(7L)).thenReturn(true);
+        when(snapshotService.ensureRelativeMissionQualification(7L)).thenReturn(true);
         when(relativeService.assign(7L, date)).thenReturn(
                 RelativeMissionAssignmentDto.builder().assigned(true).assignDate(date).build());
         DailyMissionAssignmentService service = service();
@@ -62,7 +61,7 @@ class DailyMissionAssignmentServiceTest {
     @Test
     void qualifiedUserGetsAbsoluteMissionWhenRecentRelativeDataIsInsufficient() {
         LocalDate date = LocalDate.of(2026, 8, 18);
-        when(absoluteMapper.isRelativeMissionQualified(7L)).thenReturn(true);
+        when(snapshotService.ensureRelativeMissionQualification(7L)).thenReturn(true);
         when(relativeService.assign(7L, date)).thenReturn(RelativeMissionAssignmentDto.skipped(date));
         DailyMissionAssignmentService service = service();
 
@@ -74,6 +73,6 @@ class DailyMissionAssignmentServiceTest {
 
     private DailyMissionAssignmentService service() {
         return new DailyMissionAssignmentService(
-                absoluteMapper, absolutePolicy, absoluteService, relativeService);
+                absolutePolicy, absoluteService, relativeService, snapshotService);
     }
 }

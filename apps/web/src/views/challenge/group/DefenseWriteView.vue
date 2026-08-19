@@ -24,6 +24,10 @@ const route = useRoute();
 const MAX_TEXT = 150;
 const MAX_IMAGES = 3;
 
+/* 서버가 ImageIO 로 다시 디코딩해 JPEG 로 재인코딩한다. SVG·HEIC·WEBP 는 ImageIO 가
+   읽지 못해 업로드 시점에 INVALID_IMAGE 로 떨어지므로, 고를 수 없게 앞에서 막는다. */
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
+
 const indictment = ref(null);
 
 onMounted(async () => {
@@ -111,9 +115,14 @@ function triggerUpload() {
 function onFileChange(e) {
     const files = e.target.files;
     if (!files?.length) return;
+    /* accept 는 파일 선택창의 기본 필터일 뿐이다. "모든 파일" 로 바꿔 고르면 통과하므로 여기서 한 번 더 막는다. */
+    let rejected = false;
     for (const file of files) {
         if (images.value.length >= MAX_IMAGES) break;
-        if (!file.type.startsWith('image/')) continue;
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+            rejected = true;
+            continue;
+        }
         images.value.push({
             file,
             name: file.name,
@@ -121,6 +130,7 @@ function onFileChange(e) {
         });
     }
     e.target.value = '';
+    if (rejected) window.alert('JPG · PNG 이미지만 첨부할 수 있어요.');
 }
 
 function removeImage(index) {
@@ -308,7 +318,7 @@ async function onSubmit() {
                 <input
                     ref="fileInput"
                     type="file"
-                    accept="image/*"
+                    :accept="ALLOWED_IMAGE_TYPES.join(',')"
                     hidden
                     @change="onFileChange"
                 >

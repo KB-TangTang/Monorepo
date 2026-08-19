@@ -301,9 +301,11 @@
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/accounts/institutions` | Bearer | `{ banks:[], cards:[], securities:[] }` — 각 항목 `{code,name,shortLabel,connected}` |
+| GET | `/api/accounts/institutions` | Bearer | `{ banks:[], cards:[], securities:[], loans:[], payMoney:[] }` — 각 항목 `{code,name,shortLabel,connected}` |
 
-- `connected: true` 는 **이미 연결된 기관**이라 다시 고를 수 없다.
+- `connected: true` 는 **이미 연결된 기관**이라는 표시일 뿐 선택은 막지 않는다 — 같은 은행의 두 번째 계좌 추가와 재연동이 막히기 때문이다. 중복은 4단계의 `alreadyLinked` 가 막는다.
+- 업권은 **5종**이다(응답 필드 순서 = 화면 칩 순서). 대출은 마이데이터에서 독립 업권이 아니라 은행 업권 산하 상품이므로, `loans` 에는 **할부금융(캐피탈)·저축은행**이 들어간다. 은행 대출은 은행을 연결하면 함께 조회된다.
+- `loans` · `payMoney` 의 기관 코드는 **CODEF organization 코드가 아니다**(해당 업권 코드를 확인하지 못해 자체 코드를 쓴다). 실 CODEF 로 전환하면 매핑이 필요하고, 그전까지는 `supportedOrganizations` 가 은행 20곳만 허용해 두 업권이 자동으로 빈 배열이 된다.
 - 공급자가 다루지 못하는 기관은 목록에서 아예 빠진다(`supportedOrganizations`. 빈 집합이면 "제한 없음").
 - **보험은 연동 범위에서 제외됐다(2026-08-06).** 되살리려면 `InstitutionCatalog` 부터 손봐야 한다.
 
@@ -671,8 +673,7 @@
 `PENDING`과 `showUnlock=true`를 반환하며, 확인 후에는 `SEEN`이라 다른 기기에서도 다시 뜨지 않는다.
 
 ```json
-// POST request
-{ "enoughData": true }
+// POST request - 본문 없음. 자격 판정은 서버가 한다 (이슈 #315)
 
 // response data
 { "status": "PENDING", "showUnlock": true }
@@ -990,7 +991,10 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 
 - 정규 배정 대상은 `CHALLENGE` 동의가 활성 상태이고 오늘 미션이 없는 활성 사용자다.
 - 최초 동의 또는 철회 후 재동의 시에는 해당 사용자만 당일 즉시 배정한다.
-- 서버 시작 시 한 번, 매일 00:30에 같은 조건으로 당일 누락 배정을 한 번 복구한다.
+- 서버 시작 시 한 번, 매일 00:30에 활성 동의 기간의 누락 날짜를 오래된 순서로 복구한다.
+- 과거 누락일은 해당 날짜 미션을 먼저 배정한 뒤 그 날짜 소비로 즉시 판정하며,
+  점수·연속 성공일·랭킹을 함께 다시 계산한다. 복구 배정 알림은 보내지 않는다.
+- 이미 저장된 날짜별 미션은 다시 뽑지 않으며, `PENDING` 결과만 판정한다.
 - 복구 시각은 `mission.assignment.recovery-cron`으로 변경할 수 있다.
 - 동의를 철회하면 기존 미션 기록은 유지하고 이후 정규·복구 배정 대상에서 제외한다.
 - 사용자 한 명의 실패가 나머지 사용자 배정을 중단하지 않으며, 다음 복구 주기에 다시 대상이 된다.

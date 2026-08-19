@@ -65,14 +65,14 @@ public class ImageStorageConfig {
      * commons-logging 때문에 빼 두어서 SDK 가 스스로 찾지 못한다.
      *
      * <p><b>타임아웃을 기본값에 맡기지 않는다.</b> SDK 기본 소켓 타임아웃은 읽기·쓰기 각 30초이고
-     * (`SdkHttpConfigurationOption`) 그 위에 기본 재시도가 붙는다. 그런데 업로드는 지금
-     * {@code DefenseService#registerDefense} · {@code UserService#updateProfileImage} 의
-     * <b>DB 트랜잭션 안에서</b> 일어난다 — S3 가 느려지면 HikariCP 커넥션(풀 크기 10,
-     * {@code RootConfig#dataSource})이 그만큼 묶이고, 변론 기능만이 아니라 같은 풀을 쓰는
-     * <b>API 전체</b>가 대기한다. 상한을 못 박아 최악의 경우를 「수 분」에서 「사진당 10초」로 줄인다.
+     * (`SdkHttpConfigurationOption`) 그 위에 기본 재시도가 붙는다. S3 가 느려지면 그동안
+     * 요청 스레드가 묶이므로 상한을 못 박아 최악의 경우를 「수 분」에서 「사진당 10초」로 줄인다.
      *
-     * <p>업로드를 트랜잭션 밖으로 빼는 것이 근본 해결이지만, 그건 서비스 두 개의 트랜잭션 경계를
-     * 바꾸는 구조 변경이라 별도 이슈로 뺐다(`docs.local/state/BACKLOG.md`). 그때까지의 방어선이다.
+     * <p><b>DB 커넥션 점유와는 무관해졌다</b>(이슈 #318). 업로드는 이제
+     * {@code DefenseService#registerDefense} · {@code UserService#updateProfileImage} 에서
+     * <b>트랜잭션 밖</b>에 있다 — DB 쓰기는 {@code DefenseWriter} · {@code ProfileImageWriter} 의
+     * 짧은 트랜잭션으로 분리돼, S3 지연이 HikariCP 풀(크기 10, {@code RootConfig#dataSource})을
+     * 마르게 하지 않는다. 이 타임아웃은 그와 별개로 <b>요청 스레드</b>의 상한이다.
      */
     private S3Client s3Client(ImageStorageProperties properties) {
         if (properties.getS3Bucket() == null || properties.getS3Bucket().isBlank()) {

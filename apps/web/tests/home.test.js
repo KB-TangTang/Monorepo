@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
     clampHomeProgress,
     formatHomeAmount,
@@ -88,11 +89,27 @@ test('오늘 미션을 홈 진행 카드 모델로 변환한다', () => {
         limitAmount: 8000,
         spentAmount: 4500,
         remainingAmount: 3500,
+        exceededAmount: 0,
         progressRate: 56,
     });
 });
 
-test('절대형 미션을 홈의 무지출 카드 모델로 변환한다', () => {
+test('위반하지 않은 절대형 미션을 공통 진행 카드 모델로 변환한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '무지출 명령 · 배달',
+        missionType: 'ABSOLUTE',
+        categoryName: '배달앱',
+        targetValue: 0,
+        currentAmount: 0,
+    });
+
+    assert.equal(mission.isAbsoluteMission, true);
+    assert.equal(mission.spentAmount, 0);
+    assert.equal(mission.exceededAmount, 0);
+    assert.equal(mission.progressRate, 0);
+});
+
+test('위반한 절대형 미션은 공통 진행 카드에서 100%로 표시한다', () => {
     const mission = toHomeMission({
         missionTitle: '무지출 명령 · 배달',
         missionType: 'ABSOLUTE',
@@ -105,6 +122,18 @@ test('절대형 미션을 홈의 무지출 카드 모델로 변환한다', () =>
     assert.equal(mission.categoryName, '배달앱');
     assert.equal(mission.spentAmount, 3200);
     assert.equal(mission.limitAmount, 0);
+    assert.equal(mission.exceededAmount, 3200);
+    assert.equal(mission.progressRate, 100);
+});
+
+test('상대형과 절대형이 현재 사용액과 한도를 같은 형식으로 표시한다', () => {
+    const source = readFileSync(new URL('../src/views/HomeView.vue', import.meta.url), 'utf8');
+
+    assert.match(
+        source,
+        /formatHomeAmount\(challenge\.spentAmount\) \}\}원 \/[\s\S]*formatHomeAmount\(challenge\.limitAmount\) \}\}원/,
+    );
+    assert.doesNotMatch(source, /사용 \{\{ formatHomeAmount\(challenge\.spentAmount\)/);
 });
 
 test('현재 월과 다음 리포트 공개까지 남은 날짜를 계산한다', () => {

@@ -55,24 +55,36 @@
            AND result = 'PENDING'
     </update>
 
-    <insert id="increaseSuccessStreak">
+    <insert id="recalculateStreak">
         INSERT INTO tbl_streak_count
             (user_id, streak_count, longest_streak_count, last_check_date)
-        VALUES
-            (#{userId}, 1, 1, #{checkedAt})
+        SELECT #{userId},
+               COALESCE(MAX(CASE WHEN streak.last_success_date = latest.last_result_date
+                                 THEN streak.streak_length ELSE 0 END), 0),
+               COALESCE(MAX(streak.streak_length), 0),
+               #{checkedAt}
+          FROM (
+              SELECT MAX(assign_date) AS last_result_date
+                FROM tbl_user_mission_info
+               WHERE user_id = #{userId}
+                 AND result IN ('SUCCESS', 'FAIL')
+          ) latest
+          LEFT JOIN (
+              SELECT MAX(success.assign_date) AS last_success_date,
+                     COUNT(*) AS streak_length
+                FROM (
+                    SELECT assign_date,
+                           DATE_SUB(assign_date, INTERVAL ROW_NUMBER() OVER (ORDER BY assign_date) DAY)
+                               AS streak_group
+                      FROM tbl_user_mission_info
+                     WHERE user_id = #{userId}
+                       AND result = 'SUCCESS'
+                ) success
+               GROUP BY success.streak_group
+          ) streak ON 1 = 1
         ON DUPLICATE KEY UPDATE
-            longest_streak_count = GREATEST(longest_streak_count, streak_count + 1),
-            streak_count = streak_count + 1,
-            last_check_date = #{checkedAt}
-    </insert>
-
-    <insert id="resetStreak">
-        INSERT INTO tbl_streak_count
-            (user_id, streak_count, longest_streak_count, last_check_date)
-        VALUES
-            (#{userId}, 0, 0, #{checkedAt})
-        ON DUPLICATE KEY UPDATE
-            streak_count = 0,
+            streak_count = VALUES(streak_count),
+            longest_streak_count = VALUES(longest_streak_count),
             last_check_date = #{checkedAt}
     </insert>
 

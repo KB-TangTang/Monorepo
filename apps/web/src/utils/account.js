@@ -17,6 +17,8 @@ export const INSTITUTION_GROUPS = [
     { key: 'banks', label: '은행' },
     { key: 'cards', label: '카드' },
     { key: 'securities', label: '증권' },
+    { key: 'loans', label: '대출' },
+    { key: 'payMoney', label: '페이머니' },
 ];
 
 /** 계좌 종류. 목서버가 은행 자산을 이 두 값으로 구분한다. */
@@ -449,7 +451,11 @@ export function formatAmount(value) {
  * 브랜드 색을 그대로 쓰면 HEX 하드코딩이 되므로(DESIGN_SYSTEM.md 절대 규칙 1)
  * **디자인시스템의 의미 토큰 4계열에 배정**해 같은 인상을 만든다.
  *
- * 매핑에 없는 기관은 코드 앞 두 자리로 갈린다 — CODEF `organization` 체계에서 `03xx` 가 카드사다.
+ * 매핑에 없는 기관은 코드 모양으로 갈린다 — CODEF `organization` 은 숫자 4자리이고 앞 두 자리가
+ * 업권이라 `03xx` 는 카드사, `02xx` 는 증권사로 본다.
+ * 반면 대출·페이머니 기관은 숫자가 아니라 `CP_`(캐피탈) · `SB_`(저축은행) · `PAY_`(페이머니)
+ * 접두사를 쓴다. 앞 두 자리 규칙에 걸리지 않아 전부 기본값 gold 로 떨어지므로,
+ * **14곳을 아래 매핑에 직접 적어 둔다** — 적지 않으면 두 업권 화면이 통째로 단색이 된다.
  *
  * @returns {'gold'|'blue'|'green'|'rose'} 컴포넌트가 이 값으로 클래스를 고른다
  */
@@ -463,6 +469,24 @@ const INSTITUTION_TONES = {
     '0011': 'green', // NH농협은행
     '0003': 'green', // IBK기업은행
     '0081': 'rose', // 하나은행
+
+    /* 대출 — 캐피탈(CP_) · 저축은행(SB_). 로고 PNG 가 없어 전부 배경색 + 약칭으로 그린다. */
+    CP_KB: 'gold', // KB캐피탈
+    CP_HYUNDAI: 'blue', // 현대캐피탈
+    CP_SHINHAN: 'blue', // 신한캐피탈
+    CP_HANA: 'rose', // 하나캐피탈
+    CP_WOORI: 'green', // 우리금융캐피탈
+    SB_SBI: 'blue', // SBI저축은행
+    SB_OK: 'rose', // OK저축은행
+    SB_WELCOME: 'gold', // 웰컴저축은행
+
+    /* 페이머니(PAY_) */
+    PAY_KAKAO: 'gold', // 카카오페이
+    PAY_NAVER: 'green', // 네이버페이
+    PAY_TOSS: 'blue', // 토스페이
+    PAY_PAYCO: 'rose', // 페이코
+    PAY_KB: 'gold', // KB페이
+    PAY_CPANG: 'rose', // 쿠팡페이
 };
 
 export function resolveInstitutionTone(code) {

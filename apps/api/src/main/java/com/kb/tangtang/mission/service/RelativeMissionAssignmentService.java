@@ -60,10 +60,10 @@ public class RelativeMissionAssignmentService {
             return RelativeMissionAssignmentDto.skipped(assignDate);
         }
 
-        MissionAnalysisSnapshot snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId);
+        MissionAnalysisSnapshot snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId, assignDate);
         if (snapshot == null) {
-            snapshotService.getOrCreateSnapshot(userId);
-            snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId);
+            snapshotService.getOrCreateSnapshot(userId, assignDate);
+            snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId, assignDate);
         }
         if (snapshot == null) {
             return RelativeMissionAssignmentDto.skipped(assignDate);

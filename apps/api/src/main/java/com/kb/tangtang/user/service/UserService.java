@@ -8,12 +8,8 @@ import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.dto.PersonalMissionUnlockDto;
 import com.kb.tangtang.user.mapper.UserMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -30,8 +26,6 @@ import java.util.regex.Pattern;
  */
 @Service
 public class UserService {
-
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     /** tbl_user.name 이 VARCHAR(50) 이다. 넘치면 DB 가 자르기 전에 여기서 막는다. */
     private static final int NAME_MAX_LENGTH = 50;
@@ -52,16 +46,19 @@ public class UserService {
     private final ProfileImageUrlResolver profileImageUrlResolver;
     private final ImageStorage imageStorage;
     private final ImageProcessor imageProcessor;
+    private final ProfileImageWriter profileImageWriter;
     private final ConsentService consentService;
     private final RefreshTokenService refreshTokenService;
 
     public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
                        ImageStorage imageStorage, ImageProcessor imageProcessor,
+                       ProfileImageWriter profileImageWriter,
                        ConsentService consentService, RefreshTokenService refreshTokenService) {
         this.userMapper = userMapper;
         this.profileImageUrlResolver = profileImageUrlResolver;
         this.imageStorage = imageStorage;
         this.imageProcessor = imageProcessor;
+        this.profileImageWriter = profileImageWriter;
         this.consentService = consentService;
         this.refreshTokenService = refreshTokenService;
     }
@@ -128,9 +125,13 @@ public class UserService {
      * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
      *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
      *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
-     * ⚠ **옛 파일 삭제는 커밋 뒤로 미룬다** ({@link #deleteAfterCommit}). 이유는 그쪽 주석에 있다.
+     * ⚠ **옛 파일 삭제는 커밋 뒤로 미룬다** ({@code ProfileImageWriter#deleteAfterCommit}).
+     *
+     * <p><b>이 메서드에는 {@code @Transactional} 이 없다</b> (이슈 #318). 업로드는 S3 왕복이고,
+     * 트랜잭션 안에 두면 HikariCP 커넥션(풀 크기 10, {@code RootConfig#dataSource})을 쥔 채
+     * 네트워크를 기다리게 되어 같은 풀을 쓰는 API 전체가 대기한다. DB 쓰기는
+     * {@link ProfileImageWriter#apply} 의 짧은 트랜잭션이 맡는다.
      */
-    @Transactional
     public UserMeDto updateProfileImage(long userId, byte[] content) {
         UserDto user = findActive(userId);
         String oldKey = user.getProfileImageKey();
@@ -139,74 +140,38 @@ public class UserService {
         String newKey = "profile/" + userId + "/" + UUID.randomUUID() + ".jpg";
         imageStorage.store(jpeg, newKey);
 
-        if (userMapper.updateProfileImageKey(userId, newKey) == 0) {
+        try {
+            profileImageWriter.apply(userId, newKey, oldKey);
+        } catch (RuntimeException e) {
             /*
              * 탈퇴·차단 계정이 유효한 JWT 로 여기까지 들어오면 매번 이 경로를 탄다
              * (findActive 는 status 를 보지 않고, updateProfileImageKey 는
-             *  WHERE status = 'ACTIVE' 라 0행이 된다). 방금 저장한 파일을 그대로 두면
-             * 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 NOT_FOUND 를 던진다.
-             * delete 는 멱등이라 정리 자체가 실패할 일은 없다.
+             *  WHERE status = 'ACTIVE' 라 0행이 되어 NOT_FOUND 가 된다). 방금 저장한 파일을
+             * 그대로 두면 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 다시 던진다.
              *
-             * 이 한 건만 즉시 지운다. 롤백되는 트랜잭션이라 afterCommit 이 영영 오지 않는다.
+             * 트랜잭션이 이 밖으로 나왔으므로 0행뿐 아니라 DB 예외로 롤백된 경우까지 같이
+             * 정리된다(범위가 넓어진 쪽으로 안전하다). delete 는 멱등이다.
              */
             imageStorage.delete(newKey);
-            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+            throw e;
         }
-        deleteAfterCommit(oldKey);
         return meOf(userId);
     }
 
     /**
      * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
      * 이미 미설정이어도 성공으로 처리한다. 없는 것을 지우는 것은 오류가 아니다.
+     *
+     * <p>업로드 경로와 달리 <b>{@code @Transactional} 을 그대로 둔다</b> (이슈 #318).
+     * 올릴 파일이 없어 트랜잭션 안에 네트워크 I/O 가 들어오지 않는다 —
+     * {@link ProfileImageWriter#clear} 는 {@code REQUIRED} 라 이 트랜잭션에 합류한다.
      */
     @Transactional
     public UserMeDto deleteProfileImage(long userId) {
         UserDto user = findActive(userId);
-        String oldKey = user.getProfileImageKey();
 
-        if (userMapper.updateProfileImageKey(userId, null) == 0) {
-            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-        }
-        deleteAfterCommit(oldKey);
+        profileImageWriter.clear(userId, user.getProfileImageKey());
         return meOf(userId);
-    }
-
-    /**
-     * 옛 이미지 삭제를 <b>커밋이 끝난 뒤</b>로 미룬다. 두 가지를 동시에 막는다.
-     *
-     * <ol>
-     *   <li><b>깨진 사진.</b> 트랜잭션 안에서 지우면 그 뒤 커밋이 실패했을 때 DB 에는 옛 키가
-     *       남았는데 파일은 이미 없는 상태가 된다. 화면에 엑스박스가 뜨고 되돌릴 방법이 없다.</li>
-     *   <li><b>DB 커넥션 점유.</b> S3 저장소({@code image.storage=s3})에서 삭제는 네트워크 왕복이다.
-     *       트랜잭션 안에 두면 커넥션을 쥔 채 S3 응답을 기다리게 되고, 사용자가 몰리면
-     *       HikariCP 풀이 마른다.</li>
-     * </ol>
-     *
-     * <p>커밋 뒤에 지우므로 <b>삭제가 실패하면 고아 파일이 남는다.</b> 사용자 요청은 이미 성공한
-     * 뒤이고 되돌릴 수도 없으므로 예외를 삼킨다 — 여기서 던지면 커밋된 작업이 500 으로 보인다.
-     * 고아 파일은 용량만 차지할 뿐 화면·정합성에 영향이 없다.
-     *
-     * <p>트랜잭션이 없는 호출(테스트 등)에서는 동기화를 걸 수 없으므로 그 자리에서 지운다.
-     */
-    private void deleteAfterCommit(String key) {
-        if (key == null) {
-            return;
-        }
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            imageStorage.delete(key);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    imageStorage.delete(key);
-                } catch (RuntimeException e) {
-                    log.warn("옛 프로필 이미지 삭제 실패 — 고아 파일이 남습니다. key={}", key, e);
-                }
-            }
-        });
     }
 
     /**

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,5 +42,21 @@ class MissionAnalysisSnapshotMapperXmlTest {
         assertTrue(rotationSql.contains("AS mission_round"));
         assertTrue(rotationSql.contains("FROM tbl_user_mission_info category_assignment"));
         assertTrue(rotationSql.contains("WHEN analysis.assigned_date IS NULL THEN 1"));
+
+        String pendingSql = configuration
+                .getMappedStatement(namespace + ".findPendingSnapshots")
+                .getBoundSql(Map.of("userId", 1L, "referenceDate", LocalDate.of(2026, 8, 15)))
+                .getSql();
+        assertTrue(pendingSql.contains("MIN(latest.cycle_start_date)"));
+        assertTrue(pendingSql.contains("latest.assigned_date IS NULL"));
+        assertTrue(pendingSql.contains("latest.cycle_start_date <= ?"));
+
+        String assignmentSql = configuration
+                .getMappedStatement(namespace + ".findNextPendingSnapshotForUpdate")
+                .getBoundSql(Map.of("userId", 1L, "assignDate", LocalDate.of(2026, 8, 15)))
+                .getSql();
+        assertTrue(assignmentSql.contains("MIN(latest.cycle_start_date)"));
+        assertTrue(assignmentSql.contains("latest.assigned_date IS NULL"));
+        assertTrue(assignmentSql.contains("latest.cycle_start_date <= ?"));
     }
 }

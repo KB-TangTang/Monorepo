@@ -1,5 +1,6 @@
 <script setup>
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
+import courtSpeechBubble from '@/assets/images/court/court_speech_bubble.png';
 
 defineProps({
     courtImage: { type: String, required: true },
@@ -20,7 +21,7 @@ defineProps({
         <!-- 기본 모드: 중앙 현판 + 날짜 + 검사 -->
         <div v-if="!compact" class="court-header__inner">
             <div class="court-header__topbar">
-                <div style="flex:1" />
+                <div style="flex: 1" />
                 <TheNotificationBell />
             </div>
 
@@ -33,11 +34,17 @@ defineProps({
 
             <div v-if="prosecutorImage && quote" class="court-header__prosecutor">
                 <div class="court-header__tangi-wrap">
-                    <img :src="prosecutorImage" :alt="prosecutorName" class="court-header__tangi-img" />
+                    <img
+                        :src="prosecutorImage"
+                        :alt="prosecutorName"
+                        class="court-header__tangi-img"
+                    />
                     <div class="court-header__nameplate">검사 {{ prosecutorName }}</div>
                 </div>
-                <div class="court-header__speech">
-                    <div class="court-header__speech-arrow"></div>
+                <div
+                    class="court-header__speech"
+                    :style="{ backgroundImage: `url(${courtSpeechBubble})` }"
+                >
                     <h2 class="court-header__speech-text">{{ quote }}</h2>
                 </div>
             </div>
