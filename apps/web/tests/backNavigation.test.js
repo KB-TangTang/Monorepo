@@ -148,17 +148,25 @@ test('재판 종착 화면의 좌상단은 뒤로가기가 아니라 닫기다',
     );
 });
 
-test('그룹챌린지 상세의 뒤로가기는 히스토리가 아니라 그룹챌린지 홈으로 간다', () => {
+/*
+ * 2026-08-19(이슈 #303)에 「무조건 홈으로 간다」에서 「진입 경로를 보고 정한다」로 바뀌었다.
+ * 홈 하드코딩이 목록에서 들어온 사용자까지 홈으로 튕겼기 때문이다.
+ *
+ * **여기서 지키는 것은 여전히 이슈 #172 다** — 조건 없는 `router.back()` 이면 판결 플로우가
+ * `replace` 로 돌아온 뒤 방금 본 재판 화면으로 되돌아간다. 어떤 경우에 back 을 쓰는지는
+ * groupChallengeBackNavigation.test.js 가 규칙 단위로 검증한다.
+ */
+test('그룹챌린지 상세의 뒤로가기는 조건 없이 히스토리를 밟지 않는다', () => {
     const src = source('src/views/challenge/group/GroupChallengeDetailView.vue');
 
     assert.ok(
         !/function goBack\(\) \{\s*router\.back\(\);\s*\}/.test(src),
-        '상세가 router.back() 이면 재판·판결 플로우로 되돌아간다',
+        '상세가 조건 없는 router.back() 이면 재판·판결 플로우로 되돌아간다',
     );
     assert.match(
         src,
-        /function goBack\(\) \{\s*router\.push\(\{ name: 'groupChallenge' \}\);\s*\}/,
-        '상세 뒤로가기는 그룹챌린지 홈으로 명시 이동해야 한다',
+        /resolveBack\(window\.history\.state/,
+        '진입 경로 표시를 보고 정해야 한다 (utils/groupChallengeNavigation)',
     );
 });
 
