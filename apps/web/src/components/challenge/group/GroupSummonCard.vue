@@ -1,163 +1,236 @@
 <script setup>
-defineProps({
+import { computed } from 'vue';
+import { formatIssuedDate } from '@/utils/groupInvite';
+
+const props = defineProps({
+    /** 소환장 본문에 들어갈 그룹 이름 */
+    groupName: { type: String, default: '' },
     inviteCode: { type: String, required: true },
-    variant: {
-        type: String,
-        default: 'solid',
-        validator: (v) => ['solid', 'outline'].includes(v),
-    },
+    /** 그룹 생성 시각(ISO-8601). 소환장 발부일로 찍는다. 없으면 발부일 줄을 감춘다 */
+    issuedAt: { type: String, default: '' },
 });
+
+const issuedDate = computed(() => formatIssuedDate(props.issuedAt));
 </script>
 
 <template>
-    <div class="gsc-card" :class="`gsc-card--${variant}`">
-        <!-- 좌우 펀치홀 -->
-        <div class="gsc-punch gsc-punch--left" />
-        <div class="gsc-punch gsc-punch--right" />
+    <div class="gsc-paper">
+        <div class="gsc-frame">
+            <div class="gsc-court">탕탕 법정</div>
+            <div class="gsc-title">소환장</div>
 
-        <!-- 상단: SUMMONS + 소환장 -->
-        <div class="gsc-top">
-            <span class="gsc-overline">SUMMONS</span>
-            <span class="gsc-label">소환장</span>
+            <div class="gsc-rule">
+                <span class="gsc-rule__line" />
+                <span class="gsc-rule__diamond" />
+                <span class="gsc-rule__line" />
+            </div>
+
+            <p class="gsc-body">
+                귀하를 <b>{{ props.groupName }}</b> 그룹 법정의<br />배심원으로 소환합니다.
+            </p>
+
+            <div class="gsc-code-box">
+                <div class="gsc-code-box__label">초대 코드</div>
+                <div class="gsc-code-box__value">{{ props.inviteCode }}</div>
+            </div>
+
+            <div v-if="issuedDate" class="gsc-issued">{{ issuedDate }}<br />탕탕 지방법원</div>
+
+            <div class="gsc-seal" aria-hidden="true"><span>소환</span></div>
         </div>
-
-        <!-- 점선 구분선 -->
-        <div class="gsc-divider" />
-
-        <!-- 하단: 초대 코드 -->
-        <div class="gsc-code-label">초대 코드</div>
-        <div class="gsc-code">{{ inviteCode }}</div>
     </div>
 </template>
 
 <style scoped>
-.gsc-card {
+/* ── 종이 ────────────────────────────────── */
+.gsc-paper {
     position: relative;
     width: 100%;
-    border-radius: var(--tt-radius-xl);
-    padding: 24px 22px;
-    overflow: hidden;
+    background: var(--tt-doc-bg);
+    border: 2px solid var(--tt-text);
+    border-radius: 6px;
+    padding: 6px;
+    box-shadow: 0 18px 36px -14px rgba(35, 40, 66, 0.4);
+    /* 반듯하게 두면 인쇄물이 아니라 카드로 보인다. 살짝 틀어 「올려 둔 서류」로 만든다 */
+    transform: rotate(-1.2deg);
+    animation: gsc-drop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* ── solid variant (FRAME 7) ─────────── */
-.gsc-card--solid {
-    background: var(--tt-info);
-    box-shadow: 0 16px 34px -14px rgba(62, 99, 214, 0.55);
+.gsc-frame {
+    border: 1px solid var(--tt-doc-frame);
+    border-radius: 3px;
+    padding: 20px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
 }
 
-.gsc-card--solid .gsc-overline {
-    color: #fff;
+/* ── 머리 ────────────────────────────────── */
+.gsc-court {
+    font-size: 9.5px;
+    font-weight: var(--tt-fw-bold);
+    letter-spacing: 0.34em;
+    color: var(--tt-text-muted);
 }
 
-.gsc-card--solid .gsc-label {
-    color: #C6D2F8;
+.gsc-title {
+    font-family: var(--tt-font-serif);
+    font-size: 27px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    letter-spacing: 0.42em;
+    /* 자간이 마지막 글자 뒤에도 붙어 오른쪽으로 밀린다. 같은 값만큼 들여써서 가운데를 맞춘다 */
+    text-indent: 0.42em;
+    margin-top: 8px;
 }
 
-.gsc-card--solid .gsc-divider {
-    border-top: 1.5px dashed rgba(255, 255, 255, 0.4);
-}
-
-.gsc-card--solid .gsc-code-label {
-    color: #C6D2F8;
-}
-
-.gsc-card--solid .gsc-code {
-    color: #fff;
-}
-
-/* ── outline variant (FRAME 8) ────────── */
-.gsc-card--outline {
-    background: var(--tt-info-subtle);
-    border: 1.5px solid #C9D6F5;
-}
-
-.gsc-card--outline .gsc-overline {
-    color: var(--tt-info);
-}
-
-.gsc-card--outline .gsc-label {
-    color: #8FA4E0;
-}
-
-.gsc-card--outline .gsc-divider {
-    border-top: 1.5px dashed #B9C6F2;
-}
-
-.gsc-card--outline .gsc-code-label {
-    color: #7E93D6;
-}
-
-.gsc-card--outline .gsc-code {
-    color: #2C46A8;
-}
-
-/* ── 펀치홀 ──────────────────────────── */
-.gsc-punch {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--tt-bg-subtle);
-}
-
-.gsc-card--outline .gsc-punch {
-    border: 1.5px solid #C9D6F5;
-}
-
-.gsc-punch--left {
-    left: -11px;
-}
-
-.gsc-card--outline .gsc-punch--left {
-    border-right: none;
-}
-
-.gsc-punch--right {
-    right: -11px;
-}
-
-.gsc-card--outline .gsc-punch--right {
-    border-left: none;
-}
-
-/* ── 내부 요소 ───────────────────────── */
-.gsc-top {
+/* ── 마름모 구분선 ───────────────────────── */
+.gsc-rule {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    margin: 12px 0;
 }
 
-.gsc-overline {
-    font-size: 13px;
-    font-weight: var(--tt-fw-black);
-    letter-spacing: 0.18em;
+.gsc-rule__line {
+    flex: 1;
+    border-top: 1px solid var(--tt-doc-rule);
 }
 
-.gsc-label {
-    font-size: 10.5px;
-    font-weight: var(--tt-fw-black);
-    letter-spacing: 0.06em;
+.gsc-rule__diamond {
+    width: 5px;
+    height: 5px;
+    background: var(--tt-text);
+    transform: rotate(45deg);
 }
 
-.gsc-divider {
-    margin: 16px 0;
-}
-
-.gsc-code-label {
-    font-size: 11px;
+/* ── 본문 ────────────────────────────────── */
+.gsc-body {
+    font-family: var(--tt-font-serif);
+    font-size: 12.5px;
     font-weight: var(--tt-fw-bold);
-    letter-spacing: 0.04em;
-    text-align: center;
+    color: var(--tt-text-body);
+    line-height: 1.75;
+    /* 그룹 이름이 길면 줄을 넘긴다. 서류 폭을 밀어내지 않도록 강제 줄바꿈을 허용한다 */
+    overflow-wrap: anywhere;
 }
 
-.gsc-code {
-    font-family: var(--tt-font-mono);
-    font-size: 30px;
+.gsc-body b {
+    color: var(--tt-text);
+}
+
+/* ── 초대 코드 ───────────────────────────── */
+.gsc-code-box {
+    margin-top: 14px;
+    width: 100%;
+    border: 1.5px dashed var(--tt-doc-inset-border);
+    border-radius: var(--tt-radius-xs);
+    padding: 10px 12px 12px;
+    background: var(--tt-doc-inset-bg);
+}
+
+.gsc-code-box__label {
+    font-size: 10px;
     font-weight: var(--tt-fw-black);
+    color: var(--tt-doc-label);
+    letter-spacing: 0.12em;
+}
+
+.gsc-code-box__value {
+    font-family: var(--tt-font-mono);
+    font-size: 29px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+    margin-top: 4px;
+}
+
+/* ── 발부일 ──────────────────────────────── */
+.gsc-issued {
+    margin-top: 13px;
+    width: 100%;
+    padding-right: 2px;
+    text-align: right;
+    font-family: var(--tt-font-serif);
+    font-size: 10.5px;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
     letter-spacing: 0.14em;
-    margin-top: 6px;
-    text-align: center;
+    line-height: 1.7;
+}
+
+/* ── 인장 ────────────────────────────────── */
+.gsc-seal {
+    position: absolute;
+    right: 8px;
+    bottom: 58px;
+    width: 52px;
+    height: 52px;
+    border: 2.5px solid var(--tt-doc-seal);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.9;
+    animation: gsc-seal-hit 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+}
+
+.gsc-seal span {
+    font-family: var(--tt-font-serif);
+    font-size: 15px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-doc-seal);
+    letter-spacing: 0.1em;
+    text-indent: 0.1em;
+}
+
+/* ── 애니메이션 ──────────────────────────── */
+@keyframes gsc-drop {
+    0% {
+        opacity: 0;
+        transform: translateY(-26px) rotate(3deg) scale(0.94);
+    }
+    60% {
+        opacity: 1;
+        transform: translateY(4px) rotate(-2deg) scale(1.01);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) rotate(-1.2deg) scale(1);
+    }
+}
+
+@keyframes gsc-seal-hit {
+    0% {
+        opacity: 0;
+        transform: rotate(-12deg) scale(2.2);
+    }
+    60% {
+        opacity: 1;
+        transform: rotate(-12deg) scale(0.92);
+    }
+    100% {
+        opacity: 0.9;
+        transform: rotate(-12deg) scale(1);
+    }
+}
+
+/*
+ * 낙하·도장은 연출일 뿐이라 없어도 정보가 빠지지 않는다.
+ * 도장은 기운 각도까지 지우면 스티커처럼 보여서 최종 상태만 그대로 둔다.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .gsc-paper {
+        animation: none;
+    }
+
+    .gsc-seal {
+        animation: none;
+        transform: rotate(-12deg);
+    }
 }
 </style>
