@@ -404,9 +404,11 @@ class AccountLinkServiceTest {
 
         List<String> codes = result.getBanks().stream().map(InstitutionDto::getCode).toList();
         assertEquals(List.of("0004", "0003"), codes);
-        /* 카드·증권·보험도 같은 기준으로 걸린다 — 지금 구현은 은행 계좌조회뿐이다. */
+        /* 카드·증권·대출·페이머니도 같은 기준으로 걸린다 — 지금 구현은 은행 계좌조회뿐이다. */
         assertTrue(result.getCards().isEmpty());
         assertTrue(result.getSecurities().isEmpty());
+        assertTrue(result.getLoans().isEmpty(), "실 CODEF 모드에서는 대출이 빈 배열이어야 한다");
+        assertTrue(result.getPayMoney().isEmpty(), "실 CODEF 모드에서는 페이머니가 빈 배열이어야 한다");
     }
 
     @Test
@@ -417,6 +419,12 @@ class AccountLinkServiceTest {
         List<String> codes = result.getBanks().stream().map(InstitutionDto::getCode).toList();
         assertTrue(codes.contains("0090"), "목 모드에는 카카오뱅크가 남아야 한다");
         assertFalse(result.getCards().isEmpty());
+        assertFalse(result.getSecurities().isEmpty());
+        assertFalse(result.getLoans().isEmpty(), "목 모드에는 대출 업권이 내려가야 한다");
+        assertFalse(result.getPayMoney().isEmpty(), "목 모드에는 페이머니 업권이 내려가야 한다");
+        assertTrue(result.getLoans().stream().map(InstitutionDto::getCode).toList().contains("CP_KB"));
+        assertTrue(result.getPayMoney().stream().map(InstitutionDto::getCode).toList()
+                .contains("PAY_KAKAO"));
     }
 
     @Test
