@@ -19,6 +19,7 @@ import org.springframework.web.multipart.support.StandardServletMultipartResolve
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -37,6 +38,23 @@ import java.util.List;
                 type = FilterType.ANNOTATION,
                 classes = {Controller.class, ControllerAdvice.class}))
 public class ServletConfig implements WebMvcConfigurer {
+
+    /**
+     * SwaggerAccessInterceptor 를 걸 경로. springfox 가 문서를 그리는 데 필요한 전부다 —
+     * 하나라도 빠지면 인증을 통과한 뒤에도 화면이 비거나 "Failed to load API definition" 이 뜬다.
+     *
+     * <p><b>모든 항목에 {@code /**} 짝을 둔 이유.</b> 인터셉터 패턴이 <b>정확 매칭</b>이면
+     * 핸들러는 받아주는데 인터셉터는 안 걸리는 URL 이 생겨 <b>인증이 통째로 우회된다.</b>
+     * 실제로 {@code /v2/api-docs/} (슬래시 하나)가 401 이 아니라 200 으로 명세 전문을 뱉었다.
+     * {@code JwtAuthInterceptor} 가 무사한 건 {@code /api/**} 가 이미 {@code **} 라서다.
+     * {@code SwaggerAccessPathTest} 가 이 성질을 고정한다.
+     */
+    static final String[] SWAGGER_PATH_PATTERNS = {
+            "/swagger-ui.html", "/swagger-ui.html/**",
+            "/v2/api-docs", "/v2/api-docs/**",
+            "/swagger-resources", "/swagger-resources/**",
+            "/configuration", "/configuration/**",
+            "/webjars", "/webjars/**"};
 
     /*
      * 두 컨텍스트 구조 주의:
@@ -94,13 +112,24 @@ public class ServletConfig implements WebMvcConfigurer {
          * 인증을 통과한 뒤에도 화면이 비거나 "Failed to load API definition" 이 뜬다.
          */
         registry.addInterceptor(swaggerAccessInterceptor)
-                .addPathPatterns(
-                        "/swagger-ui.html",
-                        "/v2/api-docs",
-                        "/swagger-resources",
-                        "/swagger-resources/**",
-                        "/configuration/**",
-                        "/webjars/**");
+                .addPathPatterns(SWAGGER_PATH_PATTERNS);
+    }
+
+    /**
+     * 끝 슬래시를 핸들러가 관대하게 받아주던 동작을 끈다.
+     *
+     * <p>기본값(true)에서는 {@code /v2/api-docs/} 가 핸들러에는 매칭되는데 인터셉터 패턴
+     * {@code /v2/api-docs} 에는 매칭되지 않아 <b>인증만 빠진 채 본문이 나갔다.</b>
+     * 끄면 같은 URL 이 404 가 되어 애초에 핸들러까지 닿지 않는다. 위 패턴 확장이 벨트라면
+     * 이쪽이 근본 수정이다.
+     *
+     * <p>Spring 6.0 은 이 값을 deprecated 로 두고 <b>기본값을 false 로 바꿨다</b> — 즉 상위 버전의
+     * 기본 동작으로 맞추는 것이다. 프론트({@code apps/web/src})와 백엔드 {@code @*Mapping} 을
+     * 전수 확인했고 끝 슬래시에 의존하는 경로는 <b>하나도 없다</b>(2026-08-19 실측).
+     */
+    @Override
+    public void configurePathMatch(PathMatchConfigurer configurer) {
+        configurer.setUseTrailingSlashMatch(false);
     }
 
     @Override
