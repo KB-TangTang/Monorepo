@@ -1,6 +1,6 @@
 package com.kb.tangtang.mission.listener;
 
-import com.kb.tangtang.mission.service.RelativeMissionAssignmentService;
+import com.kb.tangtang.mission.service.DailyMissionAssignmentService;
 import com.kb.tangtang.user.event.ChallengeConsentAgreedEvent;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,11 +16,11 @@ import java.time.ZoneId;
 @Log4j2
 public class ChallengeConsentAgreedListener {
 
-    private final RelativeMissionAssignmentService assignmentService;
+    private final DailyMissionAssignmentService assignmentService;
     private final ZoneId zoneId;
 
     public ChallengeConsentAgreedListener(
-            RelativeMissionAssignmentService assignmentService,
+            DailyMissionAssignmentService assignmentService,
             @Value("${mission.assignment.zone}") String zoneId) {
         this.assignmentService = assignmentService;
         this.zoneId = ZoneId.of(zoneId);

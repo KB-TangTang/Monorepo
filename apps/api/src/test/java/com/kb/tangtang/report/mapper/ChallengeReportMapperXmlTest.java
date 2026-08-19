@@ -61,6 +61,8 @@ class ChallengeReportMapperXmlTest {
             assertTrue(xml.contains("category_results_json AS category_effects_json"));
             assertTrue(xml.contains("SELECT MIN(assign_date)"));
             assertTrue(xml.contains("mission.mission_type"));
+            assertTrue(xml.contains(
+                    "CASE WHEN mission.mission_type = 'ABSOLUTE' THEN 50 ELSE difficulty.score END"));
             assertFalse(xml.contains("mission_type = 'RELATIVE'"));
             assertTrue(xml.contains("CAST(#{weeklyResultsJson} AS JSON)"));
             assertTrue(xml.contains("CAST(#{groupRecordJson} AS JSON)"));

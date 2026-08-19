@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.AbsoluteMissionAssignmentMapper">
+
+    <select id="isRelativeMissionQualified" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM tbl_user
+             WHERE id = #{userId}
+               AND status = 'ACTIVE'
+               AND relative_mission_qualified_at IS NOT NULL
+        )
+    </select>
+
+    <select id="lockActiveUserDifficulty" resultType="java.lang.Long">
+        SELECT difficulty_id
+          FROM tbl_user
+         WHERE id = #{userId}
+           AND status = 'ACTIVE'
+         FOR UPDATE
+    </select>
+
+    <select id="countAssignment" resultType="int">
+        SELECT COUNT(*)
+          FROM tbl_user_mission_info
+         WHERE user_id = #{userId}
+           AND assign_date = #{assignDate}
+    </select>
+
+    <select id="findNoSpendAbsoluteMissions"
+            resultType="com.kb.tangtang.mission.domain.MissionPoolItem">
+        SELECT id, mission_title, mission_content, category_id
+          FROM tbl_mission_pool
+         WHERE mission_type = 'ABSOLUTE'
+           AND limit_price = 0
+           AND category_id IS NOT NULL
+         ORDER BY category_id, id
+    </select>
+
+    <select id="findCategorySpendingStats"
+            resultType="com.kb.tangtang.mission.domain.CategorySpendingStats">
+        SELECT ROUND(AVG(daily.net_amount), 2) AS base_amount
+          FROM (
+            SELECT tr_date,
+                   SUM(CASE WHEN is_refund = 1 THEN -COALESCE(refunded_amount, amount) ELSE amount END) AS net_amount
+              FROM tbl_transaction
+             WHERE user_id = #{userId}
+               AND category_id = #{categoryId}
+               AND tr_date BETWEEN #{startDate} AND #{endDate}
+               AND classification = 'CONSUMPTION'
+               AND direction = 'OUT'
+               AND is_excluded_from_summary = 0
+             GROUP BY tr_date
+            HAVING net_amount &gt; 0
+          ) daily
+    </select>
+
+    <insert id="insertAssignment" parameterType="com.kb.tangtang.mission.domain.RelativeMissionAssignment">
+        INSERT INTO tbl_user_mission_info
+            (user_id, mission_id, difficulty_id, assign_date, target_rate, target_value, base_amount,
+             assignment_reason)
+        VALUES
+            (#{userId}, #{missionId}, #{difficultyId}, #{assignDate}, NULL, 0, #{baseAmount},
+             #{assignmentReason})
+    </insert>
+
+</mapper>

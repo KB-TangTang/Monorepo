@@ -5,6 +5,7 @@ import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,5 +29,12 @@ class MissionVerdictMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + "countOwnedFinalizedVerdict"));
         assertTrue(configuration.hasStatement(namespace + "acknowledgeVerdict"));
         assertTrue(configuration.hasStatement(namespace + "findResultCheckedAt"));
+
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+            assertNotNull(input);
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(xml.contains(
+                    "CASE WHEN mission.mission_type = 'ABSOLUTE' THEN 50 ELSE difficulty.score END"));
+        }
     }
 }

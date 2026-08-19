@@ -39,6 +39,9 @@ class MissionScoreMapperXmlTest {
                         "endDate", LocalDate.of(2026, 8, 31)));
         assertTrue(scoreSql.getSql().contains("previous_assignment.assign_date = DATE_SUB"));
         assertTrue(scoreSql.getSql().contains("previous_assignment.result = 'SUCCESS'"));
+        assertTrue(scoreSql.getSql().contains(
+                "CASE WHEN mission.mission_type = 'ABSOLUTE' THEN 50 ELSE difficulty.score END"));
+        assertTrue(scoreSql.getSql().contains("JOIN tbl_mission_pool mission"));
 
         BoundSql upsertSql = configuration.getMappedStatement(namespace + "upsertMonthlyScore")
                 .getBoundSql(Map.of("userId", 7L, "yearMonth", "2026-08", "totalScore", 75));

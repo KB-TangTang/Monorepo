@@ -5,7 +5,7 @@
 
     <select id="calculateMonthlyScore" resultType="java.lang.Integer">
         SELECT COALESCE(SUM(
-                   difficulty.score
+                   CASE WHEN mission.mission_type = 'ABSOLUTE' THEN 50 ELSE difficulty.score END
                    + CASE WHEN EXISTS (
                        SELECT 1
                          FROM tbl_user_mission_info previous_assignment
@@ -15,6 +15,7 @@
                    ) THEN 5 ELSE 0 END
                ), 0)
           FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
           JOIN tbl_mission_difficulty difficulty ON difficulty.id = assignment.difficulty_id
          WHERE assignment.user_id = #{userId}
            AND assignment.assign_date BETWEEN #{startDate} AND #{endDate}

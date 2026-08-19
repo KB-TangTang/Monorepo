@@ -16,11 +16,11 @@ import java.time.LocalDate;
 public class RelativeMissionAssignmentBatchService {
 
     private final RelativeMissionAssignmentMapper assignmentMapper;
-    private final RelativeMissionAssignmentService assignmentService;
+    private final DailyMissionAssignmentService assignmentService;
     private final ApplicationEventPublisher events;
 
     public RelativeMissionAssignmentBatchService(RelativeMissionAssignmentMapper assignmentMapper,
-                                                 RelativeMissionAssignmentService assignmentService,
+                                                 DailyMissionAssignmentService assignmentService,
                                                  ApplicationEventPublisher events) {
         this.assignmentMapper = assignmentMapper;
         this.assignmentService = assignmentService;
