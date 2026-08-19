@@ -259,6 +259,21 @@ watch(
                     메시지를 불러오는 중...
                 </div>
 
+                <!--
+                  로드에 성공했는데 메시지가 0건인 방(이슈 #323).
+                  이 분기가 없어 새로 만든 방이 아무 문구 없는 흰 화면이었다.
+                -->
+                <div v-else-if="store.messages.length === 0" class="chat-view__empty">
+                    <p class="chat-view__empty-title">아직 오간 말이 없어요</p>
+                    <p class="chat-view__empty-desc">
+                        {{
+                            store.isEnded
+                                ? '이 챌린지는 끝났어요.'
+                                : '첫 마디를 남겨 재판을 열어보세요.'
+                        }}
+                    </p>
+                </div>
+
                 <template v-for="item in groupedMessages" :key="item.key">
                     <GroupChatDateDivider v-if="item.type === 'date'" :label="item.label" />
 
@@ -340,6 +355,25 @@ watch(
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-semibold);
     padding: var(--tt-space-6) 0;
+}
+
+/* 빈 방(이슈 #323). 스크롤 영역이 flex 라 auto 마진으로 가운데에 세운다. */
+.chat-view__empty {
+    margin: auto 0;
+    text-align: center;
+    padding: var(--tt-space-6) var(--tt-screen-padding);
+}
+
+.chat-view__empty-title {
+    color: var(--tt-text);
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+}
+
+.chat-view__empty-desc {
+    margin-top: var(--tt-space-2);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
 }
 
 .chat-view__closed {

@@ -401,6 +401,7 @@ onBeforeUnmount(stopProgressAnimation);
                         <template v-if="assetSummary">
                             <strong class="summary-card__amount">
                                 {{ formatHomeAmount(assetSummary.netWorth) }}
+                                <span class="summary-card__unit">원</span>
                             </strong>
                             <span
                                 v-if="assetChange"
