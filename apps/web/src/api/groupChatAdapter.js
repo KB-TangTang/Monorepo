@@ -7,12 +7,14 @@
  * senderName · challengeName)를 보는 동안 서버는 {type, sentAt, senderNickname, groupName} 을
  * 보내고 있었고, 그 결과 텍스트 메시지가 한 건도 렌더링되지 않았다.
  *
- * 서버가 주지 않는 값(스티커 · 판결 승패)은 <b>지어내지 않는다.</b> 화면에서 생략하거나 서버가
- * 주는 값으로 대체한다.
+ * 서버가 주지 않는 값(스티커 등)은 <b>지어내지 않는다.</b> 화면에서 생략하거나 서버가
+ * 주는 값으로 대체한다. 판결 승패도 오래 그랬는데, 이제는 서버가 verdict 로 준다(이슈 #304).
  *
  * 서버 계약 (docs/API_SPEC.md 「그룹 채팅」):
  *   메시지 { messageId, type: 'TEXT'|'SYSTEM', senderId, senderNickname, content, sentAt,
- *            systemType, deepLink, caseNo }   ← 뒤 셋은 SYSTEM 메시지에만 있다
+ *            systemType, deepLink, caseNo, verdict }   ← 뒤 넷은 SYSTEM 메시지에만 있다
+ *   verdict { outcome: 'GUILTY'|'INNOCENT', guiltyVotes, innocentVotes, livesLost }
+ *            ← 판결 확정 메시지에만 있다. 표는 투표를 거치지 않은 판결(혐의 인정)에서 null 이다
  *   방     { groupId, groupName, status: 'RECRUITING'|'ACTIVE'|'JUDGING'|'CLOSED', memberCount,
  *            unreadCount, dayIndex, daysLeft }
  */
@@ -69,6 +71,27 @@ export function toChatMessage(dto) {
         systemType: dto.systemType ?? null,
         deepLink: dto.deepLink ?? null,
         caseNo: dto.caseNo ?? null,
+        verdict: toVerdict(dto.verdict),
+    };
+}
+
+/**
+ * 판결 결과.
+ *
+ * outcome 이 없으면 통째로 null 로 만든다 — 이 필드가 생기기 전(#304)에 Redis 에 쌓인 판결
+ * 메시지가 그렇다. 카드는 그때 예전처럼 중립 도장을 찍는다.
+ *
+ * 표는 **0 과 null 을 구분해서** 넘긴다. 0:0 은 「아무도 투표하지 않았다」(무죄 추정)이고
+ * null 은 「투표라는 절차가 없었다」(혐의 인정)라서, 둘을 뭉개면 카드가 없는 표를 지어낸다.
+ */
+function toVerdict(dto) {
+    if (!dto || (dto.outcome !== 'GUILTY' && dto.outcome !== 'INNOCENT')) return null;
+    const votes = (value) => (value === null || value === undefined ? null : Number(value));
+    return {
+        outcome: dto.outcome,
+        guiltyVotes: votes(dto.guiltyVotes),
+        innocentVotes: votes(dto.innocentVotes),
+        livesLost: Number(dto.livesLost ?? 0),
     };
 }
 
