@@ -17,14 +17,19 @@ import org.springframework.web.client.RestTemplate;
  * toss.client-id / toss.client-secret 이 비어 있어도 컨텍스트는 뜬다(openai.api-key 와 같은 방식) —
  * TossAuthClient.fetchToken() 이 호출 시점에 BusinessException 으로 막고, TossAuthScheduler 가
  * 그 예외를 로그로만 남기고 삼킨다. 토스 연동 없이도 나머지 기능은 그대로 동작해야 한다.
+ *
+ * ⚠ 그래서 두 값에는 반드시 빈 기본값(`:`)을 남겨 둔다. 기본값이 없으면 "값이 비었다"가 아니라
+ *   "프로퍼티 정의가 없다"가 되어 PropertySourcesPlaceholderConfigurer 가 예외를 던지고,
+ *   토스와 무관한 API 까지 전부 404 가 된다 — 2026-08-19 도커 배포에서 실제로 발생했다
+ *   (application-docker.properties 에 두 줄이 빠져 있었다).
  */
 @Configuration
 public class TossStockClientConfig {
 
-    @Value("${toss.client-id}")
+    @Value("${toss.client-id:}")
     private String clientId;
 
-    @Value("${toss.client-secret}")
+    @Value("${toss.client-secret:}")
     private String clientSecret;
 
     @Value("${toss.connect-timeout-ms}")
