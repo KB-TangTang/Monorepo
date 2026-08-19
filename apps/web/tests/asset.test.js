@@ -42,7 +42,8 @@ test('getHoldingAveragePrice 는 보유수량이 0이하이면 0으로 나누지
 
 test('formatCompactWon 은 1만/1억 경계에서 단위를 바꾼다', () => {
     assert.equal(formatCompactWon(9999), '9,999원');
-    assert.equal(formatCompactWon(13146000), '1,315만원');
+    /* 만 단위에 콤마를 넣지 않는다(이슈 #326) - 같은 화면의 formatAssetHomeWon 과 표기를 맞춘다 */
+    assert.equal(formatCompactWon(13146000), '1315만원');
     assert.equal(formatCompactWon(150000000), '1.5억원');
     assert.equal(formatCompactWon(-20000), '-2만원');
 });

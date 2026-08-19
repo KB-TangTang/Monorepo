@@ -282,7 +282,7 @@ onUnmounted(() => {
                                     <div v-if="verdictType === 'success'" class="pt-verdict-card" style="animation: tt-pop 0.25s ease-out">
                                         <div class="pt-stamp pt-stamp--success">인 정</div>
                                         <div class="pt-verdict-card__overline">VERDICT · 00:00</div>
-                                        <div class="pt-verdict-card__case">판결문 — 카페/간식 사건</div>
+                                        <div class="pt-verdict-card__case">판결문 · 카페/간식 사건</div>
                                         <div class="pt-verdict-card__row">
                                             <img :src="disappointed" alt="아쉬워하는 검사 탕이" class="pt-verdict-card__tangi" />
                                             <div class="pt-verdict-card__bubble">"알리바이, 인정하겠습니다"</div>
@@ -299,7 +299,7 @@ onUnmounted(() => {
                                     <div v-else class="pt-verdict-card" style="animation: tt-pop 0.25s ease-out">
                                         <div class="pt-stamp pt-stamp--fail">불인정</div>
                                         <div class="pt-verdict-card__overline">VERDICT · 00:00</div>
-                                        <div class="pt-verdict-card__case">판결문 — 카페/간식 사건</div>
+                                        <div class="pt-verdict-card__case">판결문 · 카페/간식 사건</div>
                                         <div class="pt-verdict-card__row">
                                             <img :src="fieldVerification" alt="현장 검증하는 검사 탕이" class="pt-verdict-card__tangi" />
                                             <div class="pt-verdict-card__bubble">"이번 알리바이는 인정하기 어렵겠군요"</div>

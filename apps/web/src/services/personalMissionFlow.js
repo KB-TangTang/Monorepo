@@ -206,7 +206,7 @@ function formatLocalDateKey(date) {
 
 function formatAnalysisPeriod(startDate, endDate) {
     if (!startDate || !endDate) return '';
-    return `${formatShortDate(startDate)} – ${formatShortDate(endDate)}`;
+    return `${formatShortDate(startDate)} ~ ${formatShortDate(endDate)}`;
 }
 
 function formatShortDate(dateValue) {

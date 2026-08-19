@@ -8,7 +8,7 @@ import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { providerLabel } from '@/utils/my';
-import { resolveDisplayName } from '@/utils/user';
+import { maskEmail, resolveDisplayName } from '@/utils/user';
 
 const props = defineProps({
     user: { type: Object, default: null },
@@ -19,10 +19,13 @@ const props = defineProps({
  * 규칙 자체는 utils/user.js 한 곳에 있다.
  */
 const displayName = computed(() => resolveDisplayName(props.user));
+/*
+ * 이메일은 가려서 보여준다(이슈 #328). 원본을 그대로 그리면 시연영상·발표자료·스크린샷에
+ * 개인정보가 그대로 박힌다. 규칙은 utils/user.js 한 곳에 있다.
+ */
 const subtitle = computed(() => {
     const provider = providerLabel(props.user?.socialProvider);
-    const email = props.user?.email ?? '';
-    return [provider, email].filter(Boolean).join(' · ');
+    return [provider, maskEmail(props.user?.email)].filter(Boolean).join(' · ');
 });
 </script>
 
