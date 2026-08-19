@@ -22,11 +22,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(
-        200px 130px at 50% 60px,
-        rgba(245, 185, 33, 0.1),
-        transparent 70%
-    );
+    background: radial-gradient(200px 130px at 50% 60px, rgba(245, 185, 33, 0.1), transparent 70%);
 }
 
 .court-header__inner {
@@ -186,21 +182,25 @@
 
 .court-header__inner--compact {
     padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--tt-space-2);
+}
+
+.court-header__inner--compact :deep(.tt-bell) {
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + var(--tt-space-2));
+    right: var(--tt-screen-padding);
 }
 
 .court-header__compact-left {
-    flex: 1;
+    width: 100%;
     min-width: 0;
 }
 
 .court-header__compact-sign {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     align-items: center;
+    width: max-content;
+    margin: 0 auto;
 }
 
 .court-header__sign-img--compact {

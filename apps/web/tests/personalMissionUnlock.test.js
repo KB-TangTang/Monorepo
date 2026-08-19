@@ -49,16 +49,28 @@ const { usePersonalMissionChallengeStore } = await import('../src/stores/persona
 const { CHALLENGE_CONSENT_STATE } = await import('../src/services/challengeConsent.js');
 
 /*
- * categoryAnalysis 가 hasEnoughData 의 원본이다. null 이면 목 프로필로 떨어져 항상 true 다.
+ * categoryAnalysis 의 누적 건수가 영구 자격의 원본이고 topCategories 는 최근 상대형 후보 목록이다.
  * consentState 는 화면에 도달한 사용자(동의함)를 가정한다 - 없으면 screenState 가 'loading' 이다.
  */
-function newStore({ relativeEligible } = { relativeEligible: true }) {
+function newStore({ analysisAvailable = true } = {}) {
     setActivePinia(createPinia());
     apiStub.reset();
     const store = usePersonalMissionChallengeStore();
     store.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
-    store.categoryAnalysis = { relativeEligible, topCategories: [] };
+    store.categoryAnalysis = {
+        cumulativeTransactionCount: 50,
+        requiredCumulativeTransactionCount: 50,
+        topCategories: analysisAvailable ? [{ categoryId: 1 }] : [],
+    };
     return store;
+}
+
+function setQualificationCounts(store, cumulativeTransactionCount, requiredTransactionCount = 50) {
+    store.categoryAnalysis = {
+        ...store.categoryAnalysis,
+        cumulativeTransactionCount,
+        requiredCumulativeTransactionCount: requiredTransactionCount,
+    };
 }
 
 /* ── 서버 상태 기반 전이 (이슈 #315 (3)) ────────────────────── */
@@ -78,7 +90,7 @@ test('동기화는 자격 판정을 서버에 맡긴다 - 보내는 인자가 �
 });
 
 test('서버가 INSUFFICIENT 를 주면 안내를 띄우지 않는다', async () => {
-    const store = newStore({ relativeEligible: false });
+    const store = newStore({ analysisAvailable: false });
     apiStub.setSyncResponse({ status: 'INSUFFICIENT', showUnlock: false });
 
     assert.equal(await store.syncMissionUnlock(), false);
@@ -91,6 +103,16 @@ test('서버가 PENDING 을 주면 안내를 띄운다', async () => {
 
     assert.equal(await store.syncMissionUnlock(), true);
     assert.equal(store.missionUnlockStatus, 'PENDING');
+});
+
+test('영구 자격 화면은 최근 분석 가능 여부가 아니라 서버의 실제 누적 건수로 판단한다', () => {
+    const insufficientStore = newStore({ analysisAvailable: true });
+    setQualificationCounts(insufficientStore, 49);
+    assert.equal(insufficientStore.screenState, 'insufficient');
+
+    const qualifiedStore = newStore({ analysisAvailable: false });
+    setQualificationCounts(qualifiedStore, 50);
+    assert.equal(qualifiedStore.screenState, 'active');
 });
 
 test('UNTRACKED 는 안내 대상이 아니다 - 기능 도입 전부터 자격이 있던 사용자', async () => {
@@ -116,12 +138,12 @@ test('확인하면 SEEN 이 되고 다시 뜨지 않는다', async () => {
 /*
  * 이슈 #315 (2) - 서버 상태와 화면 상태가 어긋나는 구간.
  *
- * 자격 래치(relative_mission_qualified_at)는 한 번 박히면 안 풀려 서버는 PENDING 을 유지하는데,
- * 최근 28일 소비가 비면 relativeEligible 이 false 로 내려와 화면은 「증거 부족」이 된다.
- * 그 위에 「맞춤 미션이 열렸어요」를 겹쳐 띄우면 두 화면이 정면으로 모순된다.
+ * 자격 래치(relative_mission_qualified_at)는 한 번 박히면 안 풀린다.
+ * 누적 건수가 아직 50건 미만인 화면 위에는 개시 안내를 겹쳐 띄우지 않는다.
  */
 test('증거 부족 화면에서는 PENDING 이어도 안내를 겹쳐 띄우지 않는다', async () => {
-    const store = newStore({ relativeEligible: false });
+    const store = newStore({ analysisAvailable: false });
+    setQualificationCounts(store, 49);
     apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
 
     assert.equal(await store.syncMissionUnlock(), false);
@@ -129,13 +151,16 @@ test('증거 부족 화면에서는 PENDING 이어도 안내를 겹쳐 띄우지
 });
 
 test('띄우지 않은 안내는 버리지 않고 미룬다 - 데이터가 다시 차면 그때 뜬다', async () => {
-    const store = newStore({ relativeEligible: false });
+    const store = newStore({ analysisAvailable: false });
     apiStub.setSyncResponse({ status: 'PENDING', showUnlock: true });
     await store.syncMissionUnlock();
 
     assert.equal(store.missionUnlockStatus, 'PENDING', '서버 상태를 SEEN 으로 소비하면 안 된다');
 
-    store.categoryAnalysis = { relativeEligible: true, topCategories: [] };
+    store.categoryAnalysis = {
+        ...store.categoryAnalysis,
+        topCategories: [{ categoryId: 1 }],
+    };
     assert.equal(await store.syncMissionUnlock(), true);
 });
 
@@ -167,11 +192,18 @@ function homeSource() {
     );
 }
 
+function courtHeaderStyleSource() {
+    return readFileSync(
+        new URL('../src/components/challenge/personal/PersonalCourtHeader.css', import.meta.url),
+        'utf8',
+    );
+}
+
 /*
  * #313 — 데이터 부족 화면이 고정 픽스처를 실사용자에게 보여줬다.
  *
  * hasEnoughData 가 목 프로필(항상 true)을 보던 시절엔 이 화면이 도달 불가능한 분기였는데,
- * #311 이 서버의 relativeEligible 을 보게 되면서 열렸다. 그 순간부터 MOCK_DATA_REQUIREMENTS 의
+ * #311 뒤 실제 API 상태로 이 화면이 열리면서 MOCK_DATA_REQUIREMENTS 의
  * 「19일째」·「12 / 50」이 자기 데이터인 줄 알고 읽히게 됐다.
  */
 test('개인 미션 홈은 데이터 요건 목데이터를 화면에 그리지 않는다', () => {
@@ -185,11 +217,161 @@ test('개인 미션 홈은 데이터 요건 목데이터를 화면에 그리지 
     assert.doesNotMatch(src, /calculateDataProgress/, '진행 막대도 같은 목데이터로 계산된다');
 });
 
-test('맞춤 사건이 열리는 조건은 값 없이 조건만 보여준다', () => {
+test('맞춤 사건 조건은 서버의 실제 누적 소비 건수와 기준값으로 진행도를 계산한다', () => {
     const src = homeSource();
 
-    assert.match(src, /unlockConditions/, '조건 목록이 있어야 한다');
-    assert.match(src, /전체 소비 50건 확보/, '조건 문구 자체는 남긴다');
+    assert.match(src, /cumulativeTransactionCount/, '서버의 실제 누적 소비 건수를 사용해야 한다');
+    assert.match(
+        src,
+        /requiredCumulativeTransactionCount/,
+        '서버가 내려준 영구 자격 기준값을 사용해야 한다',
+    );
+    assert.doesNotMatch(
+        src,
+        /REQUIRED_CUMULATIVE_TRANSACTION_COUNT\s*=\s*50/,
+        '프론트에 영구 자격 기준을 중복 선언하면 안 된다',
+    );
+    assert.match(src, /qualificationProgress/, '실제 건수 비율로 진행 막대를 계산해야 한다');
+    assert.match(src, /전체 소비 건수 확보/, '누적 소비 조건 문구를 표시한다');
+    assert.doesNotMatch(
+        src,
+        /최근 28일 소비 데이터/,
+        '분석 기간을 영구 자격 조건으로 표시하지 않는다',
+    );
+});
+
+test('축소 헤더를 쓰는 화면에서도 법원 로고는 가운데에 놓인다', () => {
+    const css = courtHeaderStyleSource();
+
+    assert.match(
+        css,
+        /\.court-header__compact-sign\s*\{[\s\S]*?margin:\s*0 auto;/,
+        '축소 헤더의 법원 로고가 중앙 정렬되어야 한다',
+    );
+    assert.match(
+        css,
+        /\.court-header__inner--compact :deep\(\.tt-bell\)\s*\{[\s\S]*?position:\s*absolute;/,
+        '알림 버튼이 로고의 중앙 정렬 폭을 밀어내면 안 된다',
+    );
+});
+
+test('데이터 부족 화면은 기본 법원 헤더를 유지하고 오늘 미션을 본문 첫 카드로 보여준다', () => {
+    const src = homeSource();
+    const insufficientHeader = src.match(
+        /<PersonalCourtHeader[\s\S]*?store\.screenState === 'insufficient'[\s\S]*?\/>/,
+    );
+    const insufficientBody = src.match(
+        /<template v-else-if="store\.screenState === 'insufficient'">([\s\S]*?)<\/template>/,
+    );
+
+    assert.ok(insufficientHeader, '데이터 부족 화면이 기본 법원 헤더 분기에 포함되어야 한다');
+    assert.doesNotMatch(
+        insufficientHeader[0],
+        /\bcompact\b/,
+        '데이터 부족 헤더를 축소하면 안 된다',
+    );
+    assert.ok(insufficientBody, '데이터 부족 화면 본문이 있어야 한다');
+    assert.ok(
+        insufficientBody[1].indexOf('personal-home__common-mission') <
+            insufficientBody[1].indexOf('personal-home__insufficient-banner'),
+        '오늘 미션이 데이터 수집 안내보다 먼저 나와야 한다',
+    );
+    assert.ok(
+        insufficientBody[1].indexOf('personal-home__common-mission') <
+            insufficientBody[1].indexOf('personal-home__conditions-card'),
+        '오늘 미션이 맞춤 사건 조건보다 먼저 나와야 한다',
+    );
+    assert.doesNotMatch(
+        insufficientBody[1],
+        /<PersonalScoreCard/,
+        '데이터 부족 화면에는 이번 주 판정과 이번 달 누적 카드를 표시하지 않는다',
+    );
+    assert.doesNotMatch(
+        insufficientBody[1],
+        /성공 시|\+50점/,
+        '데이터 부족 화면의 공통 미션 카드에는 성공 점수를 표시하지 않는다',
+    );
+    assert.match(
+        insufficientBody[1],
+        /:src="insufficientTangi"/,
+        '노란 안내 카드에는 담당 검사 대신 전용 정장 탕이 이미지를 사용한다',
+    );
+    assert.match(
+        insufficientBody[1],
+        /증거\(소비 기록\)가 모이는 동안/,
+        '노란 안내 카드의 기존 제목을 유지한다',
+    );
+    assert.match(
+        insufficientBody[1],
+        /증거가 쌓이면 요주의 대상 3곳을 뽑아 맞춤 사건이 열려요/,
+        '노란 안내 카드의 기존 설명을 유지한다',
+    );
+});
+
+test('개발 환경에서 서버 데이터를 바꾸지 않고 데이터 부족 화면을 재현할 수 있다', () => {
+    const store = newStore({ analysisAvailable: true });
+    const src = homeSource();
+    setQualificationCounts(store, 72);
+
+    assert.equal(store.screenState, 'active', '실제 누적 건수가 50건 이상이면 기본 화면이다');
+
+    store.setDemoInsufficient();
+
+    assert.equal(store.screenState, 'insufficient');
+    assert.equal(
+        store.categoryAnalysis.cumulativeTransactionCount,
+        72,
+        '개발 화면 전환이 서버에서 받은 실제 누적 건수를 덮어쓰면 안 된다',
+    );
+    assert.equal(
+        store.categoryAnalysis.requiredCumulativeTransactionCount,
+        50,
+        '개발 화면 전환이 서버에서 받은 자격 기준을 덮어쓰면 안 된다',
+    );
+    assert.equal(
+        store.missionStreak,
+        null,
+        '신규 데이터 부족 프리뷰에 기존 연속 기록이 남으면 안 된다',
+    );
+    assert.deepEqual(
+        store.monthlyScore,
+        { score: 0, topPercent: null },
+        '신규 데이터 부족 프리뷰에 공용 목 점수와 순위가 남으면 안 된다',
+    );
+    assert.match(src, /showInsufficientDemo/, '개발용 데이터 부족 화면 전환 함수가 있어야 한다');
+    assert.match(src, />\s*데이터 부족 화면\s*</, '개발용 전환 버튼이 있어야 한다');
+});
+
+test('개발 환경에서 개시 안내를 서버 확인 처리 없이 미리 볼 수 있다', () => {
+    const src = homeSource();
+
+    assert.match(src, /showMissionUnlockDemo/, '개시 안내 미리보기 함수가 있어야 한다');
+    assert.match(src, />\s*맞춤 사건 개시 안내\s*</, '개시 안내 미리보기 버튼이 있어야 한다');
+    assert.match(
+        src,
+        /isMissionUnlockDifficultyFlow\.value && isMissionUnlockPreview\.value/,
+        '미리보기에서 탕이를 골라도 서버 상태를 변경하면 안 된다',
+    );
+});
+
+test('개시 안내의 난이도 설정은 담당 탕이 선택 시트로 이어진다', () => {
+    const src = homeSource();
+
+    assert.match(
+        src,
+        /destination === 'difficulty'[\s\S]*?openTangiSheet/,
+        '담당 탕이 선택이 곧 미션 난이도 선택이다',
+    );
+    assert.doesNotMatch(
+        src,
+        /router\.push\(\{ name: 'personalMissionChallengeDifficulty' \}\)/,
+        '개시 안내에서 별도 난이도 페이지로 이동하면 안 된다',
+    );
+    assert.match(
+        src,
+        /saveProsecutorDifficulty\(prosecutorId\)[\s\S]*?acknowledgeMissionUnlock\(\)/,
+        '탕이 난이도 저장에 성공한 뒤 개시 안내를 확인 처리해야 한다',
+    );
 });
 
 /*

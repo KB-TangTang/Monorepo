@@ -73,6 +73,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
         courtMode: 'supreme',
         isHydrated: false,
         missionUnlockStatus: 'UNTRACKED',
+        demoScreenState: null,
 
         /* mock 데이터 (API 교체 대상) */
         briefing: MOCK_TODAY_BRIEFING,
@@ -86,9 +87,20 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
     getters: {
         hasEnoughData(state) {
             if (state.categoryAnalysis != null) {
-                return state.categoryAnalysis.relativeEligible === true;
+                const cumulativeCount = Number(state.categoryAnalysis.cumulativeTransactionCount);
+                const requiredCount = Number(
+                    state.categoryAnalysis.requiredCumulativeTransactionCount,
+                );
+                if (Number.isFinite(cumulativeCount) && Number.isFinite(requiredCount)) {
+                    return cumulativeCount >= requiredCount;
+                }
+                return false;
             }
             return hasEnoughPersonalMissionData(state.profile);
+        },
+
+        hasRelativeMissionCandidates(state) {
+            return (state.categoryAnalysis?.topCategories ?? []).length > 0;
         },
 
         isAccountLinked(state) {
@@ -115,6 +127,7 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             if (this.consentState === null) return 'loading';
             if (this.consentState === 'ERROR') return 'error';
             if (this.consentState === CHALLENGE_CONSENT_STATE.FIRST) return 'consent';
+            if (this.demoScreenState !== null) return this.demoScreenState;
             if (
                 this.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN &&
                 !this.todayMission &&
@@ -202,15 +215,17 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
          *
          * 서버가 자격을 스스로 판정하므로 보낼 것이 없다 - 요청 본문이 사라졌다(#315 (1)).
          *
-         * 서버 상태(PENDING)와 화면 상태가 어긋날 수 있다. 자격 래치는 한 번 박히면 안 풀리는데,
-         * 최근 28일 소비가 비면 relativeEligible 이 false 로 내려와 화면은 「증거 부족」이 된다.
-         * 그 위에 「맞춤 미션이 열렸어요」를 띄우면 두 화면이 정면으로 모순된다.
-         * 이때는 띄우지 않고 미룬다 - 서버 상태는 PENDING 그대로라 데이터가 다시 차면 그때 뜬다.
+         * 영구 자격을 얻어도 최근 28일 후보 카테고리가 없으면 상대형 미션은 아직 만들 수 없다.
+         * 이때 안내를 소비하지 않고 미뤘다가 topCategories 가 생기면 띄운다.
          */
         async syncMissionUnlock() {
             const result = await requestPersonalMissionUnlockSync();
             this.missionUnlockStatus = result.status;
-            return Boolean(result.showUnlock) && this.hasEnoughData;
+            return (
+                Boolean(result.showUnlock) &&
+                this.hasEnoughData &&
+                this.hasRelativeMissionCandidates
+            );
         },
 
         async acknowledgeMissionUnlock() {
@@ -293,16 +308,39 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.pendingVerdict = null;
             this.courtMode = 'supreme';
             this.isHydrated = true;
+            this.demoScreenState = null;
         },
 
         setDemoWithdrawnWithoutMission() {
             this.hasAgreed = false;
             this.consentState = CHALLENGE_CONSENT_STATE.WITHDRAWN;
             this.todayMission = null;
+            this.demoScreenState = null;
+        },
+
+        setDemoInsufficient() {
+            this.hasAgreed = true;
+            this.consentState = CHALLENGE_CONSENT_STATE.ACTIVE;
+            this.demoScreenState = 'insufficient';
+            this.dataRequirements = {
+                ...this.dataRequirements,
+                accountLinked: true,
+            };
+            this.categoryAnalysis = {
+                ...this.categoryAnalysis,
+                topCategories: [],
+            };
+            this.missionStreak = null;
+            this.monthlyScore = {
+                score: 0,
+                topPercent: null,
+            };
+            this.pendingVerdict = null;
         },
 
         /* 데모용: 판정 테스트 */
         setDemoVerdict(verdict) {
+            this.demoScreenState = null;
             this.pendingVerdict = verdict;
         },
     },

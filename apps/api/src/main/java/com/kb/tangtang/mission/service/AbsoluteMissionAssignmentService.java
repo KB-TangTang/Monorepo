@@ -19,6 +19,7 @@ public class AbsoluteMissionAssignmentService {
 
     public static final String COLD_START = "COLD_START";
     public static final String MONTHLY_RANDOM = "MONTHLY_RANDOM";
+    public static final String INSUFFICIENT_RELATIVE_DATA = "INSUFFICIENT_RELATIVE_DATA";
 
     private final AbsoluteMissionAssignmentMapper assignmentMapper;
     private final AbsoluteMissionPolicy policy;

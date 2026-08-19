@@ -31,6 +31,11 @@ public class DailyMissionAssignmentService {
         if (!absoluteMapper.isRelativeMissionQualified(userId)) {
             return absoluteService.assign(userId, assignDate, AbsoluteMissionAssignmentService.COLD_START);
         }
-        return relativeService.assign(userId, assignDate);
+        RelativeMissionAssignmentDto relativeAssignment = relativeService.assign(userId, assignDate);
+        if (relativeAssignment.isAssigned()) {
+            return relativeAssignment;
+        }
+        return absoluteService.assign(
+                userId, assignDate, AbsoluteMissionAssignmentService.INSUFFICIENT_RELATIVE_DATA);
     }
 }

@@ -960,7 +960,9 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|---|
 | GET | `/api/missions/categoryAnalysis` | Bearer | 최근 28일 상대형 미션 대상 소비 상위 3개 |
 
-응답은 `{ analysisStartDate, analysisEndDate, transactionCount, relativeEligible, topCategories }` 다.
+응답은 `{ analysisStartDate, analysisEndDate, transactionCount, cumulativeTransactionCount, requiredCumulativeTransactionCount, topCategories }` 다.
+`transactionCount`는 최근 28일 분석 건수이고, `cumulativeTransactionCount`는 최초 영구 자격에
+사용하는 실제 누적 유효 소비 건수다. 화면은 `requiredCumulativeTransactionCount`와 비교해 진행도를 표시한다.
 `topCategories[]` 항목은 `{ rank, categoryId, parentCategoryName, categoryName, totalAmount, transactionCount, spendingRatio, rotationAssignDate, rotationResult, missionRound }` 형태다.
 
 - 응답의 상위 카테고리는 매일 재산정한 목록이 아니라 아직 소진 중인 현재 분석 주기의 스냅샷이다.
@@ -969,13 +971,15 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - `missionRound`는 이번 배정 또는 다음 배정이 해당 카테고리의 몇 번째 수사인지를 나타낸다. 해당 카테고리로 배정된 전체 이력 수를 세고, 현재 주기에서 아직 `WAITING`이면 다음 예정 회차를 위해 1을 더한다.
 
 - 분석 기간은 오늘을 제외한 최근 28일이다.
-- 최초 상대형 미션 자격은 거래 이력이 28일 이상이고 최근 28일 정상 소비가 50건 이상일 때 획득한다.
+- 최초 상대형 미션 자격은 기간과 무관하게 누적 유효 소비가 50건 이상일 때 획득한다.
 - 최초 자격 획득 시 `tbl_user.relative_mission_qualified_at`을 기록한다. 이 값은 챌린지 동의를 철회해도 유지한다.
-- 자격 획득 후에는 최근 28일 거래가 50건 미만이어도 현재 존재하는 소비로 상위 카테고리를 다시 집계한다.
-- 자격 획득 후라도 최근 28일에 상대형 미션 대상 카테고리의 양수 소비가 전혀 없으면 스냅샷을 만들 수 없다.
+- 자격 획득 후에는 최근 28일 거래 건수를 자격 조건으로 다시 검사하지 않는다.
+- 상대형 후보 카테고리는 최근 28일에 유효 소비 3건 이상, 서로 다른 소비일 2일 이상,
+  환불 반영 순소비금액이 양수인 카테고리다. 조건을 만족한 카테고리 중 소비금액 상위 3개를 선정한다.
+- 후보 카테고리가 없으면 영구 자격은 유지하고 그날은 절대형 미션으로 대체한다.
 - 미션 대상은 `tbl_mission_pool`에 `RELATIVE` 행이 존재하는 소분류다. 현재 정책은 15개다.
 - 환불은 거래 건수에서 제외하고 순소비금액에서 차감한다.
-- 대상 카테고리의 양수 순소비금액이 없으면 `relativeEligible=false`, `topCategories=[]`를 반환한다.
+- 상대형 후보 조건을 만족하는 카테고리가 없으면 `topCategories=[]`를 반환한다.
 - 소비금액, 거래 건수, 카테고리 ID 순으로 정렬해 최대 3개를 반환한다.
 - `spendingRatio`의 분모는 최근 28일 전체 분류 소비의 순소비금액이다.
 
