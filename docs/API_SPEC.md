@@ -671,8 +671,7 @@
 `PENDING`과 `showUnlock=true`를 반환하며, 확인 후에는 `SEEN`이라 다른 기기에서도 다시 뜨지 않는다.
 
 ```json
-// POST request
-{ "enoughData": true }
+// POST request - 본문 없음. 자격 판정은 서버가 한다 (이슈 #315)
 
 // response data
 { "status": "PENDING", "showUnlock": true }
