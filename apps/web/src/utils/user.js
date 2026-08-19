@@ -37,6 +37,39 @@ export function resolveDisplayName(user) {
     return found ? found.trim() : '';
 }
 
+/** 아이디 앞에 남길 글자 수. 어느 계정인지는 알아보되 전체가 드러나지 않을 만큼만 남긴다. */
+const EMAIL_VISIBLE_LENGTH = 3;
+
+/**
+ * 화면에 보여줄 이메일. 아이디 앞 3자만 남기고 가린다. 도메인은 그대로 둔다(이슈 #328).
+ *
+ * 마이페이지는 본인만 보는 화면이지만 시연영상·발표자료·스크린샷에 계속 등장하는 자리다.
+ * 제출물에 개인정보를 담지 않기 위해 화면 단계에서 가린다.
+ *
+ * 도메인을 남기는 이유는 **소셜 계정을 여러 개 쓸 때 어느 계정인지 구분**해야 해서다.
+ * 소셜 로그인이라 이메일이 사실상 유일한 식별 정보고, 전부 가리면 그 수단이 사라진다.
+ *
+ * 짧은 아이디도 안전해야 한다 - 남기는 글자 수가 아이디 길이를 넘지 않게 최소 1자는 가린다.
+ *   twinsjh01@gmail.com → twi******@gmail.com
+ *   ab@naver.com        → a*@naver.com
+ *
+ * @returns 가린 이메일. 값이 없거나 `@` 가 없으면 빈 문자열이다 - 이메일이 아닌 값을
+ *          그대로 화면에 흘리지 않는다.
+ */
+export function maskEmail(email) {
+    const value = String(email ?? '').trim();
+    const at = value.lastIndexOf('@');
+    if (at <= 0 || at === value.length - 1) {
+        return '';
+    }
+
+    const local = value.slice(0, at);
+    const domain = value.slice(at);
+    const visible = Math.min(EMAIL_VISIBLE_LENGTH, Math.max(1, local.length - 1));
+
+    return `${local.slice(0, visible)}${'*'.repeat(local.length - visible)}${domain}`;
+}
+
 /**
  * 닉네임 입력 검증.
  *
