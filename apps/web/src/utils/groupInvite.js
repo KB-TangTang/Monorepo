@@ -67,34 +67,14 @@ export function inviteBadges(group) {
 }
 
 /**
- * 소환장 아래 안내 문구. `<b>` 를 쓰므로 `v-html` 로 붙인다 — 값은 전부 우리가 만든 문자열이다.
- */
-export function inviteNotice(group) {
-    if (!isInviteOpen(group)) {
-        return '지금은 새 배심원을 받을 수 없어요. 코드는 기록으로 남겨 둡니다.';
-    }
-
-    const deadline = formatMonthDay(group.startDate);
-    const left = (group.maxMembers ?? 6) - memberCount(group);
-    const when = deadline ? `<b>${deadline} 23:59</b>까지` : '시작일 당일까지';
-
-    return `${when} 초대할 수 있어요. 지금 <b>${left}자리</b> 남았어요.`;
-}
-
-/**
- * 생성 완료 직후 헤더에 붙는 한 줄. `배달 소비 줄이기 · 8월 1일부터 시작해요`.
+ * 남은 자리 수. 초대할 수 없는 상태면 `null` — 화면이 자리 수 대신 안내 문구를 띄운다.
  *
- * 그룹 이름이 그대로 들어가는 **사용자 입력 문자열**이다. `inviteNotice` 와 달리 `<b>` 를
- * 섞지 않는 이유가 그것이다 — v-html 로 그려지면 이름에 넣은 태그가 실행된다.
+ * 마감 시각은 여기 섞지 않는다. 이미 헤더 뱃지가 같은 말을 하고 있어, 한 화면에서 두 번
+ * 읽히면 정작 **몇 자리 남았는지**가 문장 속에 묻힌다.
  */
-export function createdSubtitle(group) {
-    if (!group) return '';
-
-    const name = group.groupName ?? '';
-    const start = formatMonthDay(group.startDate);
-    if (!start) return name;
-
-    return `${name} · ${start}부터 시작해요`;
+export function remainingSeats(group) {
+    if (!isInviteOpen(group)) return null;
+    return (group.maxMembers ?? 6) - memberCount(group);
 }
 
 function memberCount(group) {

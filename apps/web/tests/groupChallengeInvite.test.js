@@ -3,12 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-    createdSubtitle,
     formatIssuedDate,
     formatJoinDeadline,
     inviteBadges,
-    inviteNotice,
     isInviteOpen,
+    remainingSeats,
 } from '@/utils/groupInvite';
 
 /*
@@ -108,27 +107,38 @@ test('그룹을 아직 못 받았으면 뱃지를 만들지 않는다', () => {
     assert.deepEqual(inviteBadges(null), []);
 });
 
-/* ── 안내 문구 ───────────────────────────────────────────────────── */
+/* ── 남은 자리 ───────────────────────────────────────────────────── */
 
-test('안내 문구에 남은 자리 수가 실제로 들어간다', () => {
-    const notice = inviteNotice(RECRUITING);
-
-    assert.match(notice, /8월 1일 23:59/);
-    assert.match(notice, /4자리/);
+test('남은 자리는 정원에서 인원을 뺀 수다', () => {
+    assert.equal(remainingSeats(RECRUITING), 4);
 });
 
-test('닫힌 방에는 초대를 권하지 않는다', () => {
-    assert.doesNotMatch(inviteNotice({ ...RECRUITING, status: 'CLOSED' }), /초대할 수 있어요/);
+/*
+ * 0 이 아니라 null 이다. 「0자리 남았어요」는 자리를 세는 말투로 마감을 알리는 셈이라
+ * 화면이 그대로 그리면 어색하다. null 이면 화면이 다른 문구로 갈아탄다.
+ */
+test('초대할 수 없는 방은 자리 수 대신 null 을 준다', () => {
+    assert.equal(remainingSeats({ ...RECRUITING, memberCount: 6 }), null);
+    assert.equal(remainingSeats({ ...RECRUITING, status: 'ACTIVE' }), null);
+    assert.equal(remainingSeats(null), null);
 });
 
 /* ── 화면이 규칙을 실제로 쓰는지 ─────────────────────────────────── */
 
-test('초대 화면은 뱃지·안내를 하드코딩하지 않는다', () => {
+test('초대 화면은 뱃지·남은 자리를 하드코딩하지 않는다', () => {
     const src = source(INVITE_VIEW);
 
     assert.doesNotMatch(src, /초대 가능/, '뱃지 문자열이 화면에 박혀 있다');
     assert.match(src, /inviteBadges\(/);
-    assert.match(src, /inviteNotice\(/);
+    assert.match(src, /remainingSeats\(/);
+});
+
+/*
+ * 마감 시각은 헤더 뱃지가 이미 말한다. 본문에 또 적으면 문장이 길어지고
+ * 정작 「몇 자리 남았는지」가 그 안에 묻힌다.
+ */
+test('마감 시각을 본문에 한 번 더 적지 않는다', () => {
+    assert.doesNotMatch(source(INVITE_VIEW), /23:59/);
 });
 
 test('소환장에 그룹 이름과 발부일을 넘긴다 — 더미로 남겨 두지 않는다', () => {
@@ -174,26 +184,15 @@ test('초대 화면 헤더는 두 가지 상단 아이콘을 모두 갖고 있�
 
 /* ── 생성 완료 화면 통합 ─────────────────────────────────────────── */
 
-test('생성 완료 한 줄에 그룹 이름과 시작일이 함께 들어간다', () => {
-    const line = createdSubtitle({ ...RECRUITING, groupName: '배달 소비 줄이기' });
-
-    assert.equal(line, '배달 소비 줄이기 · 8월 1일부터 시작해요');
-});
-
-test('시작일을 못 읽으면 그룹 이름만 남긴다 — 「· 부터 시작해요」 같은 반쪽 문장을 만들지 않는다', () => {
-    assert.equal(createdSubtitle({ groupName: '배달 소비 줄이기' }), '배달 소비 줄이기');
-    assert.equal(createdSubtitle(null), '');
-});
-
 /*
- * 그룹 이름은 사용자가 적은 값이다. inviteNotice 와 달리 `<b>` 를 섞지 않는 이유가 그것이다 —
- * 헤더가 v-html 로 그리면 이름에 넣은 태그가 그대로 실행된다.
+ * 헤더가 그리는 문자열은 `title` 하나뿐이고 그것은 우리가 쓴 리터럴이라 `v-html` 로 둔다.
+ * 그룹 이름 같은 **사용자 입력을 헤더에 넘기지 않는다** — 넘기는 순간 v-html 이 태그를 실행한다.
  */
-test('생성 완료 한 줄에는 태그를 섞지 않는다', () => {
-    const line = createdSubtitle({ ...RECRUITING, groupName: '<img src=x onerror=alert(1)>' });
+test('헤더는 사용자 입력을 그리지 않는다', () => {
+    const src = source(INVITE_HEADER);
 
-    assert.doesNotMatch(line, /<b>/);
-    assert.match(source(INVITE_HEADER), /class="gih-subtitle">\{\{ subtitle \}\}/);
+    assert.doesNotMatch(src, /subtitle/);
+    assert.equal(src.match(/v-html/g).length, 1);
 });
 
 /*

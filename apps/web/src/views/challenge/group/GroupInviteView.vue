@@ -5,7 +5,7 @@ import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vu
 import GroupSummonCard from '@/components/challenge/group/GroupSummonCard.vue';
 import { fetchGroupDetail } from '@/api/groupChallenge';
 import { resolveBack } from '@/utils/groupChallengeNavigation';
-import { createdSubtitle, inviteBadges, inviteNotice, isInviteOpen } from '@/utils/groupInvite';
+import { inviteBadges, isInviteOpen, remainingSeats } from '@/utils/groupInvite';
 import celebrationImg from '@/assets/images/emotions/10_celebration.png';
 
 const route = useRoute();
@@ -20,8 +20,8 @@ const group = ref(null);
 const isPostCreate = computed(() => route.query.from === 'create');
 
 const headerBadges = computed(() => inviteBadges(group.value));
-const noticeText = computed(() => inviteNotice(group.value));
 const canInvite = computed(() => isInviteOpen(group.value));
+const seatsLeft = computed(() => remainingSeats(group.value));
 
 /*
  * 생성 완료는 따로 화면을 두지 않는다. 축하만 보여주고 버튼을 한 번 더 누르게 하면
@@ -30,7 +30,6 @@ const canInvite = computed(() => isInviteOpen(group.value));
 const headerTitle = computed(() =>
     isPostCreate.value ? '그룹을 제대로<br>만들었어요!' : '배심원을<br>초대해주세요!',
 );
-const headerSubtitle = computed(() => (isPostCreate.value ? createdSubtitle(group.value) : ''));
 const headerMascot = computed(() => (isPostCreate.value ? celebrationImg : ''));
 
 const subLinkText = computed(() => (isPostCreate.value ? '그룹 화면으로' : '나중에 초대하기'));
@@ -101,7 +100,6 @@ function leaveScreen() {
         <GroupInviteHeader
             nav-label="친구 초대"
             :title="headerTitle"
-            :subtitle="headerSubtitle"
             :mascot="headerMascot"
             :badges="headerBadges"
             :nav-mode="isPostCreate ? 'close' : 'back'"
@@ -109,8 +107,17 @@ function leaveScreen() {
         />
 
         <div v-if="group" class="giv-body">
-            <!-- 안내 카드 -->
-            <div class="giv-info-card" v-html="noticeText" />
+            <!-- 남은 자리 -->
+            <div class="giv-seats">
+                <template v-if="seatsLeft !== null">
+                    <span class="giv-seats__label">남은 배심원석</span>
+                    <span class="giv-seats__value">
+                        <b>{{ seatsLeft }}</b
+                        >자리
+                    </span>
+                </template>
+                <span v-else class="giv-seats__label">지금은 새 배심원을 부를 수 없어요</span>
+            </div>
 
             <!-- 소환장 -->
             <div class="giv-card-area">
@@ -152,19 +159,39 @@ function leaveScreen() {
     flex-direction: column;
 }
 
-.giv-info-card {
+/*
+ * 남은 자리는 이 화면에서 **유일하게 지금 행동을 바꾸는 수치**다. 마감 시각은 헤더 뱃지가
+ * 이미 말하고 있어 여기 같이 적으면 문장이 되고, 문장이 되면 숫자가 묻힌다.
+ */
+.giv-seats {
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-xl);
     box-shadow: var(--tt-elevation-3);
-    padding: 16px 18px;
-    font-size: 12.5px;
-    color: var(--tt-text-body);
-    line-height: 1.6;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
-.giv-info-card :deep(b) {
-    color: var(--tt-text);
+.giv-seats__label {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+}
+
+.giv-seats__value {
+    font-size: 13px;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-body);
+}
+
+.giv-seats__value b {
+    font-size: 26px;
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-primary);
+    margin-right: 2px;
 }
 
 .giv-card-area {

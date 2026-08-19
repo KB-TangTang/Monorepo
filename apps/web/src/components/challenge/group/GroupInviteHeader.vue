@@ -9,11 +9,6 @@ import { ChevronLeftIcon, XMarkIcon } from '@heroicons/vue/24/solid';
  */
 defineProps({
     title: { type: String, required: true },
-    /**
-     * 제목 아래 한 줄. 그룹 이름 같은 **사용자 입력이 들어오므로 v-html 로 그리지 않는다.**
-     * 강조가 필요하면 문구가 아니라 스타일로 준다.
-     */
-    subtitle: { type: String, default: '' },
     badges: { type: Array, default: () => [] },
     navLabel: { type: String, default: '' },
     navMode: {
@@ -58,10 +53,7 @@ const emit = defineEmits(['back']);
         </div>
 
         <div class="gih-meta">
-            <div class="gih-meta__text">
-                <h2 class="gih-title" v-html="title" />
-                <p v-if="subtitle" class="gih-subtitle">{{ subtitle }}</p>
-            </div>
+            <h2 class="gih-title" v-html="title" />
             <img v-if="mascot" :src="mascot" class="gih-mascot" alt="" aria-hidden="true" />
         </div>
     </header>
@@ -165,28 +157,15 @@ const emit = defineEmits(['back']);
     gap: 12px;
 }
 
-.gih-meta__text {
-    flex: 1;
-    /* 그룹 이름이 길어도 마스코트를 화면 밖으로 밀어내지 않게 한다 */
-    min-width: 0;
-}
-
 .gih-title {
+    flex: 1;
+    /* 제목이 길어도 마스코트를 화면 밖으로 밀어내지 않게 한다 */
+    min-width: 0;
     font-size: 22px;
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-inverse);
     line-height: 1.3;
     letter-spacing: -0.01em;
-}
-
-.gih-subtitle {
-    margin-top: 8px;
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-inverse);
-    opacity: 0.7;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
 }
 
 /* ── mascot ─────────────────────────────── */
