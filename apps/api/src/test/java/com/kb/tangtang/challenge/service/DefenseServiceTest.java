@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,6 +63,7 @@ class DefenseServiceTest {
     @Mock private ImageStorage imageStorage;
     @Mock private ImageProcessor imageProcessor;
     @Mock private ApplicationEventPublisher events;
+    @Mock private GroupVerdictTransitionService verdictTransition;
 
     private DefenseService service() {
         return service(NOW);
@@ -71,7 +73,7 @@ class DefenseServiceTest {
         Clock clock = Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(),
                 ZoneId.systemDefault());
         return new DefenseService(indictmentMapper, defenseMapper, imageStorage, imageProcessor,
-                events, DEFENSE_HOURS, clock);
+                events, verdictTransition, DEFENSE_HOURS, clock);
     }
 
     /** 검증을 모두 통과하는 기본 상태 — 각 테스트가 필요한 필드만 어긋나게 바꾼다. */
@@ -403,5 +405,68 @@ class DefenseServiceTest {
         assertEquals(GROUP_ID, captor.getValue().getGroupId());
         assertTrue(captor.getValue().getSummary().startsWith("지판"),
                 "리스너가 summary 를 그대로 올리므로 닉네임이 들어 있어야 한다");
+    }
+
+    /*
+     * ── 혐의 인정의 목숨 차감 (이슈 #305) ────────────────────────────────
+     *
+     * 개표 배치는 status = 'VOTING' 인 기소만 훑는데 혐의 인정은 DEFENSE_WAIT → GUILTY 로
+     * 곧장 넘어가 그 대상이 되지 않는다. 그래서 이 경로가 직접 차감을 불러야 한다.
+     * 차감 자체는 개표 경로와 같은 메서드다 — 두 벌로 두면 한쪽만 고쳐진다.
+     */
+
+    @Test
+    @DisplayName("혐의 인정 유죄도 목숨을 1개 깎는다 — 개표 경로와 같은 후처리를 부른다")
+    void confessionDeductsLife() {
+        given(defendableRow());
+        when(verdictTransition.deductLifeForGuilty(GROUP_ID, USER_ID)).thenReturn(1);
+
+        service().confess(USER_ID, INDICTMENT_ID);
+
+        verify(verdictTransition).deductLifeForGuilty(GROUP_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("혐의 인정 이벤트는 표 분포 없이 차감된 목숨만 싣는다")
+    void confessionEventCarriesLivesWithoutVotes() {
+        given(defendableRow());
+        when(verdictTransition.deductLifeForGuilty(GROUP_ID, USER_ID)).thenReturn(1);
+
+        service().confess(USER_ID, INDICTMENT_ID);
+
+        ArgumentCaptor<GroupTrialEvents.VerdictConfirmed> captor =
+                ArgumentCaptor.forClass(GroupTrialEvents.VerdictConfirmed.class);
+        verify(events).publishEvent(captor.capture());
+
+        assertTrue(captor.getValue().isGuilty(), "혐의 인정은 언제나 유죄다");
+        assertNull(captor.getValue().getGuiltyVotes(), "투표가 없었으므로 표는 비어 있어야 한다");
+        assertNull(captor.getValue().getInnocentVotes());
+        assertEquals(1, captor.getValue().getLivesLost());
+    }
+
+    @Test
+    @DisplayName("남은 목숨이 없으면 차감 0 이 그대로 이벤트에 실린다")
+    void confessionWithoutRemainingLifeCarriesZero() {
+        given(defendableRow());
+        when(verdictTransition.deductLifeForGuilty(GROUP_ID, USER_ID)).thenReturn(0);
+
+        service().confess(USER_ID, INDICTMENT_ID);
+
+        ArgumentCaptor<GroupTrialEvents.VerdictConfirmed> captor =
+                ArgumentCaptor.forClass(GroupTrialEvents.VerdictConfirmed.class);
+        verify(events).publishEvent(captor.capture());
+
+        assertEquals(0, captor.getValue().getLivesLost());
+    }
+
+    @Test
+    @DisplayName("상태 전이가 0행이면 목숨을 깎지 않는다 — 제출을 두 번 눌러도 두 번 깎이지 않는다")
+    void confessionDoesNotDeductWhenAlreadyMoved() {
+        given(defendableRow());
+        when(indictmentMapper.confirmConfession(INDICTMENT_ID)).thenReturn(0);
+
+        assertThrows(BusinessException.class, () -> service().confess(USER_ID, INDICTMENT_ID));
+
+        verify(verdictTransition, never()).deductLifeForGuilty(anyLong(), anyLong());
     }
 }

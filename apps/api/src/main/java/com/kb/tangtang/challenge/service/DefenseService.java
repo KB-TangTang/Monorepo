@@ -32,7 +32,9 @@ import java.util.UUID;
  * 상태·피고·생성시각과 부담금 상한({@code currentAmount})이 모두 그 한 문장에 있다. 검증용
  * 쿼리를 따로 만들면 소비액 공식이 다섯 벌이 된다(#170 이 그 복사본을 정리하는 이슈다).
  *
- * <p><b>목숨 차감과 무죄 감액 기록은 여기서 하지 않는다.</b> 판결 확정 후처리는 이슈 #172 담당이다.
+ * <p><b>무죄 감액 기록은 여기서 하지 않는다.</b> 판결 확정 후처리는 {@link GroupVerdictTransitionService}
+ * 한 곳에 있다. 혐의 인정의 목숨 차감도 그쪽 메서드를 불러서 한다 — 차감 코드를 여기 복사하면
+ * 개표 경로와 두 벌이 되어 한쪽만 고쳐진다(이슈 #305).
  */
 @Service
 public class DefenseService {
@@ -48,6 +50,7 @@ public class DefenseService {
     private final ImageStorage imageStorage;
     private final ImageProcessor imageProcessor;
     private final ApplicationEventPublisher events;
+    private final GroupVerdictTransitionService verdictTransition;
     private final Clock clock;
 
     /** 기소 후 변론을 낼 수 있는 시간. {@link GroupTrialService} 와 같은 프로퍼티를 읽는다. */
@@ -59,9 +62,10 @@ public class DefenseService {
                           ImageStorage imageStorage,
                           ImageProcessor imageProcessor,
                           ApplicationEventPublisher events,
+                          GroupVerdictTransitionService verdictTransition,
                           @Value("${challenge.trial.defense-hours}") int defenseHours) {
         this(indictmentMapper, defenseMapper, imageStorage, imageProcessor, events,
-                defenseHours, Clock.systemDefaultZone());
+                verdictTransition, defenseHours, Clock.systemDefaultZone());
     }
 
     DefenseService(IndictmentMapper indictmentMapper,
@@ -69,6 +73,7 @@ public class DefenseService {
                    ImageStorage imageStorage,
                    ImageProcessor imageProcessor,
                    ApplicationEventPublisher events,
+                   GroupVerdictTransitionService verdictTransition,
                    int defenseHours,
                    Clock clock) {
         this.indictmentMapper = indictmentMapper;
@@ -76,6 +81,7 @@ public class DefenseService {
         this.imageStorage = imageStorage;
         this.imageProcessor = imageProcessor;
         this.events = events;
+        this.verdictTransition = verdictTransition;
         this.defenseHours = defenseHours;
         this.clock = clock;
     }
@@ -155,9 +161,17 @@ public class DefenseService {
     /**
      * 혐의 인정. {@code DEFENSE_WAIT} → {@code GUILTY}({@code verdict_method = 'CONFESSION'}).
      *
-     * <p>변론·투표 행을 만들지 않는다({@code db/schema.sql:505-508} 계약). 목숨 차감도 없다 —
-     * 이슈 #172 가 판결 확정 후처리를 한 곳에서 맡는다. 여기서 같이 깎으면 개표 경로와
-     * 후처리가 두 벌이 되어 한쪽만 고쳐진다.
+     * <p>변론·투표 행을 만들지 않는다({@code db/schema.sql:505-508} 계약).
+     *
+     * <p><b>목숨 차감은 개표 경로와 같은 메서드를 부른다</b>
+     * ({@link GroupVerdictTransitionService#deductLifeForGuilty}). 이슈 #172 는 후처리를 한 곳에
+     * 두려고 이 경로에서 차감을 뺐는데, 그 「한 곳」이 {@code status = 'VOTING'} 인 기소만 훑는
+     * 개표 배치라서 혐의 인정 건은 어디서도 깎이지 않았다(이슈 #305). 일일평가 탈락 판정이
+     * {@code lives_count = 0} 만 보기 때문에, 혐의를 인정한 참여자는 유죄를 몇 번 받아도
+     * 탈락하지 않는 상태였다.
+     *
+     * <p>UPDATE 가 0행이면 그 자리에서 예외를 던져 차감까지 함께 롤백된다 — 제출을 두 번 눌러도
+     * 목숨이 두 번 깎이지 않는다({@code confirmConfession} 의 {@code status = 'DEFENSE_WAIT'} 조건).
      */
     @Transactional
     public void confess(long userId, long indictmentId) {
@@ -167,9 +181,11 @@ public class DefenseService {
             throw new BusinessException("DEFENSE_NOT_ALLOWED", "지금은 혐의를 인정할 수 없는 재판입니다.");
         }
 
-        events.publishEvent(new GroupTrialEvents.VerdictConfirmed(
+        int livesLost = verdictTransition.deductLifeForGuilty(row.getGroupId(), row.getUserId());
+
+        events.publishEvent(GroupTrialEvents.VerdictConfirmed.byConfession(
                 row.getGroupId(), indictmentId,
-                row.getNickname() + "님이 혐의를 인정했어요. 유죄로 확정됩니다."));
+                row.getNickname() + "님이 혐의를 인정했어요. 유죄로 확정됩니다.", livesLost));
     }
 
     /**

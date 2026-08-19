@@ -1,6 +1,9 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import guiltyStampImage from '@/assets/images/judgment/guilty_stamp.png';
+import innocentStampImage from '@/assets/images/judgment/innocent_stamp.png';
+import { verdictMetaParts, verdictStampKind } from '@/utils/groupChat';
 
 /*
  * 판결 확정 카드.
@@ -8,15 +11,30 @@ import { useRouter } from 'vue-router';
  * 기록 카드(Ink)와 반대로 흰 종이 + 이중 괘선을 쓴다. 판결문 화면(VerdictDocumentCard)이
  * 이미 쓰는 어법이라 같은 사건을 두 화면에서 봐도 같은 물건으로 읽힌다.
  *
- * 도장은 유죄/무죄가 아니라 중립 "판결" 이다 — 서버가 주는 값은 요약 문구 한 줄뿐이고
- * 승패를 알려주지 않는다. 결과가 이벤트에 실리면(#169~#172) 그때 기존 유죄·무죄 도장 자산으로
- * 바꾼다. 지금 색을 고르면 무죄 판결에 붉은 도장이 찍힌다.
+ * 도장은 서버가 주는 verdict.outcome 으로 고른다(이슈 #304). 문구에서 "유죄" 를 찾아 고르지
+ * 않는다 — 문구를 한 글자만 고쳐도 무죄 판결에 붉은 도장이 찍힌다.
+ *
+ * **verdict 가 없는 메시지가 실제로 있다.** 이 필드가 생기기 전에 Redis 에 쌓인 판결 메시지가
+ * 그렇다(TTL 이 남아 있는 동안 계속 조회된다). 그때는 예전처럼 중립 "판결" 도장을 찍는다.
  */
 const props = defineProps({
     message: { type: Object, required: true },
 });
 
 const router = useRouter();
+
+/* 표시 규칙은 utils/groupChat 에 있다 — 이 저장소에는 SFC 렌더링 테스트 하네스가 없다 */
+const stampKind = computed(() => verdictStampKind(props.message.verdict));
+const metaParts = computed(() => verdictMetaParts(props.message.verdict));
+
+const stampImage = computed(() => {
+    if (!stampKind.value) return null;
+    return stampKind.value === 'GUILTY' ? guiltyStampImage : innocentStampImage;
+});
+
+const stampAlt = computed(() =>
+    stampKind.value === 'GUILTY' ? '유죄 판결 인장' : '무죄 판결 인장',
+);
 
 const timeLabel = computed(() => {
     const d = props.message.sentAt;
@@ -30,11 +48,17 @@ function openVerdict() {
 </script>
 
 <template>
-    <article class="verdict-card">
+    <article class="verdict-card" :class="stampKind ? `verdict-card--${stampKind}` : null">
         <div class="verdict-card__rule" aria-hidden="true"></div>
 
         <div class="verdict-card__main">
-            <div class="verdict-card__stamp" aria-hidden="true">
+            <img
+                v-if="stampImage"
+                :src="stampImage"
+                :alt="stampAlt"
+                class="verdict-card__stamp-image"
+            />
+            <div v-else class="verdict-card__stamp" aria-hidden="true">
                 <span class="verdict-card__stamp-label">판결</span>
                 <span class="verdict-card__stamp-sub">VERDICT</span>
             </div>
@@ -42,6 +66,9 @@ function openVerdict() {
             <div class="verdict-card__text">
                 <h3 class="verdict-card__title">판결이 확정됐습니다</h3>
                 <p class="verdict-card__body">{{ message.content }}</p>
+                <p v-if="metaParts.length" class="verdict-card__meta">
+                    {{ metaParts.join(' · ') }}
+                </p>
             </div>
         </div>
 
@@ -112,6 +139,15 @@ function openVerdict() {
     opacity: 0.7;
 }
 
+/* 결과가 실린 판결 — 그려 만든 원 대신 인장 이미지를 쓴다(판결문 화면과 같은 자산) */
+.verdict-card__stamp-image {
+    width: 62px;
+    height: 62px;
+    flex: none;
+    object-fit: contain;
+    transform: rotate(-8deg);
+}
+
 .verdict-card__text {
     min-width: 0;
 }
@@ -130,6 +166,23 @@ function openVerdict() {
     line-height: 1.5;
     color: var(--tt-text-body);
     word-break: break-word;
+}
+
+/* 「투표 4:2 · 목숨 1 차감」 — 문구가 아니라 수치라서 등폭 글꼴을 쓴다 */
+.verdict-card__meta {
+    margin: 4px 0 0;
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-overline);
+    letter-spacing: 0.04em;
+    color: var(--tt-text-hint);
+}
+
+.verdict-card--GUILTY .verdict-card__meta {
+    color: var(--tt-danger);
+}
+
+.verdict-card--INNOCENT .verdict-card__meta {
+    color: var(--tt-success);
 }
 
 .verdict-card__foot {
@@ -181,7 +234,8 @@ function openVerdict() {
         animation: none;
     }
 
-    .verdict-card__stamp {
+    .verdict-card__stamp,
+    .verdict-card__stamp-image {
         transform: none;
     }
 }
