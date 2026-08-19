@@ -56,11 +56,11 @@ class ChatMessageServiceTest {
         lenient().when(store.append(anyLong(), any(), any(), any(), anyString()))
                 .thenReturn(ChatMessage.of(1L, ChatMessageType.TEXT, SENDER_ID, "절약왕",
                         "안녕", LocalDateTime.now()));
-        /* 시스템 메시지는 시스템 필드까지 받는 8인자 오버로드를 탄다 — 목이라 5인자 스텁이 대신 응답하지 않는다 */
-        lenient().when(store.append(anyLong(), any(), any(), any(), anyString(), any(), any(), any()))
+        /* 시스템 메시지는 시스템 필드까지 받는 9인자 오버로드를 탄다 — 목이라 5인자 스텁이 대신 응답하지 않는다 */
+        lenient().when(store.append(anyLong(), any(), any(), any(), anyString(), any(), any(), any(), any()))
                 .thenReturn(new ChatMessage(2L, ChatMessageType.SYSTEM, null, null,
                         "재판이 열렸어요", LocalDateTime.now(), ChatSystemType.TRIAL_OPENED,
-                        "/group-challenges/7/trial", "2026-재판-0001"));
+                        "/group-challenges/7/trial", "2026-재판-0001", null));
         lenient().when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L, 12L));
         lenient().when(store.tryAcquireNotifyCooldown(anyLong(), anyLong())).thenReturn(true);
     }
@@ -148,7 +148,7 @@ class ChatMessageServiceTest {
         InOrder order = inOrder(access, store);
         order.verify(access).memberIdsOf(GROUP_ID);
         order.verify(store).append(eq(GROUP_ID), eq(ChatMessageType.SYSTEM), any(), any(), anyString(),
-                eq(ChatSystemType.TRIAL_OPENED), anyString(), anyString());
+                eq(ChatSystemType.TRIAL_OPENED), anyString(), anyString(), any());
     }
 
     @Test
@@ -171,7 +171,7 @@ class ChatMessageServiceTest {
 
         service.postSystemMessage(GROUP_ID, trialSpec());
 
-        verify(store, never()).append(anyLong(), any(), any(), any(), anyString(), any(), any(), any());
+        verify(store, never()).append(anyLong(), any(), any(), any(), anyString(), any(), any(), any(), any());
     }
 
     @Test

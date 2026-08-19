@@ -1531,7 +1531,7 @@ finalOutcome, finalChargeAmount }] }`
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | GET | `/api/groups/{groupId}/chat/room` | Bearer | `{ groupId, groupName, status, memberCount, unreadCount, dayIndex, daysLeft }` |
-| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo}], hasMore }` |
+| GET | `/api/groups/{groupId}/chat/messages?before=&after=&limit=50` | Bearer | `{ messages:[{messageId,type,senderId,senderNickname,content,sentAt,systemType,deepLink,caseNo,verdict}], hasMore }` |
 | POST | `/api/groups/{groupId}/chat/read` | Bearer | 없음 (호출한 사용자의 안 읽은 수를 0으로 초기화) |
 
 - `before`·`after` 는 `messageId` 기준 페이징이다. **둘을 동시에 주면 `INVALID_REQUEST`.** 둘 다 없으면
@@ -1548,8 +1548,15 @@ finalOutcome, finalChargeAmount }] }`
     **화면이 카드 모양을 고르는 기준이다.** 문구를 파싱해 종류를 알아내지 말 것 — 문구가 바뀌면 깨진다.
   - `deepLink` - "재판 보러가기" 가 여는 라우터 경로(`/challenge/group/{groupId}/trial/{indictmentId}`)
   - `caseNo` - 표시용 사건번호(`2026-재판-0729`). 서버도 이 값을 다시 파싱하지 않는다
-  - **세 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
-    (프론트는 문구만 있는 pill 로 떨어뜨린다).
+  - `verdict` - **`systemType` 이 `VERDICT_CONFIRMED` 인 메시지에만** 있다. 나머지는 `null`.
+    `{ outcome, guiltyVotes, innocentVotes, livesLost }` 이며 화면이 도장과
+    「투표 4:2 · 목숨 1 차감」을 그리는 값이다.
+    - `outcome` - `GUILTY` · `INNOCENT`. **도장은 이 값으로 고른다.** 문구에서 "유죄" 를 찾지 말 것
+    - `guiltyVotes`·`innocentVotes` - 확정 시점의 표. **투표 절차가 없던 판결(혐의 인정)은 `null`** 이다.
+      `0:0` 은 「아무도 던지지 않아 무죄 추정으로 끝났다」라서 `null` 과 뜻이 다르다 — 뭉개지 말 것
+    - `livesLost` - 이 판결로 깎인 목숨. 무죄면 `0`, **유죄여도 남은 목숨이 없었으면 `0`** 이다
+  - **네 값은 나중에 추가돼 그 전에 저장된 메시지에는 없다(`null`).** 화면은 그때도 그려져야 한다
+    (프론트는 문구만 있는 pill 로 떨어뜨리고, 판결 카드는 중립 도장을 찍는다).
   - `content` 는 **본문만** 담는다. "판결이 확정됐어요" 같은 제목은 넣지 않는다 — 채팅 카드는
     `systemType` 이, 알림은 `NotificationType` 이 각자 제목을 갖고 있어 같은 문장이 두 번 나온다.
 - `dayIndex` 는 시작일을 1일차로 세는 진행 일차(시작 전이면 `0`), `daysLeft` 는 종료일까지 남은 날

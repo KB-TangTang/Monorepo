@@ -190,6 +190,101 @@ class GroupVerdictTransitionServiceTest {
         assertTrue(captor.getValue().getSummary().contains("탕구리"));
     }
 
+    /*
+     * ── 이벤트가 싣는 판결 결과 (이슈 #304) ──────────────────────────────
+     *
+     * 채팅 카드가 유죄·무죄 도장을 고르고 「투표 4:2 · 목숨 1 차감」을 적는 값이다.
+     * 문구에서 다시 읽어 내지 않으므로 여기서 끊기면 화면이 중립 도장으로 되돌아간다.
+     */
+
+    @Test
+    @DisplayName("유죄 이벤트에 표 분포와 차감된 목숨이 실린다")
+    void guiltyEventCarriesVotesAndLives() {
+        confirmReturns(1);
+        when(groupMemberMapper.decreaseLife(GROUP_ID, USER_ID)).thenReturn(1);
+
+        VerdictTallyRow row = row(null);
+        row.setGuiltyCount(4);
+        row.setInnocentCount(2);
+
+        service().confirm(row, VerdictDecision.guiltyByVote());
+
+        GroupTrialEvents.VerdictConfirmed published = published();
+        assertTrue(published.isGuilty());
+        assertEquals(4, published.getGuiltyVotes());
+        assertEquals(2, published.getInnocentVotes());
+        assertEquals(1, published.getLivesLost());
+    }
+
+    @Test
+    @DisplayName("무죄 이벤트는 목숨 차감이 0 이다")
+    void innocentEventCarriesNoLifeLoss() {
+        confirmReturns(1);
+
+        VerdictTallyRow row = row(null);
+        row.setGuiltyCount(1);
+        row.setInnocentCount(5);
+
+        service().confirm(row, VerdictDecision.innocentByVote());
+
+        GroupTrialEvents.VerdictConfirmed published = published();
+        assertFalse(published.isGuilty());
+        assertEquals(1, published.getGuiltyVotes());
+        assertEquals(5, published.getInnocentVotes());
+        assertEquals(0, published.getLivesLost());
+    }
+
+    /**
+     * 남은 목숨이 0인 유죄는 문구도 「남은 목숨이 없어요」로 갈리는데, 이벤트의 수치도 같이
+     * 갈려야 한다. 여기서 1을 실으면 카드가 문구와 반대되는 「목숨 1 차감」을 적는다.
+     */
+    @Test
+    @DisplayName("남은 목숨이 없어 못 깎은 유죄는 livesLost 가 0 으로 나간다")
+    void guiltyWithoutRemainingLifePublishesZero() {
+        confirmReturns(1);
+        when(groupMemberMapper.decreaseLife(GROUP_ID, USER_ID)).thenReturn(0);
+
+        service().confirm(row(null), VerdictDecision.guiltyByVote());
+
+        assertEquals(0, published().getLivesLost());
+    }
+
+    /**
+     * 표가 한 장도 없어 무죄 추정으로 끝난 재판. 0:0 을 그대로 싣는다 — 카드가 「투표 0:0」을
+     * 적지 않는 것은 화면 쪽 판단이고, 서버는 실제 표를 숨기지 않는다.
+     */
+    @Test
+    @DisplayName("표가 없는 무죄 추정도 0:0 을 그대로 싣는다")
+    void noVoteInnocentPublishesZeroVotes() {
+        confirmReturns(1);
+
+        service().confirm(row(null), VerdictDecision.innocentByNoVote());
+
+        GroupTrialEvents.VerdictConfirmed published = published();
+        assertEquals(0, published.getGuiltyVotes());
+        assertEquals(0, published.getInnocentVotes());
+    }
+
+    /**
+     * 혐의 인정({@code DefenseService#confess})이 부르는 진입점이다. 개표 경로와 같은 메서드를
+     * 쓰게 해 둔 것이라, 여기서 이름이 바뀌면 그쪽도 같이 깨져야 한다(이슈 #305).
+     */
+    @Test
+    @DisplayName("목숨 차감은 개표 밖에서도 부를 수 있게 열려 있다")
+    void lifeDeductionIsCallableFromOtherVerdictPaths() {
+        when(groupMemberMapper.decreaseLife(GROUP_ID, USER_ID)).thenReturn(1);
+
+        assertEquals(1, service().deductLifeForGuilty(GROUP_ID, USER_ID));
+        verify(groupMemberMapper).decreaseLife(GROUP_ID, USER_ID);
+    }
+
+    private GroupTrialEvents.VerdictConfirmed published() {
+        ArgumentCaptor<GroupTrialEvents.VerdictConfirmed> captor =
+                ArgumentCaptor.forClass(GroupTrialEvents.VerdictConfirmed.class);
+        verify(events).publishEvent(captor.capture());
+        return captor.getValue();
+    }
+
     private String publishedSummary() {
         ArgumentCaptor<GroupTrialEvents.VerdictConfirmed> captor =
                 ArgumentCaptor.forClass(GroupTrialEvents.VerdictConfirmed.class);
