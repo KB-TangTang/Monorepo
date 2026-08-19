@@ -40,7 +40,7 @@ class FinancialSyncClientConfigTest {
     }
 
     @Test
-    @DisplayName("financialSyncExecutor 빈이 실제로 뜨고, 병렬 수집이 기대하는 크기(6)로 고정돼 있다")
+    @DisplayName("financialSyncExecutor 빈이 실제로 뜨고, 배치+수동이 겹쳐도 완전 직렬화되지 않을 크기(12)로 고정돼 있다")
     void financialSyncExecutorBeanIsWiredAndBounded() {
         context = new AnnotationConfigApplicationContext();
         context.register(FinancialSyncClientConfig.class);
@@ -59,11 +59,13 @@ class FinancialSyncClientConfigTest {
         Executor executor = context.getBean("financialSyncExecutor", Executor.class);
         assertTrue(executor instanceof ThreadPoolTaskExecutor, "ThreadPoolTaskExecutor 여야 풀 크기를 검증할 수 있다");
         ThreadPoolTaskExecutor pooled = (ThreadPoolTaskExecutor) executor;
-        /* collectAll() 이 정확히 6개(BANK/DEPOSIT/SECURITIES/LOAN/PAY_MONEY/CARD) 태스크를 동시에 던진다.
-           풀이 이보다 작으면 일부가 큐에서 대기해 병렬 효과가 줄고, 이보다 훨씬 크면 단일 목서버
-           인스턴스에 필요 이상의 동시 요청을 보낸다. */
-        assertEquals(6, pooled.getCorePoolSize());
-        assertEquals(6, pooled.getMaxPoolSize());
+        /* collectAll() 은 한 번의 sync() 호출마다 정확히 6개(BANK/DEPOSIT/SECURITIES/LOAN/PAY_MONEY/CARD)
+           태스크를 던진다. 풀이 6이면 배치가 한 사용자를 처리하는 동안 그 6개를 전부 점유해 버려
+           수동 새로고침이 완전히 직렬화된다 — 12(배치 1명분 + 수동 1명분)로 그 직렬화만 풀어준다.
+           이보다 훨씬 크게 잡지 않는 이유는 단일 목서버 인스턴스에 필요 이상의 동시 요청을 보내면
+           타임아웃 실패 위험만 커지기 때문이다(FinancialSyncClientConfig 주석 참고). */
+        assertEquals(12, pooled.getCorePoolSize());
+        assertEquals(12, pooled.getMaxPoolSize());
 
         /* 빈이 존재하는 것만이 아니라 실제로 이 풀의 스레드에서 태스크를 실행하는지까지 확인한다. */
         AtomicReference<String> runnerThreadName = new AtomicReference<>();
