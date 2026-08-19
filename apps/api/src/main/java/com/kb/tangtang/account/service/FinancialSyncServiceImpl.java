@@ -707,6 +707,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             String accountNoEncrypted = "MOCK-PAYMONEY-" + payMoney.getPayMoneyId();
             ConnectedAccount row = ConnectedAccount.builder()
                     .userId(userId)
+                    .bankCode(payMoney.getProviderCode())
                     .bankName(payMoney.getProviderName())
                     .accountName(payMoney.getWalletName())
                     .accountNoEncrypted(accountNoEncrypted)

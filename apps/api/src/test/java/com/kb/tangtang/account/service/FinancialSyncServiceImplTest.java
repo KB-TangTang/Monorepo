@@ -496,6 +496,24 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("선택한 PAY_KB 기관 코드와 같은 페이머니 응답만 동기화한다")
+    void syncsPayMoneyWhenResponseUsesSelectedInstitutionCode() {
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("PAY_KB").bankName("KB Pay").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                "PAYMONEY".equals(account.getAccountType())
+                        && "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
     @DisplayName("카드 취소(03)는 음수 금액을 양수 + is_refund=1 로 저장한다")
     void cardCancellationIsStoredAsPositiveRefund() {
         when(client.getCards("1")).thenReturn(List.of(
