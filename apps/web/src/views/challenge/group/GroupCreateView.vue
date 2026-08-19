@@ -74,8 +74,14 @@ async function handleCreate() {
     }
 }
 
+/*
+ * push 가 아니라 replace 다. 위자드는 이미 끝났고 되돌아갈 곳이 아니다 —
+ * push 하면 기기 뒤로가기가 완료된 4단계 화면으로 되돌아가, 이미 만든 그룹을 다시 만드는
+ * 것처럼 보인다. 자리를 덮어 두면 초대 화면에서 뒤로가기를 눌러도 위자드 이전으로 나간다.
+ * 초대 화면은 이 흐름을 `from=create` 로 알아보고 상단에 ← 대신 × 를 띄운다.
+ */
 function goToInvite() {
-    router.push({
+    router.replace({
         name: 'groupChallengeInvite',
         params: { groupId: createdGroupId.value },
         query: { from: 'create' },
@@ -107,7 +113,11 @@ function formatDate(dateStr) {
                 <template v-if="currentStep === 2" #subtitle>
                     <span
                         class="gcv-eval-badge"
-                        :class="form.evalType === 'DAILY' ? 'gcv-eval-badge--gold' : 'gcv-eval-badge--blue'"
+                        :class="
+                            form.evalType === 'DAILY'
+                                ? 'gcv-eval-badge--gold'
+                                : 'gcv-eval-badge--blue'
+                        "
                     >
                         {{ form.evalType === 'DAILY' ? '일일결산' : '기간결산' }}
                     </span>
@@ -168,24 +178,23 @@ function formatDate(dateStr) {
 
             <div class="gcv-success-body">
                 <div class="gcv-mascot-wrap">
-                    <img
-                        :src="celebrationImg"
-                        alt="생성 완료 축하"
-                        class="gcv-mascot"
-                    />
+                    <img :src="celebrationImg" alt="생성 완료 축하" class="gcv-mascot" />
                 </div>
 
-                <h2 class="gcv-success-title">그룹을 제대로<br>만들었어요!</h2>
+                <h2 class="gcv-success-title">그룹을 제대로<br />만들었어요!</h2>
 
                 <p class="gcv-success-sub">
-                    <b>{{ form.groupName }}</b><br>
+                    <b>{{ form.groupName }}</b
+                    ><br />
                     {{ formatDate(form.startDate) }}부터 친구들과 시작해요.
                 </p>
 
                 <div class="gcv-success-info-card">
                     <div class="gcv-success-info-left">
                         <div class="gcv-success-info-label">초대 가능 시간</div>
-                        <div class="gcv-success-info-value gcv-success-info-value--danger">첫날 23:59까지</div>
+                        <div class="gcv-success-info-value gcv-success-info-value--danger">
+                            첫날 23:59까지
+                        </div>
                     </div>
                     <div class="gcv-success-info-right">
                         <div class="gcv-success-info-label">현재 멤버</div>
@@ -231,7 +240,7 @@ function formatDate(dateStr) {
 
 .gcv-eval-badge--blue {
     background: rgba(62, 99, 214, 0.28);
-    color: #B9C6F2;
+    color: #b9c6f2;
 }
 
 /* ── 생성 실패 안내 ──────────────────────── */
@@ -250,7 +259,9 @@ function formatDate(dateStr) {
 /* ── step transition ─────────────────────── */
 .gcv-slide-enter-active,
 .gcv-slide-leave-active {
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
 }
 
 .gcv-slide-enter-from {
