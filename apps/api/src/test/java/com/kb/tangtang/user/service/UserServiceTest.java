@@ -15,9 +15,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -28,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -491,6 +495,57 @@ class UserServiceTest {
         ArgumentCaptor<String> storedKey = ArgumentCaptor.forClass(String.class);
         verify(imageStorage).store(any(), storedKey.capture());
         verify(imageStorage).delete(storedKey.getValue());
+    }
+
+    /* ── 옛 이미지 삭제 시점 (이슈 #162) ──────────────────── */
+
+    @Test
+    @DisplayName("트랜잭션 안에서는 옛 이미지를 커밋 전에 지우지 않는다 — 커밋이 깨지면 사진만 사라진다")
+    void deferredDeleteWaitsForCommit() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteProfileImage(USER_ID);
+
+            verify(imageStorage, never()).delete(anyString());
+
+            /* 커밋이 끝난 시점을 흉내 낸다 — 이때 비로소 지워야 한다. */
+            runAfterCommit();
+            verify(imageStorage).delete("profile/7/old.jpg");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("커밋 뒤 삭제가 실패해도 예외를 밖으로 내보내지 않는다 — 이미 성공한 요청이 500 이 되면 안 된다")
+    void deferredDeleteSwallowsFailure() {
+        UserDto before = user("장재한");
+        before.setProfileImageKey("profile/7/old.jpg");
+        when(userMapper.findById(USER_ID)).thenReturn(before);
+        when(userMapper.updateProfileImageKey(USER_ID, null)).thenReturn(1);
+        doThrow(new RuntimeException("S3 연결 실패")).when(imageStorage).delete(anyString());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteProfileImage(USER_ID);
+
+            assertDoesNotThrow(UserServiceTest::runAfterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /** 등록된 동기화 콜백의 afterCommit 을 직접 돌린다. 실제 트랜잭션 매니저 없이 시점만 흉내 낸다. */
+    private static void runAfterCommit() {
+        for (TransactionSynchronization synchronization :
+                TransactionSynchronizationManager.getSynchronizations()) {
+            synchronization.afterCommit();
+        }
     }
 
     @Test

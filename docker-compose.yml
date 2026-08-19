@@ -78,10 +78,14 @@ services:
       CODEF_CLIENT_ID: ${CODEF_CLIENT_ID}
       CODEF_CLIENT_SECRET: ${CODEF_CLIENT_SECRET}
       MOCK_API_URL: http://mock:8080
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
-      AWS_REGION: ${AWS_REGION}
+      # 이미지 저장소 전환 스위치(이슈 #162). local = 아래 uploads 볼륨 / s3 = AWS S3.
+      # 이 줄이 없으면 .env 에 IMAGE_STORAGE=s3 를 적어도 컨테이너까지 전달되지 않는다.
+      IMAGE_STORAGE: ${IMAGE_STORAGE:-local}
+      # IMAGE_STORAGE=s3 일 때만 쓰인다. local 이면 비어 있어도 정상 기동한다.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       APP_FRONT_URL: ${APP_FRONT_URL}
       GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE}

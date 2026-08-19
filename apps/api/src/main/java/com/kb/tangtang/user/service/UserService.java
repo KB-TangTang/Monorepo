@@ -7,8 +7,12 @@ import com.kb.tangtang.user.domain.TutorialType;
 import com.kb.tangtang.user.dto.UserDto;
 import com.kb.tangtang.user.dto.UserMeDto;
 import com.kb.tangtang.user.mapper.UserMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -25,6 +29,8 @@ import java.util.regex.Pattern;
  */
 @Service
 public class UserService {
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     /** tbl_user.name 이 VARCHAR(50) 이다. 넘치면 DB 가 자르기 전에 여기서 막는다. */
     private static final int NAME_MAX_LENGTH = 50;
@@ -121,6 +127,7 @@ public class UserService {
      * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
      *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
      *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
+     * ⚠ **옛 파일 삭제는 커밋 뒤로 미룬다** ({@link #deleteAfterCommit}). 이유는 그쪽 주석에 있다.
      */
     @Transactional
     public UserMeDto updateProfileImage(long userId, byte[] content) {
@@ -138,13 +145,13 @@ public class UserService {
              *  WHERE status = 'ACTIVE' 라 0행이 된다). 방금 저장한 파일을 그대로 두면
              * 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 NOT_FOUND 를 던진다.
              * delete 는 멱등이라 정리 자체가 실패할 일은 없다.
+             *
+             * 이 한 건만 즉시 지운다. 롤백되는 트랜잭션이라 afterCommit 이 영영 오지 않는다.
              */
             imageStorage.delete(newKey);
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        if (oldKey != null) {
-            imageStorage.delete(oldKey);
-        }
+        deleteAfterCommit(oldKey);
         return meOf(userId);
     }
 
@@ -160,10 +167,45 @@ public class UserService {
         if (userMapper.updateProfileImageKey(userId, null) == 0) {
             throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        if (oldKey != null) {
-            imageStorage.delete(oldKey);
-        }
+        deleteAfterCommit(oldKey);
         return meOf(userId);
+    }
+
+    /**
+     * 옛 이미지 삭제를 <b>커밋이 끝난 뒤</b>로 미룬다. 두 가지를 동시에 막는다.
+     *
+     * <ol>
+     *   <li><b>깨진 사진.</b> 트랜잭션 안에서 지우면 그 뒤 커밋이 실패했을 때 DB 에는 옛 키가
+     *       남았는데 파일은 이미 없는 상태가 된다. 화면에 엑스박스가 뜨고 되돌릴 방법이 없다.</li>
+     *   <li><b>DB 커넥션 점유.</b> S3 저장소({@code image.storage=s3})에서 삭제는 네트워크 왕복이다.
+     *       트랜잭션 안에 두면 커넥션을 쥔 채 S3 응답을 기다리게 되고, 사용자가 몰리면
+     *       HikariCP 풀이 마른다.</li>
+     * </ol>
+     *
+     * <p>커밋 뒤에 지우므로 <b>삭제가 실패하면 고아 파일이 남는다.</b> 사용자 요청은 이미 성공한
+     * 뒤이고 되돌릴 수도 없으므로 예외를 삼킨다 — 여기서 던지면 커밋된 작업이 500 으로 보인다.
+     * 고아 파일은 용량만 차지할 뿐 화면·정합성에 영향이 없다.
+     *
+     * <p>트랜잭션이 없는 호출(테스트 등)에서는 동기화를 걸 수 없으므로 그 자리에서 지운다.
+     */
+    private void deleteAfterCommit(String key) {
+        if (key == null) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            imageStorage.delete(key);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    imageStorage.delete(key);
+                } catch (RuntimeException e) {
+                    log.warn("옛 프로필 이미지 삭제 실패 — 고아 파일이 남습니다. key={}", key, e);
+                }
+            }
+        });
     }
 
     /**
