@@ -9,6 +9,8 @@ import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.storage.ImageProcessor;
 import com.kb.tangtang.common.storage.ImageStorage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -39,6 +41,8 @@ import java.util.UUID;
 @Service
 public class DefenseService {
 
+    private static final Logger log = LoggerFactory.getLogger(DefenseService.class);
+
     /** 화면(`DefenseWriteView.vue` 의 MAX_TEXT)과 같은 값. 클라이언트만 믿지 않는다. */
     private static final int CONTENT_MAX_LENGTH = 150;
 
@@ -47,6 +51,7 @@ public class DefenseService {
 
     private final IndictmentMapper indictmentMapper;
     private final DefenseMapper defenseMapper;
+    private final DefenseWriter defenseWriter;
     private final ImageStorage imageStorage;
     private final ImageProcessor imageProcessor;
     private final ApplicationEventPublisher events;
@@ -59,17 +64,19 @@ public class DefenseService {
     @Autowired
     public DefenseService(IndictmentMapper indictmentMapper,
                           DefenseMapper defenseMapper,
+                          DefenseWriter defenseWriter,
                           ImageStorage imageStorage,
                           ImageProcessor imageProcessor,
                           ApplicationEventPublisher events,
                           GroupVerdictTransitionService verdictTransition,
                           @Value("${challenge.trial.defense-hours}") int defenseHours) {
-        this(indictmentMapper, defenseMapper, imageStorage, imageProcessor, events,
+        this(indictmentMapper, defenseMapper, defenseWriter, imageStorage, imageProcessor, events,
                 verdictTransition, defenseHours, Clock.systemDefaultZone());
     }
 
     DefenseService(IndictmentMapper indictmentMapper,
                    DefenseMapper defenseMapper,
+                   DefenseWriter defenseWriter,
                    ImageStorage imageStorage,
                    ImageProcessor imageProcessor,
                    ApplicationEventPublisher events,
@@ -78,6 +85,7 @@ public class DefenseService {
                    Clock clock) {
         this.indictmentMapper = indictmentMapper;
         this.defenseMapper = defenseMapper;
+        this.defenseWriter = defenseWriter;
         this.imageStorage = imageStorage;
         this.imageProcessor = imageProcessor;
         this.events = events;
@@ -99,9 +107,25 @@ public class DefenseService {
      * {@code defenseId} 대신 {@code indictmentId} 를 쓰는 이유는 INSERT 전에 키를 만들 수 있어서고,
      * {@code uk_def_indictment} 로 기소당 변론이 1건이라 충돌하지 않는다.
      *
+     * <p><b>이 메서드에는 {@code @Transactional} 이 없다</b> (이슈 #318). 증빙 사진 업로드는
+     * S3 왕복이고, 트랜잭션 안에 두면 HikariCP 커넥션(풀 크기 10, {@code RootConfig#dataSource})을
+     * 쥔 채 네트워크를 기다리게 되어 같은 풀을 쓰는 API 전체가 대기한다. 그래서
+     * <b>검증(읽기) → 업로드(트랜잭션 밖) → 저장({@link DefenseWriter} 의 짧은 트랜잭션)</b> 순으로
+     * 나눴다. 삭제처럼 커밋 뒤로 미룰 수는 없다 — 업로드가 돌려주는 키가 있어야 INSERT 를 한다.
+     *
+     * <p>검증이 업로드보다 <b>먼저</b>여야 한다. 뒤집으면 권한 없는 요청이 S3 용량을 태운다.
+     *
+     * <p>경계가 바뀌면서 딸려온 변화 둘.
+     * <ol>
+     *   <li><b>이벤트가 커밋 뒤에 나간다.</b> 전에는 트랜잭션 안에서 발행했는데 리스너가
+     *       {@code @Async} 라 커밋 전에 채팅 메시지가 나갈 수 있었다. 지금이 맞다.</li>
+     *   <li>{@code existsByIndictmentId} 중복 검사와 INSERT 가 다른 트랜잭션이 되어 경합 창이
+     *       조금 넓어진다. 원래도 최후 방어선은 {@code uk_def_indictment} UNIQUE 였고
+     *       그 계약은 그대로다({@link DefenseMapper#insertDefense}).</li>
+     * </ol>
+     *
      * @param images NULL 이거나 빈 목록이면 증빙 없이 등록한다
      */
-    @Transactional
     public void registerDefense(long userId, long indictmentId, String content,
                                 BigDecimal actualBurdenAmount, List<byte[]> images) {
         GroupTrialDetailRow row = requireDefendableIndictment(userId, indictmentId);
@@ -138,20 +162,17 @@ public class DefenseService {
         defense.setContent(text);
         defense.setActualBurdenAmount(burden);
         defense.setDeductionAmount(consumption.subtract(burden));
-        defenseMapper.insertDefense(defense);
 
         List<String> imageKeys = storeImages(indictmentId, sources);
-        if (!imageKeys.isEmpty()) {
-            defenseMapper.insertDefenseImages(defense.getId(), imageKeys);
-        }
-
-        /*
-         * 여기까지 왔어도 상태가 이미 옮겨졌을 수 있다 — 위 SELECT 와 이 UPDATE 사이에
-         * 마감 배치가 끼어들거나 사용자가 제출을 두 번 누르면 그렇다. 0행이면 롤백한다.
-         * (변론 INSERT 도 함께 되돌아간다. 트랜잭션이 하나다)
-         */
-        if (indictmentMapper.moveToVoting(indictmentId) == 0) {
-            throw new BusinessException("DEFENSE_NOT_ALLOWED", "지금은 변론할 수 없는 재판입니다.");
+        try {
+            defenseWriter.save(defense, imageKeys);
+        } catch (RuntimeException e) {
+            /*
+             * 저장이 롤백돼도 이미 올라간 파일은 남는다 — 참조 없는 고아가 되므로 여기서 지운다.
+             * 트랜잭션 밖이라 그 자리에서 지울 수 있다.
+             */
+            deleteQuietly(imageKeys);
+            throw e;
         }
 
         events.publishEvent(new GroupTrialEvents.DefenseRegistered(
@@ -223,8 +244,10 @@ public class DefenseService {
      * 컨트롤러가 {@code MultipartFile#getSize()} 로 먼저 한 번 막지만, 그것은 힙 할당을
      * 피하기 위한 것이고 이 계층으로 직접 들어오는 호출(테스트)도 같이 막혀야 한다.
      *
-     * <p>실패하면 트랜잭션이 DB 를 되돌리지만 <b>이미 저장한 파일은 남는다.</b> 참조 없는 고아
-     * 파일이 되므로 여기서 직접 지운다 — {@code delete} 는 멱등이라 정리가 실패할 일은 없다.
+     * <p>중간에 실패하면 <b>먼저 올린 파일이 남는다.</b> 참조 없는 고아 파일이 되므로
+     * {@link #deleteQuietly} 로 정리하고 원인 예외를 그대로 올린다.
+     *
+     * <p>DB 는 아직 손대지 않은 시점이다 — 저장은 {@link DefenseWriter} 가 이 뒤에 한다(이슈 #318).
      */
     private List<String> storeImages(long indictmentId, List<byte[]> sources) {
         List<String> keys = new ArrayList<>();
@@ -235,11 +258,26 @@ public class DefenseService {
                 keys.add(key);
             }
         } catch (RuntimeException e) {
-            for (String key : keys) {
-                imageStorage.delete(key);
-            }
+            deleteQuietly(keys);
             throw e;
         }
         return keys;
+    }
+
+    /**
+     * 고아 파일 정리. <b>정리 중의 예외는 삼킨다</b> — 두 호출부 모두 이미 실패를 들고 있고,
+     * 여기서 새 예외가 튀면 원인 예외를 덮어 버려 진짜 실패 이유가 로그에서 사라진다.
+     * ({@code ProfileImageWriter#deleteAfterCommit} 과 같은 판단이다)
+     *
+     * <p>고아 파일은 용량만 차지할 뿐 화면·정합성에 영향이 없다.
+     */
+    private void deleteQuietly(List<String> keys) {
+        for (String key : keys) {
+            try {
+                imageStorage.delete(key);
+            } catch (RuntimeException e) {
+                log.warn("증빙 사진 정리 실패 — 고아 파일이 남습니다. key={}", key, e);
+            }
+        }
     }
 }
