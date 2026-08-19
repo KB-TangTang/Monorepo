@@ -776,9 +776,11 @@ targetValue, remainAmount, overAmount, points, bonusPoints, streakDays, pendingC
 ```
 
 - `SUCCESS`로 확정된 미션만 점수에 포함한다. `FAIL`, `PENDING`은 0점이다.
-- 기본 점수는 배정 당시 `difficulty_id`가 참조하는 `tbl_mission_difficulty.score`를 사용한다.
+- 상대형 기본 점수는 배정 당시 `difficulty_id`가 참조하는 `tbl_mission_difficulty.score`를 사용한다.
+- 절대형 미션은 난이도와 관계없이 성공 시 기본 50점을 부여한다.
 - 전날 미션과 해당일 미션이 모두 `SUCCESS`이면 해당일 점수에 연속 성공 보너스 5점을 더한다.
 - 전날 미션이 `FAIL`이거나 배정 이력이 없으면 연속 성공으로 계산하지 않는다.
+- 절대형도 연속 성공일에 포함하며, 전날 미션이 성공이면 기존 연속 성공 보너스 5점을 더한다.
 - 월간 점수는 해당 월 확정 미션 이력 전체를 다시 합산해 `tbl_monthly_ranking.total_score`에 갱신하므로 배치 재실행에도 중복 반영되지 않는다.
 - `topPercent`는 해당 월 활성 사용자의 점수 순위와 전체 참여자 수를 기준으로 올림 계산한다.
 - 해당 월 랭킹 행이 아직 없으면 `totalScore`는 0, `topPercent`는 `null`을 반환한다.
