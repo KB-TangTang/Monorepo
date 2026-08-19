@@ -36,7 +36,7 @@ public interface AccountLinkControllerDocs {
     /* ── 1단계: 기관 선택 ───────────────────────────────── */
 
     @ApiOperation(value = "[1단계] 연동 가능 기관 목록",
-            notes = "은행·카드사 목록. 이미 연동한 기관도 함께 내려간다.")
+            notes = "은행·카드·증권·대출·페이머니 5종 목록. 이미 연동한 기관도 함께 내려간다.")
     ApiResponse<InstitutionListDto> institutions(@ApiIgnore Long userId);
 
     /* ── 2단계: 인증 ────────────────────────────────────── */

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    INSTITUTION_GROUPS,
     LINK_EXIT_ROUTE,
     LINK_STEPS,
     calcLinkProgress,
@@ -278,6 +279,64 @@ test('매핑에 없는 기관은 업권으로 색조를 정한다', () => {
     assert.equal(resolveInstitutionTone(null), 'gold');
     // 보험(05)은 연동 범위에서 빠졌다. 남은 업권이 아니므로 기본 색조로 떨어진다
     assert.equal(resolveInstitutionTone('0501'), 'gold');
+});
+
+test('업권 칩은 은행·카드·증권·대출·페이머니 5종이다 (이슈 #344)', () => {
+    // key 는 GET /accounts/institutions 응답의 필드명과 정확히 같아야 한다.
+    assert.deepEqual(INSTITUTION_GROUPS, [
+        { key: 'banks', label: '은행' },
+        { key: 'cards', label: '카드' },
+        { key: 'securities', label: '증권' },
+        { key: 'loans', label: '대출' },
+        { key: 'payMoney', label: '페이머니' },
+    ]);
+    // 화면은 첫 항목을 기본 칩으로 쓴다. 은행이 계좌 연동의 기본 대상이라 순서가 뒤집히면 안 된다.
+    assert.equal(INSTITUTION_GROUPS[0].key, 'banks');
+});
+
+test('대출 기관(캐피탈·저축은행)은 저마다 색조가 다르다', () => {
+    // CP_/SB_ 는 숫자 코드가 아니라 앞 두 자리 추론에 걸리지 않는다.
+    // 매핑이 빠지면 8곳이 전부 기본값 gold 가 돼 화면이 단색이 된다.
+    assert.equal(resolveInstitutionTone('CP_KB'), 'gold');
+    assert.equal(resolveInstitutionTone('CP_HYUNDAI'), 'blue');
+    assert.equal(resolveInstitutionTone('CP_SHINHAN'), 'blue');
+    assert.equal(resolveInstitutionTone('CP_HANA'), 'rose');
+    assert.equal(resolveInstitutionTone('CP_WOORI'), 'green');
+    assert.equal(resolveInstitutionTone('SB_SBI'), 'blue');
+    assert.equal(resolveInstitutionTone('SB_OK'), 'rose');
+    assert.equal(resolveInstitutionTone('SB_WELCOME'), 'gold');
+});
+
+test('페이머니 기관도 저마다 색조가 다르다', () => {
+    assert.equal(resolveInstitutionTone('PAY_KAKAO'), 'gold');
+    assert.equal(resolveInstitutionTone('PAY_NAVER'), 'green');
+    assert.equal(resolveInstitutionTone('PAY_TOSS'), 'blue');
+    assert.equal(resolveInstitutionTone('PAY_PAYCO'), 'rose');
+    assert.equal(resolveInstitutionTone('PAY_KB'), 'gold');
+    assert.equal(resolveInstitutionTone('PAY_CPANG'), 'rose');
+});
+
+test('신규 업권 14곳이 한 색으로 몰리지 않는다', () => {
+    // 로고 PNG 가 없어 전부 「배경색 + 약칭」 폴백으로 그려진다 —
+    // 색조가 한쪽으로 쏠리면 대출·페이머니 화면이 통째로 단색이 된다.
+    const codes = [
+        'CP_KB',
+        'CP_HYUNDAI',
+        'CP_SHINHAN',
+        'CP_HANA',
+        'CP_WOORI',
+        'SB_SBI',
+        'SB_OK',
+        'SB_WELCOME',
+        'PAY_KAKAO',
+        'PAY_NAVER',
+        'PAY_TOSS',
+        'PAY_PAYCO',
+        'PAY_KB',
+        'PAY_CPANG',
+    ];
+    const tones = new Set(codes.map((code) => resolveInstitutionTone(code)));
+    assert.deepEqual([...tones].sort(), ['blue', 'gold', 'green', 'rose']);
 });
 
 test('휴대폰번호는 입력하는 대로 하이픈이 붙는다', () => {

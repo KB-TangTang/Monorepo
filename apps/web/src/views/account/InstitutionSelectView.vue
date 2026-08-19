@@ -5,8 +5,9 @@
 
   레이아웃은 Figma 확정본 `금융기관 선택` 기준이다 —
   네비 제목 + 2줄 헤드라인 · 검색 · 업권 칩 필터 · 3열 카드 그리드 · 하단 요약 + 네이비 CTA.
-  업권을 세로로 다 늘어놓지 않고 칩으로 하나씩 보여준다. 기관이 22곳이라 한 화면에 다 담으면
+  업권을 세로로 다 늘어놓지 않고 칩으로 하나씩 보여준다. 기관이 36곳이라 한 화면에 다 담으면
   스크롤만 길어지고 무엇을 고르는 화면인지 흐려진다.
+  업권은 은행·카드·증권·대출·페이머니 5종이다 (이슈 #344 에서 대출·페이머니가 늘었다).
 
   온보딩과 추가 연결을 한 화면이 겸한다 (`?mode=add`). FIX_C_계좌추가연결_홈정리.md 가 요구한 차이가
   헤더 문구 · 연결된 기관 표시 · 탭바 노출뿐이라 뷰를 나누지 않았다.
@@ -78,6 +79,17 @@ const visible = computed(() => {
     return institutions.value?.[activeGroup.value] ?? [];
 });
 
+/**
+ * 대출 칩을 보고 있을 때만 띄우는 안내.
+ *
+ * 마이데이터에서 대출은 독립 업권이 아니라 **은행 업권 산하 상품**이다 —
+ * 은행을 연결하면 그 은행의 대출까지 함께 내려온다. 그래서 이 칩에는 은행이 없고
+ * 은행 밖 공급자(캐피탈·저축은행)만 남는다. 이유를 말해주지 않으면 사용자는
+ * "내 주거래은행 대출이 왜 여기 없지" 하고 없는 기관을 검색하게 된다.
+ * 검색 중에는 칩 자체가 사라지므로 안내도 같이 감춘다.
+ */
+const showLoanNotice = computed(() => !keyword.value.trim() && activeGroup.value === 'loans');
+
 onMounted(async () => {
     /* 추가 연결로 들어오면 이전 플로우의 선택이 남아 있을 수 있다. */
     store.resetFlow();
@@ -86,8 +98,9 @@ onMounted(async () => {
         /*
          * ⚠ 기본값으로 전체를 고르지 않는다.
          *   예전에는 뱅크샐러드처럼 전체 선택으로 시작했는데, 뱅크샐러드는 사용자가 실제로 보유한
-         *   기관만 보여주는 반면 우리 목록은 22곳 전부다. 그대로 두면 사용자가 한 곳만 고른 줄 알고
-         *   넘어가도 **비씨카드·롯데카드까지 22곳 전부 인증·조회 요청이 나간다**(2026-08-05 실측).
+         *   기관만 보여주는 반면 우리 목록은 36곳 전부다. 그대로 두면 사용자가 한 곳만 고른 줄 알고
+         *   넘어가도 **비씨카드·롯데카드까지 목록에 있는 기관 전부로 인증·조회 요청이 나간다**
+         *   (2026-08-05 실측, 당시 22곳).
          *   화면 문구도 "선택하세요" 이므로 빈 상태에서 시작하는 편이 말과 동작이 맞는다.
          */
         /* 은행이 비어 있는 공급자도 있을 수 있다. 첫 화면이 빈 칸이 되지 않게 맞춰준다. */
@@ -154,6 +167,10 @@ function onNext() {
                     {{ group.label }}
                 </button>
             </div>
+
+            <p v-if="showLoanNotice" class="institution-select__notice">
+                은행 대출은 은행을 연결하면 함께 조회돼요. 여기서는 캐피탈·저축은행을 골라요.
+            </p>
 
             <div v-if="visible.length" class="institution-select__grid">
                 <InstitutionTile
@@ -242,10 +259,20 @@ function onNext() {
     outline: none;
 }
 
+/*
+ * 업권이 5종으로 늘어 좁은 화면에서는 한 줄에 다 들어가지 않는다.
+ * 줄바꿈(flex-wrap) 대신 가로 스크롤을 유지한다 — 줄이 늘면 아래 그리드가 밀려
+ * 3종만 내려오는 공급자에서 기존 모양이 달라진다. 스크롤바는 숨겨 높이를 고정한다.
+ */
 .institution-select__chips {
     display: flex;
     gap: var(--tt-space-2);
     overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.institution-select__chips::-webkit-scrollbar {
+    display: none;
 }
 
 .institution-select__chip {
@@ -272,6 +299,16 @@ function onNext() {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--tt-space-3);
+}
+
+.institution-select__notice {
+    margin: 0;
+    padding: var(--tt-space-3);
+    border-radius: var(--tt-radius-sm);
+    background: var(--tt-primary-subtle);
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-text-muted);
 }
 
 .institution-select__empty {

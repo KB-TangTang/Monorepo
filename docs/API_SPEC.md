@@ -301,9 +301,11 @@
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
-| GET | `/api/accounts/institutions` | Bearer | `{ banks:[], cards:[], securities:[] }` — 각 항목 `{code,name,shortLabel,connected}` |
+| GET | `/api/accounts/institutions` | Bearer | `{ banks:[], cards:[], securities:[], loans:[], payMoney:[] }` — 각 항목 `{code,name,shortLabel,connected}` |
 
-- `connected: true` 는 **이미 연결된 기관**이라 다시 고를 수 없다.
+- `connected: true` 는 **이미 연결된 기관**이라는 표시일 뿐 선택은 막지 않는다 — 같은 은행의 두 번째 계좌 추가와 재연동이 막히기 때문이다. 중복은 4단계의 `alreadyLinked` 가 막는다.
+- 업권은 **5종**이다(응답 필드 순서 = 화면 칩 순서). 대출은 마이데이터에서 독립 업권이 아니라 은행 업권 산하 상품이므로, `loans` 에는 **할부금융(캐피탈)·저축은행**이 들어간다. 은행 대출은 은행을 연결하면 함께 조회된다.
+- `loans` · `payMoney` 의 기관 코드는 **CODEF organization 코드가 아니다**(해당 업권 코드를 확인하지 못해 자체 코드를 쓴다). 실 CODEF 로 전환하면 매핑이 필요하고, 그전까지는 `supportedOrganizations` 가 은행 20곳만 허용해 두 업권이 자동으로 빈 배열이 된다.
 - 공급자가 다루지 못하는 기관은 목록에서 아예 빠진다(`supportedOrganizations`. 빈 집합이면 "제한 없음").
 - **보험은 연동 범위에서 제외됐다(2026-08-06).** 되살리려면 `InstitutionCatalog` 부터 손봐야 한다.
 
@@ -671,8 +673,7 @@
 `PENDING`과 `showUnlock=true`를 반환하며, 확인 후에는 `SEEN`이라 다른 기기에서도 다시 뜨지 않는다.
 
 ```json
-// POST request
-{ "enoughData": true }
+// POST request - 본문 없음. 자격 판정은 서버가 한다 (이슈 #315)
 
 // response data
 { "status": "PENDING", "showUnlock": true }
