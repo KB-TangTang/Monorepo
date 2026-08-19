@@ -39,8 +39,12 @@ function formatDateRange(start, end) {
     return `${s.getMonth() + 1}월 ${s.getDate()}일 ~ ${e.getMonth() + 1}월 ${e.getDate()}일`;
 }
 
+/* 참여도 이 코드로 한다(#346). 미리보기가 알려준 `group.id` 를 쓰면 안 된다 —
+ * 그 순간 코드는 groupId 를 알아내는 수단이 될 뿐 참여 자격이 아니게 된다. */
+const inviteCode = computed(() => route.params.code);
+
 onMounted(async () => {
-    const code = route.params.code;
+    const code = inviteCode.value;
     if (!code) {
         router.replace({ name: 'groupChallenge' });
         return;
@@ -65,7 +69,7 @@ async function handleJoin() {
     isLoading.value = true;
     joinError.value = '';
     try {
-        await joinGroup(group.value.id);
+        await joinGroup(inviteCode.value);
         /* 상세 화면(재판 현황)은 아직 서버가 없다. 목록으로 보내되 「시작 전」 탭을 열어야
          * 방금 들어간 그룹이 보인다 — 기본 탭인 「진행 중」으로 떨어지면 빈 화면이라
          * 참여가 실패한 것처럼 보인다. 상세 API 가 붙으면 그리로 바꾼다. */

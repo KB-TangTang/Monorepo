@@ -120,10 +120,19 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
         return ApiResponse.ok(challengeGroupService.previewInviteCode(userId, inviteCode));
     }
 
-    /** 참여 (GC_01_06). 참여 직후 화면이 상세로 넘어가므로 상세를 그대로 돌려준다. */
-    @PostMapping("/{groupId}/members")
+    /**
+     * 참여 (GC_01_06). 참여 직후 화면이 상세로 넘어가므로 상세를 그대로 돌려준다.
+     *
+     * <p><b>groupId 가 아니라 초대 코드를 받는다.</b> 예전에는 {@code POST /{groupId}/members} 였는데,
+     * 코드 검증이 미리보기(읽기 전용)에만 있고 정작 참여에는 없어 <b>코드 없이 groupId 만으로 참여할 수
+     * 있었다</b>(이슈 #346). id 가 AUTO_INCREMENT 연번이라 순회로 모집 중인 방을 전부 찾을 수 있었다.
+     *
+     * <p>groupId 를 받으면서 코드를 함께 검증하는 방법도 있지만, 그러면 「검증을 빠뜨리면 다시 뚫리는」
+     * 구조가 남는다. <b>파라미터 자체를 없애 우회 경로를 지운다.</b>
+     */
+    @PostMapping("/invite-codes/{inviteCode}/members")
     public ApiResponse<ChallengeGroupDto> join(@LoginUser Long userId,
-                                                     @PathVariable Long groupId) {
-        return ApiResponse.ok(challengeGroupService.join(userId, groupId));
+                                                     @PathVariable String inviteCode) {
+        return ApiResponse.ok(challengeGroupService.join(userId, inviteCode));
     }
 }
