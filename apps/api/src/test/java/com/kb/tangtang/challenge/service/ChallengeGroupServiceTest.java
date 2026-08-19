@@ -53,6 +53,12 @@ class ChallengeGroupServiceTest {
     private static final long GUEST_ID = 2L;
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 12);
 
+    /**
+     * 기본 시작일. 생성은 <b>내일 이후</b>만 받는다(이슈 #350) — 모집이 시작일 23:59 에 닫히므로
+     * 오늘 시작하면 모집 기간이 없어진다. 기간을 세는 테스트는 TODAY 가 아니라 이 날짜를 기준으로 잡는다.
+     */
+    private static final LocalDate START = TODAY.plusDays(1);
+
     private FakeGroupMapper groupMapper;
     private FakeMemberMapper memberMapper;
     private IndictmentMapper indictmentMapper;
@@ -83,7 +89,7 @@ class ChallengeGroupServiceTest {
     void createRegistersOwnerAsMember() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
             r.setEvalType("DAILY");
-            r.setEndDate(TODAY.plusDays(6));   // 7일
+            r.setEndDate(START.plusDays(6));   // 7일
         }));
 
         assertNotNull(created.getGroupId());
@@ -118,7 +124,7 @@ class ChallengeGroupServiceTest {
     void periodEvalGivesSingleLife() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
             r.setEvalType("PERIOD");
-            r.setEndDate(TODAY.plusDays(6));
+            r.setEndDate(START.plusDays(6));
         }));
 
         assertEquals(1, memberMapper.findByGroupIds(List.of(created.getGroupId())).get(0).getLivesCount());
@@ -145,7 +151,7 @@ class ChallengeGroupServiceTest {
     @DisplayName("기간이 7일을 넘으면 거절한다 — ck_cg_period 위반을 DB 까지 보내지 않는다")
     void rejectsPeriodLongerThanSevenDays() {
         BusinessException e = assertThrows(BusinessException.class,
-                () -> service.create(OWNER_ID, request(r -> r.setEndDate(TODAY.plusDays(7)))));
+                () -> service.create(OWNER_ID, request(r -> r.setEndDate(START.plusDays(7)))));
 
         assertEquals("GROUP_PERIOD_INVALID", e.getCode());
     }
@@ -160,6 +166,33 @@ class ChallengeGroupServiceTest {
                 })));
 
         assertEquals("GROUP_START_DATE_INVALID", e.getCode());
+    }
+
+    /**
+     * 이슈 #350. 모집은 시작일 23:59 에 닫힌다 — 오늘 시작을 허용하면 만든 시각부터 자정까지가
+     * 모집 기간의 전부가 된다. 프론트 달력은 이미 내일부터만 고를 수 있어 API 직접 호출만 막으면 된다.
+     */
+    @Test
+    @DisplayName("오늘 시작은 거절한다 — 모집 기간이 없어진다")
+    void rejectsTodayAsStartDate() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.create(OWNER_ID, request(r -> {
+                    r.setStartDate(TODAY);
+                    r.setEndDate(TODAY.plusDays(2));
+                })));
+
+        assertEquals("GROUP_START_DATE_INVALID", e.getCode());
+    }
+
+    @Test
+    @DisplayName("내일 시작은 허용한다")
+    void allowsTomorrowAsStartDate() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
+            r.setStartDate(TODAY.plusDays(1));
+            r.setEndDate(TODAY.plusDays(3));
+        }));
+
+        assertEquals(TODAY.plusDays(1), groupMapper.findById(created.getGroupId()).getStartDate());
     }
 
     @Test
@@ -215,8 +248,32 @@ class ChallengeGroupServiceTest {
         assertNull(preview.getReason());
     }
 
+    /**
+     * 이슈 #350. 상태 전이 배치는 시작일 00:01 에 돌아 ACTIVE 로 바꾼다. status 만 보면 시작일
+     * 하루가 통째로 막혀 「시작일 23:59까지 초대」가 거짓말이 된다.
+     */
     @Test
-    @DisplayName("배치가 ACTIVE 로 바꾼 뒤에는 만료다 — 날짜가 아니라 status 로 판정한다(#152)")
+    @DisplayName("ACTIVE 라도 오늘이 시작일이면 참여할 수 있다 — 시작일 23:59 까지 모집")
+    void joinableOnStartDateEvenWhenActive() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
+            r.setStartDate(TODAY.plusDays(1));
+            r.setEndDate(TODAY.plusDays(3));
+        }));
+        groupMapper.updateStatusIfCurrent(created.getGroupId(), "RECRUITING", "ACTIVE");
+
+        ChallengeGroupService onStartDate = newService(TODAY.plusDays(1));
+        InviteCodePreviewDto preview = onStartDate.previewInviteCode(GUEST_ID, created.getInviteCode());
+
+        assertTrue(preview.isJoinable());
+        assertNull(preview.getReason());
+
+        ChallengeGroupDto joined = onStartDate.join(GUEST_ID, created.getInviteCode());
+        assertTrue(joined.isMember());
+        assertEquals(2, joined.getMemberCount());
+    }
+
+    @Test
+    @DisplayName("ACTIVE 이고 시작일이 지났으면 만료다 (#350 회귀 방지)")
     void expiresOnceBatchActivates() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
             r.setStartDate(TODAY.plusDays(1));
@@ -290,7 +347,7 @@ class ChallengeGroupServiceTest {
     void joinGrantsLives() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> {
             r.setEvalType("DAILY");
-            r.setEndDate(TODAY.plusDays(2));   // 3일
+            r.setEndDate(START.plusDays(2));   // 3일
         }));
 
         ChallengeGroupDto detail = service.join(GUEST_ID, created.getInviteCode());
@@ -620,8 +677,8 @@ class ChallengeGroupServiceTest {
         request.setGroupName("커피값 줄이기");
         request.setLimitAmount(5000);
         request.setEvalType("DAILY");
-        request.setStartDate(TODAY);
-        request.setEndDate(TODAY.plusDays(2));
+        request.setStartDate(START);
+        request.setEndDate(START.plusDays(2));
         tweak.apply(request);
         return request;
     }

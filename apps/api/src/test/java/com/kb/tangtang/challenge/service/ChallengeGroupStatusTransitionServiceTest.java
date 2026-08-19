@@ -46,6 +46,12 @@ class ChallengeGroupStatusTransitionServiceTest {
     private static final long OWNER_ID = 1L;
     private static final LocalDate START = LocalDate.of(2026, 8, 13);
 
+    /**
+     * 시작 다음 날. 혼자인 그룹의 삭제는 시작일 하루를 넘겨야 일어난다(이슈 #350) —
+     * 미성립 관련 테스트는 전부 이 날짜로 부른다.
+     */
+    private static final LocalDate DAY_AFTER_START = START.plusDays(1);
+
     @Mock private ChallengeGroupMapper groupMapper;
     @Mock private GroupMemberMapper memberMapper;
     @Mock private ChatMessageStore chatMessageStore;
@@ -67,7 +73,7 @@ class ChallengeGroupStatusTransitionServiceTest {
                 .thenReturn(List.of(member(OWNER_ID), member(2L), member(3L)));
         when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "ACTIVE")).thenReturn(1);
 
-        assertTrue(service.startOrCancel(group()));
+        assertTrue(service.startOrCancel(group(), START));
 
         verify(groupMapper).updateStatusIfCurrent(GROUP_ID, "RECRUITING", "ACTIVE");
         assertEquals(3, published.size(), "방장도 tbl_group_member 에 있으므로 따로 챙기지 않는다");
@@ -83,13 +89,45 @@ class ChallengeGroupStatusTransitionServiceTest {
         verify(chatMessageStore, never()).deleteRoom(anyLong());
     }
 
+    /**
+     * 이슈 #350. 모집 마감은 시작일 23:59 인데 이 배치는 시작일 00:01 에 돈다.
+     * 그때 지워 버리면 초대 링크를 열어도 들어올 방이 없다.
+     */
     @Test
-    @DisplayName("참여자가 방장 1명뿐이면 그룹이 삭제되고 방장에게만 미성립 알림이 간다")
+    @DisplayName("시작일 당일에는 혼자여도 삭제하지 않는다 — 그 날 23:59 까지 더 모집한다")
+    void defersCancelOnStartDate() {
+        when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
+
+        assertFalse(service.startOrCancel(group(), START));
+
+        verify(groupMapper, never()).deleteIfCurrent(anyLong(), anyString());
+        verify(groupMapper, never()).updateStatusIfCurrent(anyLong(), anyString(), anyString());
+        assertTrue(published.isEmpty(), "유예했으므로 미성립 알림도 없어야 한다");
+        verifyNoInteractions(chatMessageStore);
+    }
+
+    /** 유예된 그룹은 {@code start_date <= today} 라 다음 날 다시 집힌다 — 그 사이 누가 들어왔으면 시작한다. */
+    @Test
+    @DisplayName("시작일에 유예된 그룹이 2명이 되면 다음 날 ACTIVE 로 시작한다")
+    void startsOnDayAfterWhenSomeoneJoinedOnStartDate() {
+        when(memberMapper.findByGroupIds(anyList()))
+                .thenReturn(List.of(member(OWNER_ID), member(2L)));
+        when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "ACTIVE")).thenReturn(1);
+
+        assertTrue(service.startOrCancel(group(), DAY_AFTER_START));
+
+        verify(groupMapper).updateStatusIfCurrent(GROUP_ID, "RECRUITING", "ACTIVE");
+        assertEquals(2, published.size());
+        verify(groupMapper, never()).deleteIfCurrent(anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("시작일 다음 날에도 방장 1명뿐이면 그룹이 삭제되고 방장에게만 미성립 알림이 간다")
     void cancelsWhenAloneAndNotifiesOwnerOnly() {
         when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
         when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(1);
 
-        assertTrue(service.startOrCancel(group()));
+        assertTrue(service.startOrCancel(group(), DAY_AFTER_START));
 
         verify(groupMapper).deleteIfCurrent(GROUP_ID, "RECRUITING");
         verify(groupMapper, never()).updateStatusIfCurrent(anyLong(), anyString(), anyString());
@@ -111,7 +149,7 @@ class ChallengeGroupStatusTransitionServiceTest {
         when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(1);
         doThrow(new RuntimeException("Redis 연결 실패")).when(chatMessageStore).deleteRoom(GROUP_ID);
 
-        assertTrue(service.startOrCancel(group()));
+        assertTrue(service.startOrCancel(group(), DAY_AFTER_START));
 
         assertEquals(1, published.size(), "채팅방 삭제 실패가 알림 발행을 막으면 안 된다");
     }
@@ -123,7 +161,7 @@ class ChallengeGroupStatusTransitionServiceTest {
                 .thenReturn(List.of(member(OWNER_ID), member(2L)));
         when(groupMapper.updateStatusIfCurrent(GROUP_ID, "RECRUITING", "ACTIVE")).thenReturn(0);
 
-        assertFalse(service.startOrCancel(group()));
+        assertFalse(service.startOrCancel(group(), START));
 
         assertTrue(published.isEmpty(), "compare-and-set 이 0 을 냈으면 알림도 없어야 한다");
         verifyNoInteractions(chatMessageStore);
@@ -139,7 +177,7 @@ class ChallengeGroupStatusTransitionServiceTest {
         when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
         when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(0);
 
-        assertFalse(service.startOrCancel(group()));
+        assertFalse(service.startOrCancel(group(), DAY_AFTER_START));
 
         assertTrue(published.isEmpty(), "0 행이면 이미 다른 쪽이 처리한 것이라 알림도 없어야 한다");
         verifyNoInteractions(chatMessageStore);

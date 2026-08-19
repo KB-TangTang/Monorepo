@@ -13,6 +13,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,7 @@ import java.util.Map;
  * <p>시작일이 도래한 그룹을 참여 인원에 따라 갈라 보낸다.
  * <pre>
  *   참여자 2명 이상 → ACTIVE + 참여자 전원에게 시작 알림
- *   참여자 1명      → 삭제   + 방장에게만 미성립 알림
+ *   참여자 1명      → 시작일 당일이면 유예(그대로 RECRUITING), 하루 지났으면 삭제 + 방장에게 미성립 알림
  * </pre>
  *
  * <p><b>미성립 그룹을 CLOSED 로 두지 않고 지우는 이유</b>는 {@code CLOSED} 가 「정상 종료 +
@@ -75,12 +76,30 @@ public class ChallengeGroupStatusTransitionService {
     /**
      * 모집 중인 그룹 하나를 시작시키거나 미성립 처리한다.
      *
-     * @return 실제로 처리했으면 {@code true}. 이미 다른 실행이 처리했으면 {@code false}
+     * <p><b>혼자인 그룹은 시작일 당일에 지우지 않는다</b> (2026-08-20, 이슈 #350).
+     * 모집 마감이 시작일 23:59 인데 이 배치는 시작일 00:01 에 돈다. 그때 지워 버리면
+     * 친구가 초대 링크를 열어도 들어올 방 자체가 없어 「시작일 23:59까지 초대」가 거짓말이 된다.
+     * 하루 미루면 {@code findGroupsToStart} 가 {@code start_date <= today} 라 다음 날 00:01 에
+     * 자동으로 다시 집어 간다 — 그 사이 누가 들어왔으면 ACTIVE, 아니면 그때 삭제다.
+     *
+     * <p>2명 이상인 그룹은 그대로 시작일 00:01 에 시작한다. 참여는 {@code joinBlockReason} 이
+     * ACTIVE + {@code today <= startDate} 를 열어 두므로 그 날 23:59 까지 계속 가능하다.
+     *
+     * @param today 배치 기준일
+     * @return 실제로 처리했으면 {@code true}. 이미 다른 실행이 처리했거나 삭제를 미뤘으면 {@code false}
      */
     @Transactional
-    public boolean startOrCancel(ChallengeGroup group) {
+    public boolean startOrCancel(ChallengeGroup group, LocalDate today) {
         List<GroupMember> members = groupMemberMapper.findByGroupIds(List.of(group.getId()));
-        return members.size() >= MIN_MEMBERS ? start(group, members) : cancel(group);
+        if (members.size() >= MIN_MEMBERS) {
+            return start(group, members);
+        }
+        if (!today.isAfter(group.getStartDate())) {
+            log.info("그룹 챌린지 미성립 처리 유예 groupId={} startDate={} — 시작일 23:59 까지 모집한다",
+                    group.getId(), group.getStartDate());
+            return false;
+        }
+        return cancel(group);
     }
 
     private boolean start(ChallengeGroup group, List<GroupMember> members) {
