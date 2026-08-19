@@ -77,6 +77,14 @@
     --tt-wood: #9c7b54;
     --tt-kraft: #efe7d8;
 
+    /* 소환장 같은 「법원 서류」 질감. 위 규칙의 종이 계열이다. */
+    --tt-paper: #fdfbf3; /* 서류 바탕 */
+    --tt-paper-inset: #fbf7ea; /* 서류 안의 강조 박스 */
+    --tt-paper-rule: #d8d3c4; /* 가로 괘선 */
+    --tt-paper-dashed: #c5bfa9; /* 점선 테두리 */
+    --tt-paper-frame: #9aa0b8; /* 서류 내부 얇은 액자선 */
+    --tt-paper-label: #8a8265; /* 강조 박스 안의 작은 라벨 */
+
     /* ── 의미 토큰 (컴포넌트는 이쪽만 참조한다) ─────────── */
     --tt-primary: var(--tt-ink); /* 주 CTA (Ink 버튼) */
     --tt-primary-hover: var(--tt-ink-raised);
@@ -133,11 +141,22 @@
     /* 카드 노치(영수증 절취선/소환장 펀치홀) */
     --tt-notch-bg: var(--tt-bg-subtle);
 
+    /* 법원 서류(소환장) — 종이 질감. 일반 카드에는 쓰지 않는다 */
+    --tt-doc-bg: var(--tt-paper);
+    --tt-doc-inset-bg: var(--tt-paper-inset);
+    --tt-doc-inset-border: var(--tt-paper-dashed);
+    --tt-doc-rule: var(--tt-paper-rule);
+    --tt-doc-frame: var(--tt-paper-frame);
+    --tt-doc-label: var(--tt-paper-label);
+    --tt-doc-seal: var(--tt-red-deep); /* 인장 붉은색 */
+
     /* ── 타이포 ─────────────────────────────────────────── */
     --tt-font-sans:
         'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
         'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
     --tt-font-mono: ui-monospace, Menlo, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    /* 법원 서류(소환장) 전용 명조. 본문에는 쓰지 않는다 */
+    --tt-font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', 'Batang', serif;
 
     /* 스케일 — v2 기준 (결과수치 / 스탯 / H1 / H2 / 라벨 / 본문 / 보조 / 오버라인 / 모노) */
     --tt-fs-hero: 38px; /* 결과 수치 / 순위 */

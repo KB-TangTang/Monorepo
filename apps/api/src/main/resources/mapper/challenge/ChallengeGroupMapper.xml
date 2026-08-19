@@ -12,6 +12,7 @@
     <sql id="columns">
         g.id, g.admin_id, g.group_name, g.category_id, g.limit_amount, g.eval_type,
         g.max_members, g.start_date, g.end_date, g.invite_code, g.status, g.memo,
+        g.created_at,
         c.category_name
     </sql>
 

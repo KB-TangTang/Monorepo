@@ -45,6 +45,8 @@ public class ChallengeGroupDto {
     private String status;
     /** 리워드·벌칙 자유 메모. 표시 전용이며 시스템이 집행하지 않는다. */
     private String memo;
+    /** 그룹을 만든 시각. 초대 화면의 소환장이 「발부일」로 찍는다. */
+    private LocalDateTime createdAt;
 
     /* ── tbl_group_member (로그인 사용자 본인) ────────── */
     private Integer livesCount;

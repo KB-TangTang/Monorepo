@@ -426,6 +426,7 @@ public class ChallengeGroupService {
                 .inviteCode(group.getInviteCode())
                 .status(group.getStatus())
                 .memo(group.getMemo())
+                .createdAt(group.getCreatedAt())
                 .livesCount(me == null ? null : me.getLivesCount())
                 .finalOutcome(me == null ? null : me.getFinalOutcome())
                 .finalRank(me == null ? null : me.getFinalRank())

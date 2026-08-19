@@ -19,8 +19,8 @@ export const MOCK_GROUPS = {
         id: 1,
         adminId: 2,
         groupName: '배달 소비 줄이기',
-        categoryId: null,            // null = 총 소비
-        categoryName: '총 소비',     /* 파생: tbl_category JOIN */
+        categoryId: null, // null = 총 소비
+        categoryName: '총 소비' /* 파생: tbl_category JOIN */,
         evalType: 'DAILY',
         limitAmount: 15000,
         maxMembers: 6,
@@ -197,15 +197,25 @@ export const MOCK_GROUPS = {
     },
 };
 
+/*
+ * created_at 은 실제 테이블에 항상 있는 값이다(초대 화면의 소환장이 「발부일」로 찍는다).
+ * 그룹마다 손으로 적어 두면 시작일을 고칠 때 같이 고치는 걸 잊는다. 시작일 3일 전으로 파생시킨다.
+ */
+for (const group of Object.values(MOCK_GROUPS)) {
+    const created = new Date(`${group.startDate}T00:00:00Z`);
+    created.setUTCDate(created.getUTCDate() - 3);
+    group.createdAt = `${created.toISOString().slice(0, 10)}T21:14:00`;
+}
+
 /* ────────────────────────────────────────────────────────────
  * 2. MOCK_INVITE_CODES — 초대코드 → 그룹 매핑 (5자리)
  * ──────────────────────────────────────────────────────────── */
 
 export const MOCK_INVITE_CODES = {
-    'DL7K2': { groupId: 1, expired: false },
-    'CF9X1': { groupId: 2, expired: false },
-    'NZ3P5': { groupId: 3, expired: false },
-    'TX8M4': { groupId: 4, expired: true },
+    DL7K2: { groupId: 1, expired: false },
+    CF9X1: { groupId: 2, expired: false },
+    NZ3P5: { groupId: 3, expired: false },
+    TX8M4: { groupId: 4, expired: true },
 };
 
 /* ────────────────────────────────────────────────────────────
@@ -224,7 +234,7 @@ export const MOCK_TRIAL_SUMMARY = {
     votes: [
         { verdict: 'GUILTY' },
         { verdict: 'GUILTY' },
-        { verdict: 'INNOCENT' },  // DB: 'INNOCENT' (NOT_GUILTY 아님)
+        { verdict: 'INNOCENT' }, // DB: 'INNOCENT' (NOT_GUILTY 아님)
     ],
     deadlineLabel: '02:14:03',
 };
@@ -232,7 +242,7 @@ export const MOCK_TRIAL_SUMMARY = {
 /** 기소 (변론 요청) 요약. */
 export const MOCK_INDICTMENT_SUMMARY = {
     count: 1,
-    groupName: '배달 소비 줄이기',  // DB: group_name
+    groupName: '배달 소비 줄이기', // DB: group_name
     chargeAmount: 6800,
     daysLeft: 1,
 };
@@ -259,11 +269,12 @@ export const MOCK_PRE_START_CHALLENGES = [
         inviteCode: 'CF9X1',
         status: 'RECRUITING',
         /* --- 파생 필드 (서버 계산) --- */
-        totalDays: 7,                 // DATEDIFF(end, start) + 1
-        daysUntilStart: 2,            // DATEDIFF(start, CURDATE())
-        memberCount: 4,               // COUNT(tbl_group_member)
-        isOwner: true,                // adminId === CURRENT_USER_ID
-        members: [                    // tbl_group_member JOIN tbl_user
+        totalDays: 7, // DATEDIFF(end, start) + 1
+        daysUntilStart: 2, // DATEDIFF(start, CURDATE())
+        memberCount: 4, // COUNT(tbl_group_member)
+        isOwner: true, // adminId === CURRENT_USER_ID
+        members: [
+            // tbl_group_member JOIN tbl_user
             { userId: 1, nickname: '나', initial: '나' },
             { userId: 2, nickname: '유현', initial: '유' },
             { userId: 3, nickname: '준서', initial: '준' },
@@ -358,8 +369,8 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         maxLives: 7,
         memberCount: 5,
         /* --- 내 재판 상태 (tbl_indictment + tbl_vote 집계) --- */
-        myVoteStatus: 'PENDING',      // 'PENDING' = 내가 아직 투표 안 함, 'DONE' = 투표 완료, null = 투표 대상 아님
-        isDefendant: false,           // 내가 피고인인 기소건이 있는지
+        myVoteStatus: 'PENDING', // 'PENDING' = 내가 아직 투표 안 함, 'DONE' = 투표 완료, null = 투표 대상 아님
+        isDefendant: false, // 내가 피고인인 기소건이 있는지
         /* --- 멤버 목록 --- */
         members: [
             { userId: 1, nickname: '나', initial: '나' },
@@ -386,7 +397,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         maxLives: 7,
         memberCount: 4,
         myVoteStatus: null,
-        isDefendant: true,            // 내가 기소당함 → 변론필요
+        isDefendant: true, // 내가 기소당함 → 변론필요
         members: [
             { userId: 1, nickname: '나', initial: '나' },
             { userId: 3, nickname: '준서', initial: '준' },
@@ -409,7 +420,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         currentDay: 5,
         maxLives: 1,
         memberCount: 6,
-        myVoteStatus: 'DONE',         // 투표는 했지만 아직 마감 안 됨
+        myVoteStatus: 'DONE', // 투표는 했지만 아직 마감 안 됨
         isDefendant: false,
         members: [
             { userId: 1, nickname: '나', initial: '나' },
@@ -554,9 +565,54 @@ export const MOCK_ENDED_CHALLENGES = [
  * ──────────────────────────────────────────────────────────── */
 
 export const MOCK_TODO_ITEMS = [
-    { id: 1, type: 'accuse', title: '기소 되어 변론이 필요해요!', amount: 6800, challengeName: '배달 소비 줄이기', challengeId: 1, indictmentId: 101, deadlineMinutes: 26 * 60 },
-    { id: 2, type: 'vote', title: '지판님의 변론에 투표하세요', challengeName: '배달 소비 줄이기', challengeId: 1, indictmentId: 102, tally: '3/5 투표', deadlineMinutes: 134 },
-    { id: 3, type: 'vote', title: '현우님의 변론에 투표하세요', challengeName: '택시 대신 지하철', challengeId: 4, indictmentId: 201, tally: '1/5 투표', deadlineMinutes: 21 * 60 + 40 },
-    { id: 4, type: 'accuse', title: '기소 되어 변론이 필요해요!', amount: 23000, challengeName: '신상 지름신 봉인령', challengeId: 3, indictmentId: 201, deadlineMinutes: 44 * 60 },
-    { id: 5, type: 'vote', title: '민지님의 변론에 투표하세요', challengeName: '신상 지름신 봉인령', challengeId: 5, indictmentId: 301, tally: '2/5 투표', deadlineMinutes: 52 * 60 },
+    {
+        id: 1,
+        type: 'accuse',
+        title: '기소 되어 변론이 필요해요!',
+        amount: 6800,
+        challengeName: '배달 소비 줄이기',
+        challengeId: 1,
+        indictmentId: 101,
+        deadlineMinutes: 26 * 60,
+    },
+    {
+        id: 2,
+        type: 'vote',
+        title: '지판님의 변론에 투표하세요',
+        challengeName: '배달 소비 줄이기',
+        challengeId: 1,
+        indictmentId: 102,
+        tally: '3/5 투표',
+        deadlineMinutes: 134,
+    },
+    {
+        id: 3,
+        type: 'vote',
+        title: '현우님의 변론에 투표하세요',
+        challengeName: '택시 대신 지하철',
+        challengeId: 4,
+        indictmentId: 201,
+        tally: '1/5 투표',
+        deadlineMinutes: 21 * 60 + 40,
+    },
+    {
+        id: 4,
+        type: 'accuse',
+        title: '기소 되어 변론이 필요해요!',
+        amount: 23000,
+        challengeName: '신상 지름신 봉인령',
+        challengeId: 3,
+        indictmentId: 201,
+        deadlineMinutes: 44 * 60,
+    },
+    {
+        id: 5,
+        type: 'vote',
+        title: '민지님의 변론에 투표하세요',
+        challengeName: '신상 지름신 봉인령',
+        challengeId: 5,
+        indictmentId: 301,
+        tally: '2/5 투표',
+        deadlineMinutes: 52 * 60,
+    },
 ];
