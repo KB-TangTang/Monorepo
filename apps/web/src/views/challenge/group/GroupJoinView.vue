@@ -36,7 +36,7 @@ function formatDateRange(start, end) {
     if (!start || !end) return '';
     const s = new Date(start);
     const e = new Date(end);
-    return `${s.getMonth() + 1}월 ${s.getDate()}일 – ${e.getMonth() + 1}월 ${e.getDate()}일`;
+    return `${s.getMonth() + 1}월 ${s.getDate()}일 ~ ${e.getMonth() + 1}월 ${e.getDate()}일`;
 }
 
 onMounted(async () => {

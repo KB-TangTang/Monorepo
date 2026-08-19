@@ -31,7 +31,7 @@ function formatAmount(val) {
 
 const categoryLabel = computed(() => CATEGORY_MAP[props.form.categoryId] ?? '총 소비');
 const evalLabel = computed(() => props.form.evalType === 'DAILY' ? '일일결산' : '기간결산');
-const periodLabel = computed(() => `${formatDate(props.form.startDate)} – ${formatDate(props.form.endDate)}`);
+const periodLabel = computed(() => `${formatDate(props.form.startDate)} ~ ${formatDate(props.form.endDate)}`);
 const limitLabel = computed(() => {
     const amt = formatAmount(props.form.limitAmount);
     return props.form.evalType === 'DAILY' ? `하루 ${amt}원` : `총 ${amt}원`;
