@@ -41,11 +41,7 @@ public class MissionEvaluationService {
             return;
         }
 
-        if (success) {
-            mapper.increaseSuccessStreak(target.getUserId(), evaluatedAt);
-        } else {
-            mapper.resetStreak(target.getUserId(), evaluatedAt);
-        }
+        mapper.recalculateStreak(target.getUserId(), evaluatedAt);
         missionScoreService.recalculate(
                 target.getUserId(), YearMonth.from(target.getAssignDate()));
         String verdict = success ? "어제 미션을 성공적으로 마쳤어요" : "결과를 확인해 보세요";

@@ -22,9 +22,6 @@ public interface MissionEvaluationMapper {
                             @Param("result") String result,
                             @Param("evaluatedAt") LocalDateTime evaluatedAt);
 
-    int increaseSuccessStreak(@Param("userId") long userId,
-                              @Param("checkedAt") LocalDateTime checkedAt);
-
-    int resetStreak(@Param("userId") long userId,
-                    @Param("checkedAt") LocalDateTime checkedAt);
+    int recalculateStreak(@Param("userId") long userId,
+                          @Param("checkedAt") LocalDateTime checkedAt);
 }

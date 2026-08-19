@@ -3,6 +3,50 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.kb.tangtang.mission.mapper.RelativeMissionAssignmentMapper">
 
+    <select id="findEarliestRecoveryDateBefore" resultType="java.time.LocalDate">
+        WITH RECURSIVE active_consent AS (
+            SELECT consent.user_id,
+                   DATE(consent.updated_at) AS consent_date
+              FROM tbl_user_consent consent
+              JOIN tbl_user user ON user.id = consent.user_id
+             WHERE consent.consent_type = 'CHALLENGE'
+               AND consent.status = 1
+               AND consent.withdrawn_at IS NULL
+               AND (consent.expires_at IS NULL OR consent.expires_at &gt; NOW())
+               AND user.status = 'ACTIVE'
+        ), recovery_date AS (
+            SELECT MIN(consent_date) AS assign_date
+              FROM active_consent
+             WHERE consent_date &lt; #{beforeDate}
+            UNION ALL
+            SELECT DATE_ADD(assign_date, INTERVAL 1 DAY)
+              FROM recovery_date
+             WHERE DATE_ADD(assign_date, INTERVAL 1 DAY) &lt; #{beforeDate}
+        )
+        SELECT MIN(calendar.assign_date)
+          FROM recovery_date calendar
+         WHERE EXISTS (
+             SELECT 1
+               FROM active_consent consent
+              WHERE consent.consent_date &lt;= calendar.assign_date
+                AND (
+                    NOT EXISTS (
+                        SELECT 1
+                          FROM tbl_user_mission_info assignment
+                         WHERE assignment.user_id = consent.user_id
+                           AND assignment.assign_date = calendar.assign_date
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                          FROM tbl_user_mission_info assignment
+                         WHERE assignment.user_id = consent.user_id
+                           AND assignment.assign_date = calendar.assign_date
+                           AND assignment.result = 'PENDING'
+                    )
+                )
+         )
+    </select>
+
     <select id="findUnassignedChallengeConsentedUserIds" resultType="java.lang.Long">
         SELECT user.id
         FROM tbl_user user
@@ -15,6 +59,7 @@
                 AND consent.status = 1
                 AND consent.withdrawn_at IS NULL
                 AND (consent.expires_at IS NULL OR consent.expires_at &gt; NOW())
+                AND DATE(consent.updated_at) &lt;= #{assignDate}
           )
           AND NOT EXISTS (
               SELECT 1

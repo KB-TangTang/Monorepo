@@ -12,6 +12,7 @@ import java.util.List;
 
 @Mapper
 public interface RelativeMissionAssignmentMapper {
+    LocalDate findEarliestRecoveryDateBefore(@Param("beforeDate") LocalDate beforeDate);
     List<Long> findUnassignedChallengeConsentedUserIds(@Param("assignDate") LocalDate assignDate);
     Long lockActiveUserDifficulty(@Param("userId") long userId);
     int countAssignment(@Param("userId") long userId, @Param("assignDate") LocalDate assignDate);

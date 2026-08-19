@@ -98,6 +98,13 @@ class MissionAnalysisSnapshotServiceTest {
         }
 
         @Override
+        public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId,
+                                                                               LocalDate referenceDate) {
+            qualifiedCallCount++;
+            return result;
+        }
+
+        @Override
         public boolean hasInitialQualification(long userId) {
             qualificationCheckCount++;
             return initiallyQualified;

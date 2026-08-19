@@ -143,6 +143,6 @@ class RelativeMissionAssignmentServiceTest {
 
         assertTrue(service.assign(USER_ID, ASSIGN_DATE).isAssigned());
 
-        verify(snapshotService).getOrCreateSnapshot(USER_ID);
+        verify(snapshotService).getOrCreateSnapshot(USER_ID, ASSIGN_DATE);
     }
 }

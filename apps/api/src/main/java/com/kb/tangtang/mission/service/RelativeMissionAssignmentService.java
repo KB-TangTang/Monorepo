@@ -62,7 +62,7 @@ public class RelativeMissionAssignmentService {
 
         MissionAnalysisSnapshot snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId);
         if (snapshot == null) {
-            snapshotService.getOrCreateSnapshot(userId);
+            snapshotService.getOrCreateSnapshot(userId, assignDate);
             snapshot = snapshotMapper.findNextPendingSnapshotForUpdate(userId);
         }
         if (snapshot == null) {

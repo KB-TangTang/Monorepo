@@ -38,6 +38,11 @@ public class MissionAnalysisSnapshotService {
 
     @Transactional
     public MissionAnalysisSnapshotDto getOrCreateSnapshot(long userId) {
+        return getOrCreateSnapshot(userId, LocalDate.now(clock));
+    }
+
+    @Transactional
+    public MissionAnalysisSnapshotDto getOrCreateSnapshot(long userId, LocalDate cycleStartDate) {
         List<MissionAnalysisSnapshot> pendingSnapshots =
                 missionAnalysisSnapshotMapper.findPendingSnapshots(userId);
         if (!pendingSnapshots.isEmpty()) {
@@ -46,13 +51,12 @@ public class MissionAnalysisSnapshotService {
 
         boolean qualified = ensureRelativeMissionQualification(userId);
         MissionCategoryAnalysisDto analysis = qualified
-                ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId)
+                ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId, cycleStartDate)
                 : missionCategoryAnalysisService.getCategoryAnalysis(userId);
         if (analysis.getTopCategories().isEmpty()) {
             return MissionAnalysisSnapshotDto.empty();
         }
 
-        LocalDate cycleStartDate = LocalDate.now(clock);
         List<MissionAnalysisSnapshot> newSnapshots = analysis.getTopCategories().stream()
                 .map(category -> toSnapshot(userId, cycleStartDate, category))
                 .toList();
