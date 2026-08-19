@@ -12,7 +12,6 @@ const props = defineProps({
     roomInfo: { type: Object, default: null },
 });
 
-const emit = defineEmits(['open-menu']);
 const router = useRouter();
 
 function goBack() {
@@ -64,12 +63,6 @@ const metaLine = computed(() => {
             </div>
             <p class="chat-header__meta">{{ metaLine }}</p>
         </div>
-
-        <button class="chat-header__menu" aria-label="더보기" @click="emit('open-menu')">
-            <span class="chat-header__dot" />
-            <span class="chat-header__dot" />
-            <span class="chat-header__dot" />
-        </button>
     </header>
 </template>
 
@@ -145,20 +138,4 @@ const metaLine = computed(() => {
     font-weight: var(--tt-fw-semibold);
 }
 
-.chat-header__menu {
-    border: none;
-    background: none;
-    cursor: pointer;
-    display: flex;
-    gap: 3px;
-    padding: 8px 4px;
-    flex: none;
-}
-
-.chat-header__dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--tt-text-hint);
-}
 </style>
