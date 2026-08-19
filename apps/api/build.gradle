@@ -20,6 +20,7 @@ ext {
     log4jVersion   = '2.23.1'
     lombokVersion  = '1.18.34'
     junitVersion   = '5.10.2'
+    awsSdkVersion  = '2.28.16'  // AWS SDK v2. Boot 의존이 0건이라 금지 기술에 걸리지 않는다
 }
 
 java {
@@ -110,6 +111,26 @@ dependencies {
     implementation "org.springframework:spring-messaging:${springVersion}"
     implementation 'org.springframework.data:spring-data-redis:2.7.18'
     implementation 'io.lettuce:lettuce-core:6.2.7.RELEASE'
+
+    /*
+     * ---- AWS S3 (이미지 저장소, 이슈 #162) ----
+     * 이 프로젝트는 의존성 추가를 자제하지만 S3 는 SDK 없이 쓰기 어려워 예외로 둔다.
+     * SDK 자체는 Spring Boot 를 전혀 끌고 오지 않는다(금지 기술 아님).
+     *
+     * ⚠ 기본 HTTP 클라이언트인 apache-client 를 빼고 url-connection-client 를 쓴다. 이유가 둘이다.
+     *   1) apache-client → httpclient 4.5 → **commons-logging** 이 딸려온다. 이 프로젝트는
+     *      spring-context·springfox 에서 이미 commons-logging 을 빼고 log4j-slf4j-impl 로
+     *      통일해 뒀다. 놔두면 SLF4J 와 JCL 이 이중 바인딩된다.
+     *   2) netty-nio-client 는 비동기 클라이언트(S3AsyncClient)용이다. 우리는 동기 S3Client 만
+     *      쓰므로 war 에 넣을 이유가 없다.
+     * 빼면 SDK 가 기본 클라이언트를 못 찾으므로 ImageStorageConfig 에서
+     * httpClientBuilder(UrlConnectionHttpClient.builder()) 를 명시한다.
+     */
+    implementation("software.amazon.awssdk:s3:${awsSdkVersion}") {
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+    implementation "software.amazon.awssdk:url-connection-client:${awsSdkVersion}"
 
     // ---- Test ----
     implementation "org.springframework:spring-test:${springVersion}"
