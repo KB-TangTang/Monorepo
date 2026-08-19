@@ -57,6 +57,11 @@ public interface UserMapper {
                              @Param("target") String target,
                              @Param("seenAt") java.time.LocalDateTime seenAt);
 
+    int syncPersonalMissionUnlockStatus(@Param("id") Long id,
+                                        @Param("enoughData") boolean enoughData);
+
+    int acknowledgePersonalMissionUnlock(@Param("id") Long id);
+
     /**
      * 회원 탈퇴. 상태 변경 · 식별정보 익명화 · 유니크 키 비우기를 한 문장으로 한다.
      * (DECISIONS.md 2026-08-13 회원 탈퇴)

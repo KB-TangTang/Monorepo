@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { shouldShowPersonalMissionUnlock } from '../src/services/personalMissionFlow.js';
 
 /*
  * ⏸ 개발 중 — 「맞춤 미션 개시」 안내는 아직 구현되지 않았다. (이슈 #129)
@@ -28,18 +29,35 @@ import assert from 'node:assert/strict';
  *   다시 뜬다) `tbl_user` 컬럼이 하나 더 필요하다. 즉 스키마 변경이 따라온다.
  */
 
-test(
-    '소비 데이터가 부족했던 동의 사용자에게 데이터 충족 후 맞춤 미션 개시를 보여준다',
-    { skip: '개발 중 — 이슈 #129' },
-    () => {
-        assert.fail('구현되면 shouldShowPersonalMissionUnlock 을 import 해 되살린다');
-    },
-);
+test('소비 데이터가 부족했던 동의 사용자에게 데이터 충족 후 맞춤 미션 개시를 보여준다', () => {
+    assert.equal(
+        shouldShowPersonalMissionUnlock({
+            hasAgreed: true,
+            hasEnoughData: true,
+            wasDataInsufficient: true,
+            hasSeenDataUnlock: false,
+        }),
+        true,
+    );
+});
 
-test(
-    '신규 충분 데이터 사용자나 이미 확인한 사용자에게는 맞춤 미션 개시를 다시 보여주지 않는다',
-    { skip: '개발 중 — 이슈 #129' },
-    () => {
-        assert.fail('구현되면 shouldShowPersonalMissionUnlock 을 import 해 되살린다');
-    },
-);
+test('신규 충분 데이터 사용자나 이미 확인한 사용자에게는 맞춤 미션 개시를 다시 보여주지 않는다', () => {
+    assert.equal(
+        shouldShowPersonalMissionUnlock({
+            hasAgreed: true,
+            hasEnoughData: true,
+            wasDataInsufficient: false,
+            hasSeenDataUnlock: false,
+        }),
+        false,
+    );
+    assert.equal(
+        shouldShowPersonalMissionUnlock({
+            hasAgreed: true,
+            hasEnoughData: true,
+            wasDataInsufficient: true,
+            hasSeenDataUnlock: true,
+        }),
+        false,
+    );
+});

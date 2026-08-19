@@ -10,7 +10,8 @@
     <!-- 조회 컬럼은 한 곳에서만 정의한다. 컬럼이 늘어도 고칠 데가 하나다. -->
     <sql id="userColumns">
         id, social_provider, provider_user_id, email, nickname, social_name, profile_image_key,
-        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at
+        name, status, difficulty_id, tutorial_seen_at, group_tutorial_seen_at,
+        personal_mission_unlock_status
     </sql>
 
     <select id="findBySocialId" resultType="com.kb.tangtang.user.dto.UserDto">
@@ -97,6 +98,28 @@
                                              ELSE group_tutorial_seen_at END
          WHERE id     = #{id}
            AND status = 'ACTIVE'
+    </update>
+
+    <update id="syncPersonalMissionUnlockStatus">
+        UPDATE tbl_user
+           SET personal_mission_unlock_status =
+               CASE
+                   WHEN personal_mission_unlock_status = 'UNTRACKED' AND #{enoughData} = FALSE
+                       THEN 'INSUFFICIENT'
+                   WHEN personal_mission_unlock_status = 'INSUFFICIENT' AND #{enoughData} = TRUE
+                       THEN 'PENDING'
+                   ELSE personal_mission_unlock_status
+               END
+         WHERE id = #{id}
+           AND status = 'ACTIVE'
+    </update>
+
+    <update id="acknowledgePersonalMissionUnlock">
+        UPDATE tbl_user
+           SET personal_mission_unlock_status = 'SEEN'
+         WHERE id = #{id}
+           AND status = 'ACTIVE'
+           AND personal_mission_unlock_status = 'PENDING'
     </update>
 
     <!--
