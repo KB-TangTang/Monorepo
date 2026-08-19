@@ -18,6 +18,19 @@ export function hasEnoughPersonalMissionData(profile) {
     );
 }
 
+/**
+ * 맞춤 미션 개시 안내의 순수 판단 규칙.
+ * 영속 상태는 서버가 관리하고, 이 함수는 화면 노출 조건을 한 곳에 기록한다.
+ */
+export function shouldShowPersonalMissionUnlock({
+    hasAgreed,
+    hasEnoughData,
+    wasDataInsufficient,
+    hasSeenDataUnlock,
+}) {
+    return hasAgreed && hasEnoughData && wasDataInsufficient && !hasSeenDataUnlock;
+}
+
 export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     if (targetAmount <= 0) {
         return currentAmount === 0 ? 100 : 0;

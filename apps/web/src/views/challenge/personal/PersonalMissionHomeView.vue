@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
+import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
 import PersonalCourtHeader from '@/components/challenge/personal/PersonalCourtHeader.vue';
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
@@ -27,6 +28,7 @@ import {
 } from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
+import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
@@ -48,6 +50,10 @@ const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
 const devActionMessage = ref('');
+const isMissionUnlockOpen = ref(false);
+const isMissionUnlockAcknowledging = ref(false);
+const missionUnlockError = ref('');
+const hasPendingMissionUnlock = ref(false);
 
 const courtDate = computed(() => formatCourtDate());
 const shortDate = computed(() => {
@@ -58,6 +64,12 @@ const shortDate = computed(() => {
 const dataProgress = computed(() => calculateDataProgress(store.dataRequirements));
 const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
 const weeklyVerdictModel = computed(() => toWeeklyVerdictModel(store.missionStreak));
+const selectedUnlockDifficulty = computed(
+    () =>
+        PERSONAL_MISSION_DIFFICULTIES.find(
+            (difficulty) => difficulty.id === store.selectedDifficultyId,
+        ) ?? PERSONAL_MISSION_DIFFICULTIES[1],
+);
 
 /*
  * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
@@ -89,6 +101,7 @@ onMounted(async () => {
                 store.loadMissionStreak(),
                 store.loadMissionMonthlyScore(),
             ]);
+            hasPendingMissionUnlock.value = await store.syncMissionUnlock();
         }
     } catch (err) {
         store.consentState = 'ERROR';
@@ -104,6 +117,12 @@ onMounted(async () => {
 
     if (!hasSeenPersonalTutorial()) {
         showTutorial.value = true;
+        return;
+    }
+
+
+    if (hasPendingMissionUnlock.value) {
+        isMissionUnlockOpen.value = true;
         return;
     }
 
@@ -127,10 +146,15 @@ async function handleAgree() {
             store.loadMissionStreak(),
             store.loadMissionMonthlyScore(),
         ]);
+        hasPendingMissionUnlock.value = await store.syncMissionUnlock();
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {
                 showTutorial.value = true;
+            });
+        } else if (hasPendingMissionUnlock.value) {
+            afterOverlayClosed(() => {
+                isMissionUnlockOpen.value = true;
             });
         }
     } catch (err) {
@@ -147,6 +171,33 @@ async function handleAgree() {
  */
 async function onTutorialComplete() {
     await markPersonalTutorialSeen();
+    if (hasPendingMissionUnlock.value) {
+        afterOverlayClosed(() => {
+            isMissionUnlockOpen.value = true;
+        });
+    }
+}
+
+async function acknowledgeMissionUnlock(destination) {
+    if (isMissionUnlockAcknowledging.value) return;
+    isMissionUnlockAcknowledging.value = true;
+    missionUnlockError.value = '';
+    try {
+        await store.acknowledgeMissionUnlock();
+        hasPendingMissionUnlock.value = false;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(() => {
+            if (destination === 'difficulty') {
+                router.push({ name: 'personalMissionChallengeDifficulty' });
+            } else if (store.hasPendingVerdict) {
+                isVerdictOpen.value = true;
+            }
+        });
+    } catch (err) {
+        missionUnlockError.value = err.message ?? '안내 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+    } finally {
+        isMissionUnlockAcknowledging.value = false;
+    }
 }
 
 function openTangiSheet() {
@@ -240,6 +291,14 @@ async function reassignTodayMission() {
             :error-message="consentError"
             @agree="handleAgree"
             @later="handleConsentLater"
+        />
+        <PersonalMissionUnlockSheet
+            v-model="isMissionUnlockOpen"
+            :difficulty="selectedUnlockDifficulty"
+            :loading="isMissionUnlockAcknowledging"
+            :error-message="missionUnlockError"
+            @set-difficulty="acknowledgeMissionUnlock('difficulty')"
+            @view-mission="acknowledgeMissionUnlock('mission')"
         />
         <PersonalTangiSheet
             v-model="isTangiSheetOpen"

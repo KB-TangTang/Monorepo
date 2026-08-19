@@ -31,5 +31,7 @@ class UserMapperXmlTest {
         String namespace = UserMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findById"));
         assertTrue(configuration.hasStatement(namespace + ".updateProfileImageKey"));
+        assertTrue(configuration.hasStatement(namespace + ".syncPersonalMissionUnlockStatus"));
+        assertTrue(configuration.hasStatement(namespace + ".acknowledgePersonalMissionUnlock"));
     }
 }

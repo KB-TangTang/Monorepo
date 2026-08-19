@@ -4,6 +4,14 @@ export function fetchTodayMission() {
     return http.get('/missions/today');
 }
 
+export function syncPersonalMissionUnlock(enoughData) {
+    return http.post('/main-challenge/mission-unlock/status', { enoughData });
+}
+
+export function acknowledgePersonalMissionUnlock() {
+    return http.patch('/main-challenge/mission-unlock/acknowledge');
+}
+
 export function fetchMissionStreak() {
     return http.get('/missions/streak');
 }
