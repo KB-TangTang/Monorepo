@@ -52,4 +52,18 @@ class RelativeMissionAssignmentBatchServiceTest {
                     && request.deepLinkUrl().equals("/mission/personal?date=2026-08-12");
         }));
     }
+
+    @Test
+    void recoveryAssignmentDoesNotSendPastNotification() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        when(mapper.findUnassignedChallengeConsentedUserIds(date)).thenReturn(List.of(1L));
+        when(assignmentService.assign(1L, date)).thenReturn(RelativeMissionAssignmentDto.builder()
+                .assigned(true).missionTitle("편의점 무지출").build());
+
+        new RelativeMissionAssignmentBatchService(mapper, assignmentService, events)
+                .assignDailyMissions(date, false);
+
+        verify(assignmentService).assign(1L, date);
+        verifyNoInteractions(events);
+    }
 }

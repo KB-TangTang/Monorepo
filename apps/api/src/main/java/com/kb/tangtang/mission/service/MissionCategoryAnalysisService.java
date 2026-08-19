@@ -37,12 +37,18 @@ public class MissionCategoryAnalysisService {
 
     @Transactional(readOnly = true)
     public MissionCategoryAnalysisDto getCategoryAnalysis(long userId) {
-        return getCategoryAnalysis(userId, true);
+        return getCategoryAnalysis(userId, true, LocalDate.now(clock));
     }
 
     @Transactional(readOnly = true)
     public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId) {
-        return getCategoryAnalysis(userId, false);
+        return getCategoryAnalysis(userId, false, LocalDate.now(clock));
+    }
+
+    @Transactional(readOnly = true)
+    public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId,
+                                                                           LocalDate referenceDate) {
+        return getCategoryAnalysis(userId, false, referenceDate);
     }
 
     @Transactional(readOnly = true)
@@ -59,8 +65,8 @@ public class MissionCategoryAnalysisService {
         return MIN_TRANSACTION_COUNT;
     }
 
-    private MissionCategoryAnalysisDto getCategoryAnalysis(long userId, boolean requireInitialQualification) {
-        LocalDate endDateExclusive = LocalDate.now(clock);
+    private MissionCategoryAnalysisDto getCategoryAnalysis(long userId, boolean requireInitialQualification,
+                                                           LocalDate endDateExclusive) {
         LocalDate startDate = endDateExclusive.minusDays(ANALYSIS_DAYS);
         LocalDate analysisEndDate = endDateExclusive.minusDays(1);
 

@@ -69,7 +69,7 @@ class RelativeMissionAssignmentServiceTest {
 
         when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(3L);
         when(assignmentMapper.countAssignment(USER_ID, ASSIGN_DATE)).thenReturn(0);
-        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(snapshot);
+        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID, ASSIGN_DATE)).thenReturn(snapshot);
         when(assignmentMapper.findDifficulty(3L)).thenReturn(difficulty);
         when(assignmentMapper.findLastMissionId(USER_ID, 18L)).thenReturn(null);
         when(assignmentMapper.findRelativeMissions(18L, null)).thenReturn(List.of(mission));
@@ -104,7 +104,7 @@ class RelativeMissionAssignmentServiceTest {
                 .id(32L).userId(USER_ID).categoryId(19L).categoryName("배달앱")
                 .categoryRank(1).build();
         when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(2L);
-        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(snapshot);
+        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID, ASSIGN_DATE)).thenReturn(snapshot);
         when(assignmentMapper.findDifficulty(2L)).thenReturn(MissionDifficulty.builder()
                 .id(2L).minReductionRate(new BigDecimal("20"))
                 .maxReductionRate(new BigDecimal("40")).build());
@@ -131,7 +131,7 @@ class RelativeMissionAssignmentServiceTest {
         MissionAnalysisSnapshot snapshot = MissionAnalysisSnapshot.builder()
                 .id(44L).userId(USER_ID).categoryId(20L).categoryRank(1).build();
         when(assignmentMapper.lockActiveUserDifficulty(USER_ID)).thenReturn(2L);
-        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID)).thenReturn(null, snapshot);
+        when(snapshotMapper.findNextPendingSnapshotForUpdate(USER_ID, ASSIGN_DATE)).thenReturn(null, snapshot);
         when(assignmentMapper.findDifficulty(2L)).thenReturn(MissionDifficulty.builder()
                 .id(2L).minReductionRate(BigDecimal.ZERO).maxReductionRate(BigDecimal.ZERO).build());
         when(assignmentMapper.findLastMissionId(USER_ID, 20L)).thenReturn(null);
@@ -143,6 +143,6 @@ class RelativeMissionAssignmentServiceTest {
 
         assertTrue(service.assign(USER_ID, ASSIGN_DATE).isAssigned());
 
-        verify(snapshotService).getOrCreateSnapshot(USER_ID);
+        verify(snapshotService).getOrCreateSnapshot(USER_ID, ASSIGN_DATE);
     }
 }

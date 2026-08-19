@@ -28,10 +28,14 @@ public class RelativeMissionAssignmentBatchService {
     }
 
     public void assignDailyMissions(LocalDate assignDate) {
+        assignDailyMissions(assignDate, true);
+    }
+
+    public void assignDailyMissions(LocalDate assignDate, boolean notifyAssignment) {
         for (Long userId : assignmentMapper.findUnassignedChallengeConsentedUserIds(assignDate)) {
             try {
                 RelativeMissionAssignmentDto assignment = assignmentService.assign(userId, assignDate);
-                if (assignment != null && assignment.isAssigned()) {
+                if (notifyAssignment && assignment != null && assignment.isAssigned()) {
                     events.publishEvent(new NotificationRequestedEvent(userId, NotificationType.MISSION_ASSIGNED,
                             java.util.Map.of("missionTitle", assignment.getMissionTitle()),
                             "/mission/personal?date=" + assignDate));

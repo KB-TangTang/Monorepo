@@ -33,9 +33,11 @@ class MissionAnalysisSnapshotServiceTest {
         final List<MissionAnalysisSnapshot> insertedSnapshots = new ArrayList<>();
         LocalDateTime qualifiedAt;
         LocalDateTime markedQualifiedAt;
+        LocalDate pendingReferenceDate;
 
         @Override
-        public List<MissionAnalysisSnapshot> findPendingSnapshots(long userId) {
+        public List<MissionAnalysisSnapshot> findPendingSnapshots(long userId, LocalDate referenceDate) {
+            pendingReferenceDate = referenceDate;
             return pendingSnapshots;
         }
 
@@ -45,7 +47,7 @@ class MissionAnalysisSnapshotServiceTest {
         }
 
         @Override
-        public MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(long userId) {
+        public MissionAnalysisSnapshot findNextPendingSnapshotForUpdate(long userId, LocalDate assignDate) {
             return pendingSnapshots.isEmpty() ? null : pendingSnapshots.get(0);
         }
 
@@ -98,6 +100,13 @@ class MissionAnalysisSnapshotServiceTest {
         }
 
         @Override
+        public MissionCategoryAnalysisDto getCategoryAnalysisForQualifiedUser(long userId,
+                                                                               LocalDate referenceDate) {
+            qualifiedCallCount++;
+            return result;
+        }
+
+        @Override
         public boolean hasInitialQualification(long userId) {
             qualificationCheckCount++;
             return initiallyQualified;
@@ -139,6 +148,23 @@ class MissionAnalysisSnapshotServiceTest {
         assertEquals(2, result.getItems().get(0).getCategoryRank());
         assertEquals(0, analysisService.callCount);
         assertTrue(mapper.insertedSnapshots.isEmpty());
+        assertEquals(TODAY, mapper.pendingReferenceDate);
+    }
+
+    @Test
+    @DisplayName("과거 미션 복구 시 해당 배정일을 기준으로 미소진 스냅샷을 조회한다")
+    void usesRecoveryDateAsPendingSnapshotReferenceDate() {
+        LocalDate recoveryDate = TODAY.minusDays(3);
+        FakeSnapshotMapper mapper = new FakeSnapshotMapper();
+        StubCategoryAnalysisService analysisService = new StubCategoryAnalysisService();
+        analysisService.initiallyQualified = true;
+        analysisService.result = eligibleAnalysis(List.of(
+                category(1, 18L, "쇼핑", "패션", "120000", 4, "20.00")));
+
+        service(mapper, analysisService).getOrCreateSnapshot(USER_ID, recoveryDate);
+
+        assertEquals(recoveryDate, mapper.pendingReferenceDate);
+        assertEquals(recoveryDate, mapper.insertedSnapshots.get(0).getCycleStartDate());
     }
 
     @Test
