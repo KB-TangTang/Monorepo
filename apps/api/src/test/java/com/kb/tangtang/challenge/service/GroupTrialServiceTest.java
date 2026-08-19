@@ -1,12 +1,17 @@
 package com.kb.tangtang.challenge.service;
 
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
+import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
+import com.kb.tangtang.challenge.domain.VerdictMethod;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
+import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.challenge.mapper.DefenseMapper;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
+import com.kb.tangtang.challenge.mapper.VoteMapper;
 import com.kb.tangtang.common.storage.ImageStorage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,8 +20,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,14 +44,25 @@ class GroupTrialServiceTest {
     private static final int VOTE_HOURS = 24;
     private static final long USER_ID = 7L;
 
+    /**
+     * 테스트가 보는 「지금」. 아래 픽스처의 기소 시각과 같은 값이라 마감은 전부 미래다.
+     *
+     * <p>고정하지 않으면 마감이 지난 건을 거르는 규칙 때문에 <b>픽스처가 하루 만에 썩는다</b>.
+     */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 16, 9, 0);
+
+    private static final Clock CLOCK = Clock.fixed(
+            NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     @Mock private IndictmentMapper indictmentMapper;
     @Mock private DefenseMapper defenseMapper;
+    @Mock private VoteMapper voteMapper;
     @Mock private GroupChallengeResultMapper resultMapper;
     @Mock private ImageStorage imageStorage;
 
     private GroupTrialService service() {
-        return new GroupTrialService(indictmentMapper, defenseMapper, resultMapper, imageStorage,
-                DEFENSE_HOURS, VOTE_HOURS);
+        return new GroupTrialService(indictmentMapper, defenseMapper, voteMapper, resultMapper,
+                imageStorage, DEFENSE_HOURS, VOTE_HOURS, CLOCK);
     }
 
     private TrialTodoRow row(long indictmentId, LocalDateTime createdAt) {
@@ -100,6 +118,38 @@ class GroupTrialServiceTest {
         assertEquals("지판", trial.getDefendantNickname());
         assertEquals(3, trial.getVoteCount());
         assertEquals(5, trial.getTotalVoters());
+    }
+
+    /**
+     * 마감을 넘긴 재판은 TO-DO 에서 뺀다.
+     *
+     * <p>남겨 두면 카운트다운이 {@code 00:00:00} 인 줄을 눌러 화면까지 들어간 뒤 제출에서야 튕긴다.
+     * 특히 투표는 {@code VOTING} 을 풀어 줄 개표 배치가 없어(#172) 영원히 남는다.
+     */
+    @Test
+    @DisplayName("마감이 지난 변론·투표는 할 일 목록에서 빠진다")
+    void dropsExpiredTodos() {
+        /* 변론 마감 = -1h, 투표 마감 = -1h. 둘 다 이미 지났다 */
+        when(indictmentMapper.findDefenseTodos(USER_ID))
+                .thenReturn(List.of(row(11L, NOW.minusHours(DEFENSE_HOURS + 1))));
+        when(indictmentMapper.findVoteTodos(USER_ID))
+                .thenReturn(List.of(row(21L, NOW.minusHours(DEFENSE_HOURS + VOTE_HOURS + 1))));
+
+        assertEquals(List.of(), service().findMyTrials(USER_ID));
+    }
+
+    /**
+     * 경계는 「지났다」가 아니다. 마감 시각 정각에 낸 표를 {@code VoteService} 는 받는다 —
+     * 목록에서 먼저 지우면 화면은 막는데 서버는 받는 구간이 생긴다.
+     */
+    @Test
+    @DisplayName("마감 시각 정각은 아직 남아 있는 것으로 본다")
+    void keepsTodoExactlyAtDeadline() {
+        when(indictmentMapper.findDefenseTodos(USER_ID))
+                .thenReturn(List.of(row(11L, NOW.minusHours(DEFENSE_HOURS))));
+        when(indictmentMapper.findVoteTodos(USER_ID)).thenReturn(List.of());
+
+        assertEquals(1, service().findMyTrials(USER_ID).size());
     }
 
     /**
@@ -218,5 +268,52 @@ class GroupTrialServiceTest {
         GroupIndictmentDto card = service().findGroupIndictments(USER_ID, 3L).get(0);
 
         assertEquals("http://localhost/images/profile/9/a.jpg", card.getProfileImageUrl());
+    }
+
+    /* ══ 재판 상세 — 개표 공개 조건 (이슈 #171·#172) ══════════════ */
+
+    private GroupTrialDetailRow detailRow(String status) {
+        GroupTrialDetailRow row = new GroupTrialDetailRow();
+        row.setIndictmentId(11L);
+        row.setGroupId(3L);
+        row.setUserId(9L);
+        row.setStatus(status);
+        row.setVerdictMethod(IndictmentStatus.VOTING.name().equals(status)
+                ? null : VerdictMethod.AI_JUDGMENT.name());
+        row.setAiVerdictReason("변론이 사실과 다르다");
+        row.setGuiltyCount(2);
+        row.setInnocentCount(2);
+        row.setCreatedAt(NOW);
+        return row;
+    }
+
+    /**
+     * <b>AI 판결은 표가 동률일 때만 나온다.</b> 그래서 사유가 내려가는 순간 「지금 2:2 다」가
+     * 드러나 {@code guiltyCount} 를 가린 의미가 없어진다 — 같은 분기에서 함께 가려야 한다.
+     */
+    @Test
+    @DisplayName("개표 전에는 판사 탕이의 사유도 표수와 함께 가린다")
+    void masksAiReasonBeforeTally() {
+        when(indictmentMapper.findTrialDetail(11L, USER_ID))
+                .thenReturn(detailRow(IndictmentStatus.VOTING.name()));
+
+        GroupTrialDetailDto detail = service().findTrialDetail(USER_ID, 11L);
+
+        assertNull(detail.getGuiltyCount());
+        assertNull(detail.getAiVerdictReason());
+    }
+
+    /** 확정된 뒤에는 원문 그대로 내려간다. 화면이 이 문장을 판결문에 띄운다. */
+    @Test
+    @DisplayName("확정된 재판은 판결 방식과 사유를 그대로 내려보낸다")
+    void exposesAiReasonAfterTally() {
+        when(indictmentMapper.findTrialDetail(11L, USER_ID))
+                .thenReturn(detailRow(IndictmentStatus.GUILTY.name()));
+
+        GroupTrialDetailDto detail = service().findTrialDetail(USER_ID, 11L);
+
+        assertEquals(VerdictMethod.AI_JUDGMENT.name(), detail.getVerdictMethod());
+        assertEquals("변론이 사실과 다르다", detail.getAiVerdictReason());
+        assertEquals(2, detail.getGuiltyCount());
     }
 }

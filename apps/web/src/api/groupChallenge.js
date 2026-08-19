@@ -7,7 +7,7 @@
  * 목/실데이터 전환은 `services/devDataSource` 가 관리한다 (개발 전용).
  */
 import http from '@/api/http';
-import { isMockMode, notImplementedYet } from '@/services/devDataSource';
+import { isMockMode } from '@/services/devDataSource';
 import {
     MOCK_GROUPS,
     MOCK_INVITE_CODES,
@@ -24,6 +24,7 @@ import {
     MOCK_TRIAL_TRANSACTIONS,
 } from '@/fixtures/groupChallengeTrial';
 import { formatDeadlineLabel, toTrialProgress } from '@/utils/groupTrial';
+import { formatMonthDay, toRankingViewModel } from '@/utils/groupRanking';
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -32,13 +33,6 @@ function clone(value) {
 /** 지금부터 `ms` 뒤의 절대시각. 목데이터의 상대 마감을 실데이터 모양으로 맞출 때 쓴다. */
 function afterNow(ms) {
     return new Date(Date.now() + ms).toISOString();
-}
-
-/** `2026-08-05` → `8월 5일`. 화면은 「8월 5일 결산」으로 읽는다. */
-function formatMonthDay(isoDate) {
-    if (!isoDate) return '';
-    const [, month, day] = isoDate.split('-');
-    return `${Number(month)}월 ${Number(day)}일`;
 }
 
 /**
@@ -251,6 +245,14 @@ function toDetailViewModel(dto) {
             profileImage: member.profileImageUrl,
             isExceeded: member.exceeded,
         })),
+        /*
+         * 종료 화면의 최종 순위 (이슈 #173). CLOSED 전에는 null 을 그대로 둔다 —
+         * 빈 배열로 채우면 `v-if="ch.finalMembers"` 가 참이 되어 빈 랭킹 표가 그려진다.
+         * `trialStats` 는 이름이 같아 스프레드로 통과한다.
+         */
+        finalMembers: dto.finalMembers
+            ? dto.finalMembers.map((m) => ({ ...m, profileImage: m.profileImageUrl }))
+            : null,
     };
 }
 
@@ -337,6 +339,14 @@ function mockTrialDetailNow() {
  *
  * `caseNumber` · `evalLabel` · `settlementLabel` 은 서버에 없다. 사건 번호와 「일일결산」
  * 같은 문구는 표시 전용이라 서버가 내려주면 디자인을 고칠 때마다 war 를 다시 올려야 한다.
+ *
+ * ⚠ `guiltyCount` · `innocentCount` · `comments` 는 **손대지 않고 그대로 통과시킨다**(이슈 #171).
+ * 개표 전에는 셋 다 `null` 로 오는데, 이것이 「아직 모른다」는 신호다. `?? 0` · `?? []` 로
+ * 채우면 투표 중인 재판이 화면에 「0 : 0 · 코멘트 없음」으로 그려져 만장일치 0표처럼 보인다.
+ *
+ * `result` · `verdictMethod` · `aiVerdictReason` 도 같다(이슈 #172). 확정 전에는 셋 다 `null` 이고,
+ * 판결 화면으로 갈지 진행 현황으로 되돌릴지를 `utils/groupTrial` 의 `toVerdictScreen` 이
+ * 그 `null` 로 판단한다. 여기서 기본값을 채우면 투표 중인 재판이 판결문으로 열린다.
  */
 function toTrialDetailViewModel(dto) {
     const isDaily = dto.evalType === 'DAILY';
@@ -460,16 +470,50 @@ export async function confessIndictment(indictmentId) {
 }
 
 /**
- * 그룹 챌린지 생존/누적 순위 (명예 법정).
- * 서버 미구현 — 일일 평가 결과가 쌓여야 만들 수 있다.
+ * 투표 — 유·무죄 + 익명 한줄 코멘트 (이슈 #171).
+ *
+ * **응답 본문이 없다.** 여기서 표수를 돌려주면 「개표 전 비율 비공개」 정책이 이 한 곳에서
+ * 뚫린다. 제출 뒤 화면은 재판 상세를 다시 읽어 그린다.
+ *
+ * 코멘트는 선택이다. 서버도 trim 후 빈 값을 NULL 로 저장하지만, 빈 문자열을 실어 보내면
+ * 「코멘트를 남겼는데 안 보인다」는 오해를 만든다 — 비어 있으면 `null` 로 보낸다.
+ *
+ * 실패는 `err.code` 로 갈린다: `VOTE_ALREADY_EXISTS` · `VOTE_NOT_ALLOWED` ·
+ * `CANNOT_VOTE_OWN_TRIAL` · `INVALID_VERDICT` · `COMMENT_TOO_LONG` · `TRIAL_NOT_FOUND`.
+ *
+ * @param {number|string} indictmentId
+ * @param {{ verdict: 'GUILTY'|'INNOCENT', comment?: string }} payload
+ */
+export async function submitVote(indictmentId, { verdict, comment = '' }) {
+    if (isMockMode.value) {
+        /*
+         * 목데이터로는 투표 화면을 끝까지 걸을 수 없다. 재판 상세 픽스처의 피고가 「나」라서
+         * (`MOCK_TRIAL_DETAIL.accused.mine = true`) 투표 화면이 진입 단계에서 되돌려 보낸다.
+         * 배심원 시점 픽스처를 하나 더 두면 같은 재판이 목/실에서 다른 사람 것이 되어 더 헷갈린다 —
+         * 투표 흐름 검증은 DEV 데이터 출처 토글로 실서버를 쓴다.
+         */
+        return { mocked: true };
+    }
+    const text = (comment ?? '').trim();
+    return http.post(`/group-challenges/trials/${indictmentId}/votes`, {
+        verdict,
+        comment: text === '' ? null : text,
+    });
+}
+
+/**
+ * 명예 법정 — 생존/누적 순위 (이슈 #173). 참여자만 볼 수 있다.
+ *
+ * 실패(`GROUP_NOT_FOUND` · `GROUP_NOT_MEMBER`)는 화면이 그룹 상세로 되돌린다 —
+ * 코드를 나눠 봐야 화면이 할 수 있는 일이 같아서 여기서 구분하지 않는다.
  */
 export async function fetchGroupChallengeRanking(groupId) {
-    if (!isMockMode.value) {
-        throw notImplementedYet('명예 법정 순위');
+    if (isMockMode.value) {
+        const ranking = MOCK_CHALLENGE_RANKINGS[Number(groupId)];
+        if (!ranking) {
+            throw new Error('순위 정보를 찾을 수 없습니다.');
+        }
+        return clone(ranking);
     }
-    const ranking = MOCK_CHALLENGE_RANKINGS[Number(groupId)];
-    if (!ranking) {
-        throw new Error('순위 정보를 찾을 수 없습니다.');
-    }
-    return clone(ranking);
+    return toRankingViewModel(await http.get(`/group-challenges/${groupId}/ranking`));
 }

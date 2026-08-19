@@ -6,6 +6,8 @@ import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOver
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
 import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
+import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
+import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
@@ -169,6 +171,14 @@ function goToAllChallenges() {
 }
 
 /*
+ * 그룹챌린지 생성 진입로. 만들기 화면(`/group-challenges/create`)은 라우트만 있고
+ * 홈·목록 어느 쪽에도 버튼이 없어 주소를 직접 쳐야만 갈 수 있었다(이슈 #172).
+ */
+function goToCreate() {
+    router.push({ name: 'groupChallengeCreate' });
+}
+
+/*
  * 홈의 진행 중 카드에는 클릭이 아예 없었다. 목록의 GroupActiveCard 와 달리 그 자리에서 만든
  * 별도 마크업이라 진입로가 함께 붙지 않았다 — 눌러도 반응이 없어 「전체보기 ›」로 목록까지
  * 들어가야만 상세에 갈 수 있었다.
@@ -227,7 +237,7 @@ function livesColor(challenge) {
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- TO-DO 인박스 또는 완료 카드 -->
+            <!-- TO-DO 인박스 / 방금 다 처리함 / 애초에 할 일이 없음 -->
             <GroupTodoCard
                 v-if="hasTodo"
                 :items="todoItems"
@@ -236,6 +246,12 @@ function livesColor(challenge) {
                 @open-sheet="showSheet = true"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
+            <!-- 기소·투표가 아예 없는 평온 상태. 이 분기가 없으면 자리 전체가 빈 화면이 된다.
+                 doneIds 는 DEV 토글로만 채워지므로 allDone 은 실사용에서 거의 오지 않는다. -->
+            <template v-else>
+                <GroupPeacefulCard />
+                <GroupMascotScene scene="peaceful" />
+            </template>
 
             <!-- 진행 중인 챌린지 -->
             <div class="gc-section">
@@ -273,6 +289,12 @@ function livesColor(challenge) {
                         </span>
                     </div>
                 </div>
+
+                <!-- 생성 진입로. 만들기 화면으로 가는 유일한 버튼이다 -->
+                <button type="button" class="gc-create-cta" @click="goToCreate">
+                    <span class="gc-create-cta__title">새 그룹챌린지 만들기</span>
+                    <span class="gc-create-cta__plus">+</span>
+                </button>
 
                 <!-- 참여코드 진입로. 목록 「시작 전」 탭까지 들어가지 않아도 코드를 넣을 수 있다 -->
                 <button type="button" class="gc-join-cta" @click="showJoinSheet = true">
@@ -606,6 +628,39 @@ function livesColor(challenge) {
 .gc-challenge-card__lives {
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
+}
+
+/* ── 생성 진입로 ──────────────────────── */
+.gc-create-cta {
+    width: 100%;
+    margin-top: 11px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--tt-primary);
+    border: none;
+    border-radius: 18px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: var(--tt-elevation-btn);
+}
+
+.gc-create-cta:active {
+    background: var(--tt-primary-hover);
+}
+
+.gc-create-cta__title {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+}
+
+.gc-create-cta__plus {
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+    line-height: 1;
 }
 
 /* ── 참여코드 진입로 ──────────────────── */

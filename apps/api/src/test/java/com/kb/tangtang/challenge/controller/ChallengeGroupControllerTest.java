@@ -14,6 +14,7 @@ import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.challenge.service.ChallengeGroupDetailService;
 import com.kb.tangtang.challenge.service.ChallengeGroupService;
+import com.kb.tangtang.challenge.service.GroupRankingService;
 import com.kb.tangtang.challenge.service.GroupTrialService;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.exception.CommonExceptionAdvice;
@@ -53,7 +54,8 @@ class ChallengeGroupControllerTest {
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return MockMvcBuilders
-                .standaloneSetup(new ChallengeGroupController(stubService, stubTrialService, stubDetailService))
+                .standaloneSetup(new ChallengeGroupController(stubService, stubTrialService, stubDetailService,
+                        new GroupRankingService(null, null, null)))
                 .setControllerAdvice(new CommonExceptionAdvice())
                 .setCustomArgumentResolvers(loginUserResolver())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
@@ -278,7 +280,7 @@ class ChallengeGroupControllerTest {
         private long lastGroupId;
 
         StubDetailService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null, null);
         }
 
         @Override
@@ -317,7 +319,7 @@ class ChallengeGroupControllerTest {
         private long lastUserId;
 
         StubTrialService() {
-            super(null, null, null, null, 6, 24);
+            super(null, null, null, null, null, 6, 24);
         }
 
         @Override

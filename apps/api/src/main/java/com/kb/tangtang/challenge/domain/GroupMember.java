@@ -30,4 +30,7 @@ public class GroupMember {
 
     /** 조인 파생 — tbl_user.nickname. NULL 허용 컬럼이라 값이 없을 수 있다. */
     private String nickname;
+
+    /** 조인 파생 — tbl_user.profile_image_key. 이미지가 없으면 NULL. URL 변환은 서비스가 한다. */
+    private String profileImageKey;
 }

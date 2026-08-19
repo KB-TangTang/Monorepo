@@ -3,6 +3,7 @@
   언제 쓰는지: 자산 상세 4개 화면, 장부 상세내역 화면 등 "뒤로가기 헤더"가 필요한 모든 화면.
 -->
 <script setup>
+import { getCurrentInstance } from 'vue';
 import { useRouter } from 'vue-router';
 
 defineProps({
@@ -10,9 +11,22 @@ defineProps({
     backLabel: { type: String, default: '뒤로가기' },
 });
 
+/*
+ * `@back` 을 건 화면은 **목적지를 스스로 정한다.** 걸지 않은 화면은 지금까지처럼 히스토리를 되돌린다.
+ *
+ * 이슈 #172 전까지 이 컴포넌트에 `defineEmits` 가 없어, `@back` 은 선언되지 않은 리스너로
+ * 루트 `<header>` 에 흘러가 **버튼을 눌러도 영영 호출되지 않았다.** 판결 플로우 세 화면이
+ * 그걸 모르고 `@back` 을 걸어 둔 탓에 뒤로가기가 전부 맹목적인 `router.back()` 이었다.
+ */
+const emit = defineEmits(['back']);
+const instance = getCurrentInstance();
 const router = useRouter();
 
 function goBack() {
+    if (instance.vnode.props?.onBack) {
+        emit('back');
+        return;
+    }
     router.back();
 }
 </script>

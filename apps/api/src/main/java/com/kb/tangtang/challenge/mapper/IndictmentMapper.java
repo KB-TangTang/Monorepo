@@ -2,9 +2,11 @@ package com.kb.tangtang.challenge.mapper;
 
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
+import com.kb.tangtang.challenge.domain.GroupTrialStatsRow;
 import com.kb.tangtang.challenge.domain.GroupTrialSummaryRow;
 import com.kb.tangtang.challenge.domain.Indictment;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
+import com.kb.tangtang.challenge.domain.VerdictTallyRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -38,10 +40,9 @@ public interface IndictmentMapper {
     /**
      * 내가 피고이고 아직 변론을 내지 않은 기소 (이슈 #169). 홈 「오늘의 할 일」의 {@code accuse} 줄.
      *
-     * <p><b>마감이 지났는지는 여기서 거르지 않는다.</b> 마감은 {@code created_at} 에서 계산하는
-     * 값이라 SQL 로 거를 수는 있지만, 그러면 상태를 넘기는 배치(#170)와 <b>판단 주체가 둘</b>이 된다.
-     * 배치가 5분 늦게 돌면 할 일이 사라졌다가 투표 줄로 다시 나타난다. 진실은 {@code status} 하나다.
-     * 마감 시각은 화면에 표시만 한다.
+     * <p><b>마감이 지났는지는 SQL 이 거르지 않는다.</b> 마감 시간은 {@code challenge.trial.*}
+     * 프로퍼티라 SQL 에 넣으려면 {@code ${}} 가 필요하다 — 팀 규칙상 금지다.
+     * 거르는 일은 {@link com.kb.tangtang.challenge.service.GroupTrialService#findMyTrials} 가 한다.
      *
      * <p>{@code idx_ind_user_status (user_id, status)} 를 그대로 탄다.
      */
@@ -75,6 +76,15 @@ public interface IndictmentMapper {
      */
     List<GroupTrialSummaryRow> findTrialSummaryByGroupIds(@Param("userId") Long userId,
                                                           @Param("groupIds") List<Long> groupIds);
+
+    /**
+     * 종료 그룹의 확정 재판 전적 (이슈 #173). 종료 화면 「재판 기록」 링크의 숫자다.
+     *
+     * <p>확정 상태(GUILTY·INNOCENT)만 센다 — 위의 {@link #findTrialSummaryByGroupIds} 는
+     * 진행 중(DEFENSE_WAIT·VOTING)만 세는 반대 방향이라 재사용할 수 없다.
+     * 재판이 하나도 없어도 GROUP BY 가 없어 0 으로 채워진 행이 항상 나온다.
+     */
+    GroupTrialStatsRow findClosedTrialStats(@Param("groupId") Long groupId);
 
     /**
      * 재판 상세 한 벌 (이슈 #170). 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 모두 이것을 쓴다.
@@ -131,4 +141,44 @@ public interface IndictmentMapper {
      * @return 넘긴 건수
      */
     int moveExpiredDefensesToVoting(@Param("defenseHours") int defenseHours);
+
+    /**
+     * 개표할 차례가 된 기소 (이슈 #172 배치).
+     *
+     * <p><b>마감이 지났거나, 투표할 사람이 전부 던졌거나</b> 둘 중 하나면 잡는다. 마감만 보면
+     * 전원이 일찍 투표를 끝낸 재판도 30시간을 채워야 결과가 나온다 — 그 사이 화면은
+     * 「투표 완료」인 채로 멈춰 있어 사용자는 서비스가 멈춘 줄 안다(팀 결정 2026-08-18).
+     *
+     * <p>분모는 {@code 참여자 수 - 1} 이다(피고는 자기 재판에 투표할 수 없다). 중도 이탈 기능이
+     * 없어 분모가 줄지 않는 것을 전제로 한다 — 나가기가 생기면 이 조건부터 다시 본다.
+     *
+     * <p>{@code status = 'VOTING'} 이라 혐의 인정(GUILTY)·이미 확정된 건은 애초에 걸리지 않는다.
+     * 변론 없이 마감된 재판도 그대로 투표에 올라와 있으므로 여기 잡힌다 — 변론 유무는 보지 않는다.
+     *
+     * <p>시간 값은 프로퍼티라 파라미터로 받는다({@code ${}} 금지).
+     *
+     * @param defenseHours {@code challenge.trial.defense-hours}
+     * @param voteHours    {@code challenge.trial.vote-hours}. 투표 마감은 둘의 합이다
+     */
+    List<VerdictTallyRow> findVotingToTally(@Param("defenseHours") int defenseHours,
+                                            @Param("voteHours") int voteHours);
+
+    /**
+     * 판결 확정 — {@code VOTING} → {@code GUILTY} / {@code INNOCENT} (이슈 #172).
+     *
+     * <p><b>{@code WHERE ... AND status = 'VOTING'} 이 멱등의 근거다.</b> 배치를 두 번 돌리거나
+     * 두 인스턴스가 같은 틱을 잡아도 두 번째는 0행을 바꾼다. 호출부는 그 0 을 보고 목숨 차감·
+     * 감액 반영·이벤트 발행을 통째로 건너뛴다 — 조건이 없으면 <b>목숨이 두 번 깎인다.</b>
+     *
+     * <p>{@code result} 를 함께 쓰는 이유는 {@code ck_ind_result} 가 상태와의 조합만 허용해서다.
+     * {@code aiVerdictReason} 은 {@code AI_JUDGMENT} 가 아니면 반드시 NULL 이어야 한다
+     * ({@code ck_ind_ai_reason}).
+     *
+     * @return 바꾼 행 수. 0 이면 이미 확정된 재판이다
+     */
+    int confirmVerdict(@Param("indictmentId") Long indictmentId,
+                       @Param("status") String status,
+                       @Param("result") int result,
+                       @Param("verdictMethod") String verdictMethod,
+                       @Param("aiVerdictReason") String aiVerdictReason);
 }

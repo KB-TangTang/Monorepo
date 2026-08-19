@@ -1,11 +1,15 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
+import com.kb.tangtang.challenge.domain.GroupTrialStatsRow;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.GroupDailyMemberDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
+import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
+import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.storage.ImageStorage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -46,18 +52,25 @@ class ChallengeGroupDetailServiceTest {
     @Mock private ChallengeGroupService challengeGroupService;
     @Mock private GroupTrialService groupTrialService;
     @Mock private GroupChallengeResultMapper resultMapper;
+    @Mock private GroupMemberMapper groupMemberMapper;
+    @Mock private IndictmentMapper indictmentMapper;
     @Mock private ImageStorage imageStorage;
 
     private ChallengeGroupDetailService service() {
         return new ChallengeGroupDetailService(challengeGroupService, groupTrialService, resultMapper,
-                imageStorage, Clock.fixed(TODAY.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                groupMemberMapper, indictmentMapper, imageStorage,
+                Clock.fixed(TODAY.atStartOfDay(ZoneId.systemDefault()).toInstant(),
                 ZoneId.systemDefault()));
     }
 
     private void givenGroup(int limitAmount) {
+        givenGroup(limitAmount, "ACTIVE");
+    }
+
+    private void givenGroup(int limitAmount, String status) {
         when(challengeGroupService.findDetail(USER_ID, GROUP_ID)).thenReturn(
                 ChallengeGroupDto.builder().id(GROUP_ID).groupName("커피값 줄이기")
-                        .limitAmount(limitAmount).evalType("DAILY").status("ACTIVE").build());
+                        .limitAmount(limitAmount).evalType("DAILY").status(status).build());
     }
 
     private void givenIndictments(GroupIndictmentDto... cards) {
@@ -190,5 +203,70 @@ class ChallengeGroupDetailServiceTest {
         assertEquals(0, detail.getMyDailyAmount().signum());
         assertEquals(0, detail.getMyUsagePercent());
         assertEquals(0, detail.getDailyMembers().get(0).getDailyAmount().signum());
+    }
+
+    /* ══ 종료 화면 필드 (이슈 #173) ═══════════════════════ */
+
+    private GroupMember finalMember(long userId, int finalRank, String outcome, String imageKey) {
+        return GroupMember.builder()
+                .groupId(GROUP_ID)
+                .userId(userId)
+                .livesCount(2)
+                .finalRank(finalRank)
+                .finalOutcome(outcome)
+                .nickname("절약왕" + userId)
+                .profileImageKey(imageKey)
+                .build();
+    }
+
+    /**
+     * 확정값을 읽기만 하고({@code final_rank} 그대로), 정렬만 서비스가 한다 —
+     * {@code findByGroupIds} 는 다른 화면 때문에 {@code user_id} 순으로 온다.
+     */
+    @Test
+    @DisplayName("종료 그룹은 최종 결과를 final_rank 순으로 채운다")
+    void closedGroupFillsFinalMembersOrderedByRank() {
+        givenGroup(10_000, "CLOSED");
+        givenIndictments();
+        givenConsumption();
+        when(groupMemberMapper.findByGroupIds(List.of(GROUP_ID))).thenReturn(List.of(
+                finalMember(7L, 2, "SURVIVED", null),
+                finalMember(9L, 1, "SURVIVED", "profile/9.png"),
+                finalMember(10L, 3, "ELIMINATED", null)));
+        when(imageStorage.urlOf("profile/9.png")).thenReturn("https://img/profile/9.png");
+        GroupTrialStatsRow stats = new GroupTrialStatsRow();
+        stats.setTotalTrials(3);
+        stats.setGuiltyCount(2);
+        stats.setInnocentCount(1);
+        when(indictmentMapper.findClosedTrialStats(GROUP_ID)).thenReturn(stats);
+
+        ChallengeGroupDetailDto detail = service().findDetail(USER_ID, GROUP_ID);
+
+        assertEquals(List.of(9L, 7L, 10L), detail.getFinalMembers().stream()
+                .map(ChallengeGroupDetailDto.FinalMember::getUserId).toList());
+        assertEquals("ELIMINATED", detail.getFinalMembers().get(2).getFinalOutcome());
+        assertEquals("https://img/profile/9.png", detail.getFinalMembers().get(0).getProfileImageUrl());
+        assertEquals(3, detail.getTrialStats().getTotalTrials());
+        assertEquals(2, detail.getTrialStats().getGuiltyCount());
+        assertEquals(1, detail.getTrialStats().getInnocentCount());
+    }
+
+    /**
+     * CLOSED 전에는 {@code final_*} 가 NULL 이라 만들 수 있는 값이 없다.
+     * 진행 중 화면이 빈 포디움을 그리면 안 되므로 필드째 NULL 로 내린다.
+     */
+    @Test
+    @DisplayName("진행 중 그룹은 종료 화면 필드를 채우지 않는다")
+    void activeGroupLeavesClosedFieldsNull() {
+        givenGroup(10_000);
+        givenIndictments();
+        givenConsumption(consumption(USER_ID, "6000"));
+
+        ChallengeGroupDetailDto detail = service().findDetail(USER_ID, GROUP_ID);
+
+        assertNull(detail.getFinalMembers());
+        assertNull(detail.getTrialStats());
+        verify(groupMemberMapper, never()).findByGroupIds(List.of(GROUP_ID));
+        verify(indictmentMapper, never()).findClosedTrialStats(GROUP_ID);
     }
 }

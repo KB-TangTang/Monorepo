@@ -2,6 +2,7 @@ package com.kb.tangtang.challenge.chat.service;
 
 import com.kb.tangtang.challenge.chat.domain.ChatSystemMessageSpec;
 import com.kb.tangtang.challenge.chat.domain.ChatSystemType;
+import com.kb.tangtang.challenge.chat.domain.ChatVerdictInfo;
 import com.kb.tangtang.challenge.domain.GroupTrialEvents;
 import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,12 +75,28 @@ public class ChatSystemMessageListener {
                 ChatSystemType.DEFENSE_REGISTERED, NotificationType.GROUP_DEFENSE_REGISTERED);
     }
 
+    /**
+     * 판결만 결과 값을 함께 싣는다(이슈 #304). 화면이 도장을 고르고 「투표 4:2 · 목숨 1 차감」을
+     * 적는 데 쓴다. <b>문구에서 유죄·무죄를 다시 읽어 내지 않는다</b> — 문구를 고치면 도장이
+     * 조용히 뒤집히는 구조가 되기 때문이다.
+     */
     @Async
     @EventListener
     public void onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed event) {
-        post(event.getGroupId(), event.getIndictmentId(),
-                event.getSummary(),
-                ChatSystemType.VERDICT_CONFIRMED, NotificationType.GROUP_JUDGMENT);
+        chatMessageService.postSystemMessage(event.getGroupId(), new ChatSystemMessageSpec(
+                event.getSummary(), ChatSystemType.VERDICT_CONFIRMED,
+                trialLink(event.getGroupId(), event.getIndictmentId()),
+                caseNo(event.getIndictmentId()), NotificationType.GROUP_JUDGMENT,
+                verdictInfo(event)));
+    }
+
+    /** 표 분포가 없는 판결(혐의 인정)은 그 자리를 비운 채 넘긴다. 0:0 으로 채우지 않는다. */
+    private ChatVerdictInfo verdictInfo(GroupTrialEvents.VerdictConfirmed event) {
+        if (event.getGuiltyVotes() == null || event.getInnocentVotes() == null) {
+            return ChatVerdictInfo.byConfession(event.getLivesLost());
+        }
+        return ChatVerdictInfo.byVote(event.isGuilty(),
+                event.getGuiltyVotes(), event.getInnocentVotes(), event.getLivesLost());
     }
 
     private void post(long groupId, long indictmentId, String content,

@@ -5,7 +5,6 @@ import com.kb.tangtang.account.dto.AssetTrendDto;
 import com.kb.tangtang.account.dto.AssetTrendItemDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -41,7 +40,9 @@ public class AssetTrendService {
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
+    /* @Transactional 을 두지 않는다 — AssetSummaryService 와 같은 이유(QA 지적사항):
+       compositionCalculator.compute() 가 InvestmentPriceRefresher 를 거쳐 토스에 블로킹
+       HTTP 호출을 할 수 있어, 트랜잭션을 걸면 그 동안 DB 커넥션을 붙잡게 된다. */
     public AssetTrendDto getTrend(long userId, String rawBaseDate) {
         LocalDateTime asOf = LocalDateTime.now(clock);
         YearMonth baseMonth = YearMonth.from(AssetBaseDateParser.parse(rawBaseDate, asOf.toLocalDate()));

@@ -107,9 +107,14 @@ function formatDate(iso) {
     return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
-/* 네비게이션 */
+/*
+ * 네비게이션
+ *
+ * 뒤로가기는 히스토리를 믿지 않고 그룹챌린지 홈으로 명시 이동한다(이슈 #172).
+ * 재판·판결 플로우가 이 화면 뒤에 쌓여 있어 `router.back()` 이면 방금 본 판결문으로 되돌아간다.
+ */
 function goBack() {
-    router.back();
+    router.push({ name: 'groupChallenge' });
 }
 
 function goToList() {

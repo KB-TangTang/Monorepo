@@ -97,6 +97,23 @@ public interface ChallengeGroupMapper {
                                            @Param("endedBefore") LocalDate endedBefore);
 
     /**
+     * 최종 결과를 확정할 그룹 (이슈 #172). {@code JUDGING → CLOSED}.
+     *
+     * <p><b>「미확정 재판이 없는 그룹만」이 이 조회의 전부다.</b> 재판이 아직 {@code DEFENSE_WAIT}
+     * 나 {@code VOTING} 으로 남아 있는데 확정해 버리면, 그 재판이 유죄로 끝났을 때 깎였어야 할
+     * 목숨이 순위에 반영되지 못한다. {@code final_*} 3개는 write-once 라 되돌릴 수도 없다.
+     *
+     * <p>기다리는 시간에 상한을 두지 않는다. 개표 배치가 마감 경과분을 1분마다 집어 가므로
+     * 남아 있는 재판은 반드시 끝난다 — 상한을 두면 「끝났지만 반영되지 않은 재판」이 생긴다.
+     *
+     * <p>날짜 조건이 없는 이유는 {@code JUDGING} 자체가 이미 종료를 뜻하기 때문이다.
+     * {@link #findGroupsToJudge} 가 {@code end_date} 를 보고 넘겨준 그룹만 이 상태에 있다.
+     *
+     * @param status 찾을 상태. 보통 {@code JUDGING}
+     */
+    List<ChallengeGroup> findGroupsToClose(@Param("status") String status);
+
+    /**
      * 기대한 상태일 때만 상태를 바꾼다(compare-and-set).
      *
      * <b>배치 멱등성의 근거가 이 반환값이다.</b> 두 번째 실행이나 동시에 도는 인스턴스는 0 을 받고,

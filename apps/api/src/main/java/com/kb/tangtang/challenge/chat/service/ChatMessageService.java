@@ -108,7 +108,7 @@ public class ChatMessageService {
         }
 
         ChatMessage saved = store.append(groupId, ChatMessageType.SYSTEM, null, null,
-                spec.content(), spec.systemType(), spec.deepLink(), spec.caseNo());
+                spec.content(), spec.systemType(), spec.deepLink(), spec.caseNo(), spec.verdict());
         broadcaster.broadcast(groupId, ChatMessageDto.from(saved));
 
         List<Long> outsiders = outsiders(members, groupId, null);

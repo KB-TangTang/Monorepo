@@ -42,8 +42,9 @@ public interface AssetControllerDocs {
                                                           String type);
 
     @ApiOperation(value = "자산 상세 목록 — 투자",
-            notes = "사용자의 전체 보유 종목과 평가금액·원금 합계를 내려준다. 종목별 손익금액·손익률은 "
-                    + "tbl_investment_holding 에 동기화된 값을 그대로 반환한다(화면에서 다시 계산하지 않는다).")
+            notes = "사용자의 보유 종목과 평가금액·원금 합계를 내려준다. 연결 해제(is_active=0)된 계좌의 "
+                    + "종목은 제외한다. 종목별 손익금액·손익률은 tbl_investment_holding 에 동기화된 값을 "
+                    + "그대로 반환한다(화면에서 다시 계산하지 않는다).")
     ApiResponse<AssetInvestmentDetailDto> getInvestments(@ApiIgnore Long userId);
 
     @ApiOperation(value = "자산 상세 목록 — 대출",
