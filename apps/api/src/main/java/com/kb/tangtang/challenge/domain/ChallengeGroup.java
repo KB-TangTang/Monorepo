@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * {@code tbl_challenge_group} 한 행.
@@ -37,6 +38,14 @@ public class ChallengeGroup {
     private String inviteCode;
     private String status;
     private String memo;
+
+    /**
+     * 그룹을 만든 시각. 초대 화면의 소환장이 「발부일」로 찍는다.
+     *
+     * <p>INSERT 는 이 값을 보내지 않고 컬럼 기본값에 맡기므로 <b>생성 직후 객체에는 NULL 이다.</b>
+     * 조회해 온 행에만 채워진다.
+     */
+    private LocalDateTime createdAt;
 
     /** 조인 파생 — tbl_category.category_name. categoryId 가 NULL 이면 NULL. */
     private String categoryName;

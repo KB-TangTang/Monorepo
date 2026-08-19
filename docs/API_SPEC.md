@@ -1043,7 +1043,8 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 프론트의 자유 규칙 입력값은 ERD 컬럼명에 맞춰 `memo` 로 보낸다.
 
 `ChallengeGroup` 은 목록·상세·미리보기가 **모두 같은 한 가지 모양**이다.
-`tbl_challenge_group` 전 컬럼(`memo` 포함) + 로그인 사용자 본인의
+`tbl_challenge_group` 전 컬럼(`memo` · `createdAt` 포함 — `createdAt` 은 초대 화면의 소환장이
+「발부일」로 찍는다) + 로그인 사용자 본인의
 `tbl_group_member` 값(`livesCount`, `finalOutcome`, `finalRank`, `finalChargeAmount`)
 + 파생값(`totalDays`, `currentDay`, `daysUntilStart`, `maxLives`, `memberCount`,
 `owner`, `member`, `joinable`) + `members[{userId, nickname, owner}]`.
