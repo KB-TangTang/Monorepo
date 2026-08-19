@@ -87,7 +87,7 @@ class ChatSystemMessageListenerTest {
     @DisplayName("유죄 판결은 표 분포와 차감된 목숨을 함께 싣는다 — 화면이 문구를 파싱하지 않게")
     void guiltyVerdictCarriesVotesAndLives() {
         listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
-                7L, 55L, "절약왕님 재판 — 유죄. 목숨 1개가 차감됐어요.", true, 4, 2, 1));
+                7L, 55L, "절약왕님, 유죄예요. 목숨 1개가 차감됐어요.", true, 4, 2, 1));
 
         ChatVerdictInfo verdict = captureSpec().verdict();
         assertEquals(ChatVerdictInfo.Outcome.GUILTY, verdict.outcome());
@@ -100,7 +100,7 @@ class ChatSystemMessageListenerTest {
     @DisplayName("남은 목숨이 없어 못 깎은 유죄는 livesLost 가 0 이다 — 화면이 「1 차감」을 적으면 거짓말이 된다")
     void guiltyWithoutRemainingLifeCarriesZero() {
         listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
-                7L, 55L, "절약왕님 재판 — 유죄. 남은 목숨이 없어요.", true, 3, 1, 0));
+                7L, 55L, "절약왕님, 유죄예요. 남은 목숨이 없어요.", true, 3, 1, 0));
 
         ChatVerdictInfo verdict = captureSpec().verdict();
         assertEquals(ChatVerdictInfo.Outcome.GUILTY, verdict.outcome());

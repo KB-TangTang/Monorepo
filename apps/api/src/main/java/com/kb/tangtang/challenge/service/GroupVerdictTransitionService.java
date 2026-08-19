@@ -118,9 +118,9 @@ public class GroupVerdictTransitionService {
     /** 유죄 문구. 남은 목숨이 없었으면 「차감됐어요」라고 거짓말하지 않는다. */
     private String guiltySummary(VerdictTallyRow row, int livesLost) {
         if (livesLost == 0) {
-            return nickname(row) + "님 재판 — 유죄. 남은 목숨이 없어요.";
+            return nickname(row) + "님, 유죄예요. 남은 목숨이 없어요.";
         }
-        return nickname(row) + "님 재판 — 유죄. 목숨 1개가 차감됐어요.";
+        return nickname(row) + "님, 유죄예요. 목숨 1개가 차감됐어요.";
     }
 
     /**
@@ -133,10 +133,10 @@ public class GroupVerdictTransitionService {
     private String applyInnocent(VerdictTallyRow row) {
         BigDecimal deduction = row.getDeductionAmount();
         if (deduction == null || deduction.signum() <= 0) {
-            return nickname(row) + "님 재판 — 무죄.";
+            return nickname(row) + "님, 무죄예요.";
         }
         resultMapper.addVerdictDeduction(row.getResultId(), deduction);
-        return nickname(row) + "님 재판 — 무죄. " + money(deduction) + "이 소비액에서 빠졌어요.";
+        return nickname(row) + "님, 무죄예요. " + money(deduction) + "이 소비액에서 빠졌어요.";
     }
 
     /** 닉네임은 NULL 허용이다. 조회 SQL 이 social_name 까지 떨어뜨려도 비어 있을 수 있다. */

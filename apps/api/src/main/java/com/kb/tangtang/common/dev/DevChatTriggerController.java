@@ -58,11 +58,11 @@ public class DevChatTriggerController implements DevChatTriggerControllerDocs {
             case "VERDICT":
             case "VERDICT_GUILTY":
                 events.publishEvent(GroupTrialEvents.VerdictConfirmed.byVote(groupId, indictmentId,
-                        nickname + "님 재판 — 유죄. 목숨 1개가 차감됐어요.", true, 4, 2, 1));
+                        nickname + "님, 유죄예요. 목숨 1개가 차감됐어요.", true, 4, 2, 1));
                 break;
             case "VERDICT_INNOCENT":
                 events.publishEvent(GroupTrialEvents.VerdictConfirmed.byVote(groupId, indictmentId,
-                        nickname + "님 재판 — 무죄. 30,000원이 소비액에서 빠졌어요.", false, 2, 4, 0));
+                        nickname + "님, 무죄예요. 30,000원이 소비액에서 빠졌어요.", false, 2, 4, 0));
                 break;
             case "VERDICT_CONFESSION":
                 events.publishEvent(GroupTrialEvents.VerdictConfirmed.byConfession(groupId, indictmentId,
