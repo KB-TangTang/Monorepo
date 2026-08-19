@@ -38,31 +38,43 @@ public class MissionAnalysisSnapshotService {
 
     @Transactional
     public MissionAnalysisSnapshotDto getOrCreateSnapshot(long userId) {
+        return getOrCreateSnapshot(userId, LocalDate.now(clock));
+    }
+
+    @Transactional
+    public MissionAnalysisSnapshotDto getOrCreateSnapshot(long userId, LocalDate cycleStartDate) {
         List<MissionAnalysisSnapshot> pendingSnapshots =
                 missionAnalysisSnapshotMapper.findPendingSnapshots(userId);
         if (!pendingSnapshots.isEmpty()) {
             return toDto(pendingSnapshots);
         }
 
-        boolean alreadyQualified = missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null;
-        if (!alreadyQualified && missionCategoryAnalysisService.hasInitialQualification(userId)) {
-            missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock));
-            alreadyQualified = true;
-        }
-        MissionCategoryAnalysisDto analysis = alreadyQualified
-                ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId)
+        boolean qualified = ensureRelativeMissionQualification(userId);
+        MissionCategoryAnalysisDto analysis = qualified
+                ? missionCategoryAnalysisService.getCategoryAnalysisForQualifiedUser(userId, cycleStartDate)
                 : missionCategoryAnalysisService.getCategoryAnalysis(userId);
         if (analysis.getTopCategories().isEmpty()) {
             return MissionAnalysisSnapshotDto.empty();
         }
 
-        LocalDate cycleStartDate = LocalDate.now(clock);
         List<MissionAnalysisSnapshot> newSnapshots = analysis.getTopCategories().stream()
                 .map(category -> toSnapshot(userId, cycleStartDate, category))
                 .toList();
 
         missionAnalysisSnapshotMapper.insertSnapshots(newSnapshots);
         return toDto(newSnapshots);
+    }
+
+    @Transactional
+    public boolean ensureRelativeMissionQualification(long userId) {
+        if (missionAnalysisSnapshotMapper.findQualifiedAt(userId) != null) {
+            return true;
+        }
+        if (!missionCategoryAnalysisService.hasInitialQualification(userId)) {
+            return false;
+        }
+        missionAnalysisSnapshotMapper.markQualified(userId, LocalDateTime.now(clock).withNano(0));
+        return true;
     }
 
     @Transactional

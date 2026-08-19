@@ -25,7 +25,6 @@ class MissionEvaluationMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + "findPendingAssignmentIdsBefore"));
         assertTrue(configuration.hasStatement(namespace + "lockPendingAssignment"));
         assertTrue(configuration.hasStatement(namespace + "updateMissionResult"));
-        assertTrue(configuration.hasStatement(namespace + "increaseSuccessStreak"));
-        assertTrue(configuration.hasStatement(namespace + "resetStreak"));
+        assertTrue(configuration.hasStatement(namespace + "recalculateStreak"));
     }
 }

@@ -38,7 +38,7 @@ class MissionEvaluationServiceTest {
     }
 
     @Test
-    void increasesStreakWhenSpendingIsAtOrBelowTarget() {
+    void recalculatesStreakWhenSpendingIsAtOrBelowTarget() {
         MissionEvaluationTarget target = target("15000", "15000");
         when(mapper.lockPendingAssignment(11L)).thenReturn(target);
         when(mapper.updateMissionResult(11L, "SUCCESS", EVALUATED_AT)).thenReturn(1);
@@ -47,9 +47,8 @@ class MissionEvaluationServiceTest {
 
         InOrder order = inOrder(mapper);
         order.verify(mapper).updateMissionResult(11L, "SUCCESS", EVALUATED_AT);
-        order.verify(mapper).increaseSuccessStreak(7L, EVALUATED_AT);
+        order.verify(mapper).recalculateStreak(7L, EVALUATED_AT);
         verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
-        verify(mapper, never()).resetStreak(7L, EVALUATED_AT);
         verify(events).publishEvent((Object) argThat(event -> {
             NotificationRequestedEvent request = (NotificationRequestedEvent) event;
             return request.userId() == 7L && request.params().get("result").contains("성공");
@@ -57,16 +56,15 @@ class MissionEvaluationServiceTest {
     }
 
     @Test
-    void resetsStreakWhenSpendingExceedsTarget() {
+    void recalculatesStreakWhenSpendingExceedsTarget() {
         MissionEvaluationTarget target = target("15001", "15000");
         when(mapper.lockPendingAssignment(11L)).thenReturn(target);
         when(mapper.updateMissionResult(11L, "FAIL", EVALUATED_AT)).thenReturn(1);
 
         service.evaluate(11L, EVALUATED_AT);
 
-        verify(mapper).resetStreak(7L, EVALUATED_AT);
+        verify(mapper).recalculateStreak(7L, EVALUATED_AT);
         verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
-        verify(mapper, never()).increaseSuccessStreak(7L, EVALUATED_AT);
         verify(events).publishEvent((Object) argThat(event -> {
             NotificationRequestedEvent request = (NotificationRequestedEvent) event;
             return request.userId() == 7L && request.params().get("result").equals("결과를 확인해 보세요");

@@ -27,6 +27,7 @@ class MissionCategoryAnalysisServiceTest {
         List<CategorySpending> topCategories = List.of();
         int sumConsumptionCallCount;
         int findTopCategoriesCallCount;
+        LocalDate expectedEndDate = TODAY;
 
         @Override
         public int countAllConsumptionTransactions(long userId) {
@@ -35,8 +36,8 @@ class MissionCategoryAnalysisServiceTest {
 
         @Override
         public int countConsumptionTransactions(long userId, LocalDate startDate, LocalDate endDate) {
-            assertEquals(LocalDate.of(2026, 7, 14), startDate);
-            assertEquals(TODAY, endDate);
+            assertEquals(expectedEndDate.minusDays(28), startDate);
+            assertEquals(expectedEndDate, endDate);
             return transactionCount;
         }
 
@@ -123,6 +124,23 @@ class MissionCategoryAnalysisServiceTest {
         assertEquals(12, result.getTransactionCount());
         assertEquals("배달앱", result.getTopCategories().get(0).getCategoryName());
         assertEquals(1, mapper.findTopCategoriesCallCount);
+    }
+
+    @Test
+    @DisplayName("복구 배정은 누락 날짜 직전 28일을 기준으로 카테고리를 분석한다")
+    void qualifiedUserAnalysisUsesRecoveryReferenceDate() {
+        FakeMapper mapper = new FakeMapper();
+        mapper.expectedEndDate = LocalDate.of(2026, 8, 8);
+        mapper.transactionCount = 4;
+        mapper.totalConsumption = new BigDecimal("120000");
+        mapper.topCategories = List.of(row(17L, "식비", "배달앱", "80000", 4));
+
+        MissionCategoryAnalysisDto result = service(mapper)
+                .getCategoryAnalysisForQualifiedUser(USER_ID, mapper.expectedEndDate);
+
+        assertEquals(LocalDate.of(2026, 7, 11), result.getAnalysisStartDate());
+        assertEquals(LocalDate.of(2026, 8, 7), result.getAnalysisEndDate());
+        assertEquals("배달앱", result.getTopCategories().get(0).getCategoryName());
     }
 
     @Test
