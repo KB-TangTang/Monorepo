@@ -4,12 +4,20 @@ import {
     formatWatchlistMissionRound,
     formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    formatMissionWatchQuote,
     getMissionBadge,
     toMissionVerdictModel,
     toWatchCategoryModel,
     toTodayMissionBriefing,
     toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('카테고리명 받침에 따라 목적격 조사를 표시한다', () => {
+    assert.equal(formatMissionWatchQuote('패션'), '"오늘은 패션을 지켜보겠습니다"');
+    assert.equal(formatMissionWatchQuote('취미'), '"오늘은 취미를 지켜보겠습니다"');
+    assert.equal(formatMissionWatchQuote('카페/간식'), '"오늘은 카페/간식을 지켜보겠습니다"');
+    assert.equal(formatMissionWatchQuote(''), '"오늘의 소비를 지켜보겠습니다"');
+});
 
 test('미확인 판정 API 응답을 성공 모달 표시 모델로 변환한다', () => {
     const model = toMissionVerdictModel(
