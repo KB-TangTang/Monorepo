@@ -97,7 +97,11 @@ public interface ChallengeGroupControllerDocs {
                                                         @ApiParam(value = "초대 코드", required = true) String inviteCode);
 
     @ApiOperation(value = "그룹 챌린지 참여",
-            notes = "참여 직후 화면이 상세로 넘어가므로 **상세 정보를 그대로 돌려준다.**")
+            notes = "참여 직후 화면이 상세로 넘어가므로 **상세 정보를 그대로 돌려준다.**\n\n"
+                    + "**그룹 ID 가 아니라 초대 코드로 참여한다.** 코드를 아는 사람만 들어올 수 있어야 하므로 "
+                    + "참여 경로를 코드 하나로 좁혔다. 코드는 대소문자를 가리지 않는다.\n\n"
+                    + "오류 코드: `GROUP_INVITE_CODE_NOT_FOUND`(코드가 없거나 틀림) · "
+                    + "`GROUP_ALREADY_JOINED` · `GROUP_CLOSED` · `GROUP_INVITE_CODE_EXPIRED`(모집 마감) · `GROUP_FULL`")
     ApiResponse<ChallengeGroupDto> join(@ApiIgnore Long userId,
-                                        @ApiParam(value = "그룹 ID", required = true) Long groupId);
+                                        @ApiParam(value = "초대 코드", required = true) String inviteCode);
 }

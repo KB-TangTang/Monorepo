@@ -262,7 +262,7 @@ class ChallengeGroupServiceTest {
     void previewReportsFull() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
         for (long userId = 10L; userId < 15L; userId++) {
-            service.join(userId, created.getGroupId());
+            service.join(userId, created.getInviteCode());
         }
 
         InviteCodePreviewDto preview = service.previewInviteCode(GUEST_ID, created.getInviteCode());
@@ -293,7 +293,7 @@ class ChallengeGroupServiceTest {
             r.setEndDate(TODAY.plusDays(2));   // 3일
         }));
 
-        ChallengeGroupDto detail = service.join(GUEST_ID, created.getGroupId());
+        ChallengeGroupDto detail = service.join(GUEST_ID, created.getInviteCode());
 
         assertTrue(detail.isMember());
         assertEquals(3, detail.getLivesCount());
@@ -309,7 +309,7 @@ class ChallengeGroupServiceTest {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
         clearInvocations(chatMessageStore);
 
-        assertThrows(BusinessException.class, () -> service.join(OWNER_ID, created.getGroupId()));
+        assertThrows(BusinessException.class, () -> service.join(OWNER_ID, created.getInviteCode()));
 
         verifyNoInteractions(chatMessageStore);
     }
@@ -319,11 +319,11 @@ class ChallengeGroupServiceTest {
     void joinRejectedWhenFull() {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
         for (long userId = 10L; userId < 15L; userId++) {
-            service.join(userId, created.getGroupId());
+            service.join(userId, created.getInviteCode());
         }
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> service.join(GUEST_ID, created.getGroupId()));
+                () -> service.join(GUEST_ID, created.getInviteCode()));
 
         assertEquals("GROUP_FULL", e.getCode());
     }
@@ -334,17 +334,58 @@ class ChallengeGroupServiceTest {
         ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> service.join(OWNER_ID, created.getGroupId()));
+                () -> service.join(OWNER_ID, created.getInviteCode()));
 
         assertEquals("GROUP_ALREADY_JOINED", e.getCode());
     }
 
     @Test
-    @DisplayName("없는 그룹에 참여하면 GROUP_NOT_FOUND 다")
-    void joinUnknownGroup() {
-        BusinessException e = assertThrows(BusinessException.class, () -> service.join(GUEST_ID, 999L));
+    @DisplayName("없는 초대 코드로 참여하면 GROUP_INVITE_CODE_NOT_FOUND 다")
+    void joinUnknownInviteCode() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.join(GUEST_ID, "NOPE9"));
 
-        assertEquals("GROUP_NOT_FOUND", e.getCode());
+        assertEquals("GROUP_INVITE_CODE_NOT_FOUND", e.getCode());
+    }
+
+    @Test
+    @DisplayName("빈 초대 코드도 GROUP_INVITE_CODE_NOT_FOUND 다 — 코드 없이 들어올 길을 남기지 않는다")
+    void joinBlankInviteCode() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.join(GUEST_ID, "   "));
+
+        assertEquals("GROUP_INVITE_CODE_NOT_FOUND", e.getCode());
+    }
+
+    @Test
+    @DisplayName("참여도 초대 코드의 대소문자를 가리지 않는다 — 미리보기와 같은 정규화를 탄다")
+    void joinIsCaseInsensitive() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+
+        ChallengeGroupDto detail = service.join(GUEST_ID, created.getInviteCode().toLowerCase());
+
+        assertTrue(detail.isMember());
+        assertEquals(2, detail.getMemberCount());
+    }
+
+    /**
+     * 이슈 #346 의 회귀 방지.
+     *
+     * <p>예전에는 참여가 {@code groupId} 를 받아 <b>초대 코드 없이도 참여할 수 있었다.</b> 코드를
+     * 그룹을 찾는 유일한 수단으로 만든 지금은, 남의 그룹 코드를 모르면 그 그룹에 닿을 방법이 없다.
+     * groupId 를 문자열로 밀어 넣어도 코드로 해석돼 조회에 실패한다.
+     */
+    @Test
+    @DisplayName("groupId 를 코드 자리에 넣어도 참여되지 않는다 (#346)")
+    void joinRejectsGroupIdInPlaceOfInviteCode() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.join(GUEST_ID, String.valueOf(created.getGroupId())));
+
+        assertEquals("GROUP_INVITE_CODE_NOT_FOUND", e.getCode());
+        assertEquals(1, memberMapper.findByGroupIds(List.of(created.getGroupId())).size(),
+                "참여자가 늘어나면 안 된다");
     }
 
     /* ══ 조회 ══════════════════════════════════════════════ */

@@ -36,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -169,15 +170,41 @@ class ChallengeGroupControllerTest {
     }
 
     @Test
+    @DisplayName("참여는 초대 코드를 그대로 서비스에 넘긴다")
+    void joinPassesInviteCode() throws Exception {
+        mockMvc().perform(post("/api/group-challenges/invite-codes/AB2C3/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.groupName").value("커피값 줄이기"));
+
+        assertEquals("AB2C3", stubService.lastJoinCode);
+    }
+
+    @Test
     @DisplayName("업무 규칙 위반은 400 + code 로 내려간다")
     void joinBlocked() throws Exception {
         stubService.joinFailure = new BusinessException("GROUP_FULL", "정원이 가득 찼습니다.");
 
-        mockMvc().perform(post("/api/group-challenges/7/members"))
+        mockMvc().perform(post("/api/group-challenges/invite-codes/AB2C3/members"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("GROUP_FULL"))
                 .andExpect(jsonPath("$.message").value("정원이 가득 찼습니다."));
+    }
+
+    /**
+     * 이슈 #346 의 회귀 방지 — <b>URL 수준에서</b> 못박는다.
+     *
+     * <p>서비스 테스트만으로는 「예전 경로가 아직 살아 있는지」를 못 잡는다. 매핑을 되살리거나
+     * 편의를 위해 groupId 경로를 다시 추가하면 코드 검증을 통째로 우회하게 되므로 여기서 막는다.
+     */
+    @Test
+    @DisplayName("groupId 로 참여하던 옛 경로는 더 이상 없다 (#346)")
+    void oldGroupIdJoinPathIsGone() throws Exception {
+        mockMvc().perform(post("/api/group-challenges/7/members"))
+                .andExpect(status().isNotFound());
+
+        assertNull(stubService.lastJoinCode, "서비스까지 닿으면 안 된다");
     }
 
     /* ══ 스텁 ══════════════════════════════════════════════ */
@@ -233,6 +260,7 @@ class ChallengeGroupControllerTest {
         private ChallengeGroupCreateRequestDto lastCreateRequest;
         private List<String> lastStatuses;
         private String lastInviteCode;
+        private String lastJoinCode;
         private BusinessException joinFailure;
 
         StubService() {
@@ -267,11 +295,12 @@ class ChallengeGroupControllerTest {
         }
 
         @Override
-        public ChallengeGroupDto join(long userId, long groupId) {
+        public ChallengeGroupDto join(long userId, String inviteCode) {
+            this.lastJoinCode = inviteCode;
             if (joinFailure != null) {
                 throw joinFailure;
             }
-            return findDetail(userId, groupId);
+            return findDetail(userId, 7L);
         }
     }
 

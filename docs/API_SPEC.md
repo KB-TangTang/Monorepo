@@ -1036,7 +1036,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | GET | `/api/group-challenges?status=` | Bearer | `ChallengeGroup[]` |
 | GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroup` |
 | GET | `/api/group-challenges/invite-codes/{inviteCode}` | Bearer | `{ challenge, joinable, reason }` |
-| POST | `/api/group-challenges/{groupId}/members` | Bearer | `ChallengeGroup` |
+| POST | `/api/group-challenges/invite-codes/{inviteCode}/members` | Bearer | `ChallengeGroup` |
 
 생성 요청 본문은 `{ groupName, categoryId, limitAmount, evalType, startDate, endDate, memo }` 다.
 **정원(`maxMembers`)은 받지 않는다** — 생성 화면에 입력 UI 가 없어 서버가 6 으로 고정한다.
@@ -1062,6 +1062,12 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - **제한 금액 0원은 정상 입력값이다** (무지출 챌린지). 음수만 막는다.
 - 방장도 `tbl_group_member` 에 들어간다. 정원·목숨·랭킹이 전부 이 테이블을 세기 때문이다.
 - 상세는 **참여자만** 볼 수 있다. 비참여자는 초대 코드 미리보기 경로를 쓴다.
+- **참여는 `groupId` 가 아니라 초대 코드로 한다** (이슈 #346). 예전 경로 `POST /{groupId}/members` 는
+  코드를 전혀 받지 않아, 미리보기로 알아낸 id 나 연번 순회만으로 남의 방에 들어갈 수 있었다.
+  코드를 함께 받아 검증하는 대신 **`groupId` 파라미터 자체를 없앴다** — 검증을 빠뜨리면 다시 뚫리는
+  구조를 남기지 않기 위해서다. 오류 코드는 미리보기와 같은 `GROUP_INVITE_CODE_NOT_FOUND` 로 시작하고,
+  코드는 맞는데 참여만 막힌 경우 `GROUP_ALREADY_JOINED`·`GROUP_CLOSED`·
+  `GROUP_INVITE_CODE_EXPIRED`·`GROUP_FULL` 이다.
 - 재판 배지(`pendingTrialCount`·`defendant`·`myVoteStatus`)는 **목록에서만** 채워진다 (이슈 #169).
   상세·참여·초대 미리보기에서는 `0`·`false`·`null` 이다.
   절감액·채팅 필드는 근거 데이터가 없어 **아예 내려주지 않는다.**

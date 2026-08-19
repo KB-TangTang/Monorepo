@@ -156,16 +156,23 @@ export async function previewInviteCode(code) {
     };
 }
 
-/** 참여. 참여 직후 화면이 상세로 넘어가므로 서버가 상세를 그대로 돌려준다. */
-export async function joinGroup(groupId) {
+/**
+ * 참여. 참여 직후 화면이 상세로 넘어가므로 서버가 상세를 그대로 돌려준다.
+ *
+ * **groupId 가 아니라 초대 코드를 넘긴다.** 예전에는 미리보기로 알아낸 `group.id` 를
+ * 그대로 POST 했는데, 서버가 코드를 다시 보지 않아 **코드 없이 groupId 만으로 참여할 수
+ * 있었다**(이슈 #346). 이제 참여 경로에 groupId 자리가 아예 없다.
+ */
+export async function joinGroup(code) {
     if (isMockMode.value) {
-        const group = MOCK_GROUPS[Number(groupId)];
+        const entry = MOCK_INVITE_CODES[code];
+        const group = entry ? MOCK_GROUPS[entry.groupId] : null;
         if (!group) {
             throw new Error('그룹을 찾을 수 없습니다.');
         }
         return toViewModel(clone(group));
     }
-    return toViewModel(await http.post(`/group-challenges/${groupId}/members`));
+    return toViewModel(await http.post(`/group-challenges/invite-codes/${code}/members`));
 }
 
 /**

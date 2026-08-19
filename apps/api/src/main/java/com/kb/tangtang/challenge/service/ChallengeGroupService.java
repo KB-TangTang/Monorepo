@@ -150,17 +150,12 @@ public class ChallengeGroupService {
      */
     @Transactional(readOnly = true)
     public InviteCodePreviewDto previewInviteCode(long userId, String inviteCode) {
-        String normalized = normalizeInviteCode(inviteCode);
-        ChallengeGroup group = challengeGroupMapper.findByInviteCode(normalized);
-        if (group == null) {
-            log.warn("초대 코드 조회 실패 userId={} inviteCode={} — 일치하는 그룹 없음", userId, normalized);
-            throw new BusinessException("GROUP_INVITE_CODE_NOT_FOUND", "유효하지 않은 초대 코드입니다.");
-        }
+        ChallengeGroup group = findGroupByInviteCodeOrThrow(userId, inviteCode);
 
         List<GroupMember> members = findMembers(group.getId());
         String reason = joinBlockReason(group, members, userId);
         log.info("초대 코드 조회 userId={} inviteCode={} groupId={} status={} startDate={} memberCount={} joinable={} reason={}",
-                userId, normalized, group.getId(), group.getStatus(), group.getStartDate(),
+                userId, group.getInviteCode(), group.getId(), group.getStatus(), group.getStartDate(),
                 members.size(), reason == null, reason);
 
         return InviteCodePreviewDto.builder()
@@ -170,12 +165,19 @@ public class ChallengeGroupService {
                 .build();
     }
 
-    /** 참여 (GC_01_06). 성공하면 참여한 그룹을 그대로 돌려준다 — 화면이 바로 상세로 넘어간다. */
+    /**
+     * 참여 (GC_01_06). 성공하면 참여한 그룹을 그대로 돌려준다 — 화면이 바로 상세로 넘어간다.
+     *
+     * <p><b>groupId 가 아니라 초대 코드로 그룹을 찾는다.</b> 예전에는 groupId 를 받았는데, 코드 검증이
+     * {@link #previewInviteCode} 에만 있고 여기에는 없어 <b>코드 없이 참여할 수 있었다</b>(이슈 #346).
+     * 코드를 「그룹을 찾는 유일한 수단」으로 만들면 검증을 빠뜨릴 자리 자체가 없어진다.
+     */
     @Transactional
-    public ChallengeGroupDto join(long userId, long groupId) {
-        log.info("그룹 참여 요청 userId={} groupId={}", userId, groupId);
+    public ChallengeGroupDto join(long userId, String inviteCode) {
+        log.info("그룹 참여 요청 userId={} inviteCode={}", userId, inviteCode);
 
-        ChallengeGroup group = findGroupOrThrow(groupId);
+        ChallengeGroup group = findGroupByInviteCodeOrThrow(userId, inviteCode);
+        long groupId = group.getId();
         List<GroupMember> members = findMembers(groupId);
 
         String reason = joinBlockReason(group, members, userId);
@@ -324,6 +326,26 @@ public class ChallengeGroupService {
         }
         // 사용자가 옮겨 적는 값이라 대소문자는 가리지 않는다. 저장은 항상 대문자다.
         return normalized.toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * 초대 코드로 그룹을 찾는다. 없으면 예외.
+     *
+     * <p>미리보기와 참여가 <b>같은 조회</b>를 하므로 한 곳에 둔다. 한쪽만 정규화나 존재 검사를
+     * 빠뜨리면 「미리보기는 되는데 참여는 안 되는」 코드가 생긴다 — 이슈 #346 이 정확히 그
+     * 어긋남(참여 쪽에 코드 검증이 아예 없었다)이었다.
+     *
+     * <p>코드가 없을 때와 틀렸을 때를 같은 오류로 묶는 것은 의도적이다. 구분해서 알려주면
+     * 「존재하는 코드」를 가려내는 신호가 된다.
+     */
+    private ChallengeGroup findGroupByInviteCodeOrThrow(long userId, String inviteCode) {
+        String normalized = normalizeInviteCode(inviteCode);
+        ChallengeGroup group = challengeGroupMapper.findByInviteCode(normalized);
+        if (group == null) {
+            log.warn("초대 코드 조회 실패 userId={} inviteCode={} — 일치하는 그룹 없음", userId, normalized);
+            throw new BusinessException("GROUP_INVITE_CODE_NOT_FOUND", "유효하지 않은 초대 코드입니다.");
+        }
+        return group;
     }
 
     /**
