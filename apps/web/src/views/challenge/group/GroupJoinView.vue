@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import GroupInviteHeader from '@/components/challenge/group/GroupInviteHeader.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import { previewInviteCode, joinGroup } from '@/api/groupChallenge';
+import { isStartDateToday } from '@/utils/groupInvite';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +32,14 @@ const limitLabel = computed(() => {
     const prefix = group.value.evalType === 'DAILY' ? '하루' : '기간';
     return `${prefix} ${group.value.limitAmount.toLocaleString('ko-KR')}원`;
 });
+
+/*
+ * 오늘 들어와도 **오늘 0시부터의 소비가 전부 집계된다.** 참여 시각으로 자르지 않는 것은
+ * 의도한 결정이다(이슈 #350) — 거래에 시각이 없을 수 있고, 이 도메인의 평가 단위가 하루라
+ * 집계만 시각 단위가 되면 랭킹·재판 상세가 서로 다른 금액을 말하게 된다.
+ * 대신 들어오기 전에 알린다. 억울함의 실체는 불공평이 아니라 몰랐음이다.
+ */
+const joiningOnStartDate = computed(() => isStartDateToday(group.value));
 
 function formatDateRange(start, end) {
     if (!start || !end) return '';
@@ -127,6 +136,9 @@ function goBack() {
             <!-- 주의 문구 -->
             <div class="gjv-warning">
                 참여하면 그룹 멤버에게 이름과 소비 상태가 보여요.
+                <template v-if="joiningOnStartDate">
+                    <br />오늘은 시작일이에요. <b>오늘 0시부터의 소비가 집계돼요.</b>
+                </template>
             </div>
 
             <p v-if="joinError" class="gjv-error">{{ joinError }}</p>
