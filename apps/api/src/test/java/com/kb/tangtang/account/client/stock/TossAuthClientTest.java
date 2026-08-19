@@ -28,7 +28,12 @@ class TossAuthClientTest {
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(method(org.springframework.http.HttpMethod.POST))
-                .andExpect(content().contentType(MediaType.APPLICATION_FORM_URLENCODED))
+                /*
+                 * contentType(완전일치) 이면 안 된다 — FormHttpMessageConverter 가 charset 을 덧붙여
+                 * 실제 헤더는 application/x-www-form-urlencoded;charset=UTF-8 로 나간다.
+                 * 여기서 검증할 것은 "폼 인코딩으로 보냈는가" 이지 charset 유무가 아니다.
+                 */
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(content().string(
                         "client_id=id-1&client_secret=secret-1&grant_type=client_credentials"))
                 .andRespond(withSuccess(
