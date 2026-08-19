@@ -74,6 +74,20 @@ export function formatWon(amount) {
     return `${roundedAmount.toLocaleString('ko-KR')}원`;
 }
 
+export function formatMissionWatchQuote(categoryName) {
+    const name = String(categoryName ?? '').trim();
+    if (!name) {
+        return '"오늘의 소비를 지켜보겠습니다"';
+    }
+
+    const lastCharacterCode = name.charCodeAt(name.length - 1);
+    const isKoreanSyllable = lastCharacterCode >= 0xac00 && lastCharacterCode <= 0xd7a3;
+    const hasFinalConsonant = isKoreanSyllable && (lastCharacterCode - 0xac00) % 28 !== 0;
+    const objectParticle = hasFinalConsonant ? '을' : '를';
+
+    return `"오늘은 ${name}${objectParticle} 지켜보겠습니다"`;
+}
+
 export function toMissionVerdictModel(verdict, images = {}) {
     if (!verdict) {
         return null;

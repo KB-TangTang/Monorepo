@@ -148,24 +148,19 @@
 .court-header__speech {
     flex: 1;
     min-width: 0;
-    background: var(--tt-white);
-    border-radius: var(--tt-space-4);
-    padding: 13px 14px;
-    box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
     position: relative;
-}
-
-.court-header__speech-arrow {
-    position: absolute;
-    left: -10px;
-    top: calc(50% - 7px);
-    width: 0;
-    height: 0;
-    border-bottom: 14px solid var(--tt-white);
-    border-left: 11px solid transparent;
+    aspect-ratio: 1600 / 680;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
+    filter: drop-shadow(0 12px 14px rgba(0, 0, 0, 0.24));
 }
 
 .court-header__speech-text {
+    position: absolute;
+    inset: 38% 7% 8% 12%;
+    display: flex;
+    align-items: center;
     font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);

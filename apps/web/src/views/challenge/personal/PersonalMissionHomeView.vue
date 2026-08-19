@@ -20,6 +20,7 @@ import { useConsentStore } from '@/stores/consent';
 import { useAuthStore } from '@/stores/auth';
 import {
     formatCourtDate,
+    formatMissionWatchQuote,
     formatWon,
     formatMissionAssignmentSummary,
     toWatchCategoryModel,
@@ -62,6 +63,9 @@ const shortDate = computed(() => {
     const d = new Date();
     return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 });
+const missionWatchQuote = computed(() =>
+    formatMissionWatchQuote(store.todayBriefing?.categoryName),
+);
 
 const cumulativeTransactionCount = computed(() => {
     const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
@@ -400,7 +404,7 @@ async function reassignTodayMission() {
             :date="courtDate"
             :prosecutor-image="store.selectedProsecutor?.image"
             :prosecutor-name="store.selectedProsecutor?.name"
-            :quote="'&quot;오늘은 ' + store.todayBriefing.categoryName + '을\n지켜보겠습니다&quot;'"
+            :quote="missionWatchQuote"
         />
 
         <!-- 헤더: 축소 모드 (no-account) -->
