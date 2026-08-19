@@ -1,5 +1,6 @@
 package com.kb.tangtang.account.client;
 
+import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,9 +32,6 @@ public class FinancialClientConfig {
     @Value("${financial.mock.base-url:http://localhost:8081}")
     private String mockBaseUrl;
 
-    @Value("${financial.mock.scenario-key:demo-normal-user}")
-    private String mockScenarioKey;
-
     @Value("${financial.codef.base-url:https://api.codef.io}")
     private String codefBaseUrl;
 
@@ -61,9 +59,17 @@ public class FinancialClientConfig {
         return new RestTemplate();
     }
 
+    /**
+     * ⚠ 시나리오 키 선택은 FinancialSyncClientConfig 의 {@link ScenarioKeyProvider} 빈 하나로
+     * 통일한다(#334). 예전엔 이 클라이언트가 `financial.mock.scenario-key` 프로퍼티로 시나리오를
+     * 고정해 뒀는데, 동기화 쪽(FinancialSyncServiceImpl)은 `mock.server.scenario-keys` 로 사용자마다
+     * 다른 시나리오를 골랐다. 두 설정의 기본값이 서로 달라(demo-normal-user vs 1), 같은 사용자가
+     * 계좌 연동에서 고른 계좌와 배치가 동기화한 계좌가 서로 다른 가짜 데이터에서 나와 뒤섞였다.
+     */
     @Bean
     public FinancialDataClient financialDataClient(
-            @Qualifier("financialRestTemplate") RestTemplate restTemplate) {
+            @Qualifier("financialRestTemplate") RestTemplate restTemplate,
+            ScenarioKeyProvider scenarioKeyProvider) {
         if ("codef".equalsIgnoreCase(client)) {
             /*
              * 공개키가 없으면 여기서 즉시 실패한다 — 인증 시점에 알면 원인을 찾기 어렵다.
@@ -77,6 +83,6 @@ public class FinancialClientConfig {
                     new CodefPasswordCipher(codefPublicKey));
         }
         return new MockFinancialDataClient(
-                restTemplate, mockBaseUrl, mockScenarioKey, Clock.systemDefaultZone());
+                restTemplate, mockBaseUrl, scenarioKeyProvider, Clock.systemDefaultZone());
     }
 }

@@ -170,7 +170,7 @@ class CodefSimpleAuthTest {
         ConnectionResult result = client.createConnection(simpleAuth());
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> client.fetchAccounts(result.getConnectionId(), "0004"));
+                () -> client.fetchAccounts(1L, result.getConnectionId(), "0004"));
         assertEquals("TOKEN_EXPIRED", e.getCode());
     }
 

@@ -4,6 +4,10 @@ import com.kb.tangtang.account.client.FinancialDataClient;
 import com.kb.tangtang.account.client.dto.ConnectionRequest;
 import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
+import com.kb.tangtang.account.client.sync.FinancialSyncClient;
+import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
+import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
+import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
 import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.account.domain.AuthMethod;
@@ -51,6 +55,8 @@ class AccountLinkServiceTest {
     private ConnectedAccountMapper mapper;
     private LinkProgressStore store;
     private ConsentService consentService;
+    private FinancialSyncClient syncClient;
+    private ScenarioKeyProvider scenarioKeyProvider;
     private AccountLinkService service;
 
     /* 발행된 이벤트를 모아두는 퍼블리셔. 계좌별로 정확히 한 번 발행되는지 검증한다 */
@@ -63,8 +69,11 @@ class AccountLinkServiceTest {
         mapper = mock(ConnectedAccountMapper.class);
         store = new LinkProgressStore(CLOCK);
         consentService = mock(ConsentService.class);
+        syncClient = mock(FinancialSyncClient.class);
+        scenarioKeyProvider = mock(ScenarioKeyProvider.class);
         service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
-                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"), capturingPublisher,
+                new AccountNumberPolicy("test-secret-key-for-account-hash-0001"),
+                syncClient, scenarioKeyProvider, capturingPublisher,
                 consentService, BATCH_FIXED_DELAY_MS, CLOCK);
         /*
          * 기본은 "제3자 제공 동의를 마친 사용자" 다. 동의 검사는 연결 생성의 전제일 뿐이라
@@ -177,7 +186,7 @@ class AccountLinkServiceTest {
 
         assertEquals(0, progress.getPercent());
         assertFalse(progress.isDone());
-        verify(client, never()).fetchAccounts(any(), any());
+        verify(client, never()).fetchAccounts(anyLong(), any(), any());
     }
 
     @Test
@@ -185,9 +194,9 @@ class AccountLinkServiceTest {
     void fetchesOneInstitutionPerPoll() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004", "0088")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
-        when(client.fetchAccounts("conn-1", "0088"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0088"))
                 .thenReturn(List.of(account("0088", "신한 주거래", "110987654321")));
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -209,9 +218,9 @@ class AccountLinkServiceTest {
     void oneFailureDoesNotStopTheRest() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004", "0088")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenThrow(new BusinessException("EXTERNAL_API_UNAVAILABLE", "점검 중"));
-        when(client.fetchAccounts("conn-1", "0088"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0088"))
                 .thenReturn(List.of(account("0088", "신한 주거래", "110987654321")));
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -232,7 +241,7 @@ class AccountLinkServiceTest {
     void linkableAccountsAreMasked() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -251,11 +260,93 @@ class AccountLinkServiceTest {
     }
 
     @Test
+    @DisplayName("#334: 페이머니는 fetchAccounts() 로 안 잡히지만 계좌 선택 화면에 " +
+            "\"자동 연동\" 미리보기 그룹으로 뜬다")
+    void showsPayMoneyAsAutoIncludedPreview() {
+        /* PAY_KB 는 은행 계좌 엔드포인트에 없다 — 목서버 실제 동작과 같다(빈 목록). */
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 챌린지 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of());
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        List<LinkableGroupDto> groups = service.linkableAccounts(USER_ID, "conn-1");
+
+        assertEquals(1, groups.size());
+        LinkableGroupDto group = groups.get(0);
+        assertTrue(group.isAutoIncluded());
+        assertEquals("PAY_KB", group.getBankCode());
+        LinkableAccountDto row = group.getAccounts().get(0);
+        assertEquals("KB Pay 챌린지 지갑", row.getAccountName());
+        assertEquals(0, new BigDecimal("130000").compareTo(row.getBalance()));
+        /* 미리보기 accountId 는 link() 이 절대 인덱스로 못 쓰게 음수여야 한다. */
+        assertTrue(row.getAccountId() < 0);
+    }
+
+    @Test
+    @DisplayName("#334: 은행 없이 페이머니만 골랐으면 빈 accountIds 로도 link() 가 성공하고 " +
+            "directAssetsPending 을 true 로 돌려준다")
+    void linkSucceedsWithNoBankAccountsWhenDirectAssetsSelected() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());   // 계좌 선택 화면에 체크할 게 없다
+
+        LinkResultDto result = service.link(USER_ID, linkRequest);
+
+        assertEquals(0, result.getLinkedCount());
+        assertTrue(result.isDirectAssetsPending());
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("대출·페이머니가 하나도 없는데 빈 accountIds 를 보내면 여전히 오류다 — 회귀 방지")
+    void linkStillRejectsEmptySelectionWithoutDirectAssets() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
+                .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("0004"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.link(USER_ID, linkRequest));
+        assertEquals("EXTERNAL_API_ERROR", e.getCode());
+    }
+
+    @Test
     @DisplayName("선택한 계좌를 저장한다 - 원본 계좌번호는 남기지 않는다")
     void savesSelectedAccounts() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
         when(mapper.reactivate(any())).thenReturn(0);
 
@@ -304,7 +395,7 @@ class AccountLinkServiceTest {
 
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004")).thenReturn(List.of(fromMock));
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004")).thenReturn(List.of(fromMock));
         when(mapper.reactivate(any())).thenReturn(0);
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -344,7 +435,7 @@ class AccountLinkServiceTest {
 
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004")).thenReturn(List.of(savings));
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004")).thenReturn(List.of(savings));
         when(mapper.reactivate(any())).thenReturn(0);
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -375,7 +466,7 @@ class AccountLinkServiceTest {
                 .thenReturn(List.of(policy.hash("0004", "110123456723")));
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -432,7 +523,7 @@ class AccountLinkServiceTest {
     void countsDuplicateIdsOnce() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
         when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
-        when(client.fetchAccounts("conn-1", "0004"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
                 .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
 
         SimpleAuthRequestDto request = new SimpleAuthRequestDto();
@@ -506,13 +597,13 @@ class AccountLinkServiceTest {
         AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
         String hash = policy.hash("0003", "110123456723");
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(linked(7L, "0003", hash, "100")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
 
         RefreshResultDto result = service.refresh(USER_ID);
 
         /* 예전에는 공급자를 부르지 않고 DB 에 NORMAL 만 써서 "방금 동기화됨" 이 거짓이었다. */
-        verify(client).fetchAccounts("conn-1", "0003");
+        verify(client).fetchAccounts(USER_ID, "conn-1", "0003");
         verify(mapper).updateSynced(eq(7L), eq(USER_ID), eq(new BigDecimal("8340000")), any());
         assertEquals("NORMAL", result.getInstitutions().get(0).getSyncStatus());
     }
@@ -524,7 +615,7 @@ class AccountLinkServiceTest {
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
                 linked(1L, "0003", policy.hash("0003", "111"), "0"),
                 linked(2L, "0003", policy.hash("0003", "222"), "0")));
-        when(client.fetchAccounts("conn-1", "0003")).thenReturn(List.of(
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003")).thenReturn(List.of(
                 balanced("0003", "111", "500000"),
                 balanced("0003", "222", "1500000")));
 
@@ -541,7 +632,7 @@ class AccountLinkServiceTest {
         AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
         when(mapper.findActiveByUser(USER_ID))
                 .thenReturn(List.of(linked(9L, "0003", policy.hash("0003", "111"), "100")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenThrow(new BusinessException("CONNECTION_NOT_FOUND", "연결 정보를 찾을 수 없어요."));
 
         RefreshResultDto result = service.refresh(USER_ID);
@@ -558,7 +649,7 @@ class AccountLinkServiceTest {
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
                 linked(9L, "0003", policy.hash("0003", "111"), "100"),
                 linked(10L, "0003", policy.hash("0003", "222"), "200")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenThrow(new BusinessException("CONNECTION_NOT_FOUND", "연결 정보를 찾을 수 없어요."));
 
         RefreshResultDto result = service.refresh(USER_ID);
@@ -587,7 +678,7 @@ class AccountLinkServiceTest {
         ConnectedAccount account = linked(11L, "0003", policy.hash("0003", "111"), "100");
         when(mapper.findByIdAndUser(11L, USER_ID)).thenReturn(account);
         /* 기관 응답에 이 계좌가 없다 — 해지 등으로 사라진 경우 */
-        when(client.fetchAccounts("conn-1", "0003")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003")).thenReturn(List.of());
 
         ResyncResultDto result = service.resync(USER_ID, 11L);
 
@@ -621,7 +712,7 @@ class AccountLinkServiceTest {
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
                 linked(7L, "0003", presentHash, "100"),
                 linked(8L, "0003", policy.hash("0003", "999"), "200")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
 
         RefreshResultDto result = service.refresh(USER_ID);
@@ -639,7 +730,7 @@ class AccountLinkServiceTest {
         AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
         String hash = policy.hash("0003", "110123456723");
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(linked(7L, "0003", hash, "100")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenReturn(List.of(account("0003", "입출금통장", "110123456723")));
 
         RefreshResultDto result = service.refresh(USER_ID);
@@ -658,7 +749,7 @@ class AccountLinkServiceTest {
         AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
         when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(
                 linked(12L, "0003", policy.hash("0003", "111"), "100")));
-        when(client.fetchAccounts("conn-1", "0003"))
+        when(client.fetchAccounts(USER_ID, "conn-1", "0003"))
                 .thenThrow(new BusinessException("EXTERNAL_API_UNAVAILABLE", "점검 중"));
 
         RefreshResultDto result = service.refresh(USER_ID);

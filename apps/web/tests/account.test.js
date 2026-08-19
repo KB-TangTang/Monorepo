@@ -79,6 +79,26 @@ test('중간 단계는 이전 단계 결과가 있어야 들어갈 수 있다', 
     assert.equal(canEnterLinkStep('done', linked), true);
 });
 
+test('은행 없이 대출·페이머니만 골랐으면 linkedCount 가 0이어도 완료 단계에 들어간다 (#334)', () => {
+    const directAssetsOnly = {
+        selectedCount: 1,
+        hasConnection: true,
+        linkedCount: 0,
+        progressDone: true,
+        directAssetsPending: true,
+    };
+    assert.equal(canEnterLinkStep('done', directAssetsOnly), true);
+
+    const nothingLinked = {
+        selectedCount: 1,
+        hasConnection: true,
+        linkedCount: 0,
+        progressDone: true,
+        directAssetsPending: false,
+    };
+    assert.equal(canEnterLinkStep('done', nothingLinked), false);
+});
+
 test('조회가 끝나야 계좌 선택 단계에 들어갈 수 있다', () => {
     const base = { selectedCount: 1, hasConnection: true, linkedCount: 0, progressDone: false };
     assert.equal(canEnterLinkStep('progress', base), true);

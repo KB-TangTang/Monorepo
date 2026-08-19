@@ -451,6 +451,7 @@ router.beforeEach((to, from) => {
             hasConnection: account.hasConnection,
             linkedCount: account.linkedCount,
             progressDone: account.progressDone,
+            directAssetsPending: account.directAssetsPending,
         });
         if (!canEnter) {
             return { name: 'accountLinkInstitutions' };

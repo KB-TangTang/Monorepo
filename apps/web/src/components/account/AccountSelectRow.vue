@@ -12,12 +12,17 @@ import { formatAmount } from '@/utils/account';
 const props = defineProps({
     account: { type: Object, required: true },
     selected: { type: Boolean, default: false },
+    /**
+     * 대출·페이머니 미리보기 행(#334). alreadyLinked 와 똑같이 잠근 채 체크로 보여주지만
+     * 라벨은 다르다 — "이미 연결됨"은 사실이 아니다(아직 저장 전이고, 최초 동기화가 실제로 만든다).
+     */
+    autoIncluded: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['toggle']);
 
 function onClick() {
-    if (props.account.alreadyLinked) {
+    if (props.account.alreadyLinked || props.autoIncluded) {
         return;
     }
     emit('toggle', props.account.accountId);
@@ -27,15 +32,15 @@ function onClick() {
 <template>
     <button
         class="account-row"
-        :class="{ 'account-row--locked': account.alreadyLinked }"
+        :class="{ 'account-row--locked': account.alreadyLinked || autoIncluded }"
         type="button"
-        :disabled="account.alreadyLinked"
-        :aria-pressed="account.alreadyLinked ? undefined : selected"
+        :disabled="account.alreadyLinked || autoIncluded"
+        :aria-pressed="account.alreadyLinked || autoIncluded ? undefined : selected"
         @click="onClick"
     >
         <span
             class="account-row__check"
-            :class="{ 'account-row__check--on': selected || account.alreadyLinked }"
+            :class="{ 'account-row__check--on': selected || account.alreadyLinked || autoIncluded }"
             aria-hidden="true"
         >
             ✓
@@ -44,7 +49,9 @@ function onClick() {
         <span class="account-row__body">
             <span class="account-row__name">{{ account.accountName }}</span>
             <span class="account-row__sub">
-                {{ account.alreadyLinked ? '이미 연결됨' : account.accountNoMasked }}
+                <template v-if="account.alreadyLinked">이미 연결됨</template>
+                <template v-else-if="autoIncluded">자동으로 연동돼요</template>
+                <template v-else>{{ account.accountNoMasked }}</template>
             </span>
         </span>
 

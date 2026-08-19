@@ -183,7 +183,8 @@ export function linkStepPosition(current) {
  * 스토어를 직접 읽지 않고 값만 받는 순수 함수라 마운트 없이 검증할 수 있다.
  *
  * @param {string} step 검사할 단계
- * @param {{selectedCount: number, hasConnection: boolean, linkedCount: number, progressDone: boolean}} state
+ * @param {{selectedCount: number, hasConnection: boolean, linkedCount: number, progressDone: boolean,
+ *          directAssetsPending?: boolean}} state
  */
 export function canEnterLinkStep(step, state) {
     switch (step) {
@@ -195,7 +196,12 @@ export function canEnterLinkStep(step, state) {
             /* 계좌 목록은 인증이 아니라 **조회**가 끝나야 생긴다. */
             return state.hasConnection && state.progressDone === true;
         case 'done':
-            return state.linkedCount > 0;
+            /*
+             * 은행 계좌 없이 대출·페이머니만 고르면 linkedCount 는 0 그대로다(#334) — 그 업권은
+             * link() 가 아니라 완료 화면의 최초 동기화가 저장한다. directAssetsPending 이 그 사실을
+             * 대신 말해준다.
+             */
+            return state.linkedCount > 0 || state.directAssetsPending === true;
         default:
             return true;
     }

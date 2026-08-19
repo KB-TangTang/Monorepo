@@ -46,6 +46,8 @@ export const useAccountStore = defineStore('account', () => {
     const linkableGroups = ref([]);
     const selectedAccountIds = ref([]);
     const linkedCount = ref(0);
+    /** 은행 계좌 없이 대출·페이머니만 골랐을 때 true(#334) — canEnterLinkStep('done') 이 함께 본다. */
+    const directAssetsPending = ref(false);
 
     /* --- 인증 (수단 무관) --- */
     const authMethods = ref([]);
@@ -283,8 +285,13 @@ export const useAccountStore = defineStore('account', () => {
     async function loadLinkableAccounts() {
         return run(async () => {
             linkableGroups.value = await fetchLinkableAccounts(connectionId.value);
-            /* 이미 연결된 계좌는 기본 선택에서 뺀다 — 중복 등록을 막는다(AC_01_03). */
+            /*
+             * 이미 연결된 계좌는 기본 선택에서 뺀다 — 중복 등록을 막는다(AC_01_03).
+             * autoIncluded 그룹(대출·페이머니, #334)도 뺀다 — 고를 대상이 아니라 항상 자동으로
+             * 연동되는 항목이라, 여기 섞이면 "선택한 계좌 N개"에 사용자가 고르지 않은 것까지 잡힌다.
+             */
             selectedAccountIds.value = linkableGroups.value
+                .filter((group) => !group.autoIncluded)
                 .flatMap((group) => group.accounts)
                 .filter((account) => !account.alreadyLinked)
                 .map((account) => account.accountId);
@@ -317,6 +324,7 @@ export const useAccountStore = defineStore('account', () => {
         return run(async () => {
             const result = await linkAccounts(connectionId.value, selectedAccountIds.value);
             linkedCount.value = result.linkedCount;
+            directAssetsPending.value = result.directAssetsPending ?? false;
             useAuthStore().applyOnboardingFlags({ needsAccountLink: false });
             return result;
         });
@@ -391,6 +399,7 @@ export const useAccountStore = defineStore('account', () => {
         linkableGroups.value = [];
         selectedAccountIds.value = [];
         linkedCount.value = 0;
+        directAssetsPending.value = false;
         authMethods.value = [];
         authStatus.value = 'IDLE';
         progressInstitutions.value = [];
@@ -407,6 +416,7 @@ export const useAccountStore = defineStore('account', () => {
         linkableGroups,
         selectedAccountIds,
         linkedCount,
+        directAssetsPending,
         authMethods,
         authStatus,
         progressInstitutions,

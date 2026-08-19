@@ -128,6 +128,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     private final FinancialSyncClient client;
     private final ScenarioKeyProvider scenarioKeyProvider;
+    private final AccountNumberPolicy accountNumbers;
     private final ConnectedAccountMapper connectedAccountMapper;
     private final LoanMapper loanMapper;
     private final InvestmentHoldingMapper investmentHoldingMapper;
@@ -150,6 +151,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     @Autowired
     public FinancialSyncServiceImpl(FinancialSyncClient client,
                                     ScenarioKeyProvider scenarioKeyProvider,
+                                    AccountNumberPolicy accountNumbers,
                                     ConnectedAccountMapper connectedAccountMapper,
                                     LoanMapper loanMapper,
                                     InvestmentHoldingMapper investmentHoldingMapper,
@@ -161,8 +163,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                                     ApplicationEventPublisher eventPublisher,
                                     TransactionTemplate transactionTemplate,
                                     @Qualifier("financialSyncExecutor") Executor syncExecutor) {
-        this(client, scenarioKeyProvider, connectedAccountMapper, loanMapper, investmentHoldingMapper,
-                cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
+        this(client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
+                investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
                 transactionCategorizationService, eventPublisher,
                 Clock.systemDefaultZone(), transactionTemplate, syncExecutor);
     }
@@ -170,6 +172,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /** 테스트에서 시간을 고정하기 위한 생성자. */
     FinancialSyncServiceImpl(FinancialSyncClient client,
                              ScenarioKeyProvider scenarioKeyProvider,
+                             AccountNumberPolicy accountNumbers,
                              ConnectedAccountMapper connectedAccountMapper,
                              LoanMapper loanMapper,
                              InvestmentHoldingMapper investmentHoldingMapper,
@@ -184,6 +187,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                              Executor syncExecutor) {
         this.client = client;
         this.scenarioKeyProvider = scenarioKeyProvider;
+        this.accountNumbers = accountNumbers;
         this.connectedAccountMapper = connectedAccountMapper;
         this.loanMapper = loanMapper;
         this.investmentHoldingMapper = investmentHoldingMapper;
@@ -285,8 +289,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private MonthlyFetchCursor buildMonthlyFetchCursor(long userId) {
         Map<String, LocalDateTime> accounts = new HashMap<>();
         for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
-            if (account.getLastSyncAt() != null) {
-                accounts.put(account.getAccountNoEncrypted(), account.getLastSyncAt());
+            /*
+             * accountNoMasked 로 키를 만든다 — accountNoEncrypted 가 아니다.
+             * 은행 계좌는 이제 AccountLinkService 와 같은 해시 키를 쓰는데(#334, upsertBankAccount
+             * 문서 참고), 이 커서는 "목서버 계좌 ID" → "마지막 동기화 시각"을 이어줘야 하고 목서버
+             * 계좌 ID 는 해시에 안 들어간다. accountNoMasked 는 목서버 응답과 저장된 행 양쪽에
+             * 그대로 남는 유일한 값이라 여기서 조인 키로 쓴다.
+             */
+            if (account.getLastSyncAt() != null && account.getAccountNoMasked() != null) {
+                accounts.put(account.getAccountNoMasked(), account.getLastSyncAt());
             }
         }
         Map<String, LocalDateTime> cards = new HashMap<>();
@@ -354,9 +365,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return months;
     }
 
-    private List<BankTransactionSyncDto> fetchBankTransactions(String scenarioKey, long accountId,
+    private List<BankTransactionSyncDto> fetchBankTransactions(String scenarioKey, BankAccountSyncDto account,
                                                                 MonthlyFetchCursor cursor) {
-        LocalDateTime lastSyncAt = cursor.accountLastSyncAt(accountId);
+        long accountId = account.getAccountId();
+        LocalDateTime lastSyncAt = cursor.accountLastSyncAt(account.getAccountNoMasked());
         if (lastSyncAt == null) {
             return client.getBankTransactions(scenarioKey, accountId, null);
         }
@@ -441,7 +453,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             }
             bundle.bankAccounts.add(account);
             bundle.bankTransactions.put(account.getAccountId(),
-                    fetchBankTransactions(scenarioKey, account.getAccountId(), monthlyCursor));
+                    fetchBankTransactions(scenarioKey, account, monthlyCursor));
         }
     }
 
@@ -779,11 +791,22 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     /* ── upsert 헬퍼 ───────────────────────────────────── */
 
+    /**
+     * ⚠ 은행 계좌만 예외적으로 AccountLinkService 와 **같은 해시 키**를 쓴다(#334).
+     *
+     * 은행(BANK/DEMAND_DEPOSIT)은 목서버의 `/api/v1/assets/accounts` 를 계좌 연동
+     * (AccountLinkService.link(), accountNumbers.hash(bankCode, accountNoMasked)) 과 이 배치 동기화가
+     * **둘 다** 부르는 유일한 자산 종류다 — 예적금·증권·대출·페이머니·카드는 연동 흐름이 아예 모르는
+     * 별도 엔드포인트라 이 배치만 만든다. 그래서 은행만 "MOCK-BANK-{id}" 같은 소스전용 키를 쓰면
+     * 두 흐름이 **같은 실계좌**를 서로 다른 행으로 각각 만든다 — 실제로 재현됐다: 계좌 연동 직후
+     * 화면에 같은 계좌(같은 마스킹 번호·같은 잔액)가 두 번 떴다. 목서버는 마스킹된 계좌번호만 주므로
+     * (AccountLinkService 문서 참고) accountNoMasked 를 그대로 해시 입력에 써도 두 쪽이 같은 값을 낸다.
+     */
     private Long upsertBankAccount(long userId, BankAccountSyncDto account, LocalDateTime now,
                                    Set<String> inactiveKeys) {
         String accountType = "SAVINGS".equalsIgnoreCase(account.getAccountTypeCode())
                 ? "SAVINGS" : "DEMAND_DEPOSIT";
-        String accountNoEncrypted = "MOCK-BANK-" + account.getAccountId();
+        String accountNoEncrypted = accountNumbers.hash(account.getInstitutionCode(), account.getAccountNoMasked());
         ConnectedAccount row = ConnectedAccount.builder()
                 .userId(userId)
                 .bankCode(account.getInstitutionCode())
@@ -802,8 +825,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /**
      * BANK/DEPOSIT/SECURITIES/PAYMONEY 공통 upsert (reactivate 시도 → 0행이면 insert). PK 를 돌려준다.
      *
-     * ⚠ 계좌번호 원본이 없는 목서버 데이터라 account_no_encrypted 에 "MOCK-{소스}-{목서버ID}" 를 넣는다.
-     *   HMAC 해시가 아니므로 AccountLinkService 로 연결한 실제 계좌 행과 겹치지 않는다.
+     * ⚠ DEPOSIT/SECURITIES/PAYMONEY 는 account_no_encrypted 에 "MOCK-{소스}-{목서버ID}" 를 넣는다.
+     *   AccountLinkService 의 연동 흐름이 이 세 종류를 아예 다루지 않아(별도 엔드포인트) 겹칠 행이
+     *   없기 때문이다. **BANK 는 예외다** — upsertBankAccount() 의 문서 참고. 그쪽은 연동 흐름과
+     *   같은 해시 키를 써서 일부러 겹치게 한다.
      *
      * ⚠ 사용자가 해제한 계좌면 **아무것도 하지 않고 null 을 돌려준다**(이슈 #199 최종 리뷰).
      *   reactivate 의 SQL 은 is_active=1 을 무조건 세우는데, 그 동작 자체는 AccountLinkService 의
@@ -1130,8 +1155,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             this.cardLastSyncByMaskedNo = cardLastSyncByMaskedNo;
         }
 
-        LocalDateTime accountLastSyncAt(long mockAccountId) {
-            return accountLastSyncByKey.get("MOCK-BANK-" + mockAccountId);
+        LocalDateTime accountLastSyncAt(String accountNoMasked) {
+            return accountLastSyncByKey.get(accountNoMasked);
         }
 
         LocalDateTime cardLastSyncAt(String cardNoMasked) {

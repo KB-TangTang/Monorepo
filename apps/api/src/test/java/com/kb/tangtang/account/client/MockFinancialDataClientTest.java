@@ -3,6 +3,8 @@ package com.kb.tangtang.account.client;
 import com.kb.tangtang.account.client.dto.ConnectionRequest;
 import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
+import com.kb.tangtang.account.client.sync.PooledScenarioKeyProvider;
+import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -32,6 +34,8 @@ class MockFinancialDataClientTest {
 
     private static final String BASE_URL = "http://localhost:8081";
     private static final Instant NOW = Instant.parse("2026-08-05T09:00:00Z");
+    /* 시나리오 라우팅 자체는 PooledScenarioKeyProviderTest 가 검증한다. 여기서는 고정 시나리오로 충분하다. */
+    private static final ScenarioKeyProvider SCENARIO = new PooledScenarioKeyProvider(List.of("demo-normal-user"));
 
     private Clock fixed(long plusSeconds) {
         return Clock.fixed(NOW.plusSeconds(plusSeconds), ZoneId.of("Asia/Seoul"));
@@ -41,7 +45,7 @@ class MockFinancialDataClientTest {
     @DisplayName("목 모드는 간편인증만 지원한다 - 목서버에 기관 로그인 API 가 없다")
     void supportsSimpleAuthOnly() {
         MockFinancialDataClient client = new MockFinancialDataClient(
-                new RestTemplate(), BASE_URL, "demo-normal-user", fixed(0));
+                new RestTemplate(), BASE_URL, SCENARIO, fixed(0));
 
         assertEquals(List.of(AuthMethod.SIMPLE_AUTH), client.supportedAuthMethods());
         assertEquals(List.of("KAKAO", "PASS", "NAVER"), client.simpleAuthProviders());
@@ -52,7 +56,7 @@ class MockFinancialDataClientTest {
     void approvesAfterDelay() {
         RestTemplate restTemplate = new RestTemplate();
         MockFinancialDataClient client = new MockFinancialDataClient(
-                restTemplate, BASE_URL, "demo-normal-user", fixed(0));
+                restTemplate, BASE_URL, SCENARIO, fixed(0));
 
         ConnectionResult result = client.createConnection(ConnectionRequest.builder()
                 .authMethod(AuthMethod.SIMPLE_AUTH)
@@ -65,7 +69,7 @@ class MockFinancialDataClientTest {
 
         // 승인 지연(3초)이 지난 시계를 쓰는 클라이언트는 같은 상태를 승인으로 본다
         MockFinancialDataClient later = new MockFinancialDataClient(
-                restTemplate, BASE_URL, "demo-normal-user", fixed(5));
+                restTemplate, BASE_URL, SCENARIO, fixed(5));
         ConnectionResult laterResult = later.createConnection(ConnectionRequest.builder()
                 .authMethod(AuthMethod.SIMPLE_AUTH)
                 .provider("KAKAO")
@@ -79,7 +83,7 @@ class MockFinancialDataClientTest {
     @DisplayName("모르는 connectionId 는 CONNECTION_NOT_FOUND 로 막는다")
     void unknownConnection() {
         MockFinancialDataClient client = new MockFinancialDataClient(
-                new RestTemplate(), BASE_URL, "demo-normal-user", fixed(0));
+                new RestTemplate(), BASE_URL, SCENARIO, fixed(0));
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> client.getAuthStatus("없는-값"));
@@ -90,7 +94,7 @@ class MockFinancialDataClientTest {
     @DisplayName("기관을 선택하지 않으면 연결을 시작하지 않는다")
     void rejectsEmptyOrganizations() {
         MockFinancialDataClient client = new MockFinancialDataClient(
-                new RestTemplate(), BASE_URL, "demo-normal-user", fixed(0));
+                new RestTemplate(), BASE_URL, SCENARIO, fixed(0));
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> client.createConnection(ConnectionRequest.builder()
@@ -119,9 +123,9 @@ class MockFinancialDataClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         MockFinancialDataClient client = new MockFinancialDataClient(
-                restTemplate, BASE_URL, "demo-normal-user", fixed(0));
+                restTemplate, BASE_URL, SCENARIO, fixed(0));
 
-        List<FinancialAccountDto> accounts = client.fetchAccounts("mock-1", "0004");
+        List<FinancialAccountDto> accounts = client.fetchAccounts(1L, "mock-1", "0004");
 
         assertEquals(1, accounts.size());
         assertEquals("입출금통장", accounts.get(0).getAccountName());
@@ -156,9 +160,9 @@ class MockFinancialDataClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         MockFinancialDataClient client = new MockFinancialDataClient(
-                restTemplate, BASE_URL, "demo-normal-user", fixed(0));
+                restTemplate, BASE_URL, SCENARIO, fixed(0));
 
-        List<FinancialAccountDto> accounts = client.fetchAccounts("mock-1", "0004");
+        List<FinancialAccountDto> accounts = client.fetchAccounts(1L, "mock-1", "0004");
 
         assertEquals(1, accounts.size());
         FinancialAccountDto account = accounts.get(0);
@@ -185,10 +189,45 @@ class MockFinancialDataClientTest {
                 .andRespond(withServerError());
 
         MockFinancialDataClient client = new MockFinancialDataClient(
-                restTemplate, BASE_URL, "demo-normal-user", fixed(0));
+                restTemplate, BASE_URL, SCENARIO, fixed(0));
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> client.fetchAccounts("mock-1", "0004"));
+                () -> client.fetchAccounts(1L, "mock-1", "0004"));
         assertEquals("EXTERNAL_API_UNAVAILABLE", e.getCode());
+    }
+
+    /*
+     * #334 리뷰 지적: 계좌 연동 흐름(이 클래스)과 배치 동기화(FinancialSyncServiceImpl)가 서로 다른
+     * 설정(financial.mock.scenario-key 단일값 vs mock.server.scenario-keys 풀)으로 시나리오를 골라,
+     * 같은 실사용자인데도 두 흐름이 서로 다른 목데이터를 봤다 — 실제 DB에서 user_id=1(demo-normal-user)
+     * 계좌와 user_id=4(scenario_key='1') 계좌가 한 실사용자에게 같이 쌓인 것으로 확인됐다.
+     * 이 테스트는 fetchAccounts() 가 이제 userId 로 ScenarioKeyProvider 를 직접 묻는다는 것,
+     * 즉 동기화와 같은 라우팅 규칙을 탄다는 것을 증명한다.
+     */
+    @Test
+    @DisplayName("userId 로 시나리오를 고른다 — FinancialSyncServiceImpl 과 같은 ScenarioKeyProvider 규칙")
+    void resolvesScenarioKeyPerUserIdLikeSyncFlow() {
+        ScenarioKeyProvider pooled = new PooledScenarioKeyProvider(List.of("demo-normal-user", "1"));
+
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        // userId=0 → floorMod(0,2)=0 → "demo-normal-user"
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/accounts?scenarioKey=demo-normal-user"))
+                .andRespond(withSuccess("""
+                        {"code":"OK","message":"성공","data":{"accounts":[]}}
+                        """, MediaType.APPLICATION_JSON));
+        // userId=1 → floorMod(1,2)=1 → "1"
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/accounts?scenarioKey=1"))
+                .andRespond(withSuccess("""
+                        {"code":"OK","message":"성공","data":{"accounts":[]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialDataClient client = new MockFinancialDataClient(
+                restTemplate, BASE_URL, pooled, fixed(0));
+
+        client.fetchAccounts(0L, "mock-1", "0004");
+        client.fetchAccounts(1L, "mock-1", "0004");
+
+        server.verify();
     }
 }

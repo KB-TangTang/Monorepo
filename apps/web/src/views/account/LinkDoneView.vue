@@ -23,8 +23,14 @@ import successAnimation from '@/assets/images/link-success.svg';
 const router = useRouter();
 const store = useAccountStore();
 const auth = useAuthStore();
-const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions, exitRoute } =
-    storeToRefs(store);
+const {
+    linkedCount,
+    linkableGroups,
+    selectedAccountIds,
+    progressInstitutions,
+    exitRoute,
+    directAssetsPending,
+} = storeToRefs(store);
 const syncing = ref(true);
 const syncFailed = ref(false);
 
@@ -217,6 +223,14 @@ onBeforeUnmount(() => {
                 </ul>
             </section>
 
+            <!--
+              은행 없이 대출·페이머니만 골랐을 때(#334) — linkedCount 가 0이라 위 카드 자체가 안 뜬다.
+              여기서만이라도 뭔가 되고 있다는 걸 말해준다. 실제 완료는 아래 syncing 이 끝나면서다.
+            -->
+            <p v-if="!linkedCount && directAssetsPending" class="link-done__direct-assets">
+                선택한 대출·페이머니는 자동으로 연동돼요.
+            </p>
+
             <div class="link-done__next">
                 <p class="link-done__next-label">첫 거래 수집</p>
                 <p class="link-done__next-value">{{ firstCollectLabel }}</p>
@@ -391,6 +405,12 @@ onBeforeUnmount(() => {
 }
 
 .link-done__failure {
+    margin: var(--tt-space-4) 0 0;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.link-done__direct-assets {
     margin: var(--tt-space-4) 0 0;
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);

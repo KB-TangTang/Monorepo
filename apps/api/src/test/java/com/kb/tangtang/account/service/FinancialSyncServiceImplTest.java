@@ -110,6 +110,9 @@ class FinancialSyncServiceImplTest {
 
     private FinancialSyncClient client;
     private ScenarioKeyProvider scenarioKeyProvider;
+    /* AccountLinkServiceTest 와 같은 테스트 전용 시크릿 — 값 자체는 해시 알고리즘 검증에 관여하지 않는다. */
+    private final AccountNumberPolicy accountNumbers =
+            new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
     private ConnectedAccountMapper connectedAccountMapper;
     private LoanMapper loanMapper;
     private InvestmentHoldingMapper investmentHoldingMapper;
@@ -152,7 +155,7 @@ class FinancialSyncServiceImplTest {
          * 진짜 스레드풀로 따로 검증한다.
          */
         service = new FinancialSyncServiceImpl(
-                client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
+                client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
                 syncHistoryMapper, transactionCategorizationService, eventPublisher,
                 clock, new TransactionTemplate(recordingTransactionManager()), Runnable::run);
@@ -253,9 +256,12 @@ class FinancialSyncServiceImplTest {
             return 1;
         });
         when(connectedAccountMapper.reactivate(any())).thenReturn(0).thenReturn(1);
+        /* #334: 은행 계좌는 AccountLinkService 와 같은 해시 키를 쓴다(upsertBankAccount 문서 참고) —
+           setUp() 의 getBankAccounts 스텁(institutionCode=0004, accountNoMasked=110-***-120045)과
+           같은 입력으로 재계산해야 findConnectedAccountId() 의 자연키 재조회가 이 행을 찾는다. */
         when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
                 ConnectedAccount.builder().id(77L).userId(1L)
-                        .accountNoEncrypted("MOCK-BANK-101").build()));
+                        .accountNoEncrypted(accountNumbers.hash("0004", "110-***-120045")).build()));
         when(transactionMapper.update(any())).thenReturn(0).thenReturn(1);
 
         service.sync(1L);
@@ -268,6 +274,30 @@ class FinancialSyncServiceImplTest {
            엉뚱한 행을 집으면 새 행이 하나 더 생긴다. */
         verify(transactionMapper, times(2)).update(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
         verify(transactionMapper, times(1)).insert(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
+    }
+
+    @Test
+    @DisplayName("#334 리뷰 지적: 계좌 연동(AccountLinkService.link())이 이미 만든 은행 계좌 행을 " +
+            "배치 동기화가 중복으로 또 만들지 않는다 — 같은 은행코드·마스킹번호는 같은 자연키를 낸다")
+    void bankSyncReusesRowAlreadyCreatedByLinkFlow() {
+        /*
+         * AccountLinkService.link() 는 accountNumbers.hash(bankCode, accountNoMasked) 를 자연키로
+         * 쓴다. 이 배치도 은행 계좌만큼은 같은 해시를 써야(upsertBankAccount 문서 참고) 두 흐름이
+         * 같은 실계좌를 서로 다른 행으로 중복 생성하지 않는다 — 실제로 화면에 같은 계좌(같은 마스킹
+         * 번호·같은 잔액)가 두 번 뜨는 것으로 재현됐다.
+         */
+        String linkFlowKey = accountNumbers.hash("0004", "110-***-120045");
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().id(55L).userId(1L)
+                        .accountNoEncrypted(linkFlowKey).accountNoMasked("110-***-120045").build()));
+        when(connectedAccountMapper.reactivate(any())).thenReturn(1);
+
+        service.sync(1L);
+
+        /* 계좌 연동이 만든 자연키와 정확히 같은 키로 재활성화(update)만 일어나야 한다 — 새 행을
+           만들면 안 된다. */
+        verify(connectedAccountMapper).reactivate(argThat(a -> linkFlowKey.equals(a.getAccountNoEncrypted())));
+        verify(connectedAccountMapper, never()).insert(any());
     }
 
     @Test
@@ -721,9 +751,12 @@ class FinancialSyncServiceImplTest {
     @Test
     @DisplayName("이미 동기화한 계좌는 마지막 동기화 달부터 이번 달까지만 월별로 받아온다")
     void reSyncedAccountFetchesOnlyMonthsSinceLastSync() {
+        /* #334: 월별 증분 커서는 accountNoMasked 로 조인한다(MonthlyFetchCursor 참고) —
+           setUp() 의 getBankAccounts 스텁과 같은 110-***-120045 를 써야 커서가 이 행을 찾는다. */
         when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
                 ConnectedAccount.builder().id(77L).userId(1L)
-                        .accountNoEncrypted("MOCK-BANK-101")
+                        .accountNoEncrypted(accountNumbers.hash("0004", "110-***-120045"))
+                        .accountNoMasked("110-***-120045")
                         .lastSyncAt(LocalDateTime.of(2026, 6, 20, 10, 0))
                         .build()));
         when(client.getBankTransactions(eq("1"), eq(101L), anyString())).thenReturn(List.of());
@@ -746,7 +779,10 @@ class FinancialSyncServiceImplTest {
          * reactivate 의 SQL 자체는 AccountLinkService 의 정당한 재연결이 의존하므로 손대지 않고,
          * 되살리면 안 되는 계좌를 여기(동기화 파이프라인)에서 거른다.
          */
-        when(connectedAccountMapper.findInactiveKeysByUser(1L)).thenReturn(List.of("MOCK-BANK-101"));
+        /* #334: 은행 계좌의 자연키는 이제 AccountLinkService 와 같은 해시다(upsertBankAccount 참고) —
+           setUp() 의 getBankAccounts 스텁(0004, 110-***-120045)과 같은 값으로 재계산해야 한다. */
+        when(connectedAccountMapper.findInactiveKeysByUser(1L))
+                .thenReturn(List.of(accountNumbers.hash("0004", "110-***-120045")));
 
         FinancialSyncResultDto result = service.sync(1L);
 
@@ -766,12 +802,12 @@ class FinancialSyncServiceImplTest {
     @DisplayName("해제되지 않은 계좌는 평소대로 동기화된다 — 제외 목록이 과잉 차단하면 안 된다")
     void activeAccountIsStillSyncedWhenAnotherAccountIsDisconnected() {
         when(connectedAccountMapper.findInactiveKeysByUser(1L))
-                .thenReturn(List.of("MOCK-BANK-999"));   // 다른 계좌만 해제된 상태
+                .thenReturn(List.of(accountNumbers.hash("0004", "999-***-999999")));   // 다른 계좌만 해제된 상태
 
         service.sync(1L);
 
         verify(connectedAccountMapper).reactivate(argThat(a ->
-                "MOCK-BANK-101".equals(a.getAccountNoEncrypted())));
+                accountNumbers.hash("0004", "110-***-120045").equals(a.getAccountNoEncrypted())));
         verify(transactionMapper).insert(argThat(t -> "BANK".equals(t.getSourceType())));
     }
 
@@ -807,7 +843,7 @@ class FinancialSyncServiceImplTest {
     /** setUp() 의 직렬 실행기(Runnable::run)와 달리 여기서만 진짜 스레드풀을 쓴다 — 병렬 실행 자체를 검증한다. */
     private FinancialSyncServiceImpl serviceWithRealExecutor(ExecutorService executor) {
         return new FinancialSyncServiceImpl(
-                client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
+                client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
                 syncHistoryMapper, transactionCategorizationService, eventPublisher,
                 Clock.fixed(Instant.parse("2026-08-12T01:00:00Z"), ZoneId.of("Asia/Seoul")),

@@ -64,6 +64,9 @@ public interface FinancialDataClient {
     /**
      * 한 기관의 계좌 목록을 조회한다.
      * 실패하면 예외를 던진다 — 호출부가 그 기관만 FAILED 로 표시하고 나머지를 계속 진행한다.
+     *
+     * @param userId 목 구현이 시나리오를 정하는 데 쓴다(#334) — 실 CODEF 는 connectionId 로 이미
+     *               사용자를 식별하므로 이 값을 쓰지 않는다.
      */
-    List<FinancialAccountDto> fetchAccounts(String connectionId, String organization);
+    List<FinancialAccountDto> fetchAccounts(long userId, String connectionId, String organization);
 }
