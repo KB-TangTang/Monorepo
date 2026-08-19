@@ -91,3 +91,31 @@ test('금액 숫자는 여전히 mono 와 tabular-nums 를 쓴다', () => {
     assert.match(amountRule[0], /var\(--tt-font-mono\)/);
     assert.match(amountRule[0], /tabular-nums/);
 });
+
+/* ── 채팅 헤더의 미구현 버튼 (이슈 #331) ─────────────── */
+
+/*
+ * 우상단 「더보기」(⋯) 버튼은 #125 목업 UI 시절의 자리였다.
+ * 연결된 메뉴가 없어 누르면 「준비 중인 기능입니다」 토스트만 떴다.
+ * 채팅은 그룹 재판의 핵심 화면이라 시연 중에 눌리면 미완성으로 읽힌다.
+ *
+ * 방 나가기는 GroupFinalizeService 의 deleteRoom 순서 문제와 얽혀 있어 따로 다룬다.
+ * 그때까지 자리만 남겨두지 않는다.
+ */
+test('채팅 헤더에 동작하지 않는 더보기 버튼을 두지 않는다', () => {
+    const header = source('src/components/challenge/group/chat/GroupChatHeader.vue');
+
+    assert.doesNotMatch(header, /open-menu/, '받는 곳이 없는 이벤트를 쏘지 않는다');
+    assert.doesNotMatch(header, /chat-header__menu/, '버튼과 죽은 CSS 를 함께 걷어낸다');
+});
+
+test('채팅 화면에 「준비 중」 안내를 남기지 않는다', () => {
+    const chatView = source('src/views/challenge/group/GroupChatView.vue');
+
+    /* 주석의 경위 설명은 걸리지 않게 실제 호출만 본다. */
+    assert.doesNotMatch(
+        chatView,
+        /showToast\(['"]준비 중/,
+        '미구현을 토스트로 덮지 않는다 - 자리를 없애거나 기능을 붙인다',
+    );
+});

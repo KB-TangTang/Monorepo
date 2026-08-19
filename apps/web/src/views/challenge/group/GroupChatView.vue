@@ -237,10 +237,12 @@ watch(
 
 <template>
     <div class="chat-view">
-        <GroupChatHeader
-            :room-info="store.roomInfo"
-            @open-menu="showToast('준비 중인 기능입니다')"
-        />
+        <!--
+          우상단 「더보기」 버튼은 2026-08-19 에 걷어냈다(이슈 #331).
+          #125 목업 UI 시절의 자리였는데 연결된 메뉴가 없어 누르면 「준비 중인 기능입니다」만 떴다.
+          방 나가기는 GroupFinalizeService 의 deleteRoom 순서 문제와 얽혀 있어 따로 다룬다.
+        -->
+        <GroupChatHeader :room-info="store.roomInfo" />
 
         <!-- 종료된 챌린지: 대화가 챌린지 종료와 함께 이미 삭제됐다 -->
         <div v-if="store.closed" class="chat-view__closed">
