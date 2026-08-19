@@ -41,8 +41,6 @@ public class ChallengeGroupStatusBatchService {
      *
      * <p>{@code start_date < today} 인 그룹도 함께 집는다(등호가 아니라 부등호다). 배치가 하루
      * 걸러 뛰거나 서버가 내려가 있었어도 다음 실행이 밀린 그룹을 주워 담아야 하기 때문이다.
-     * <b>혼자인 그룹의 삭제를 하루 미루는 것(이슈 #350)도 이 부등호에 기대고 있다</b> —
-     * 시작일에 유예된 그룹을 다음 날 실행이 그대로 다시 집어 간다.
      *
      * @param today 배치 기준일
      * @return 실제로 상태가 바뀐 그룹 수
@@ -57,7 +55,7 @@ public class ChallengeGroupStatusBatchService {
         int transitioned = 0;
         for (ChallengeGroup group : due) {
             try {
-                if (transitionService.startOrCancel(group, today)) {
+                if (transitionService.startOrCancel(group)) {
                     transitioned++;
                 }
             } catch (RuntimeException e) {

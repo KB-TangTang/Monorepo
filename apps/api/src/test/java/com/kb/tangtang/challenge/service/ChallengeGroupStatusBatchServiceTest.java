@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -59,17 +58,15 @@ class ChallengeGroupStatusBatchServiceTest {
         ChallengeGroup last = group(3L);
         when(groupMapper.findGroupsToStart("RECRUITING", TODAY))
                 .thenReturn(List.of(first, broken, last));
-        when(transitionService.startOrCancel(any(ChallengeGroup.class), any(LocalDate.class)))
-                .thenReturn(true);
-        when(transitionService.startOrCancel(eq(broken), any(LocalDate.class)))
+        when(transitionService.startOrCancel(any(ChallengeGroup.class))).thenReturn(true);
+        when(transitionService.startOrCancel(broken))
                 .thenThrow(new BusinessException("BOOM", "전이 실패"));
 
         assertEquals(2, batch().startDueGroups(TODAY), "실패한 한 건은 세지 않는다");
 
-        /* 기준일을 그대로 넘겨야 한다 — 전이 서비스가 이 날짜로 시작일 유예를 판단한다(이슈 #350) */
-        verify(transitionService).startOrCancel(first, TODAY);
-        verify(transitionService).startOrCancel(broken, TODAY);
-        verify(transitionService).startOrCancel(last, TODAY);
+        verify(transitionService).startOrCancel(first);
+        verify(transitionService).startOrCancel(broken);
+        verify(transitionService).startOrCancel(last);
     }
 
     @Test
@@ -79,8 +76,8 @@ class ChallengeGroupStatusBatchServiceTest {
         ChallengeGroup alreadyDone = group(2L);
         when(groupMapper.findGroupsToStart("RECRUITING", TODAY))
                 .thenReturn(List.of(changed, alreadyDone));
-        when(transitionService.startOrCancel(changed, TODAY)).thenReturn(true);
-        when(transitionService.startOrCancel(alreadyDone, TODAY)).thenReturn(false);
+        when(transitionService.startOrCancel(changed)).thenReturn(true);
+        when(transitionService.startOrCancel(alreadyDone)).thenReturn(false);
 
         assertEquals(1, batch().startDueGroups(TODAY));
     }

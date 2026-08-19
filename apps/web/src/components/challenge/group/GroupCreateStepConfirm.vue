@@ -64,7 +64,8 @@ const SUMMARY_ROWS = computed(() => [
             <span class="step-confirm__info-icon">i</span>
             <p class="step-confirm__info-text">
                 그룹 생성 후 바로 친구들을 초대할 수 있어요.<br>
-                <b>첫날 23:59</b>가 지나면 초대가 닫혀요.
+                <b>첫날 23:59</b>가 지나면 초대가 닫혀요.<br>
+                시작일까지 <b>혼자면 그룹이 사라져요.</b>
             </p>
         </div>
 

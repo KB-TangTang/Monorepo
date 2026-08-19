@@ -14,10 +14,21 @@ const props = defineProps({
 
 const emit = defineEmits(['invite']);
 
+/** 챌린지가 성립하는 최소 인원. 서버 `ChallengeGroupStatusTransitionService.MIN_MEMBERS` 와 같은 값이다. */
+const MIN_MEMBERS = 2;
+
 const hasRoom = computed(() => props.memberCount < props.maxMembers);
-const recruitLabel = computed(
-    () => `${props.memberCount} / ${props.maxMembers}명 · 첫날 23:59까지 모집`,
-);
+
+/**
+ * 「첫날 23:59까지 모집」은 이미 성립한 그룹(2명 이상)에만 해당한다.
+ * 혼자인 그룹은 시작일 0시에 그대로 삭제되므로 남은 시간을 다르게 말해야 한다 (이슈 #350).
+ */
+const recruitLabel = computed(() => {
+    const seats = `${props.memberCount} / ${props.maxMembers}명`;
+    return props.memberCount < MIN_MEMBERS
+        ? `${seats} · 혼자면 시작일에 사라져요`
+        : `${seats} · 첫날 23:59까지 모집`;
+});
 </script>
 
 <template>
