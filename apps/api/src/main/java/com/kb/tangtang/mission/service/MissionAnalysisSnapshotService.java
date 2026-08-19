@@ -44,7 +44,7 @@ public class MissionAnalysisSnapshotService {
     @Transactional
     public MissionAnalysisSnapshotDto getOrCreateSnapshot(long userId, LocalDate cycleStartDate) {
         List<MissionAnalysisSnapshot> pendingSnapshots =
-                missionAnalysisSnapshotMapper.findPendingSnapshots(userId);
+                missionAnalysisSnapshotMapper.findPendingSnapshots(userId, cycleStartDate);
         if (!pendingSnapshots.isEmpty()) {
             return toDto(pendingSnapshots);
         }

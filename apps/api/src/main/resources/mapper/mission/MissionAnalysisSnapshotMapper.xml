@@ -65,9 +65,11 @@
         WHERE analysis.user_id = #{userId}
           AND analysis.assigned_date IS NULL
           AND analysis.cycle_start_date = (
-              SELECT MAX(latest.cycle_start_date)
+              SELECT MIN(latest.cycle_start_date)
               FROM tbl_user_mission_analysis latest
               WHERE latest.user_id = #{userId}
+                AND latest.assigned_date IS NULL
+                AND latest.cycle_start_date &lt;= #{referenceDate}
           )
         ORDER BY analysis.category_rank
     </select>
@@ -82,9 +84,11 @@
         WHERE analysis.user_id = #{userId}
           AND analysis.assigned_date IS NULL
           AND analysis.cycle_start_date = (
-              SELECT MAX(latest.cycle_start_date)
+              SELECT MIN(latest.cycle_start_date)
               FROM tbl_user_mission_analysis latest
               WHERE latest.user_id = #{userId}
+                AND latest.assigned_date IS NULL
+                AND latest.cycle_start_date &lt;= #{assignDate}
           )
         ORDER BY analysis.category_rank
         LIMIT 1
