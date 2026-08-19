@@ -42,6 +42,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToStart"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToEvaluate"));
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToJudge"));
+        assertTrue(configuration.hasStatement(namespace + ".findGroupsToClose"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
         assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
     }
@@ -84,6 +85,27 @@ class ChallengeMapperXmlTest {
                 "<= 로 바꾸면 평가 배치가 마지막 날 기소를 만들기 전에 그룹이 JUDGING 으로 빠진다");
     }
 
+    /**
+     * 미확정 재판이 남은 그룹을 확정해 버리면 그 재판이 유죄로 끝났을 때 깎였어야 할 목숨이
+     * 순위에 반영되지 못한다. {@code final_*} 3개는 write-once 라 되돌릴 수도 없다(이슈 #172).
+     *
+     * <p>조건이 빠져도 SQL 은 정상 실행되고 화면도 멀쩡해 보인다 — 마지막 재판 결과만 조용히
+     * 사라질 뿐이라 SQL 모양으로 못박는다.
+     */
+    @Test
+    @DisplayName("최종 확정 대상은 미확정 재판이 없는 그룹으로 좁혀져 있다")
+    void findGroupsToCloseWaitsForOpenTrials() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = sqlOf(configuration,
+                ChallengeGroupMapper.class.getName() + ".findGroupsToClose");
+
+        assertTrue(sql.contains("NOT EXISTS"),
+                "조건이 없으면 재판이 끝나기 전에 최종 결과가 확정된다");
+        assertTrue(sql.contains("i.status IN ('DEFENSE_WAIT', 'VOTING')"),
+                "미확정 두 상태가 모두 있어야 한다 — 하나만 빼면 그 재판 결과가 순위에서 사라진다");
+    }
+
     @Test
     @DisplayName("GroupMemberMapper XML 이 파싱되고 모든 구문이 등록된다")
     void parsesGroupMemberMapper() throws Exception {
@@ -92,6 +114,40 @@ class ChallengeMapperXmlTest {
         String namespace = GroupMemberMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".insertMember"));
         assertTrue(configuration.hasStatement(namespace + ".findByGroupIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findUserIdsByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".decreaseLife"));
+        assertTrue(configuration.hasStatement(namespace + ".finalizeMember"));
+    }
+
+    /**
+     * {@code final_*} 3개는 write-once 다. 조건이 빠지면 배치를 다시 돌릴 때 값이 다시 쓰이고,
+     * 그 사이 확정된 재판 때문에 <b>이미 사용자에게 보여 준 순위·완주 여부가 뒤집힌다.</b>
+     */
+    @Test
+    @DisplayName("최종 결과 확정은 이미 확정된 참여자를 덮어쓰지 않는다")
+    void finalizeMemberIsWriteOnce() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupMemberMapper.xml");
+
+        String sql = sqlOf(configuration, GroupMemberMapper.class.getName() + ".finalizeMember");
+
+        assertTrue(sql.contains("final_outcome IS NULL"),
+                "조건이 없으면 확정된 순위가 배치 재실행으로 뒤집힌다");
+    }
+
+    /**
+     * {@code lives_count} 는 UNSIGNED 가 아니라 그냥 INT 다. 조건이 빠지면 −1 이 그대로 저장되고,
+     * 종료 후 확정 배치의 「{@code lives_count = 0} 이면 탈락」 판정이 <b>조용히 빗나간다</b> —
+     * 탈락해야 할 사람이 생존자로 순위에 오른다.
+     */
+    @Test
+    @DisplayName("목숨 차감은 0 이하로 내려가지 않는다")
+    void decreaseLifeGuardsAgainstNegative() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupMemberMapper.xml");
+
+        String sql = sqlOf(configuration, GroupMemberMapper.class.getName() + ".decreaseLife");
+
+        assertTrue(sql.contains("lives_count > 0"),
+                "조건이 없으면 목숨이 음수가 되어 탈락 판정이 어긋난다");
     }
 
     @Test
@@ -106,6 +162,32 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findDeductionOverflow"));
         assertTrue(configuration.hasStatement(namespace + ".findMemberConsumption"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialTransactions"));
+        assertTrue(configuration.hasStatement(namespace + ".addVerdictDeduction"));
+        assertTrue(configuration.hasStatement(namespace + ".findFinalConsumption"));
+        assertTrue(configuration.hasStatement(namespace + ".findRankingActive"));
+        assertTrue(configuration.hasStatement(namespace + ".findRankingClosed"));
+        assertTrue(configuration.hasStatement(namespace + ".findLastSettlementDate"));
+    }
+
+    /**
+     * 무죄 감액은 <b>대입이 아니라 누적</b>이어야 한다. 기간평가는 기간 전체의 기소가
+     * {@code end_date} 행 한 줄에 붙고 일일평가도 같은 행이 다시 기소될 수 있어, 대입으로 쓰면
+     * 앞선 무죄의 감액이 사라진다.
+     *
+     * <p>{@code effective_amount} 는 STORED 생성 컬럼이라 SET 절에 넣는 순간 UPDATE 가 죽는다.
+     */
+    @Test
+    @DisplayName("판결 감액은 누적이고 생성 컬럼을 건드리지 않는다")
+    void verdictDeductionAccumulates() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+
+        String sql = sqlOf(configuration,
+                GroupChallengeResultMapper.class.getName() + ".addVerdictDeduction");
+
+        assertTrue(sql.contains("verdict_deduction_amount = verdict_deduction_amount + ?"),
+                "대입으로 바꾸면 같은 행의 앞선 무죄 감액이 지워진다");
+        assertFalse(sql.contains("effective_amount"),
+                "effective_amount 는 생성 컬럼이라 UPDATE 대상이 될 수 없다");
     }
 
     /**
@@ -169,10 +251,13 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
         assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
+        assertTrue(configuration.hasStatement(namespace + ".findClosedTrialStats"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialDetail"));
         assertTrue(configuration.hasStatement(namespace + ".moveToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".confirmConfession"));
         assertTrue(configuration.hasStatement(namespace + ".moveExpiredDefensesToVoting"));
+        assertTrue(configuration.hasStatement(namespace + ".findVotingToTally"));
+        assertTrue(configuration.hasStatement(namespace + ".confirmVerdict"));
     }
 
     @Test
@@ -244,6 +329,56 @@ class ChallengeMapperXmlTest {
     }
 
     /**
+     * 개표 대상은 「투표 마감이 지났다 <b>OR</b> 투표할 사람이 전부 던졌다」 둘 다다(이슈 #172 결정 2).
+     *
+     * <p>앞쪽만 남으면 전원이 투표를 끝내고도 최대 30시간을 기다려야 하고, 뒤쪽만 남으면
+     * <b>한 명이라도 투표를 안 하면 재판이 영원히 끝나지 않는다.</b> 어느 쪽이 빠져도 화면에는
+     * 아무 오류가 뜨지 않고 「투표 완료」인 채로 멈춰 있을 뿐이라 SQL 모양으로 못박는다.
+     */
+    @Test
+    @DisplayName("개표 대상 조회는 마감 경과와 전원 투표를 모두 건다")
+    void tallyPicksDeadlinePassedOrEveryoneVoted() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findVotingToTally");
+
+        assertTrue(sql.contains("i.status = 'VOTING'"),
+                "VOTING 만 잡아야 혐의 인정·확정된 재판이 자동으로 빠진다");
+
+        /* 변론 + 투표 두 구간이라 파라미터가 둘이다. 하나만 남으면 마감 시점이 어긋난다 */
+        int first = sql.indexOf("INTERVAL ? HOUR");
+        assertTrue(first >= 0 && sql.indexOf("INTERVAL ? HOUR", first + 1) > first,
+                "변론·투표 시간을 각각 파라미터로 받지 않으면 마감 시점이 화면과 어긋난다");
+
+        assertTrue(sql.contains("(SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) >="),
+                "던진 표 수를 세지 않으면 조기 확정이 사라져 전원 투표해도 30시간을 기다린다");
+        assertTrue(sql.contains(
+                        "(SELECT COUNT(*) FROM tbl_group_member gm WHERE gm.group_id = i.group_id) - 1"),
+                "분모에서 피고를 빼지 않으면 전원이 투표해도 조건이 성립하지 않는다");
+    }
+
+    /**
+     * {@code WHERE status = 'VOTING'} 이 개표의 <b>멱등 근거</b>다. 배치를 두 번 돌리거나 두 인스턴스가
+     * 같은 틱을 잡으면 두 번째가 0행을 바꾸고, 서비스는 그 0 을 보고 뒤처리를 건너뛴다
+     * ({@code GroupVerdictTransitionService#confirm}). 조건이 빠지면 <b>목숨이 두 번 깎이고</b>
+     * 감액이 두 번 더해지며 알림도 두 번 나간다.
+     */
+    @Test
+    @DisplayName("판결 확정 UPDATE 는 VOTING 조건 없이 실행되지 않는다")
+    void confirmVerdictGuardsVotingStatus() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".confirmVerdict");
+
+        assertTrue(sql.contains("status = 'VOTING'"),
+                "조건이 없으면 배치가 두 번 돌 때 목숨이 두 번 깎인다");
+        assertTrue(sql.contains("result = ?"),
+                "result 를 빼면 ck_ind_result 가 UPDATE 를 거부한다");
+        assertTrue(sql.contains("ai_verdict_reason = ?"),
+                "사유를 싣지 않으면 탕이 판결 화면에 근거가 비어 보인다");
+    }
+
+    /**
      * 재판 상세에서 참여자 조인이 빠지면 <b>기소 ID 만 알면 남의 그룹 재판 상세가 열린다.</b>
      * 피고 닉네임·소비 금액이 그대로 노출되고, 이 응답은 투표 화면(#171)도 함께 쓴다.
      */
@@ -263,7 +398,7 @@ class ChallengeMapperXmlTest {
     }
 
     /**
-     * 기간평가 소비액 공식이 세 곳에 같은 모양으로 있는지 본다.
+     * 기간평가 소비액 공식이 여섯 곳에 같은 모양으로 있는지 본다.
      *
      * <p><b>왜 문자열로 검사하나</b> — 상관 서브쿼리가 참조하는 바깥 별칭이 호출부마다 달라
      * ({@code r_end.user_id} · {@code m.user_id} · {@code i.user_id}) {@code <sql>} 조각 하나로
@@ -274,7 +409,7 @@ class ChallengeMapperXmlTest {
      * 「★ 기간평가(PERIOD) 소비액 공식」 주석이다. 그 주석이 원본이다.
      */
     @Test
-    @DisplayName("기간평가 소비액 공식이 세 구문에 같은 모양으로 들어 있다")
+    @DisplayName("기간평가 소비액 공식이 여섯 구문에 같은 모양으로 들어 있다")
     void periodConsumptionFormulaStaysIdentical() throws Exception {
         String formula = "GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)";
 
@@ -286,6 +421,12 @@ class ChallengeMapperXmlTest {
                 "기간평가 기소 판정이 무죄 감액을 빼지 않으면 무죄받은 사람을 다시 기소한다");
         assertTrue(sqlOf(results, resultNamespace + ".findMemberConsumption").contains(formula),
                 "그룹 상세 소비액이 감액을 반영하지 않으면 무죄 판결이 화면에 나타나지 않는다");
+        assertTrue(sqlOf(results, resultNamespace + ".findFinalConsumption").contains(formula),
+                "최종 확정 부담금이 기소 판정과 다른 식을 쓰면 「초과로 기소됐는데 완주」가 생긴다");
+        assertTrue(sqlOf(results, resultNamespace + ".findRankingActive").contains(formula),
+                "진행 중 순위의 소비액이 확정 계산과 어긋나면 종료 순간 순위가 이유 없이 바뀐다");
+        assertTrue(sqlOf(results, resultNamespace + ".findRankingClosed").contains(formula),
+                "종료 후 표시용 소비액이 다른 화면과 어긋난다");
         assertTrue(sqlOf(indictments, IndictmentMapper.class.getName() + ".findTrialDetail")
                         .contains(formula),
                 "재판 상세의 초과액·소비액이 다른 화면과 어긋난다");
@@ -334,6 +475,57 @@ class ChallengeMapperXmlTest {
                 "환불로 daily_amount 가 음수인 날은 감액 0 인 행까지 경고에 걸린다");
     }
 
+    /* ══ 명예 법정 랭킹 (이슈 #173) ═══════════════════════════════════════ */
+
+    /**
+     * 정렬 규칙(요구사항정의서 6.6)이 SQL 에 그대로 있는지 본다 — 일일평가는 남은 목숨
+     * DESC → 누적 소비액 ASC, 기간평가는 누적 소비액 ASC. {@code RANK()} 라 동률은
+     * 공동 순위(1, 1, 3)다 — {@code DENSE_RANK} 로 바뀌면 공동 1위 다음이 2위가 된다.
+     *
+     * <p>{@code <choose>} 분기라 파라미터 없이 바인딩하면 {@code <otherwise>}(PERIOD) 갈래가
+     * 나온다. DAILY 갈래는 {@code evalType} 을 넣어 따로 뽑는다.
+     */
+    @Test
+    @DisplayName("진행 중 랭킹은 평가 방식별 정렬로 RANK() 를 계산한다")
+    void rankingActiveSortsPerEvalType() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+        String id = GroupChallengeResultMapper.class.getName() + ".findRankingActive";
+
+        java.util.Map<String, Object> daily = new java.util.HashMap<>();
+        daily.put("groupId", 1L);
+        daily.put("evalType", "DAILY");
+        String dailySql = configuration.getMappedStatement(id)
+                .getBoundSql(daily).getSql().replaceAll("\\s+", " ");
+        assertTrue(dailySql.contains(
+                        "RANK() OVER ( ORDER BY base.lives_count DESC, base.total_consumption ASC )"),
+                "일일평가는 목숨이 먼저다 — 소비액만 보면 목숨 0 인 사람이 1위가 될 수 있다");
+
+        String periodSql = sqlOf(configuration, id);
+        assertTrue(periodSql.contains("RANK() OVER ( ORDER BY base.total_consumption ASC )"),
+                "기간평가는 누적 소비액 오름차순 하나다");
+    }
+
+    /**
+     * 종료 후 재계산 금지(#172 계약)를 SQL 모양으로 못박는다. 이 구문에 윈도우 함수가
+     * 들어오는 순간, 종료 후 환불·재분류로 소비액이 바뀔 때마다 이미 사용자에게 보여 준
+     * 순위가 뒤집힌다. 순위·완주·부담금은 확정 배치가 남긴 {@code final_*} 를 읽기만 한다.
+     */
+    @Test
+    @DisplayName("종료 랭킹은 확정 컬럼을 읽기만 하고 순위를 재계산하지 않는다")
+    void rankingClosedNeverRecalculates() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+
+        String sql = sqlOf(configuration,
+                GroupChallengeResultMapper.class.getName() + ".findRankingClosed");
+
+        assertFalse(sql.contains("OVER ("),
+                "윈도우 함수가 들어오면 종료 후 환불로 확정 순위가 뒤집힌다");
+        assertTrue(sql.contains("m.final_rank"), "순위는 확정 배치가 남긴 저장값이다");
+        assertTrue(sql.contains("m.final_outcome"), "탈락 표시의 유일한 근거다");
+        assertTrue(sql.contains("m.final_charge_amount"),
+                "부담금을 다시 계산하면 이미 정산한 금액과 어긋난다");
+    }
+
     private String sqlOf(Configuration configuration, String statementId) {
         return configuration.getMappedStatement(statementId)
                 .getBoundSql(new java.util.HashMap<String, Object>())
@@ -358,5 +550,95 @@ class ChallengeMapperXmlTest {
 
         assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
                 "조인이 없으면 내가 속하지 않은 그룹의 재판이 할 일 목록에 섞인다");
+    }
+
+    /* ══ 투표 (이슈 #171) ═══════════════════════════════════════════════ */
+
+    @Test
+    @DisplayName("VoteMapper XML 이 파싱되고 모든 구문이 등록된다")
+    void parsesVoteMapper() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String namespace = VoteMapper.class.getName();
+        assertTrue(configuration.hasStatement(namespace + ".insert"));
+        assertTrue(configuration.hasStatement(namespace + ".existsByIndictmentIdAndUserId"));
+        assertTrue(configuration.hasStatement(namespace + ".findCommentsByIndictmentId"));
+    }
+
+    /**
+     * 표 한 장은 {@code (group_id, user_id, indictment_id)} 복합 PK 로 식별된다.
+     * {@code group_id} 가 빠지면 NOT NULL 로 INSERT 자체가 죽고,
+     * {@code ON DUPLICATE KEY UPDATE} 가 붙으면 <b>투표 수정이 조용히 생긴다</b> —
+     * 마감 직전 눈치싸움을 막으려고 일부러 없앤 경로다(이슈 #171 결정).
+     */
+    @Test
+    @DisplayName("투표 INSERT 는 복합 PK 3개를 모두 쓰고 갱신 경로가 없다")
+    void voteInsertHasNoUpdatePath() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String sql = sqlOf(configuration, VoteMapper.class.getName() + ".insert");
+
+        assertTrue(sql.contains("group_id"), "복합 PK 의 일부라 빠지면 INSERT 가 죽는다");
+        assertTrue(sql.contains("user_id"));
+        assertTrue(sql.contains("indictment_id"));
+        assertFalse(sql.contains("ON DUPLICATE KEY"),
+                "UPSERT 로 바뀌면 재투표가 열려 개표 직전 표를 갈아탈 수 있다");
+    }
+
+    /**
+     * 코멘트는 <b>익명</b>이다. {@code tbl_user} 를 조인하거나 {@code user_id} 를 뽑는 순간
+     * 「누가 뭐라고 했는지」가 응답에 실린다. 정렬도 {@code created_at} 뿐이다 —
+     * {@code user_id} 를 tie-breaker 로 넣으면 순서에서 투표자가 읽힌다.
+     */
+    @Test
+    @DisplayName("판결 코멘트 조회는 투표자를 식별할 수 있는 컬럼을 뽑지 않는다")
+    void voteCommentsStayAnonymous() throws Exception {
+        Configuration configuration = parse("mapper/challenge/VoteMapper.xml");
+
+        String sql = sqlOf(configuration,
+                VoteMapper.class.getName() + ".findCommentsByIndictmentId");
+
+        assertFalse(sql.contains("tbl_user"), "닉네임을 붙이는 순간 익명이 아니다");
+        assertFalse(sql.contains("user_id"), "user_id 가 내려가면 화면이 투표자를 특정할 수 있다");
+        assertFalse(sql.contains("verdict"), "코멘트 옆에 유무죄가 붙으면 코멘트가 곧 표가 된다");
+        assertTrue(sql.contains("TRIM(comment) <> ''"),
+                "공백만 남은 코멘트가 목록에 빈 줄로 뜬다");
+    }
+
+    /**
+     * 표 분포는 SQL 이 <b>항상</b> 센다. 가리는 일은 {@code GroupTrialService#isCounted} 한 곳이
+     * 맡는다 — SQL 을 상태별로 나누면 이슈 #172 가 개표를 공개할 때 조건을 두 군데서 풀어야 하고
+     * 한쪽을 빠뜨리면 투표 중에 비율이 새어 편승 투표가 생긴다.
+     */
+    @Test
+    @DisplayName("재판 상세는 유죄·무죄 표수를 상태와 무관하게 센다")
+    void trialDetailCountsBothVerdicts() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findTrialDetail");
+
+        assertTrue(sql.contains("v.verdict = 'GUILTY') AS guilty_count"),
+                "guilty_count 가 없으면 개표 후 화면이 표 분포를 그릴 수 없다");
+        assertTrue(sql.contains("v.verdict = 'INNOCENT') AS innocent_count"),
+                "innocent_count 가 없으면 개표 후 화면이 표 분포를 그릴 수 없다");
+        assertFalse(sql.contains("i.status = 'GUILTY'"),
+                "노출 조건을 SQL 에 넣으면 #172 가 두 군데를 풀어야 한다");
+    }
+
+    /**
+     * 이 두 컬럼이 화면의 분기 근거다 — 「다수결 / 무투표 / 탕이 판결 / 혐의 인정」을 구분하고,
+     * 동률로 끝난 재판을 AI 판결 화면으로 보낸다.
+     */
+    @Test
+    @DisplayName("재판 상세는 판결 방식과 AI 판결 사유를 함께 내려보낸다")
+    void trialDetailSelectsVerdictMethodAndAiReason() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration, IndictmentMapper.class.getName() + ".findTrialDetail");
+
+        assertTrue(sql.contains("i.verdict_method AS verdict_method"),
+                "판결 방식이 없으면 AI 판결 화면으로 갈 분기 근거가 없다");
+        assertTrue(sql.contains("i.ai_verdict_reason AS ai_verdict_reason"),
+                "사유가 없으면 탕이 판결 상세가 빈 화면이 된다");
     }
 }

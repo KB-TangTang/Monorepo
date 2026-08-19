@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &gt; · &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨진다.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.VoteMapper">
+
+    <!--
+      표 저장 (이슈 #171).
+
+      group_id 를 빼면 안 된다 — PK 가 (group_id, user_id, indictment_id) 복합이고
+      NOT NULL 이다. 기소만 알면 그룹은 정해지지만 컬럼은 따로 채워야 한다.
+
+      created_at · updated_at 은 컬럼 기본값에 맡긴다. 수정 경로가 없어 두 값은 항상 같다.
+
+      ON DUPLICATE KEY UPDATE 를 쓰지 않는다. 그것을 쓰면 두 번째 요청이 조용히 표를 바꾸는데,
+      투표 수정은 이 이슈가 지원하지 않기로 한 동작이다(개표 직전 눈치싸움 방지).
+    -->
+    <insert id="insert" parameterType="com.kb.tangtang.challenge.domain.Vote">
+        INSERT INTO tbl_vote
+            (group_id, user_id, indictment_id, verdict, comment)
+        VALUES
+            (#{groupId}, #{userId}, #{indictmentId}, #{verdict}, #{comment})
+    </insert>
+
+    <!-- PK 선두가 group_id 라 이 조회는 idx_vote_indictment (indictment_id, verdict) 를 탄다 -->
+    <select id="existsByIndictmentIdAndUserId" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM tbl_vote
+                        WHERE indictment_id = #{indictmentId}
+                          AND user_id = #{userId})
+    </select>
+
+    <!--
+      판결 상세의 익명 코멘트 (개표 후 전용).
+
+      ⚠ tbl_user 를 조인하지 않는다. 닉네임·프로필을 붙이는 순간 「누가 나에게 유죄를 줬는지」가
+        그룹에 공개된다 — 익명이 이 기능의 전제다. user_id 도 내려보내지 않는다.
+
+      코멘트는 선택 입력이라 NULL·공백만 있는 행은 뺀다. 빈 줄이 목록에 섞이면
+      화면에 이유 없는 여백이 생긴다.
+
+      ORDER BY 에 created_at 만 쓰면 같은 초에 들어온 표의 순서가 요청마다 흔들린다.
+      user_id 를 tie-breaker 로 쓰면 정렬이 곧 투표자 힌트가 되므로, 순서 고정보다
+      익명을 택했다 — 표시 순서가 바뀌어도 내용은 같다.
+    -->
+    <select id="findCommentsByIndictmentId"
+            resultType="com.kb.tangtang.challenge.domain.VoteCommentRow">
+        SELECT comment    AS comment,
+               created_at AS created_at
+          FROM tbl_vote
+         WHERE indictment_id = #{indictmentId}
+           AND comment IS NOT NULL
+           AND TRIM(comment) &lt;&gt; ''
+         ORDER BY created_at
+    </select>
+</mapper>

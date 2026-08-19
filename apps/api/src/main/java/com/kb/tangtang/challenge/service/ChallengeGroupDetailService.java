@@ -1,11 +1,16 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
+import com.kb.tangtang.challenge.domain.GroupMember;
 import com.kb.tangtang.challenge.domain.GroupMemberConsumptionRow;
+import com.kb.tangtang.challenge.domain.GroupTrialStatsRow;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.GroupDailyMemberDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.mapper.GroupChallengeResultMapper;
+import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
+import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.storage.ImageStorage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -16,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +46,8 @@ public class ChallengeGroupDetailService {
     private final ChallengeGroupService challengeGroupService;
     private final GroupTrialService groupTrialService;
     private final GroupChallengeResultMapper resultMapper;
+    private final GroupMemberMapper groupMemberMapper;
+    private final IndictmentMapper indictmentMapper;
     private final ImageStorage imageStorage;
     private final Clock clock;
 
@@ -47,19 +55,25 @@ public class ChallengeGroupDetailService {
     public ChallengeGroupDetailService(ChallengeGroupService challengeGroupService,
                                        GroupTrialService groupTrialService,
                                        GroupChallengeResultMapper resultMapper,
+                                       GroupMemberMapper groupMemberMapper,
+                                       IndictmentMapper indictmentMapper,
                                        ImageStorage imageStorage) {
-        this(challengeGroupService, groupTrialService, resultMapper, imageStorage,
-                Clock.systemDefaultZone());
+        this(challengeGroupService, groupTrialService, resultMapper, groupMemberMapper,
+                indictmentMapper, imageStorage, Clock.systemDefaultZone());
     }
 
     ChallengeGroupDetailService(ChallengeGroupService challengeGroupService,
                                 GroupTrialService groupTrialService,
                                 GroupChallengeResultMapper resultMapper,
+                                GroupMemberMapper groupMemberMapper,
+                                IndictmentMapper indictmentMapper,
                                 ImageStorage imageStorage,
                                 Clock clock) {
         this.challengeGroupService = challengeGroupService;
         this.groupTrialService = groupTrialService;
         this.resultMapper = resultMapper;
+        this.groupMemberMapper = groupMemberMapper;
+        this.indictmentMapper = indictmentMapper;
         this.imageStorage = imageStorage;
         this.clock = clock;
     }
@@ -71,6 +85,10 @@ public class ChallengeGroupDetailService {
      * 기소가 없어 빈 배열이 되고 소비액은 0원이 된다. 상태로 분기해 필드를 비우면, 상태 전이 배치가
      * 도는 그 순간 화면이 무엇을 보여줄지가 갈려 재현하기 어려운 버그가 된다.
      * 무엇을 그릴지는 화면이 {@code status} 를 보고 정한다.
+     *
+     * <p><b>종료 화면 필드({@code finalMembers}·{@code trialStats})만은 CLOSED 로 분기한다</b>
+     * (이슈 #173). 위 원칙의 예외가 아니라 데이터 제약이다 — {@code final_*} 컬럼은 확정 배치(#172)가
+     * CLOSED 전이와 함께 채우므로 그 전에는 NULL 뿐이라 만들 수 있는 값이 없다.
      */
     @Transactional(readOnly = true)
     public ChallengeGroupDetailDto findDetail(long userId, long groupId) {
@@ -105,6 +123,7 @@ public class ChallengeGroupDetailService {
                     .build());
         }
 
+        boolean closed = ChallengeGroupStatus.CLOSED.name().equals(challenge.getStatus());
         return ChallengeGroupDetailDto.builder()
                 .challenge(challenge)
                 .myDailyAmount(myAmount)
@@ -112,6 +131,45 @@ public class ChallengeGroupDetailService {
                 .myRemainingAmount(BigDecimal.valueOf(limitAmount).subtract(myAmount))
                 .indictments(indictments)
                 .dailyMembers(others)
+                .finalMembers(closed ? finalMembers(groupId) : null)
+                .trialStats(closed ? trialStats(groupId) : null)
+                .build();
+    }
+
+    /**
+     * 종료 화면 참여자 — 확정값({@code final_*})을 <b>읽기만 한다</b>(재계산 금지, #172 와의 계약).
+     *
+     * <p>정렬은 여기서 한다. {@code findByGroupIds} 는 목록 순서 고정을 위해 {@code user_id} 순으로
+     * 읽는데, 종료 화면은 {@code final_rank} 순이어야 포디움·테이블이 맞다. 다른 호출부가 있어
+     * XML 의 ORDER BY 를 바꾸지 않는다.
+     */
+    private List<ChallengeGroupDetailDto.FinalMember> finalMembers(long groupId) {
+        List<GroupMember> members = new ArrayList<>(groupMemberMapper.findByGroupIds(List.of(groupId)));
+        members.sort(Comparator
+                .comparing(GroupMember::getFinalRank, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(GroupMember::getUserId));
+
+        List<ChallengeGroupDetailDto.FinalMember> result = new ArrayList<>();
+        for (GroupMember member : members) {
+            result.add(ChallengeGroupDetailDto.FinalMember.builder()
+                    .userId(member.getUserId())
+                    .nickname(member.getNickname())
+                    .profileImageUrl(imageStorage.urlOf(member.getProfileImageKey()))
+                    .finalRank(member.getFinalRank())
+                    .finalOutcome(member.getFinalOutcome())
+                    .livesCount(member.getLivesCount())
+                    .build());
+        }
+        return result;
+    }
+
+    /** 확정 재판 전적. 재판이 없어도 매퍼가 0 으로 채운 한 행을 준다 — NULL 방어 불필요. */
+    private ChallengeGroupDetailDto.TrialStats trialStats(long groupId) {
+        GroupTrialStatsRow row = indictmentMapper.findClosedTrialStats(groupId);
+        return ChallengeGroupDetailDto.TrialStats.builder()
+                .totalTrials(row.getTotalTrials())
+                .guiltyCount(row.getGuiltyCount())
+                .innocentCount(row.getInnocentCount())
                 .build();
     }
 

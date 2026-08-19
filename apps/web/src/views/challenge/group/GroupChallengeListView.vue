@@ -79,6 +79,14 @@ function goToDetail(challenge) {
 }
 
 /*
+ * 생성 진입로(이슈 #172). 참여코드 CTA 와 달리 **탭과 무관하게** 항상 보인다 —
+ * 「종료됨」 탭에서 지난 챌린지를 보다가 새로 열고 싶어지는 흐름이 오히려 흔하다.
+ */
+function goToCreate() {
+    router.push({ name: 'groupChallengeCreate' });
+}
+
+/*
  * 카드 하단의 채팅 영역을 누르면 상세를 거치지 않고 바로 방으로 들어간다.
  * 상세 화면이 아직 실서버에 붙지 않아, 지금은 이 경로가 채팅방으로 가는 유일한 UI 다(이슈 #271).
  */
@@ -133,6 +141,14 @@ function goToChat(challenge) {
                 />
             </template>
         </section>
+
+        <!-- ===== 생성 CTA (모든 탭) ===== -->
+        <div class="gcl-create-wrap">
+            <button type="button" class="gcl-create" @click="goToCreate">
+                <span class="gcl-create__plus">+</span>
+                <span class="gcl-create__title">새 그룹챌린지 만들기</span>
+            </button>
+        </div>
 
         <!-- ===== 시작 전 탭: 참여코드 CTA ===== -->
         <div v-if="activeTab === 'pre-start'" class="gcl-cta" @click="showJoinSheet = true">
@@ -200,6 +216,38 @@ function goToChat(challenge) {
     text-align: center;
     line-height: 1.5;
     cursor: default;
+}
+
+/* ── 생성 CTA ──────────────────── */
+.gcl-create-wrap {
+    padding: var(--tt-space-2) var(--tt-screen-padding) 0;
+}
+
+.gcl-create {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 13px 16px;
+    background: var(--tt-primary);
+    border: none;
+    border-radius: var(--tt-radius-lg);
+    box-shadow: var(--tt-elevation-btn);
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.gcl-create:active {
+    background: var(--tt-primary-hover);
+}
+
+.gcl-create__plus,
+.gcl-create__title {
+    font-size: var(--tt-fs-button);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text-inverse);
+    line-height: 1.2;
 }
 
 /* ── 참여코드 CTA 배너 ────────── */

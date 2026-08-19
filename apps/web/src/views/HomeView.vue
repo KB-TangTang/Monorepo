@@ -23,6 +23,7 @@ import {
     getDaysUntilNextMonth,
     getHomeAssetChange,
     getHomeGroupStatus,
+    getHomeReportEmptyCopy,
     toHomeMission,
     toHomeReportSummary,
 } from '@/utils/home';
@@ -41,6 +42,7 @@ const challenge = ref(null);
 const assetSummary = ref(null);
 const honorCourt = ref(null);
 const habitSummary = ref(null);
+const reportStatus = ref('loading');
 const groupTrials = ref([]);
 const activeGroupCount = ref(0);
 const isGroupSummaryLoading = ref(true);
@@ -51,6 +53,7 @@ let progressAnimationTimer = 0;
 const displayName = computed(() => resolveDisplayName(auth.user) || '사용자');
 const currentPeriod = getCurrentYearMonth();
 const assetChange = computed(() => getHomeAssetChange(assetSummary.value?.monthOverMonthRate));
+const reportEmptyCopy = computed(() => getHomeReportEmptyCopy(reportStatus.value));
 const groupStatus = computed(() =>
     getHomeGroupStatus({
         trials: groupTrials.value,
@@ -135,7 +138,8 @@ async function loadHome() {
               reportOpenDays: getDaysUntilNextMonth(),
           }
         : null;
-    habitSummary.value = reportResult.status === 'fulfilled' ? reportResult.value : null;
+    habitSummary.value = reportResult.status === 'fulfilled' ? reportResult.value.summary : null;
+    reportStatus.value = reportResult.status === 'fulfilled' ? reportResult.value.status : 'error';
 
     if (
         [missionResult, assetResult, rankingResult, reportResult].every(
@@ -150,9 +154,20 @@ async function loadHome() {
 async function loadLatestReport() {
     const availability = await fetchChallengeReportMonths();
     const latestMonth = availability.months?.find((month) => month.available);
-    if (!latestMonth) return null;
+    if (!latestMonth) {
+        return {
+            status:
+                availability.entryState === 'NOT_AGREED'
+                    ? 'not-agreed'
+                    : availability.entryState === 'PREPARING_FIRST_REPORT'
+                      ? 'preparing'
+                      : 'empty',
+            summary: null,
+        };
+    }
 
-    return toHomeReportSummary(await fetchChallengeReport(latestMonth.value));
+    const summary = toHomeReportSummary(await fetchChallengeReport(latestMonth.value));
+    return { status: summary ? 'ready' : 'empty', summary };
 }
 
 async function loadGroupSummary() {
@@ -439,13 +454,8 @@ onBeforeUnmount(stopProgressAnimation);
                 <img class="honor-court__image" :src="honorCourtImage" alt="" />
             </BaseCard>
 
-            <button
-                v-if="habitSummary"
-                type="button"
-                class="home-habit-card"
-                @click="goToChallengeReport"
-            >
-                <span class="home-habit-card__content">
+            <button type="button" class="home-habit-card" @click="goToChallengeReport">
+                <span v-if="habitSummary" class="home-habit-card__content">
                     <small>{{ habitSummary.month }}월 소비습관 변화</small>
                     <strong
                         ><b>{{ formatHomeAmount(habitSummary.savedAmount) }}원</b> 아꼈어요</strong
@@ -454,6 +464,11 @@ onBeforeUnmount(stopProgressAnimation);
                         {{ habitSummary.topCategoryName }}에서 가장 큰 변화가 있었어요
                     </em>
                     <em v-else>확정된 챌린지 결과를 확인해 보세요</em>
+                </span>
+                <span v-else class="home-habit-card__content home-habit-card__content--empty">
+                    <small>소비습관 변화 리포트</small>
+                    <strong>{{ reportEmptyCopy.title }}</strong>
+                    <em>{{ reportEmptyCopy.description }}</em>
                 </span>
                 <span class="home-habit-card__action">자세히 보기</span>
             </button>

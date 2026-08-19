@@ -1,14 +1,39 @@
 <script setup>
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BaseButton from '@/components/common/BaseButton.vue';
 import DefenseCourtHeader from '@/components/challenge/group/DefenseCourtHeader.vue';
 import GroupTieScoreCard from '@/components/challenge/group/GroupTieScoreCard.vue';
 import reviewImage from '@/assets/images/judgment/review_1.png';
-import { getAiVerdict } from '@/fixtures/groupChallengeAiVerdict';
+import { fetchTrialDetail } from '@/api/groupChallenge';
+import { isAiVerdict, toVerdictScreen, verdictRouteName } from '@/utils/groupTrial';
 
 const route = useRoute();
 const router = useRouter();
-const verdict = getAiVerdict();
+const verdict = ref(null);
+
+/*
+ * 동률이라 판사 탕이가 판결한 재판만 이 흐름을 탄다(이슈 #172).
+ * 다수결로 끝난 재판이 들어오면 「의견이 팽팽하게 맞섰어요」가 거짓말이 되므로 판결문으로 보낸다.
+ */
+onMounted(async () => {
+    let loaded;
+    try {
+        loaded = await fetchTrialDetail(route.params.indictmentId);
+    } catch {
+        router.replace({ name: 'groupChallenge' });
+        return;
+    }
+
+    if (!isAiVerdict(loaded)) {
+        router.replace({
+            name: verdictRouteName(loaded) ?? 'trialProgress',
+            params: route.params,
+        });
+        return;
+    }
+    verdict.value = toVerdictScreen(loaded);
+});
 
 function startAiVerdict() {
     router.push({
@@ -19,7 +44,7 @@ function startAiVerdict() {
 </script>
 
 <template>
-    <main class="tie-page">
+    <main v-if="verdict" class="tie-page">
         <DefenseCourtHeader>
             <template #nav-right
                 ><span class="tie-page__case">{{ verdict.caseNumber }}</span></template

@@ -5,10 +5,12 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
 import com.kb.tangtang.challenge.service.ChallengeGroupDetailService;
 import com.kb.tangtang.challenge.service.ChallengeGroupService;
+import com.kb.tangtang.challenge.service.GroupRankingService;
 import com.kb.tangtang.challenge.service.GroupTrialService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
@@ -32,13 +34,16 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
     private final ChallengeGroupService challengeGroupService;
     private final GroupTrialService groupTrialService;
     private final ChallengeGroupDetailService challengeGroupDetailService;
+    private final GroupRankingService groupRankingService;
 
     public ChallengeGroupController(ChallengeGroupService challengeGroupService,
                                     GroupTrialService groupTrialService,
-                                    ChallengeGroupDetailService challengeGroupDetailService) {
+                                    ChallengeGroupDetailService challengeGroupDetailService,
+                                    GroupRankingService groupRankingService) {
         this.challengeGroupService = challengeGroupService;
         this.groupTrialService = groupTrialService;
         this.challengeGroupDetailService = challengeGroupDetailService;
+        this.groupRankingService = groupRankingService;
     }
 
     /** 생성 (GC_01_02 ~ GC_01_04). 방장은 자동으로 참여자가 된다. */
@@ -89,6 +94,18 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
     public ApiResponse<ChallengeGroupDetailDto> findFullDetail(@LoginUser Long userId,
                                                                @PathVariable Long groupId) {
         return ApiResponse.ok(challengeGroupDetailService.findDetail(userId, groupId));
+    }
+
+    /**
+     * 명예 법정 — 생존자 랭킹 (이슈 #173). 참여자만 볼 수 있다.
+     *
+     * <p>종료(CLOSED) 그룹은 확정 배치(#172)가 남긴 {@code final_*} 를 읽기만 하고,
+     * 그 외에는 지금 시점의 순위를 계산한다.
+     */
+    @GetMapping("/{groupId}/ranking")
+    public ApiResponse<GroupRankingDto> findRanking(@LoginUser Long userId,
+                                                    @PathVariable Long groupId) {
+        return ApiResponse.ok(groupRankingService.findRanking(userId, groupId));
     }
 
     /**
