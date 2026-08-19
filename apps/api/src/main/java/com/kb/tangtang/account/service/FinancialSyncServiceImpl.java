@@ -200,9 +200,14 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     @Override
     public FinancialSyncResultDto sync(long userId) {
+        return sync(userId, Set.of());
+    }
+
+    @Override
+    public FinancialSyncResultDto sync(long userId, Set<String> extraInstitutionCodes) {
         LocalDateTime startedAt = LocalDateTime.now(clock);
         String scenarioKey = scenarioKeyProvider.resolve(userId);
-        SyncScope scope = buildSyncScope(userId);
+        SyncScope scope = buildSyncScope(userId, extraInstitutionCodes);
         MonthlyFetchCursor monthlyCursor = buildMonthlyFetchCursor(userId);
         /*
          * 사용자가 직접 해제한(is_active=0) 계좌는 동기화가 되살리면 안 된다(이슈 #199 최종 리뷰).
@@ -293,7 +298,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return new MonthlyFetchCursor(accounts, cards);
     }
 
-    private SyncScope buildSyncScope(long userId) {
+    private SyncScope buildSyncScope(long userId, Set<String> extraInstitutionCodes) {
         Set<String> institutionCodes = new HashSet<>();
         Set<String> institutionNames = new HashSet<>();
         for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
@@ -302,6 +307,37 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             }
             if (account.getBankName() != null) {
                 institutionNames.add(account.getBankName());
+            }
+        }
+        /*
+         * 대출·카드는 tbl_connected_account 를 쓰지 않는다 — saveLoans()/upsertCard() 참고, 각자
+         * tbl_loan/tbl_card 에만 남는다. 위 루프만으로 스코프를 만들면 최초 동기화(extraInstitutionCodes
+         * 로 부트스트랩) 이후로는 흔적이 tbl_connected_account 밖에 있다는 이유로 두 업권이 매번 다시
+         * 빠진다(#334 리뷰 지적 — 대출은 첫 동기화만 되고 이후 배치에서 사라짐). 각자의 테이블에서
+         * 직접 채워 "한 번이라도 연동됐던 기관"을 스코프가 기억하게 한다.
+         *
+         * 대출은 기관코드 컬럼이 없다(tbl_loan.bank_name 만 있다) — 이름으로만 매칭한다.
+         * SECURITIES 가 이미 이 방식이다(collectSecurities 의 includesName 참고. 그쪽은
+         * tbl_connected_account.bank_name 을 통해 자동으로 들어온다).
+         */
+        for (Loan loan : loanMapper.findByUser(userId)) {
+            if (loan.getBankName() != null) {
+                institutionNames.add(loan.getBankName());
+            }
+        }
+        for (Card card : cardMapper.findByUser(userId)) {
+            if (card.getInstitutionCode() != null) {
+                institutionCodes.add(card.getInstitutionCode());
+            }
+        }
+        /*
+         * 대출·페이머니 최초 연동용(#334) — 클래스 상단 FinancialSyncService.sync(userId, Set) 참고.
+         * null 코드가 섞여 들어오면 여기서 걸러야 한다. isDone() 이 null 을 "할 일 없음"으로 읽는
+         * AccountLinkService.requireOrganizations() 와 같은 이유다.
+         */
+        for (String code : extraInstitutionCodes) {
+            if (code != null && !code.isBlank()) {
+                institutionCodes.add(code);
             }
         }
         return new SyncScope(institutionCodes, institutionNames);
@@ -431,7 +467,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     private void collectLoan(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (LoanSyncDto loan : client.getLoans(scenarioKey)) {
-            if (!scope.includesCode(loan.getInstitutionCode())) {
+            /* tbl_loan 은 기관코드를 저장하지 않아 재동기화 스코프는 이름으로만 재구성된다 —
+               buildSyncScope() 참고. 그래서 코드·이름 둘 중 하나만 맞아도 포함시킨다. */
+            if (!scope.includesCode(loan.getInstitutionCode())
+                    && !scope.includesName(loan.getInstitutionName())) {
                 continue;
             }
             bundle.loans.add(loan);

@@ -8,6 +8,7 @@ import com.kb.tangtang.account.client.sync.dto.CardApprovalSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositTransactionSyncDto;
+import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneyTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.SecuritiesTransactionSyncDto;
@@ -15,6 +16,7 @@ import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.account.domain.Card;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.domain.LlmCategorizationRequestedEvent;
+import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.mapper.CardBillMapper;
 import com.kb.tangtang.account.mapper.CardMapper;
@@ -45,6 +47,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -511,6 +514,70 @@ class FinancialSyncServiceImplTest {
         verify(connectedAccountMapper).insert(argThat(account ->
                 "PAYMONEY".equals(account.getAccountType())
                         && "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334: 계좌 연동이 만든 ConnectedAccount 가 없어도 extraInstitutionCodes 로 넘긴 " +
+            "페이머니 기관은 최초 동기화에서 저장된다")
+    void syncsExtraInstitutionEvenWithoutExistingConnectedAccount() {
+        /* 대출·페이머니는 fetchAccounts() 가 다루지 못해 ConnectedAccount 가 아예 없는 상태에서 시작한다.
+           은행(0004)은 이미 연동돼 있다고 가정한다 — 실제로 이런 조합이 흔하다. */
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of());
+
+        service.sync(1L, Set.of("PAY_KB"));
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                "PAYMONEY".equals(account.getAccountType())
+                        && "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334: extraInstitutionCodes 없이 부르는 단일 인자 sync(userId) 는 여전히 " +
+            "연동 흔적이 없는 기관을 건너뛴다 — 회귀 방지")
+    void singleArgSyncStillExcludesUnlinkedInstitutions() {
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper, never()).insert(
+                argThat(account -> "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334 리뷰 지적: 대출은 tbl_connected_account 가 아니라 tbl_loan 에만 남기 때문에, " +
+            "extraInstitutionCodes 없이 부르는 평소 동기화에서도 이전에 만든 대출 이름 기록으로 스코프에 남아야 한다")
+    void loanStaysInScopeOnSubsequentSyncWithoutExtraCodes() {
+        /* 은행(0004) 하나는 이미 연동돼 있어 스코프가 "무제한(빈 스코프)"이 아니라 실제로 제한되는
+           상황을 만든다 — 대출 하나만 연동한 사용자였다면 이 결함이 가려진다. */
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        /* 이전 동기화가 이미 만들어 둔 대출 행. tbl_loan 은 기관코드 컬럼이 없어 이름만 남는다. */
+        when(loanMapper.findByUser(1L)).thenReturn(List.of(
+                Loan.builder().id(55L).userId(1L).loanNoEncrypted("MOCK-LOAN-301")
+                        .bankName("KB캐피탈").build()));
+        when(client.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(301L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").principal(new BigDecimal("5000000"))
+                        .balance(new BigDecimal("4200000")).interestRate(new BigDecimal("4.5"))
+                        .startDate("2026-01-01").maturityDate("2029-01-01")
+                        .monthlyPayment(new BigDecimal("150000")).build()));
+        when(client.getLoanTransactions(eq("1"), eq(301L))).thenReturn(List.of());
+
+        /* extraInstitutionCodes 없이 부르는 평소 동기화 — 배치 스케줄러·즉시 조회와 같은 경로다. */
+        service.sync(1L);
+
+        verify(loanMapper).insert(argThat(loan -> "KB캐피탈".equals(loan.getBankName())));
     }
 
     @Test

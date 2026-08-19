@@ -366,8 +366,12 @@ export const useAccountStore = defineStore('account', () => {
         });
     }
 
+    /**
+     * ⚠ selectedInstitutions 를 넘긴다 — resetFlow() 가 비우기 전, 완료 화면의 최초 동기화에서만
+     * 부르는 걸 전제로 한다(LinkDoneView.runInitialSync). 이유는 api/financialSync.js 참고(#334).
+     */
     async function syncAssets() {
-        return run(async () => syncFinancialAssets());
+        return run(async () => syncFinancialAssets(selectedInstitutions.value));
     }
 
     /** 즉시 조회 화면을 다시 열 때. 직전 결과가 새 결과인 것처럼 보이지 않게 한다. */

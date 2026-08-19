@@ -29,10 +29,13 @@ const syncing = ref(true);
 const syncFailed = ref(false);
 
 /**
- * 애니메이션을 재생할지.
+ * 접근성 설정에 따라 애니메이션 자체를 재생할지.
  *
- * SMIL 애니메이션은 `<img>` 안에서 도는 것이라 CSS 로 멈출 수 없다.
- * 그래서 재생 여부 자체를 여기서 정하고, 끄는 경우에는 정적인 체크를 그린다.
+ * SMIL 애니메이션은 `<img>` 안에서 도는 것이라 CSS 로 멈출 수 없다 — 그래서 재생 여부는 마운트
+ * 시점의 시스템 설정으로만 정한다. 동기화가 끝났을 때 멈추는 건 별개 문제라 템플릿에서
+ * `playsAnimation && syncing` 으로 syncing 과 함께 본다 — syncing 이 꺼지면 <img> 자체가
+ * v-if 로 언마운트돼 재생 중이던 SMIL 도 그와 함께 끊긴다(리뷰 지적 — 예전엔 동기화가 끝나도
+ * 계속 돌았다). 끄는 경우(reduced-motion 이거나 동기화가 끝난 경우)엔 정적인 체크를 그린다.
  */
 const playsAnimation = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -161,7 +164,7 @@ onBeforeUnmount(() => {
         <div class="link-done__body">
             <div class="link-done__hero">
                 <img
-                    v-if="playsAnimation"
+                    v-if="playsAnimation && syncing"
                     class="link-done__animation"
                     :src="successAnimation"
                     alt=""
