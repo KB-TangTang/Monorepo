@@ -18,7 +18,7 @@
                assignment.assign_date,
                category.category_name,
                assignment.target_value,
-               difficulty.score AS base_points,
+               CASE WHEN mission.mission_type = 'ABSOLUTE' THEN 50 ELSE difficulty.score END AS base_points,
                EXISTS (
                    SELECT 1
                      FROM tbl_user_mission_info previous_assignment
@@ -45,7 +45,7 @@
            AND mission_transaction.is_excluded_from_summary = 0
          WHERE <include refid="finalizedUncheckedVerdictCondition" />
          GROUP BY assignment.id, assignment.user_id, assignment.result, assignment.assign_date,
-                  category.category_name, assignment.target_value, difficulty.score
+                  category.category_name, assignment.target_value, mission.mission_type, difficulty.score
          LIMIT 1
     </select>
 

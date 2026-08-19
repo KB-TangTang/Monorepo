@@ -412,6 +412,8 @@ async function reassignTodayMission() {
                 <PersonalBriefingCard
                     :mission-title="store.todayBriefing.missionTitle"
                     :mission-content="store.todayBriefing.missionContent"
+                    :mission-type="store.todayBriefing.missionType"
+                    :mission-badge="store.todayBriefing.missionBadge"
                     :category-name="store.todayBriefing.categoryName"
                     :alibi-condition="store.todayBriefing.alibiCondition"
                     :current-amount="store.todayBriefing.currentAmount"
@@ -524,8 +526,12 @@ async function reassignTodayMission() {
                 </div>
 
                 <div class="personal-home__common-mission">
-                    <span class="personal-home__common-badge">공통 사건 · 절대형</span>
-                    <div class="personal-home__common-title">{{ store.commonMission.title }}</div>
+                    <span class="personal-home__common-badge">{{
+                        store.todayBriefing.missionBadge
+                    }}</span>
+                    <div class="personal-home__common-title">
+                        {{ store.todayBriefing.missionTitle }}
+                    </div>
                     <div class="personal-home__common-status">
                         <svg
                             width="15"
@@ -541,9 +547,9 @@ async function reassignTodayMission() {
                             <path d="M8.5 12.5l2.5 2.5 4.5-5" />
                         </svg>
                         <span>
-                            현재까지 {{ store.commonMission.category }} 지출
-                            <b>{{ formatWon(store.commonMission.currentAmount) }}</b>
-                            · 인정 시 +{{ store.commonMission.rewardPoints }}점
+                            현재까지 {{ store.todayBriefing.categoryName }} 지출
+                            <b>{{ formatWon(store.todayBriefing.currentAmount) }}</b>
+                            · 자정까지 0원이면 인정
                         </span>
                     </div>
                 </div>

@@ -51,6 +51,7 @@ export function toTodayMissionBriefing(mission) {
     return {
         missionTitle: mission.missionTitle ?? '',
         missionContent: mission.missionContent ?? '',
+        missionType: mission.missionType ?? '',
         categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
         alibiCondition: isRelativeMission
             ? `오늘 ${formatWon(targetAmount)} 이하`
@@ -61,7 +62,15 @@ export function toTodayMissionBriefing(mission) {
         difficultyName: mission.difficultyName ?? '',
         assignDate: mission.assignDate ?? '',
         assignmentReason: mission.assignmentReason ?? '',
+        missionBadge: getMissionBadge(mission.missionType, mission.assignmentReason),
     };
+}
+
+export function getMissionBadge(missionType, assignmentReason) {
+    if (missionType !== 'ABSOLUTE') {
+        return '수사 브리핑';
+    }
+    return assignmentReason === 'MONTHLY_RANDOM' ? '전체 단속 · 절대형' : '공통 사건 · 절대형';
 }
 
 export function formatWon(amount) {

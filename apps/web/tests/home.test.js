@@ -83,11 +83,28 @@ test('오늘 미션을 홈 진행 카드 모델로 변환한다', () => {
 
     assert.deepEqual(mission, {
         title: '카페 방어전',
+        isAbsoluteMission: false,
+        categoryName: '',
         limitAmount: 8000,
         spentAmount: 4500,
         remainingAmount: 3500,
         progressRate: 56,
     });
+});
+
+test('절대형 미션을 홈의 무지출 카드 모델로 변환한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '무지출 명령 · 배달',
+        missionType: 'ABSOLUTE',
+        categoryName: '배달앱',
+        targetValue: 0,
+        currentAmount: 3200,
+    });
+
+    assert.equal(mission.isAbsoluteMission, true);
+    assert.equal(mission.categoryName, '배달앱');
+    assert.equal(mission.spentAmount, 3200);
+    assert.equal(mission.limitAmount, 0);
 });
 
 test('현재 월과 다음 리포트 공개까지 남은 날짜를 계산한다', () => {

@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 class RelativeMissionAssignmentBatchServiceTest {
 
     @Mock private RelativeMissionAssignmentMapper mapper;
-    @Mock private RelativeMissionAssignmentService assignmentService;
+    @Mock private DailyMissionAssignmentService assignmentService;
     @Mock private ApplicationEventPublisher events;
 
     @Test
