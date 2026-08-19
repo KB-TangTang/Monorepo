@@ -23,7 +23,7 @@ import java.util.Map;
  * <p>시작일이 도래한 그룹을 참여 인원에 따라 갈라 보낸다.
  * <pre>
  *   참여자 2명 이상 → ACTIVE + 참여자 전원에게 시작 알림
- *   참여자 1명      → 삭제   + 방장에게만 미성립 알림
+ *   참여자 1명      → 삭제 + 방장에게 미성립 알림
  * </pre>
  *
  * <p><b>미성립 그룹을 CLOSED 로 두지 않고 지우는 이유</b>는 {@code CLOSED} 가 「정상 종료 +
@@ -74,6 +74,16 @@ public class ChallengeGroupStatusTransitionService {
 
     /**
      * 모집 중인 그룹 하나를 시작시키거나 미성립 처리한다.
+     *
+     * <p><b>「시작일 23:59까지 초대」(이슈 #350)는 이미 성립한 그룹에만 적용된다.</b>
+     * 2명 이상이면 여기서 시작시키고, 그 뒤 참여는 {@code joinBlockReason} 이
+     * ACTIVE + {@code today <= startDate} 를 열어 둬 그 날 23:59 까지 계속 받는다.
+     *
+     * <p>반대로 <b>혼자인 그룹은 시작일 00:01 에 그대로 지운다.</b> 한때 이것도 하루 미뤄
+     * 「시작일 23:59까지」를 맞추려 했지만 되돌렸다 — 미루면 시작일 하루가 RECRUITING 인 채로
+     * 흘러가고, 그 날 늦게 누가 들어오면 다음 날 00:01 에 ACTIVE 가 되면서
+     * {@code findGroupsToEvaluate} 가 {@code start_date <= today} 로 집어 <b>이미 지나간 시작일이
+     * 소급 기소</b>된다. 성립하지 못한 그룹을 살려 두는 값보다 이 부작용이 크다.
      *
      * @return 실제로 처리했으면 {@code true}. 이미 다른 실행이 처리했으면 {@code false}
      */

@@ -152,14 +152,15 @@ public class ChallengeGroupService {
     public InviteCodePreviewDto previewInviteCode(long userId, String inviteCode) {
         ChallengeGroup group = findGroupByInviteCodeOrThrow(userId, inviteCode);
 
+        LocalDate today = LocalDate.now(clock);
         List<GroupMember> members = findMembers(group.getId());
-        String reason = joinBlockReason(group, members, userId);
+        String reason = joinBlockReason(group, members, userId, today);
         log.info("초대 코드 조회 userId={} inviteCode={} groupId={} status={} startDate={} memberCount={} joinable={} reason={}",
                 userId, group.getInviteCode(), group.getId(), group.getStatus(), group.getStartDate(),
                 members.size(), reason == null, reason);
 
         return InviteCodePreviewDto.builder()
-                .challenge(toDto(userId, group, members, LocalDate.now(clock)))
+                .challenge(toDto(userId, group, members, today))
                 .joinable(reason == null)
                 .reason(reason)
                 .build();
@@ -178,9 +179,10 @@ public class ChallengeGroupService {
 
         ChallengeGroup group = findGroupByInviteCodeOrThrow(userId, inviteCode);
         long groupId = group.getId();
+        LocalDate today = LocalDate.now(clock);
         List<GroupMember> members = findMembers(groupId);
 
-        String reason = joinBlockReason(group, members, userId);
+        String reason = joinBlockReason(group, members, userId, today);
         if (reason != null) {
             log.warn("그룹 참여 차단 userId={} groupId={} reason={} status={} startDate={} memberCount={}",
                     userId, groupId, reason, group.getStatus(), group.getStartDate(), members.size());
@@ -200,7 +202,7 @@ public class ChallengeGroupService {
                     groupId, userId, e);
         }
 
-        return toDto(userId, group, joined, LocalDate.now(clock));
+        return toDto(userId, group, joined, today);
     }
 
     /* ══ 조회 ══════════════════════════════════════════════ */
@@ -271,8 +273,10 @@ public class ChallengeGroupService {
         if (startDate == null || endDate == null) {
             throw new BusinessException("GROUP_PERIOD_INVALID", "챌린지 기간을 입력해 주세요.");
         }
-        if (startDate.isBefore(today)) {
-            throw new BusinessException("GROUP_START_DATE_INVALID", "시작일은 오늘 이후여야 합니다.");
+        // 오늘 시작을 막는다. 모집이 시작일 23:59 에 닫히므로 오늘 시작하면 모집 기간이
+        // 만든 시각부터 자정까지로 쪼그라든다. 프론트 달력도 내일부터만 고를 수 있다.
+        if (!startDate.isAfter(today)) {
+            throw new BusinessException("GROUP_START_DATE_INVALID", "시작일은 내일 이후여야 합니다.");
         }
         if (endDate.isBefore(startDate)) {
             throw new BusinessException("GROUP_PERIOD_INVALID", "종료일은 시작일 이후여야 합니다.");
@@ -354,17 +358,25 @@ public class ChallengeGroupService {
      * <p>순서에 의미가 있다. 이미 참여 중이면 종료·만료 여부와 무관하게 그룹으로 보내야 하므로
      * ALREADY_JOINED 를 먼저 본다.
      *
-     * <p><b>판정 기준은 status 하나다</b> (2026-08-13, 이슈 #152 에서 결정).
-     * 예전에는 {@code start_date} 와 오늘을 비교해 EXPIRED 를 판정했는데, #152 배치가 status 를
-     * RECRUITING → ACTIVE 로 바꾸기 시작하면서 근거가 둘이 됐다. 배치가 지연되거나 수동
-     * 트리거로 돌면 두 판정이 어긋나 "화면엔 진행 중인데 참여가 되는" 상태가 생긴다.
-     * status 를 진실의 원천으로 두면 참여 가능 여부와 화면에 보이는 상태가 항상 같다.
+     * <p><b>기준은 status 다</b> (2026-08-13, 이슈 #152 에서 결정). 예전에는 {@code start_date} 와
+     * 오늘을 비교해 EXPIRED 를 판정했는데, #152 배치가 status 를 RECRUITING → ACTIVE 로 바꾸기
+     * 시작하면서 근거가 둘이 됐다. 배치가 지연되거나 수동 트리거로 돌면 두 판정이 어긋나
+     * "화면엔 진행 중인데 참여가 되는" 상태가 생긴다.
      *
-     * <p>대가로 <b>배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있다.</b> 배치는 00:01 에 돌고
-     * 참여 마감은 그 직전 23:59 라 정상 운영에서는 1분 차이다. 늦게 들어온 사람도 목숨은
-     * 같게 받으므로(create 주석 참고) 형평성 문제도 생기지 않는다.
+     * <p><b>단 ACTIVE 한 갈래에서만 시작일을 함께 본다</b> (2026-08-20, 이슈 #350).
+     * 모집 마감은 <b>시작일 23:59</b> 인데(클래스 주석 · 초대 화면 문구) 상태 전이 배치는 시작일
+     * 00:01 에 돌아 ACTIVE 로 바꿔 버린다. status 만 보면 시작일 하루가 통째로 막혀
+     * 시작일 참여 창이 0초가 된다. {@code today <= startDate} 인 동안에는 ACTIVE 라도 열어 둔다.
+     *
+     * <p>여기서만 날짜를 보는 것은 #152 결정과 충돌하지 않는다. 그 결정이 막으려던 것은
+     * <b>「배치가 밀려 status 와 날짜가 어긋나는」</b> 경우인데, 이 조건은 배치가 밀리면
+     * RECRUITING 이라 애초에 닿지 않고, 배치가 제때 돌았을 때만 평가된다.
+     *
+     * <p>늦게 들어온 사람도 목숨은 같게 받는다(create 주석 참고). 시작일에 들어오면 그 날
+     * 0시부터의 소비가 집계된다 — 참여 화면이 미리 알린다.
      */
-    private String joinBlockReason(ChallengeGroup group, List<GroupMember> members, long userId) {
+    private String joinBlockReason(ChallengeGroup group, List<GroupMember> members,
+                                   long userId, LocalDate today) {
         if (isMember(members, userId)) {
             return "ALREADY_JOINED";
         }
@@ -372,7 +384,7 @@ public class ChallengeGroupService {
         if (status == ChallengeGroupStatus.JUDGING || status == ChallengeGroupStatus.CLOSED) {
             return "CLOSED";
         }
-        if (status == ChallengeGroupStatus.ACTIVE) {
+        if (status == ChallengeGroupStatus.ACTIVE && today.isAfter(group.getStartDate())) {
             return "EXPIRED";
         }
         if (members.size() >= group.getMaxMembers()) {
@@ -438,7 +450,7 @@ public class ChallengeGroupService {
                 .memberCount(members.size())
                 .owner(group.getAdminId() != null && group.getAdminId() == userId)
                 .member(me != null)
-                .joinable(joinBlockReason(group, members, userId) == null)
+                .joinable(joinBlockReason(group, members, userId, today) == null)
                 .members(members.stream()
                         .map(m -> toMemberDto(m, group.getAdminId()))
                         .toList())

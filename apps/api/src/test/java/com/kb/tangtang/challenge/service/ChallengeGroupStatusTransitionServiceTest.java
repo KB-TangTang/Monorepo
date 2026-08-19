@@ -83,8 +83,14 @@ class ChallengeGroupStatusTransitionServiceTest {
         verify(chatMessageStore, never()).deleteRoom(anyLong());
     }
 
+    /**
+     * <b>#350 회귀 방지.</b> 「시작일 23:59까지 초대」를 맞추려고 이 삭제를 하루 미뤘던 적이 있다.
+     * 미루면 시작일 하루가 RECRUITING 인 채 흘러가고, 그 날 늦게 누가 들어오면 다음 날 ACTIVE 가
+     * 되면서 {@code findGroupsToEvaluate} 가 <b>이미 지나간 시작일을 소급 기소</b>한다.
+     * 성립 못 한 그룹은 시작일 당일에 지운다 — 「23:59까지」는 성립한 그룹에만 적용된다.
+     */
     @Test
-    @DisplayName("참여자가 방장 1명뿐이면 그룹이 삭제되고 방장에게만 미성립 알림이 간다")
+    @DisplayName("시작일 당일에 방장 1명뿐이면 미루지 않고 그대로 삭제한다")
     void cancelsWhenAloneAndNotifiesOwnerOnly() {
         when(memberMapper.findByGroupIds(anyList())).thenReturn(List.of(member(OWNER_ID)));
         when(groupMapper.deleteIfCurrent(GROUP_ID, "RECRUITING")).thenReturn(1);

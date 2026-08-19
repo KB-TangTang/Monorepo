@@ -7,6 +7,7 @@ import {
     formatJoinDeadline,
     inviteBadges,
     isInviteOpen,
+    isStartDateToday,
     remainingSeats,
 } from '@/utils/groupInvite';
 
@@ -25,6 +26,7 @@ function source(path) {
 const INVITE_VIEW = 'src/views/challenge/group/GroupInviteView.vue';
 const CREATE_VIEW = 'src/views/challenge/group/GroupCreateView.vue';
 const INVITE_HEADER = 'src/components/challenge/group/GroupInviteHeader.vue';
+const JOIN_VIEW = 'src/views/challenge/group/GroupJoinView.vue';
 
 const RECRUITING = {
     status: 'RECRUITING',
@@ -32,6 +34,11 @@ const RECRUITING = {
     maxMembers: 6,
     memberCount: 2,
 };
+
+/* 시작일 하루 전 · 당일 · 다음 날. 로컬 자정으로 만들어야 문자열 변환이 밀리지 않는다 */
+const BEFORE_START = new Date(2026, 6, 31);
+const ON_START = new Date(2026, 7, 1);
+const AFTER_START = new Date(2026, 7, 2);
 
 /* ── 발부일 ──────────────────────────────────────────────────────── */
 
@@ -62,43 +69,69 @@ test('마감 문구는 시작일 당일 23:59 이다', () => {
 /* ── 초대 가능 판정 ──────────────────────────────────────────────── */
 
 /*
- * 서버(ChallengeGroupService#joinBlockReason)는 status 하나만 본다. 화면이 startDate 와
- * 오늘을 따로 비교하면 상태 전이 배치가 밀렸을 때 「화면은 마감인데 참여는 되는」 어긋남이 난다.
+ * 서버(ChallengeGroupService#joinBlockReason)와 같은 규칙을 쓴다.
+ * RECRUITING 이거나, ACTIVE 이면서 오늘이 시작일을 넘지 않았으면 열려 있다(이슈 #350).
  */
 test('모집 중이고 자리가 남았으면 초대할 수 있다', () => {
-    assert.equal(isInviteOpen(RECRUITING), true);
+    assert.equal(isInviteOpen(RECRUITING, BEFORE_START), true);
 });
 
-test('시작한 방은 시작일이 오늘이어도 초대할 수 없다 — 판단 근거는 status 하나다', () => {
-    assert.equal(isInviteOpen({ ...RECRUITING, status: 'ACTIVE' }), false);
-    assert.equal(isInviteOpen({ ...RECRUITING, status: 'JUDGING' }), false);
-    assert.equal(isInviteOpen({ ...RECRUITING, status: 'CLOSED' }), false);
+/*
+ * 상태 전이 배치는 시작일 00:01 에 돌아 ACTIVE 로 바꾼다. status 만 보면 시작일 하루가
+ * 통째로 막혀 「시작일 23:59까지 초대」가 거짓말이 된다(이슈 #350).
+ */
+test('시작일 당일에는 ACTIVE 라도 초대할 수 있다', () => {
+    assert.equal(isInviteOpen({ ...RECRUITING, status: 'ACTIVE' }, ON_START), true);
+});
+
+test('시작일이 지난 ACTIVE 는 초대할 수 없다', () => {
+    assert.equal(isInviteOpen({ ...RECRUITING, status: 'ACTIVE' }, AFTER_START), false);
+});
+
+test('재판·종결 상태는 시작일 당일이어도 초대할 수 없다', () => {
+    assert.equal(isInviteOpen({ ...RECRUITING, status: 'JUDGING' }, ON_START), false);
+    assert.equal(isInviteOpen({ ...RECRUITING, status: 'CLOSED' }, ON_START), false);
+});
+
+/*
+ * 배치가 밀리면 시작일이 지나도 RECRUITING 이다. 이때는 열어 둔다 — 화면이 날짜로 따로
+ * 판정하면 「화면은 마감인데 참여는 되는」 어긋남이 난다(#152 가 막으려던 것).
+ */
+test('배치가 안 돌아 RECRUITING 이면 시작일이 지나도 초대할 수 있다', () => {
+    assert.equal(isInviteOpen(RECRUITING, AFTER_START), true);
 });
 
 test('정원이 찼으면 모집 중이어도 초대할 수 없다', () => {
-    assert.equal(isInviteOpen({ ...RECRUITING, memberCount: 6 }), false);
+    assert.equal(isInviteOpen({ ...RECRUITING, memberCount: 6 }, BEFORE_START), false);
 });
 
 test('memberCount 가 없으면 members 길이로 센다 — 미리보기 응답이 그 모양이다', () => {
     const group = { ...RECRUITING, memberCount: undefined, members: [{}, {}, {}] };
 
-    assert.equal(isInviteOpen(group), true);
+    assert.equal(isInviteOpen(group, BEFORE_START), true);
 });
 
 /* ── 뱃지 ────────────────────────────────────────────────────────── */
 
 test('초대할 수 있을 때만 마감 시각을 함께 띄운다', () => {
-    assert.deepEqual(inviteBadges(RECRUITING), [
+    assert.deepEqual(inviteBadges(RECRUITING, BEFORE_START), [
         { text: '초대 가능', variant: 'success' },
         { text: '8월 1일 23:59까지', variant: 'danger' },
     ]);
 });
 
 test('닫힌 방에는 마감 시각을 붙이지 않는다 — 아직 되는 줄 안다', () => {
-    assert.deepEqual(inviteBadges({ ...RECRUITING, status: 'ACTIVE' }), [
+    assert.deepEqual(inviteBadges({ ...RECRUITING, status: 'ACTIVE' }, AFTER_START), [
         { text: '모집 마감', variant: 'danger' },
     ]);
-    assert.deepEqual(inviteBadges({ ...RECRUITING, memberCount: 6 }), [
+    assert.deepEqual(inviteBadges({ ...RECRUITING, memberCount: 6 }, BEFORE_START), [
+        { text: '정원 마감', variant: 'danger' },
+    ]);
+});
+
+/* 시작일 당일 ACTIVE 는 아직 모집 중이다 — 자리 때문에 막힌 것이면 「정원 마감」이라고 말해야 한다 */
+test('시작일 당일 ACTIVE 이면서 정원이 찼으면 정원 마감이다', () => {
+    assert.deepEqual(inviteBadges({ ...RECRUITING, status: 'ACTIVE', memberCount: 6 }, ON_START), [
         { text: '정원 마감', variant: 'danger' },
     ]);
 });
@@ -110,7 +143,7 @@ test('그룹을 아직 못 받았으면 뱃지를 만들지 않는다', () => {
 /* ── 남은 자리 ───────────────────────────────────────────────────── */
 
 test('남은 자리는 정원에서 인원을 뺀 수다', () => {
-    assert.equal(remainingSeats(RECRUITING), 4);
+    assert.equal(remainingSeats(RECRUITING, BEFORE_START), 4);
 });
 
 /*
@@ -118,9 +151,34 @@ test('남은 자리는 정원에서 인원을 뺀 수다', () => {
  * 화면이 그대로 그리면 어색하다. null 이면 화면이 다른 문구로 갈아탄다.
  */
 test('초대할 수 없는 방은 자리 수 대신 null 을 준다', () => {
-    assert.equal(remainingSeats({ ...RECRUITING, memberCount: 6 }), null);
-    assert.equal(remainingSeats({ ...RECRUITING, status: 'ACTIVE' }), null);
-    assert.equal(remainingSeats(null), null);
+    assert.equal(remainingSeats({ ...RECRUITING, memberCount: 6 }, BEFORE_START), null);
+    assert.equal(remainingSeats({ ...RECRUITING, status: 'ACTIVE' }, AFTER_START), null);
+    assert.equal(remainingSeats(null, BEFORE_START), null);
+});
+
+/* ── 시작일 당일 참여 안내 ───────────────────────────────────────── */
+
+test('오늘이 시작일일 때만 참여 안내 대상이다', () => {
+    assert.equal(isStartDateToday(RECRUITING, ON_START), true);
+    assert.equal(isStartDateToday(RECRUITING, BEFORE_START), false);
+    assert.equal(isStartDateToday(RECRUITING, AFTER_START), false);
+    assert.equal(isStartDateToday(null, ON_START), false);
+});
+
+/*
+ * 시작일에 들어와도 그 날 0시부터의 소비가 전부 집계된다(이슈 #350). 참여 시각으로 자르지
+ * 않기로 한 결정이라, 들어오기 전에 화면이 한 줄로 알려야 한다.
+ */
+test('참여 화면은 시작일 당일에만 집계 시점을 알린다', () => {
+    const src = source(JOIN_VIEW);
+
+    assert.match(src, /isStartDateToday\(/, '판정을 화면이 직접 계산하고 있다');
+    assert.match(src, /오늘 0시부터의 소비가 집계돼요/);
+    assert.match(
+        src,
+        /v-if="joiningOnStartDate"/,
+        '항상 노출되면 시작 전 참여자에게 거짓말이 된다',
+    );
 });
 
 /* ── 화면이 규칙을 실제로 쓰는지 ─────────────────────────────────── */
