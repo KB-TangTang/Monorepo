@@ -553,11 +553,16 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .profitLossAmount(holding.getProfitLossAmount())
                     .profitLossRate(holding.getProfitLossRate())
                     .build();
-            if (investmentHoldingMapper.update(ih) == 0) {
+            /*
+             * updatePosition 만 쓴다 — 가격 4컬럼(last_price 등)은 이제 InvestmentPriceRefresher(토스
+             * 실시간 시세)가 소유한다. 여기서 목서버 값으로 같이 덮으면 배치가 돌 때마다 실시간
+             * 가격이 가짜 값으로 되돌아간다(InvestmentHoldingMapper.java 참고).
+             */
+            if (investmentHoldingMapper.updatePosition(ih) == 0) {
                 try {
                     investmentHoldingMapper.insert(ih);
                 } catch (DuplicateKeyException e) {
-                    investmentHoldingMapper.update(ih);
+                    investmentHoldingMapper.updatePosition(ih);
                 }
             }
         }

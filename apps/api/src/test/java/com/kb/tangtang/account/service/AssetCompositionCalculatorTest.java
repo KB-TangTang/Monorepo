@@ -2,9 +2,11 @@ package com.kb.tangtang.account.service;
 
 import com.kb.tangtang.account.domain.AssetGroupRow;
 import com.kb.tangtang.account.domain.AssetLiveComposition;
+import com.kb.tangtang.account.domain.InvestmentHolding;
 import com.kb.tangtang.account.dto.AssetCompositionItemDto;
 import com.kb.tangtang.account.dto.AssetGroupItemDto;
 import com.kb.tangtang.account.mapper.AssetSummaryMapper;
+import com.kb.tangtang.account.mapper.InvestmentHoldingMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,11 +36,18 @@ class AssetCompositionCalculatorTest {
     @Mock
     private LoanMapper loanMapper;
 
+    @Mock
+    private InvestmentHoldingMapper investmentHoldingMapper;
+
+    @Mock
+    private InvestmentPriceRefresher investmentPriceRefresher;
+
     private AssetCompositionCalculator calculator;
 
     @BeforeEach
     void setUp() {
-        calculator = new AssetCompositionCalculator(assetSummaryMapper, loanMapper);
+        calculator = new AssetCompositionCalculator(
+                assetSummaryMapper, loanMapper, investmentHoldingMapper, investmentPriceRefresher);
     }
 
     @Test
@@ -77,6 +88,33 @@ class AssetCompositionCalculatorTest {
                 .filter(g -> g.getType().equals("LOAN")).findFirst().orElseThrow();
         assertEquals(1, loanGroup.getCount());
         assertEquals(new BigDecimal("-1500000"), loanGroup.getAmount());
+    }
+
+    @Test
+    @DisplayName("SECURITIES 집계 전에 보유종목을 InvestmentPriceRefresher로 갱신한다(QA 지적사항)")
+    void refreshesInvestmentPricesBeforeAggregating() {
+        List<InvestmentHolding> holdings = List.of(InvestmentHolding.builder().id(1L).symbol("005930").build());
+        when(investmentHoldingMapper.findActiveByUser(USER_ID)).thenReturn(holdings);
+        when(assetSummaryMapper.findAssetGroupsByUser(USER_ID)).thenReturn(List.of());
+        when(loanMapper.sumBalanceByUser(USER_ID)).thenReturn(BigDecimal.ZERO);
+        when(loanMapper.countByUser(USER_ID)).thenReturn(0);
+
+        calculator.compute(USER_ID);
+
+        verify(investmentPriceRefresher).refresh(holdings);
+    }
+
+    @Test
+    @DisplayName("연결 해제한 계좌의 보유종목은 갱신 대상에서 뺀다(QA 지적사항) — findByUser가 아니라 findActiveByUser를 쓴다")
+    void doesNotRefreshHoldingsOfDisconnectedAccounts() {
+        when(assetSummaryMapper.findAssetGroupsByUser(USER_ID)).thenReturn(List.of());
+        when(loanMapper.sumBalanceByUser(USER_ID)).thenReturn(BigDecimal.ZERO);
+        when(loanMapper.countByUser(USER_ID)).thenReturn(0);
+
+        calculator.compute(USER_ID);
+
+        verify(investmentHoldingMapper).findActiveByUser(USER_ID);
+        verify(investmentHoldingMapper, never()).findByUser(USER_ID);
     }
 
     @Test
