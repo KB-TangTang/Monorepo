@@ -20,7 +20,6 @@ import { useConsentStore } from '@/stores/consent';
 import { useAuthStore } from '@/stores/auth';
 import {
     formatCourtDate,
-    calculateDataProgress,
     formatWon,
     formatMissionAssignmentSummary,
     toWatchCategoryModel,
@@ -61,7 +60,30 @@ const shortDate = computed(() => {
     return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 });
 
-const dataProgress = computed(() => calculateDataProgress(store.dataRequirements));
+/*
+ * 맞춤 사건이 열리는 조건. 서버가 진행도를 주지 않으므로 조건만 적는다(이슈 #313).
+ * 값을 붙이지 않는 것이 요점이라 문자열 배열로 둔다.
+ */
+const unlockConditions = ['계좌 연동', '최근 28일 소비 데이터', '전체 소비 50건 확보'];
+
+/*
+ * 맞춤 미션 개시 안내 동기화. **실패를 삼킨다**(이슈 #314).
+ *
+ * 이건 장식성 넛지다. 동의·오늘 미션·카테고리 분석·연속일수·월간 점수가 전부 정상으로 로드돼도
+ * 이 호출 하나가 실패하면 바깥 try 가 페이지를 통째로 에러 화면으로 만들었다.
+ * 실제로 2026-08-19 EC2 가 그 상태였다 — #311 의 마이그레이션이 적용되지 않아 이 API 가 500 이었고,
+ * 그 컬럼이 공용 조회 목록에 있어 사용자 조회 전체가 함께 죽었다.
+ *
+ * 안내를 못 띄우는 것과 화면을 못 그리는 것은 무게가 다르다. 실패하면 안내만 생략한다.
+ */
+async function syncMissionUnlockQuietly() {
+    try {
+        hasPendingMissionUnlock.value = await store.syncMissionUnlock();
+    } catch (err) {
+        hasPendingMissionUnlock.value = false;
+        console.error('[PersonalMissionHome] 맞춤 미션 개시 안내 상태를 가져오지 못했다.', err);
+    }
+}
 const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
 const weeklyVerdictModel = computed(() => toWeeklyVerdictModel(store.missionStreak));
 const selectedUnlockDifficulty = computed(
@@ -101,7 +123,7 @@ onMounted(async () => {
                 store.loadMissionStreak(),
                 store.loadMissionMonthlyScore(),
             ]);
-            hasPendingMissionUnlock.value = await store.syncMissionUnlock();
+            await syncMissionUnlockQuietly();
         }
     } catch (err) {
         store.consentState = 'ERROR';
@@ -119,7 +141,6 @@ onMounted(async () => {
         showTutorial.value = true;
         return;
     }
-
 
     if (hasPendingMissionUnlock.value) {
         isMissionUnlockOpen.value = true;
@@ -146,7 +167,7 @@ async function handleAgree() {
             store.loadMissionStreak(),
             store.loadMissionMonthlyScore(),
         ]);
-        hasPendingMissionUnlock.value = await store.syncMissionUnlock();
+        await syncMissionUnlockQuietly();
         isConsentOpen.value = false;
         if (!hasSeenPersonalTutorial()) {
             afterOverlayClosed(() => {
@@ -194,7 +215,8 @@ async function acknowledgeMissionUnlock(destination) {
             }
         });
     } catch (err) {
-        missionUnlockError.value = err.message ?? '안내 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+        missionUnlockError.value =
+            err.message ?? '안내 확인을 저장하지 못했어요. 다시 시도해 주세요.';
     } finally {
         isMissionUnlockAcknowledging.value = false;
     }
@@ -458,60 +480,26 @@ async function reassignTodayMission() {
                     </div>
                 </div>
 
+                <!--
+                  「맞춤 사건이 열리는 조건」 — 조건만 적고 진행도는 적지 않는다(이슈 #313).
+
+                  예전에는 「19일째」·「12 / 50」과 진행 막대를 그렸는데, 그 값이 전부
+                  MOCK_DATA_REQUIREMENTS 픽스처였다. 이 화면은 hasEnoughData 가 목 프로필을 보던
+                  시절에 도달 불가능한 분기였다가, #311 이 서버의 relativeEligible 을 보게 되면서
+                  실사용자에게 열렸다 — 그 순간부터 자기 데이터와 무관한 고정 숫자를 보여주게 됐다.
+
+                  서버가 주는 값(/api/missions/categoryAnalysis)은 「이번 회차 스냅샷이 있는가」뿐이라
+                  진행도를 만들 근거가 없다. 지어내느니 조건만 보여준다.
+                  진행도를 되살리려면 서버가 실제 확보 건수를 내려줘야 한다 → 이슈 #315
+                -->
                 <div class="personal-home__conditions-card">
                     <div class="personal-home__conditions-title">맞춤 사건이 열리는 조건</div>
                     <div class="personal-home__conditions-list">
-                        <div class="personal-home__condition">
-                            <span
-                                class="personal-home__condition-icon personal-home__condition-icon--done"
-                            >
-                                <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="var(--tt-success)"
-                                    stroke-width="3"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                >
-                                    <path d="M5 12.5l4.5 4.5L19 7" />
-                                </svg>
-                            </span>
-                            <span class="personal-home__condition-label">계좌 연동</span>
-                            <span
-                                class="personal-home__condition-value personal-home__condition-value--done"
-                                >완료</span
-                            >
-                        </div>
-                        <div class="personal-home__condition">
-                            <span
-                                class="personal-home__condition-icon personal-home__condition-icon--progress"
-                            >
-                                <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="var(--tt-accent-deep)"
-                                    stroke-width="2.2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                >
-                                    <circle cx="12" cy="12" r="8" />
-                                    <path d="M12 8v4.5l3 1.8" />
-                                </svg>
-                            </span>
-                            <span class="personal-home__condition-label"
-                                >최근 28일 소비 데이터</span
-                            >
-                            <span
-                                class="personal-home__condition-value personal-home__condition-value--progress"
-                            >
-                                {{ store.dataRequirements.availableDays }}일째
-                            </span>
-                        </div>
-                        <div class="personal-home__condition">
+                        <div
+                            v-for="condition in unlockConditions"
+                            :key="condition"
+                            class="personal-home__condition"
+                        >
                             <span
                                 class="personal-home__condition-icon personal-home__condition-icon--pending"
                             >
@@ -524,25 +512,11 @@ async function reassignTodayMission() {
                                     stroke-width="2.6"
                                     stroke-linecap="round"
                                 >
-                                    <circle cx="6" cy="12" r="1" />
                                     <circle cx="12" cy="12" r="1" />
-                                    <circle cx="18" cy="12" r="1" />
                                 </svg>
                             </span>
-                            <span class="personal-home__condition-label">전체 소비 50건 확보</span>
-                            <span
-                                class="personal-home__condition-value personal-home__condition-value--pending"
-                            >
-                                {{ store.dataRequirements.transactionCount }} /
-                                {{ store.dataRequirements.requiredTransactionCount }}
-                            </span>
+                            <span class="personal-home__condition-label">{{ condition }}</span>
                         </div>
-                    </div>
-                    <div class="personal-home__progress-bar">
-                        <div
-                            class="personal-home__progress-fill"
-                            :style="{ width: dataProgress + '%' }"
-                        ></div>
                     </div>
                     <button type="button" class="personal-home__link-more" @click="linkAccount">
                         계좌 더 연동하기 ›

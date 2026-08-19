@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { shouldShowPersonalMissionUnlock } from '../src/services/personalMissionFlow.js';
 
 /*
- * ⏸ 개발 중 — 「맞춤 미션 개시」 안내는 아직 구현되지 않았다. (이슈 #129)
+ * ✅ 구현됐다 — PR #311(이슈 #129)이 시트를 개인 미션 홈에 붙였다. 아래 머리말은 그 전의 기록이다.
  *
  * 무슨 일이 있었나
  *   v4 리디자인(커밋 cafafe1, #97)에서 개인챌린지 홈이 상태머신
@@ -59,5 +60,75 @@ test('신규 충분 데이터 사용자나 이미 확인한 사용자에게는 �
             hasSeenDataUnlock: true,
         }),
         false,
+    );
+});
+
+/*
+ * ── #311 후속 (이슈 #313 · #314) ──────────────────────────────────
+ *
+ * 렌더링 하네스가 없어 소스를 검사한다. 두 결함 모두 "코드가 그 자리에 있는가" 로 잡히는 종류다.
+ */
+
+function homeSource() {
+    return readFileSync(
+        new URL('../src/views/challenge/personal/PersonalMissionHomeView.vue', import.meta.url),
+        'utf8',
+    );
+}
+
+/*
+ * #313 — 데이터 부족 화면이 고정 픽스처를 실사용자에게 보여줬다.
+ *
+ * hasEnoughData 가 목 프로필(항상 true)을 보던 시절엔 이 화면이 도달 불가능한 분기였는데,
+ * #311 이 서버의 relativeEligible 을 보게 되면서 열렸다. 그 순간부터 MOCK_DATA_REQUIREMENTS 의
+ * 「19일째」·「12 / 50」이 자기 데이터인 줄 알고 읽히게 됐다.
+ */
+test('개인 미션 홈은 데이터 요건 목데이터를 화면에 그리지 않는다', () => {
+    const src = homeSource();
+
+    assert.doesNotMatch(
+        src,
+        /store\.dataRequirements/,
+        'dataRequirements 는 MOCK_DATA_REQUIREMENTS 고정값이다 - 서버가 주지 않는 진행도를 지어내지 않는다',
+    );
+    assert.doesNotMatch(src, /calculateDataProgress/, '진행 막대도 같은 목데이터로 계산된다');
+});
+
+test('맞춤 사건이 열리는 조건은 값 없이 조건만 보여준다', () => {
+    const src = homeSource();
+
+    assert.match(src, /unlockConditions/, '조건 목록이 있어야 한다');
+    assert.match(src, /전체 소비 50건 확보/, '조건 문구 자체는 남긴다');
+});
+
+/*
+ * #314 — 안내 API 하나가 페이지 전체를 지웠다.
+ *
+ * 진입 경로의 바깥 try 는 실패 시 consentState='ERROR' 로 StateError 를 띄운다.
+ * 동의 경로의 catch 는 「동의를 저장하지 못했어요」를 띄운다 - 동의는 이미 저장된 뒤인데도.
+ * 그래서 동기화는 자기 자리에서 실패를 삼켜야 한다.
+ */
+test('맞춤 미션 안내 동기화는 실패를 삼켜 페이지를 지우지 않는다', () => {
+    const src = homeSource();
+
+    const helper = src.match(/async function syncMissionUnlockQuietly\(\)\s*\{[\s\S]*?\n\}/);
+    assert.ok(helper, 'syncMissionUnlockQuietly 헬퍼가 없다');
+    assert.match(helper[0], /try\s*\{/, '헬퍼가 자기 try/catch 를 가져야 한다');
+    assert.match(helper[0], /catch/, '실패를 삼키는 catch 가 있어야 한다');
+    assert.match(
+        helper[0],
+        /hasPendingMissionUnlock\.value = false/,
+        '실패하면 안내를 띄우지 않는 쪽으로 확정해야 한다',
+    );
+});
+
+test('안내 동기화를 store 에서 직접 부르는 곳이 남아 있지 않다', () => {
+    const src = homeSource();
+
+    const directCalls = src.match(/await store\.syncMissionUnlock\(\)/g) ?? [];
+    assert.equal(
+        directCalls.length,
+        1,
+        '헬퍼 안의 한 번만 남아야 한다 - 바깥에서 직접 부르면 그 자리의 catch 가 다시 페이지를 지운다',
     );
 });
