@@ -85,6 +85,14 @@
           AND user_id = #{userId}
     </update>
 
+    <!-- 계좌 선택 화면에서 체크 해제한 계좌 전용(#379). insert 직후 PK 재조회 없이 자연키로 끈다. -->
+    <update id="deactivateByHash">
+        UPDATE tbl_connected_account
+        SET is_active = 0
+        WHERE user_id = #{userId}
+          AND account_no_encrypted = #{accountNoEncrypted}
+    </update>
+
     <update id="deactivateAllByUser">
         UPDATE tbl_connected_account
         SET is_active = 0

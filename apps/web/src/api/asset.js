@@ -108,6 +108,7 @@ function accountDetailToViewModel(raw, type) {
             meta: account.accountNoMasked || account.bankName,
             amount: account.balance,
             badge: account.shortLabel || presentationOf(type).badge,
+            institutionCode: account.bankCode,
             tone,
         })),
     };
@@ -167,6 +168,7 @@ export async function fetchLoanAccountDetail() {
             meta: `금리 ${loan.interestRate}% · 만기 ${loan.maturityDate}`,
             amount: loan.balance,
             badge: loan.bankName.charAt(0),
+            institutionCode: loan.bankCode,
             tone,
         })),
     };

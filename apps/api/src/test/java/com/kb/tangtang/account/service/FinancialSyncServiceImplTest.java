@@ -538,6 +538,20 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("대출 동기화는 목서버의 기관코드를 tbl_loan.bank_code 에 저장한다 (아이콘 매칭용)")
+    void loanSyncPersistsInstitutionCode() {
+        when(client.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(301L).institutionCode("CP_KB").institutionName("KB캐피탈")
+                        .productName("KB 신용대출").loanNoMasked("LN-2025-****-0001")
+                        .principal(new BigDecimal("15000000")).balance(new BigDecimal("14200000")).build()));
+        when(client.getLoanTransactions(eq("1"), eq(301L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(loanMapper).insert(argThat(loan -> "CP_KB".equals(loan.getBankCode())));
+    }
+
+    @Test
     @DisplayName("페이머니는 충전(01)=TRANSFER, 결제(02)=CONSUMPTION, 환불(03)=is_refund 로 가른다")
     void payMoneyTransTypeCodeDrivesClassification() {
         when(client.getPayMoney("1")).thenReturn(List.of(
@@ -643,7 +657,8 @@ class FinancialSyncServiceImplTest {
            상황을 만든다 — 대출 하나만 연동한 사용자였다면 이 결함이 가려진다. */
         when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
                 ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
-        /* 이전 동기화가 이미 만들어 둔 대출 행. tbl_loan 은 기관코드 컬럼이 없어 이름만 남는다. */
+        /* 이전 동기화가 이미 만들어 둔 대출 행. 2026-08-20 마이그레이션 이전에 저장된 옛 행을
+           흉내내 bankCode 는 비워 두고 이름만 남긴다 — buildSyncScope() 의 이름 폴백 경로를 검증한다. */
         when(loanMapper.findByUser(1L)).thenReturn(List.of(
                 Loan.builder().id(55L).userId(1L).loanNoEncrypted("MOCK-LOAN-301")
                         .bankName("KB캐피탈").build()));

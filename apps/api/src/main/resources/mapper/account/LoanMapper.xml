@@ -4,7 +4,7 @@
 <mapper namespace="com.kb.tangtang.account.mapper.LoanMapper">
 
     <sql id="columns">
-        id, user_id, loan_no_encrypted, loan_no_masked, bank_name, loan_type, loan_amount, balance,
+        id, user_id, loan_no_encrypted, loan_no_masked, bank_name, bank_code, loan_type, loan_amount, balance,
         interest_rate, start_date, maturity_date, monthly_payment, next_payment_date
     </sql>
 
@@ -18,6 +18,7 @@
     <update id="update" parameterType="com.kb.tangtang.account.domain.Loan">
         UPDATE tbl_loan
         SET bank_name         = #{bankName},
+            bank_code         = #{bankCode},
             loan_no_masked    = #{loanNoMasked},
             loan_type         = #{loanType},
             loan_amount       = #{loanAmount},
@@ -34,11 +35,11 @@
     <insert id="insert" parameterType="com.kb.tangtang.account.domain.Loan"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tbl_loan
-            (user_id, loan_no_encrypted, loan_no_masked, bank_name, loan_type, loan_amount, balance,
+            (user_id, loan_no_encrypted, loan_no_masked, bank_name, bank_code, loan_type, loan_amount, balance,
              interest_rate, start_date, maturity_date, monthly_payment, next_payment_date)
         VALUES
-            (#{userId}, #{loanNoEncrypted}, #{loanNoMasked}, #{bankName}, #{loanType}, #{loanAmount}, #{balance},
-             #{interestRate}, #{startDate}, #{maturityDate}, #{monthlyPayment}, #{nextPaymentDate})
+            (#{userId}, #{loanNoEncrypted}, #{loanNoMasked}, #{bankName}, #{bankCode}, #{loanType}, #{loanAmount},
+             #{balance}, #{interestRate}, #{startDate}, #{maturityDate}, #{monthlyPayment}, #{nextPaymentDate})
     </insert>
 
     <select id="sumBalanceByUser" resultType="java.math.BigDecimal">

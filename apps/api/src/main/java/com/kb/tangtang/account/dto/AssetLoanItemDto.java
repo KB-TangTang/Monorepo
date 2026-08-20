@@ -16,6 +16,7 @@ public class AssetLoanItemDto {
 
     private final long loanId;
     private final String bankName;
+    private final String bankCode;
     private final String loanType;
     private final BigDecimal loanAmount;
     private final BigDecimal balance;

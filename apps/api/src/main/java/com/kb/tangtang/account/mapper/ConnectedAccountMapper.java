@@ -37,6 +37,12 @@ public interface ConnectedAccountMapper {
     /** 연결 해제 (soft delete) */
     int deactivate(@Param("id") long id, @Param("userId") long userId);
 
+    /**
+     * 자연키로 비활성화한다(이슈 #379). 계좌 선택 화면에서 체크 해제한 계좌는 insert 직후라
+     * PK 를 다시 조회하지 않고도 끌 수 있어야 해서 {@link #deactivate} 와 별도로 둔다.
+     */
+    int deactivateByHash(@Param("userId") long userId, @Param("accountNoEncrypted") String accountNoEncrypted);
+
     /** 사용자의 모든 연결 해제. 금융정보 동의 철회 시 쓴다 (이슈 #13 TODO(#12)) */
     int deactivateAllByUser(@Param("userId") long userId);
 

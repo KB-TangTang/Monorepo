@@ -1,24 +1,26 @@
 <!--
-  용도: 자산 상세 화면의 계좌·상품 한 행. 이니셜 배지 · 이름 · 보조 설명(계좌번호·만기·금리) · 금액을 보여준다.
-  언제 쓰는지: 입출금·예적금·대출 상세 화면 3곳. amount 가 음수면 빨간색으로 표시된다(대출 잔액).
+  용도: 자산 상세 화면의 계좌·상품 한 행. 금융기관 로고(없으면 이니셜 배지) · 이름 · 보조 설명(계좌번호·만기·금리) · 금액을 보여준다.
+  언제 쓰는지: 입출금·예적금·대출·페이머니 상세 화면 4곳. amount 가 음수면 빨간색으로 표시된다(대출 잔액).
+
+  로고 매칭은 InstitutionLogo 가 한다 — institutionCode 가 없거나 로고 파일이 없는 기관이면
+  badge 이니셜로 자동 대체된다(2026-08-20 이전에 동기화된 옛 대출 행은 bank_code 가 비어 있을 수 있다).
 -->
 <script setup>
-import { formatWon, toneColor } from '@/utils/asset';
+import { formatWon } from '@/utils/asset';
+import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 
 defineProps({
     badge: { type: String, required: true },
     label: { type: String, required: true },
     meta: { type: String, default: '' },
     amount: { type: Number, required: true },
-    tone: { type: String, default: 'gray' },
+    institutionCode: { type: String, default: '' },
 });
 </script>
 
 <template>
     <li class="asset-row">
-        <span class="asset-row__avatar" :style="{ background: toneColor(tone) }" aria-hidden="true">
-            {{ badge }}
-        </span>
+        <InstitutionLogo class="asset-row__avatar" :code="institutionCode" :short-label="badge" size="sm" />
         <div class="asset-row__info">
             <p class="asset-row__name">{{ label }}</p>
             <p v-if="meta" class="asset-row__meta">{{ meta }}</p>
@@ -38,18 +40,6 @@ defineProps({
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-md);
-}
-
-.asset-row__avatar {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-inverse);
-    border-radius: var(--tt-radius-full);
 }
 
 .asset-row__info {
