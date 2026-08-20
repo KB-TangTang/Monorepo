@@ -215,6 +215,32 @@ public class RootConfig {
     }
 
     /**
+     * 그룹 채팅 시스템 메시지 전용 실행기 ({@code ChatSystemMessageListener}, 이슈 #355).
+     *
+     * ⚠ <b>스레드가 하나인 것이 이 빈의 존재 이유다.</b> 기소 한 건이 적발(ViolationDetected)과
+     *   개시(TrialOpened) 두 이벤트를 잇달아 쏘는데, 위 taskExecutor 는 corePoolSize 가 2 라
+     *   두 태스크가 동시에 실행된다. 메시지 번호는 ChatMessageStore.append() 가 Redis INCR 로
+     *   그 자리에서 발급하므로 **먼저 Redis 에 닿는 쪽이 앞 번호를 가져간다** —
+     *   「변론이 시작됩니다」가 「한도를 넘었어요」보다 위에 뜨는 화면이 실제로 나온다.
+     *   단일 스레드 + FIFO 큐라야 발행 순서가 곧 표시 순서가 된다.
+     *   corePoolSize 를 올리지 말 것. 처리량을 늘려야 하면 순번 발급 방식부터 바꿔야 한다.
+     *
+     * 부수 효과로 채팅 Redis 왕복이 알림 처리와 스레드를 다투지 않는다.
+     * 큐는 채팅 메시지가 밀렸을 때 상한을 두기 위한 것이다(taskExecutor 와 같은 취지).
+     */
+    @Bean
+    public ThreadPoolTaskExecutor chatExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("tt-chat-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        return executor;
+    }
+
+    /**
      * 기본 ObjectMapper 는 java.time(LocalDateTime 등)을 직렬화하지 못한다
      * (JavaTimeModule 이 없으면 InvalidDefinitionException 으로 500이 난다).
      * 이 빈은 JwtAuthInterceptor · GoogleOAuthClient 가 직접 주입받아 쓰므로,

@@ -6,9 +6,10 @@ import com.kb.tangtang.challenge.chat.domain.ChatVerdictInfo;
 import com.kb.tangtang.challenge.domain.GroupTrialEvents;
 import com.kb.tangtang.notification.domain.NotificationType;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -17,10 +18,25 @@ import java.time.ZoneId;
 /**
  * 재판 이벤트를 받아 채팅방에 봇 메시지를 남긴다 (이슈 #174).
  *
- * <p>발행부는 이슈 #169~#172 담당자의 몫이다. 이 리스너는 수신만 한다 — 재판·챌린지 서비스에는
- * 손대지 않는다.
+ * <p>이 리스너는 수신만 한다 — 재판·챌린지 서비스에는 손대지 않는다. 발행부는 각 흐름을 쥔 쪽에
+ * 흩어져 있다: 적발·개시는 평가 배치({@code GroupChallengeEvaluationService#indict}, 이슈 #355),
+ * 변론은 {@code DefenseService}, 판결은 {@code GroupVerdictTransitionService} 다.
  *
- * <p>{@code @Async} 다. 채팅 실패가 재판 로직을 되돌리면 안 된다.
+ * <p>{@code @Async("chatExecutor")} 다. 채팅 실패가 재판 로직을 되돌리면 안 된다.
+ * <b>실행기를 공용 {@code taskExecutor} 와 분리한 것은 카드 순서 때문이다</b> — 기소 한 건이
+ * 적발·개시 두 이벤트를 잇달아 쏘는데, 스레드가 둘 이상이면 두 태스크가 동시에 돌아
+ * {@code ChatMessageStore.append()} 의 Redis {@code INCR} 을 먼저 잡는 쪽이 앞 번호를 가져간다.
+ * 「변론이 시작됩니다」가 「한도를 넘었어요」 위에 뜨는 화면이 실제로 나온다.
+ * 단일 스레드 큐라 발행 순서가 곧 표시 순서다({@code RootConfig#chatExecutor}).
+ *
+ * <p>{@code AFTER_COMMIT} 인 이유는 기소 INSERT 가 롤백됐는데 채팅에만 「피고인이에요」가
+ * 남는 상태를 막기 위해서다. 발행부가 {@code @Transactional} 안이라 일반 {@code @EventListener}
+ * 로는 커밋 전에 메시지가 나간다.
+ *
+ * <p>⚠ {@code fallbackExecution = true} 를 빼지 말 것. 이 코드베이스는 트랜잭션 밖 발행이
+ * 섞여 있다 — {@code DefenseService#registerDefense} 는 이미지 정리 때문에 트랜잭션 밖에서
+ * 발행하고(이슈 #318), 로컬 개발 트리거({@code DevChatTriggerController})에도 트랜잭션이 없다.
+ * 빠뜨리면 그 이벤트들이 <b>아무 오류 없이 조용히 버려진다.</b>
  *
  * <p>알림 종류는 {@link NotificationType} 에 이미 있는 GROUP_TRIAL_OPENED · GROUP_DEFENSE_REGISTERED ·
  * GROUP_JUDGMENT 세 개를 그대로 쓴다. 소비 위반 적발(ViolationDetected)은 별도 종류가 없어
@@ -51,24 +67,24 @@ public class ChatSystemMessageListener {
      * (예: GROUP_JUDGMENT 의 제목이 이미 "판결이 확정됐어요" 다). 여기서 같은 문장을 다시 쓰면
      * 카드에도 알림에도 제목이 두 번 나온다.
      */
-    @Async
-    @EventListener
+    @Async("chatExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onViolationDetected(GroupTrialEvents.ViolationDetected event) {
         post(event.getGroupId(), event.getIndictmentId(),
                 event.getTargetNickname() + "님의 소비가 한도를 넘었어요.",
                 ChatSystemType.VIOLATION_DETECTED, NotificationType.GROUP_TRIAL_OPENED);
     }
 
-    @Async
-    @EventListener
+    @Async("chatExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTrialOpened(GroupTrialEvents.TrialOpened event) {
         post(event.getGroupId(), event.getIndictmentId(),
                 event.getTargetNickname() + "님이 피고인이에요. 변론이 시작됩니다.",
                 ChatSystemType.TRIAL_OPENED, NotificationType.GROUP_TRIAL_OPENED);
     }
 
-    @Async
-    @EventListener
+    @Async("chatExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onDefenseRegistered(GroupTrialEvents.DefenseRegistered event) {
         post(event.getGroupId(), event.getIndictmentId(),
                 event.getTargetNickname() + "님이 변론을 냈어요.",
@@ -80,8 +96,8 @@ public class ChatSystemMessageListener {
      * 적는 데 쓴다. <b>문구에서 유죄·무죄를 다시 읽어 내지 않는다</b> — 문구를 고치면 도장이
      * 조용히 뒤집히는 구조가 되기 때문이다.
      */
-    @Async
-    @EventListener
+    @Async("chatExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed event) {
         chatMessageService.postSystemMessage(event.getGroupId(), new ChatSystemMessageSpec(
                 event.getSummary(), ChatSystemType.VERDICT_CONFIRMED,

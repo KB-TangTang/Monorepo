@@ -3,6 +3,7 @@ package com.kb.tangtang.challenge.service;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.EvalType;
 import com.kb.tangtang.challenge.domain.GroupChallengeDailyResult;
+import com.kb.tangtang.challenge.domain.GroupTrialEvents;
 import com.kb.tangtang.challenge.domain.Indictment;
 import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.IndictmentTarget;
@@ -32,7 +33,7 @@ import java.util.Map;
  * <ol>
  *   <li>어제·오늘 두 날짜의 소비를 다시 집계해 UPSERT</li>
  *   <li>감액이 집계액을 넘어선 이상 행을 로그로 남김</li>
- *   <li>한도를 넘긴 참여자를 기소하고 알림 발행</li>
+ *   <li>한도를 넘긴 참여자를 기소하고 알림 · 그룹 채팅 시스템 메시지 발행</li>
  * </ol>
  *
  * <p><b>어제를 매번 다시 집계하는 것이 이 클래스의 핵심이다.</b> 거래 동기화가 뒤늦게 도착하기
@@ -128,11 +129,16 @@ public class GroupChallengeEvaluationService {
     }
 
     /**
-     * 기소 한 건 생성 + 알림.
+     * 기소 한 건 생성 + 알림 + 그룹 채팅 시스템 메시지.
      *
      * <p>{@code DuplicateKeyException} 은 <b>정상 경로</b>다. 조회와 INSERT 사이에 다른 인스턴스가
-     * 같은 행을 기소했다는 뜻이므로 알림까지 통째로 건너뛴다. 잡지 않으면 이 그룹의 트랜잭션이
-     * 통째로 되돌아가 앞서 만든 기소도 사라진다.
+     * 같은 행을 기소했다는 뜻이므로 알림·채팅까지 통째로 건너뛴다. 잡지 않으면 이 그룹의 트랜잭션이
+     * 통째로 되돌아가 앞서 만든 기소도 사라진다. <b>채팅 메시지의 멱등성이 이 가드에 얹혀 있다</b> —
+     * 배치를 몇 번 다시 돌려도 같은 기소로 카드가 두 번 뜨지 않는다(이슈 #355).
+     *
+     * <p>채팅 이벤트를 둘 다 쏘는 이유는 카드가 「적발 → 개시」 두 장으로 설계돼 있어서다
+     * ({@code ChatSystemType.VIOLATION_DETECTED} · {@code TRIAL_OPENED}). 수신부는
+     * {@code AFTER_COMMIT} 이라 이 트랜잭션이 롤백되면 채팅에도 남지 않는다.
      *
      * @return 실제로 기소를 만들었으면 {@code true}
      */
@@ -161,6 +167,11 @@ public class GroupChallengeEvaluationService {
                         "period", period,
                         "amount", money(target.getAmount())),
                 defenseLink(group, indictment)));
+
+        events.publishEvent(new GroupTrialEvents.ViolationDetected(
+                group.getId(), indictment.getId(), target.getNickname()));
+        events.publishEvent(new GroupTrialEvents.TrialOpened(
+                group.getId(), indictment.getId(), target.getNickname()));
 
         log.info("기소 생성 groupId={} userId={} resultId={} indictmentId={} 소비={} 한도={}",
                 group.getId(), target.getUserId(), target.getResultId(),

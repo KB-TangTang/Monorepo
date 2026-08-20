@@ -449,6 +449,34 @@ class ChallengeMapperXmlTest {
     }
 
     /**
+     * 기소 대상 조회가 닉네임을 함께 뽑는지 본다 (이슈 #355).
+     *
+     * <p>빠져도 SQL 은 정상 실행되고 기소도 알림도 멀쩡하다. 다만 채팅방 카드가
+     * <b>「null님의 소비가 한도를 넘었어요.」</b> 가 될 뿐이다 — 배치를 돌려 채팅방을 열어 보기
+     * 전에는 드러나지 않는 회귀라 SQL 모양으로 못박는다.
+     *
+     * <p>식은 {@code IndictmentMapper.xml} 의 {@code displayNickname} 과 같아야 한다. 닉네임을
+     * 안 정한 소셜 로그인 사용자가 두 화면에서 다르게 보이면 안 된다.
+     */
+    @Test
+    @DisplayName("기소 대상 조회 둘 다 표시용 닉네임을 같은 식으로 뽑는다")
+    void overLimitQueriesSelectDisplayNickname() throws Exception {
+        String expression = "COALESCE(NULLIF(TRIM(u.nickname), ''), u.social_name)";
+
+        Configuration configuration = parse("mapper/challenge/GroupChallengeResultMapper.xml");
+        String namespace = GroupChallengeResultMapper.class.getName();
+
+        assertTrue(sqlOf(configuration, namespace + ".findOverLimitDaily").contains(expression),
+                "닉네임이 빠지면 일일평가 기소의 채팅 카드가 「null님」이 된다");
+        assertTrue(sqlOf(configuration, namespace + ".findOverLimitPeriod").contains(expression),
+                "닉네임이 빠지면 기간평가 기소의 채팅 카드가 「null님」이 된다");
+
+        assertTrue(sqlOf(parse("mapper/challenge/IndictmentMapper.xml"),
+                        IndictmentMapper.class.getName() + ".findTrialDetail").contains(expression),
+                "재판 상세와 다른 식을 쓰면 같은 사용자가 화면마다 다른 이름으로 보인다");
+    }
+
+    /**
      * 감액 이상 경고가 정상 데이터에서 뜨지 않게 두 조건을 못박는다.
      *
      * <ul>
