@@ -9,7 +9,7 @@
   얼굴로 이어져야 완료 화면이 결과처럼 읽힌다.
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -23,14 +23,25 @@ import successAnimation from '@/assets/images/link-success.svg';
 const router = useRouter();
 const store = useAccountStore();
 const auth = useAuthStore();
-const { linkedCount, linkableGroups, selectedAccountIds, progressInstitutions, exitRoute } =
-    storeToRefs(store);
+const {
+    linkedCount,
+    linkableGroups,
+    selectedAccountIds,
+    progressInstitutions,
+    exitRoute,
+    directAssetsPending,
+} = storeToRefs(store);
+const syncing = ref(true);
+const syncFailed = ref(false);
 
 /**
- * 애니메이션을 재생할지.
+ * 접근성 설정에 따라 애니메이션 자체를 재생할지.
  *
- * SMIL 애니메이션은 `<img>` 안에서 도는 것이라 CSS 로 멈출 수 없다.
- * 그래서 재생 여부 자체를 여기서 정하고, 끄는 경우에는 정적인 체크를 그린다.
+ * SMIL 애니메이션은 `<img>` 안에서 도는 것이라 CSS 로 멈출 수 없다 — 그래서 재생 여부는 마운트
+ * 시점의 시스템 설정으로만 정한다. 동기화가 끝났을 때 멈추는 건 별개 문제라 템플릿에서
+ * `playsAnimation && syncing` 으로 syncing 과 함께 본다 — syncing 이 꺼지면 <img> 자체가
+ * v-if 로 언마운트돼 재생 중이던 SMIL 도 그와 함께 끊긴다(리뷰 지적 — 예전엔 동기화가 끝나도
+ * 계속 돌았다). 끄는 경우(reduced-motion 이거나 동기화가 끝난 경우)엔 정적인 체크를 그린다.
  */
 const playsAnimation = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -70,10 +81,9 @@ const failedCount = computed(
 );
 
 /* 첫 수집은 자동 동기화 배치(매일 18시)를 탄다. */
-const firstCollectLabel = computed(() => {
-    const now = new Date();
-    return now.getHours() < 18 ? '오늘 18:00' : '내일 18:00';
-});
+const firstCollectLabel = computed(() =>
+    syncing.value ? '동기화 중' : syncFailed.value ? '동기화 실패' : '방금 완료',
+);
 
 /*
  * ⚠ 플로우 상태는 **여기서만** 비운다. 예전에는 onBeforeUnmount 에서 비웠는데,
@@ -112,6 +122,18 @@ function goHome() {
     leaveFlow('home');
 }
 
+async function runInitialSync() {
+    syncing.value = true;
+    syncFailed.value = false;
+    try {
+        await store.syncAssets();
+    } catch (err) {
+        syncFailed.value = true;
+    } finally {
+        syncing.value = false;
+    }
+}
+
 /*
  * 기기/브라우저 뒤로가기 가로채기.
  *
@@ -134,6 +156,7 @@ function onPopState() {
 onMounted(() => {
     window.history.pushState({ ttLinkDone: true }, '');
     window.addEventListener('popstate', onPopState);
+    runInitialSync();
 });
 
 /* 화면을 떠나면 반드시 걷어낸다 — 남으면 다른 화면의 뒤로가기까지 이 핸들러가 가로챈다. */
@@ -147,7 +170,7 @@ onBeforeUnmount(() => {
         <div class="link-done__body">
             <div class="link-done__hero">
                 <img
-                    v-if="playsAnimation"
+                    v-if="playsAnimation && syncing"
                     class="link-done__animation"
                     :src="successAnimation"
                     alt=""
@@ -167,8 +190,16 @@ onBeforeUnmount(() => {
                 </span>
             </div>
 
-            <h1 class="link-done__title">연결이 완료되었어요!</h1>
-            <p class="link-done__description">이제 거래내역을 모아<br />새는 돈을 찾아드릴게요.</p>
+            <h1 class="link-done__title">
+                {{ syncing ? '자산을 동기화하고 있어요' : '연결이 완료되었어요!' }}
+            </h1>
+            <p class="link-done__description">
+                {{
+                    syncing
+                        ? '선택한 금융기관의 자산과 거래내역을 모으고 있어요.'
+                        : '이제 거래내역을 모아 새는 돈을 찾아드릴게요.'
+                }}
+            </p>
 
             <section v-if="linkedCount" class="link-done__card">
                 <header class="link-done__card-head">
@@ -192,6 +223,14 @@ onBeforeUnmount(() => {
                 </ul>
             </section>
 
+            <!--
+              은행 없이 대출·페이머니만 골랐을 때(#334) — linkedCount 가 0이라 위 카드 자체가 안 뜬다.
+              여기서만이라도 뭔가 되고 있다는 걸 말해준다. 실제 완료는 아래 syncing 이 끝나면서다.
+            -->
+            <p v-if="!linkedCount && directAssetsPending" class="link-done__direct-assets">
+                선택한 대출·페이머니는 자동으로 연동돼요.
+            </p>
+
             <div class="link-done__next">
                 <p class="link-done__next-label">첫 거래 수집</p>
                 <p class="link-done__next-value">{{ firstCollectLabel }}</p>
@@ -200,10 +239,13 @@ onBeforeUnmount(() => {
             <p v-if="failedCount" class="link-done__failure">
                 {{ failedCount }}곳은 연결하지 못했어요. 연결 계좌 관리에서 다시 시도할 수 있어요.
             </p>
+            <p v-if="syncFailed" class="link-done__failure">
+                자산 동기화가 끝나지 않았어요. 연결 계좌 관리에서 다시 시도할 수 있어요.
+            </p>
         </div>
 
         <div class="link-done__cta">
-            <BaseButton variant="accent" block size="lg" @click="goNext">
+            <BaseButton variant="accent" block size="lg" :disabled="syncing" @click="goNext">
                 {{ primaryLabel }}
             </BaseButton>
             <!-- 닉네임을 정하기 전에는 홈으로 갈 수 없다. 눌러도 가드가 되돌리므로 아예 감춘다. -->
@@ -363,6 +405,12 @@ onBeforeUnmount(() => {
 }
 
 .link-done__failure {
+    margin: var(--tt-space-4) 0 0;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+}
+
+.link-done__direct-assets {
     margin: var(--tt-space-4) 0 0;
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);

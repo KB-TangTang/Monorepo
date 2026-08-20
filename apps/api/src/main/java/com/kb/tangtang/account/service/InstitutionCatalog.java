@@ -112,6 +112,20 @@ public class InstitutionCatalog {
         return build(PAY_MONEY, connectedCodes);
     }
 
+    /**
+     * 대출 기관코드인지. 계좌 선택 화면이 "자동 연동" 미리보기를 만들 때 쓴다(#334) —
+     * 대출·페이머니는 fetchAccounts() 가 다루는 은행 엔드포인트가 아니라 별도 엔드포인트라
+     * 계좌 목록에 안 뜨고, 그래서 이 코드로 직접 걸러 미리보기를 따로 만든다.
+     */
+    public boolean isLoanCode(String code) {
+        return LOANS.containsKey(code);
+    }
+
+    /** 페이머니 기관코드인지. isLoanCode() 와 같은 이유. */
+    public boolean isPayMoneyCode(String code) {
+        return PAY_MONEY.containsKey(code);
+    }
+
     /** 기관명. 알 수 없는 코드는 코드 그대로 돌려준다(화면이 빈칸이 되지 않게). */
     public String nameOf(String code) {
         for (Map<String, String[]> group : ALL_GROUPS) {

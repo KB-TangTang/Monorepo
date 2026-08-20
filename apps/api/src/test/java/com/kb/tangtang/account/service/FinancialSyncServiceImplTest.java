@@ -8,6 +8,7 @@ import com.kb.tangtang.account.client.sync.dto.CardApprovalSyncDto;
 import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositSyncDto;
 import com.kb.tangtang.account.client.sync.dto.DepositTransactionSyncDto;
+import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneyTransactionSyncDto;
 import com.kb.tangtang.account.client.sync.dto.SecuritiesTransactionSyncDto;
@@ -15,6 +16,7 @@ import com.kb.tangtang.account.client.sync.dto.StockAssetSyncDto;
 import com.kb.tangtang.account.domain.Card;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.domain.LlmCategorizationRequestedEvent;
+import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.mapper.CardBillMapper;
 import com.kb.tangtang.account.mapper.CardMapper;
@@ -45,6 +47,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,6 +110,9 @@ class FinancialSyncServiceImplTest {
 
     private FinancialSyncClient client;
     private ScenarioKeyProvider scenarioKeyProvider;
+    /* AccountLinkServiceTest 와 같은 테스트 전용 시크릿 — 값 자체는 해시 알고리즘 검증에 관여하지 않는다. */
+    private final AccountNumberPolicy accountNumbers =
+            new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
     private ConnectedAccountMapper connectedAccountMapper;
     private LoanMapper loanMapper;
     private InvestmentHoldingMapper investmentHoldingMapper;
@@ -138,11 +147,18 @@ class FinancialSyncServiceImplTest {
                         .build());
         eventPublisher = mock(ApplicationEventPublisher.class);
 
+        /*
+         * collectAll() 이 이제 6개 소스를 병렬로 모은다(성능 개선). 대부분의 테스트는 순서·타임라인을
+         * 검증하므로 여기서는 호출 스레드에서 그대로 실행하는 직렬 실행기를 쓴다 — 결과는 실제 병렬
+         * 실행과 같고(각 소스가 서로 다른 SyncBundle 필드만 쓴다) 테스트는 결정적으로 유지된다.
+         * 병렬 실행 자체(스레드 안전성)는 아래 collectAllRunsSourcesInParallelWithoutDataCorruption 이
+         * 진짜 스레드풀로 따로 검증한다.
+         */
         service = new FinancialSyncServiceImpl(
-                client, scenarioKeyProvider, connectedAccountMapper, loanMapper,
+                client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
                 investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
                 syncHistoryMapper, transactionCategorizationService, eventPublisher,
-                clock, new TransactionTemplate(recordingTransactionManager()));
+                clock, new TransactionTemplate(recordingTransactionManager()), Runnable::run);
 
         when(scenarioKeyProvider.resolve(1L)).thenReturn("1");
         // 이번 테스트는 BANK 만 데이터가 있고 나머지 5개 소스는 빈 목록으로 둔다.
@@ -240,9 +256,12 @@ class FinancialSyncServiceImplTest {
             return 1;
         });
         when(connectedAccountMapper.reactivate(any())).thenReturn(0).thenReturn(1);
+        /* #334: 은행 계좌는 AccountLinkService 와 같은 해시 키를 쓴다(upsertBankAccount 문서 참고) —
+           setUp() 의 getBankAccounts 스텁(institutionCode=0004, accountNoMasked=110-***-120045)과
+           같은 입력으로 재계산해야 findConnectedAccountId() 의 자연키 재조회가 이 행을 찾는다. */
         when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
                 ConnectedAccount.builder().id(77L).userId(1L)
-                        .accountNoEncrypted("MOCK-BANK-101").build()));
+                        .accountNoEncrypted(accountNumbers.hash("0004", "110-***-120045")).build()));
         when(transactionMapper.update(any())).thenReturn(0).thenReturn(1);
 
         service.sync(1L);
@@ -255,6 +274,30 @@ class FinancialSyncServiceImplTest {
            엉뚱한 행을 집으면 새 행이 하나 더 생긴다. */
         verify(transactionMapper, times(2)).update(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
         verify(transactionMapper, times(1)).insert(argThat(t -> "BANK-77-9001".equals(t.getCodefTrKey())));
+    }
+
+    @Test
+    @DisplayName("#334 리뷰 지적: 계좌 연동(AccountLinkService.link())이 이미 만든 은행 계좌 행을 " +
+            "배치 동기화가 중복으로 또 만들지 않는다 — 같은 은행코드·마스킹번호는 같은 자연키를 낸다")
+    void bankSyncReusesRowAlreadyCreatedByLinkFlow() {
+        /*
+         * AccountLinkService.link() 는 accountNumbers.hash(bankCode, accountNoMasked) 를 자연키로
+         * 쓴다. 이 배치도 은행 계좌만큼은 같은 해시를 써야(upsertBankAccount 문서 참고) 두 흐름이
+         * 같은 실계좌를 서로 다른 행으로 중복 생성하지 않는다 — 실제로 화면에 같은 계좌(같은 마스킹
+         * 번호·같은 잔액)가 두 번 뜨는 것으로 재현됐다.
+         */
+        String linkFlowKey = accountNumbers.hash("0004", "110-***-120045");
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().id(55L).userId(1L)
+                        .accountNoEncrypted(linkFlowKey).accountNoMasked("110-***-120045").build()));
+        when(connectedAccountMapper.reactivate(any())).thenReturn(1);
+
+        service.sync(1L);
+
+        /* 계좌 연동이 만든 자연키와 정확히 같은 키로 재활성화(update)만 일어나야 한다 — 새 행을
+           만들면 안 된다. */
+        verify(connectedAccountMapper).reactivate(argThat(a -> linkFlowKey.equals(a.getAccountNoEncrypted())));
+        verify(connectedAccountMapper, never()).insert(any());
     }
 
     @Test
@@ -486,6 +529,88 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("선택한 PAY_KB 기관 코드와 같은 페이머니 응답만 동기화한다")
+    void syncsPayMoneyWhenResponseUsesSelectedInstitutionCode() {
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("PAY_KB").bankName("KB Pay").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                "PAYMONEY".equals(account.getAccountType())
+                        && "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334: 계좌 연동이 만든 ConnectedAccount 가 없어도 extraInstitutionCodes 로 넘긴 " +
+            "페이머니 기관은 최초 동기화에서 저장된다")
+    void syncsExtraInstitutionEvenWithoutExistingConnectedAccount() {
+        /* 대출·페이머니는 fetchAccounts() 가 다루지 못해 ConnectedAccount 가 아예 없는 상태에서 시작한다.
+           은행(0004)은 이미 연동돼 있다고 가정한다 — 실제로 이런 조합이 흔하다. */
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of());
+
+        service.sync(1L, Set.of("PAY_KB"));
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                "PAYMONEY".equals(account.getAccountType())
+                        && "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334: extraInstitutionCodes 없이 부르는 단일 인자 sync(userId) 는 여전히 " +
+            "연동 흔적이 없는 기관을 건너뛴다 — 회귀 방지")
+    void singleArgSyncStillExcludesUnlinkedInstitutions() {
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay Money")
+                        .balance(new BigDecimal("130000")).build()));
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper, never()).insert(
+                argThat(account -> "PAY_KB".equals(account.getBankCode())));
+    }
+
+    @Test
+    @DisplayName("#334 리뷰 지적: 대출은 tbl_connected_account 가 아니라 tbl_loan 에만 남기 때문에, " +
+            "extraInstitutionCodes 없이 부르는 평소 동기화에서도 이전에 만든 대출 이름 기록으로 스코프에 남아야 한다")
+    void loanStaysInScopeOnSubsequentSyncWithoutExtraCodes() {
+        /* 은행(0004) 하나는 이미 연동돼 있어 스코프가 "무제한(빈 스코프)"이 아니라 실제로 제한되는
+           상황을 만든다 — 대출 하나만 연동한 사용자였다면 이 결함이 가려진다. */
+        when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
+                ConnectedAccount.builder().bankCode("0004").bankName("KB국민은행").build()));
+        /* 이전 동기화가 이미 만들어 둔 대출 행. tbl_loan 은 기관코드 컬럼이 없어 이름만 남는다. */
+        when(loanMapper.findByUser(1L)).thenReturn(List.of(
+                Loan.builder().id(55L).userId(1L).loanNoEncrypted("MOCK-LOAN-301")
+                        .bankName("KB캐피탈").build()));
+        when(client.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(301L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").principal(new BigDecimal("5000000"))
+                        .balance(new BigDecimal("4200000")).interestRate(new BigDecimal("4.5"))
+                        .startDate("2026-01-01").maturityDate("2029-01-01")
+                        .monthlyPayment(new BigDecimal("150000")).build()));
+        when(client.getLoanTransactions(eq("1"), eq(301L))).thenReturn(List.of());
+
+        /* extraInstitutionCodes 없이 부르는 평소 동기화 — 배치 스케줄러·즉시 조회와 같은 경로다. */
+        service.sync(1L);
+
+        verify(loanMapper).insert(argThat(loan -> "KB캐피탈".equals(loan.getBankName())));
+    }
+
+    @Test
     @DisplayName("카드 취소(03)는 음수 금액을 양수 + is_refund=1 로 저장한다")
     void cardCancellationIsStoredAsPositiveRefund() {
         when(client.getCards("1")).thenReturn(List.of(
@@ -626,9 +751,12 @@ class FinancialSyncServiceImplTest {
     @Test
     @DisplayName("이미 동기화한 계좌는 마지막 동기화 달부터 이번 달까지만 월별로 받아온다")
     void reSyncedAccountFetchesOnlyMonthsSinceLastSync() {
+        /* #334: 월별 증분 커서는 accountNoMasked 로 조인한다(MonthlyFetchCursor 참고) —
+           setUp() 의 getBankAccounts 스텁과 같은 110-***-120045 를 써야 커서가 이 행을 찾는다. */
         when(connectedAccountMapper.findActiveByUser(1L)).thenReturn(List.of(
                 ConnectedAccount.builder().id(77L).userId(1L)
-                        .accountNoEncrypted("MOCK-BANK-101")
+                        .accountNoEncrypted(accountNumbers.hash("0004", "110-***-120045"))
+                        .accountNoMasked("110-***-120045")
                         .lastSyncAt(LocalDateTime.of(2026, 6, 20, 10, 0))
                         .build()));
         when(client.getBankTransactions(eq("1"), eq(101L), anyString())).thenReturn(List.of());
@@ -651,7 +779,10 @@ class FinancialSyncServiceImplTest {
          * reactivate 의 SQL 자체는 AccountLinkService 의 정당한 재연결이 의존하므로 손대지 않고,
          * 되살리면 안 되는 계좌를 여기(동기화 파이프라인)에서 거른다.
          */
-        when(connectedAccountMapper.findInactiveKeysByUser(1L)).thenReturn(List.of("MOCK-BANK-101"));
+        /* #334: 은행 계좌의 자연키는 이제 AccountLinkService 와 같은 해시다(upsertBankAccount 참고) —
+           setUp() 의 getBankAccounts 스텁(0004, 110-***-120045)과 같은 값으로 재계산해야 한다. */
+        when(connectedAccountMapper.findInactiveKeysByUser(1L))
+                .thenReturn(List.of(accountNumbers.hash("0004", "110-***-120045")));
 
         FinancialSyncResultDto result = service.sync(1L);
 
@@ -671,12 +802,12 @@ class FinancialSyncServiceImplTest {
     @DisplayName("해제되지 않은 계좌는 평소대로 동기화된다 — 제외 목록이 과잉 차단하면 안 된다")
     void activeAccountIsStillSyncedWhenAnotherAccountIsDisconnected() {
         when(connectedAccountMapper.findInactiveKeysByUser(1L))
-                .thenReturn(List.of("MOCK-BANK-999"));   // 다른 계좌만 해제된 상태
+                .thenReturn(List.of(accountNumbers.hash("0004", "999-***-999999")));   // 다른 계좌만 해제된 상태
 
         service.sync(1L);
 
         verify(connectedAccountMapper).reactivate(argThat(a ->
-                "MOCK-BANK-101".equals(a.getAccountNoEncrypted())));
+                accountNumbers.hash("0004", "110-***-120045").equals(a.getAccountNoEncrypted())));
         verify(transactionMapper).insert(argThat(t -> "BANK".equals(t.getSourceType())));
     }
 
@@ -707,5 +838,106 @@ class FinancialSyncServiceImplTest {
 
         verify(client).getCardApprovals("1", 1L, "2026-08");
         verify(client, never()).getCardApprovals(eq("1"), eq(1L), isNull());
+    }
+
+    /** setUp() 의 직렬 실행기(Runnable::run)와 달리 여기서만 진짜 스레드풀을 쓴다 — 병렬 실행 자체를 검증한다. */
+    private FinancialSyncServiceImpl serviceWithRealExecutor(ExecutorService executor) {
+        return new FinancialSyncServiceImpl(
+                client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
+                investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper,
+                syncHistoryMapper, transactionCategorizationService, eventPublisher,
+                Clock.fixed(Instant.parse("2026-08-12T01:00:00Z"), ZoneId.of("Asia/Seoul")),
+                new TransactionTemplate(recordingTransactionManager()), executor);
+    }
+
+    @Test
+    @DisplayName("6개 소스를 진짜 스레드풀로 병렬 수집해도 소스별 데이터가 서로 섞이거나 유실되지 않는다")
+    void collectAllRunsSourcesInParallelWithoutDataCorruption() throws InterruptedException {
+        when(client.getDeposits("1")).thenReturn(List.of(
+                DepositSyncDto.builder().depositAccountId(201L).institutionCode("0004")
+                        .institutionName("KB국민은행").productName("KB 적금")
+                        .accountNoMasked("110-***-999999").balance(new BigDecimal("1000000")).build()));
+        when(client.getDepositTransactions(eq("1"), eq(201L))).thenReturn(List.of(
+                DepositTransactionSyncDto.builder()
+                        .transactionId(7001L).transactedAt("2026-08-05T09:00:00+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("300000")).description("납입")
+                        .build()));
+        when(client.getStockAsset("1")).thenReturn(
+                StockAssetSyncDto.builder().accountId(301L).institutionName("KB증권")
+                        .currency("KRW").cashBalance(new BigDecimal("50000")).build());
+        when(client.getSecuritiesTransactions(eq("1"), eq(301L))).thenReturn(List.of(
+                SecuritiesTransactionSyncDto.builder()
+                        .transactionId(8001L).transactedAt("2026-08-06T10:00:00+09:00")
+                        .transTypeCode("02").securityProductName("삼성전자")
+                        .transactionAmount(new BigDecimal("700000")).build()));
+        when(client.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(401L).providerCode("KAKAO")
+                        .providerName("카카오페이").walletName("카카오페이 머니")
+                        .balance(new BigDecimal("130000")).build()));
+        when(client.getPayMoneyTransactions(eq("1"), eq(401L))).thenReturn(List.of(
+                PayMoneyTransactionSyncDto.builder()
+                        .transactionId(6001L).transactedAt("2026-06-12T18:00:01+09:00")
+                        .transTypeCode("01").amount(new BigDecimal("150000")).build()));
+        when(client.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(1L).cardNoMasked("9490-****-****-2201")
+                        .cardTypeCode("01").currency("KRW").build()));
+        when(client.getCardApprovals(eq("1"), eq(1L), isNull())).thenReturn(List.of(
+                CardApprovalSyncDto.builder().approvalId(1L).approvalNo("APV-CREDIT-1")
+                        .approvedAt("2026-08-10T12:00:00+09:00").approvedAmount(new BigDecimal("30000"))
+                        .rawJson(null).build()));
+        when(client.getCardBills(anyString(), anyLong())).thenReturn(List.of());
+        when(cardMapper.update(any())).thenReturn(0);
+        doAnswer(inv -> {
+            Card c = inv.getArgument(0);
+            c.setId(100L);
+            return 1;
+        }).when(cardMapper).insert(any());
+
+        ExecutorService realExecutor = Executors.newFixedThreadPool(6);
+        FinancialSyncResultDto result;
+        try {
+            result = serviceWithRealExecutor(realExecutor).sync(1L);
+        } finally {
+            realExecutor.shutdown();
+            realExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals("COMPLETED", result.getStatus());
+        /* 소스마다 결과가 5건(BANK/DEPOSIT/SECURITIES/PAYMONEY/CARD_CREDIT) — 경합으로 유실되거나
+           다른 스레드가 쓴 값이 섞였다면 이 개수나 아래 소스별 단언 중 하나가 깨진다. */
+        verify(transactionMapper, times(5)).insert(any());
+        verify(transactionMapper).insert(argThat(t ->
+                "BANK".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-9001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "DEPOSIT".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-7001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "SECURITIES".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-8001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "PAYMONEY".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("-6001")));
+        verify(transactionMapper).insert(argThat(t ->
+                "CARD_CREDIT".equals(t.getSourceType()) && t.getCodefTrKey().endsWith("APV-CREDIT-1")));
+    }
+
+    @Test
+    @DisplayName("진짜 스레드풀로 병렬 수집해도 실패한 소스 이름이 실패 이력에 정확히 남는다")
+    void sourceFailureIsAttributedCorrectlyUnderRealParallelExecution() throws InterruptedException {
+        when(client.getCards("1")).thenThrow(
+                new BusinessException("EXTERNAL_API_UNAVAILABLE", "목서버 응답 없음"));
+
+        ExecutorService realExecutor = Executors.newFixedThreadPool(6);
+        BusinessException thrown;
+        try {
+            FinancialSyncServiceImpl parallelService = serviceWithRealExecutor(realExecutor);
+            thrown = assertThrows(BusinessException.class, () -> parallelService.sync(1L));
+        } finally {
+            realExecutor.shutdown();
+            realExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals("EXTERNAL_API_UNAVAILABLE", thrown.getCode());
+        verify(connectedAccountMapper, never()).insert(any());
+        verify(transactionMapper, never()).insert(any());
+        verify(syncHistoryMapper).insert(argThat(h ->
+                "FAILED".equals(h.getStatus()) && "CARD".equals(h.getFailedSource())));
     }
 }

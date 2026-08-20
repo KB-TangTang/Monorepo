@@ -3,6 +3,7 @@ package com.kb.tangtang.account.client;
 import com.kb.tangtang.account.client.dto.ConnectionRequest;
 import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
+import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -49,7 +50,15 @@ public class MockFinancialDataClient implements FinancialDataClient {
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
-    private final String scenarioKey;
+    /**
+     * 시나리오 키는 사용자별로 다르게 정해진다(#334) — FinancialSyncServiceImpl 의 동기화가 쓰는
+     * 것과 **같은** ScenarioKeyProvider 를 쓴다. 예전엔 이 클래스가 `financial.mock.scenario-key`
+     * 라는 별도 프로퍼티로 고정된 시나리오 하나만 썼는데, 동기화 쪽은 `mock.server.scenario-keys`
+     * 로 사용자마다 다른 시나리오를 골랐다 — 두 설정이 서로 다른 기본값(demo-normal-user vs 1)을
+     * 가리켜, 같은 실사용자인데도 **계좌 연동 화면에서 고른 계좌**와 **연동 직후 배치가 동기화한
+     * 계좌**가 서로 다른 시나리오(=다른 가짜 은행 데이터)에서 와 함께 쌓이는 사고가 났다.
+     */
+    private final ScenarioKeyProvider scenarioKeyProvider;
     private final Clock clock;
 
     /** 승인 기록 보관 기한. 인증 유효시간(5분)에 조회 시간을 얹은 값이다. */
@@ -64,11 +73,11 @@ public class MockFinancialDataClient implements FinancialDataClient {
      */
     private final Map<String, Instant> approvals = new ConcurrentHashMap<>();
 
-    public MockFinancialDataClient(RestTemplate restTemplate, String baseUrl, String scenarioKey,
-                                   Clock clock) {
+    public MockFinancialDataClient(RestTemplate restTemplate, String baseUrl,
+                                   ScenarioKeyProvider scenarioKeyProvider, Clock clock) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl;
-        this.scenarioKey = scenarioKey;
+        this.scenarioKeyProvider = scenarioKeyProvider;
         this.clock = clock;
     }
 
@@ -127,10 +136,10 @@ public class MockFinancialDataClient implements FinancialDataClient {
     }
 
     @Override
-    public List<FinancialAccountDto> fetchAccounts(String connectionId, String organization) {
+    public List<FinancialAccountDto> fetchAccounts(long userId, String connectionId, String organization) {
         String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
                 .path("/api/v1/assets/accounts")
-                .queryParam("scenarioKey", scenarioKey)
+                .queryParam("scenarioKey", scenarioKeyProvider.resolve(userId))
                 .toUriString();
 
         Map<String, Object> envelope;

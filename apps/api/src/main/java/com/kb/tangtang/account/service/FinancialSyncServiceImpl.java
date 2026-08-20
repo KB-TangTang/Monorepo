@@ -40,6 +40,7 @@ import com.kb.tangtang.transaction.service.TransactionCategorizationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 /**
  * 이슈 #147 — 금융 동기화 오케스트레이터.
@@ -124,6 +128,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     private final FinancialSyncClient client;
     private final ScenarioKeyProvider scenarioKeyProvider;
+    private final AccountNumberPolicy accountNumbers;
     private final ConnectedAccountMapper connectedAccountMapper;
     private final LoanMapper loanMapper;
     private final InvestmentHoldingMapper investmentHoldingMapper;
@@ -135,6 +140,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
+    private final Executor syncExecutor;
 
     /**
      * ⚠ 생성자가 둘이라 **@Autowired 로 어느 쪽을 쓸지 명시해야 한다** (AccountLinkService 와 같은 이유).
@@ -145,6 +151,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     @Autowired
     public FinancialSyncServiceImpl(FinancialSyncClient client,
                                     ScenarioKeyProvider scenarioKeyProvider,
+                                    AccountNumberPolicy accountNumbers,
                                     ConnectedAccountMapper connectedAccountMapper,
                                     LoanMapper loanMapper,
                                     InvestmentHoldingMapper investmentHoldingMapper,
@@ -154,16 +161,18 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                                     FinancialSyncHistoryMapper syncHistoryMapper,
                                     TransactionCategorizationService transactionCategorizationService,
                                     ApplicationEventPublisher eventPublisher,
-                                    TransactionTemplate transactionTemplate) {
-        this(client, scenarioKeyProvider, connectedAccountMapper, loanMapper, investmentHoldingMapper,
-                cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
+                                    TransactionTemplate transactionTemplate,
+                                    @Qualifier("financialSyncExecutor") Executor syncExecutor) {
+        this(client, scenarioKeyProvider, accountNumbers, connectedAccountMapper, loanMapper,
+                investmentHoldingMapper, cardMapper, cardBillMapper, transactionMapper, syncHistoryMapper,
                 transactionCategorizationService, eventPublisher,
-                Clock.systemDefaultZone(), transactionTemplate);
+                Clock.systemDefaultZone(), transactionTemplate, syncExecutor);
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
     FinancialSyncServiceImpl(FinancialSyncClient client,
                              ScenarioKeyProvider scenarioKeyProvider,
+                             AccountNumberPolicy accountNumbers,
                              ConnectedAccountMapper connectedAccountMapper,
                              LoanMapper loanMapper,
                              InvestmentHoldingMapper investmentHoldingMapper,
@@ -174,9 +183,11 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                              TransactionCategorizationService transactionCategorizationService,
                              ApplicationEventPublisher eventPublisher,
                              Clock clock,
-                             TransactionTemplate transactionTemplate) {
+                             TransactionTemplate transactionTemplate,
+                             Executor syncExecutor) {
         this.client = client;
         this.scenarioKeyProvider = scenarioKeyProvider;
+        this.accountNumbers = accountNumbers;
         this.connectedAccountMapper = connectedAccountMapper;
         this.loanMapper = loanMapper;
         this.investmentHoldingMapper = investmentHoldingMapper;
@@ -188,12 +199,19 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.transactionTemplate = transactionTemplate;
+        this.syncExecutor = syncExecutor;
     }
 
     @Override
     public FinancialSyncResultDto sync(long userId) {
+        return sync(userId, Set.of());
+    }
+
+    @Override
+    public FinancialSyncResultDto sync(long userId, Set<String> extraInstitutionCodes) {
         LocalDateTime startedAt = LocalDateTime.now(clock);
         String scenarioKey = scenarioKeyProvider.resolve(userId);
+        SyncScope scope = buildSyncScope(userId, extraInstitutionCodes);
         MonthlyFetchCursor monthlyCursor = buildMonthlyFetchCursor(userId);
         /*
          * 사용자가 직접 해제한(is_active=0) 계좌는 동기화가 되살리면 안 된다(이슈 #199 최종 리뷰).
@@ -203,18 +221,12 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          */
         Set<String> inactiveAccountKeys = new HashSet<>(connectedAccountMapper.findInactiveKeysByUser(userId));
 
-        /*
-         * 지금 처리 중인 소스를 담아 두는 커서. 실패 이력에 소스명을 남겨야 하는데 예외 자체에는
-         * 그 정보가 없다. 인스턴스 필드로 두면 싱글턴 빈이라 동시 요청끼리 서로 덮어쓰므로
-         * 호출마다 새로 만든 지역 객체를 넘긴다.
-         */
-        SourceCursor cursor = new SourceCursor();
         SyncBundle bundle;
         try {
-            bundle = collectAll(scenarioKey, cursor, monthlyCursor);
-        } catch (BusinessException e) {
-            recordFailure(userId, cursor.value, e.getMessage(), startedAt);
-            throw e;
+            bundle = collectAll(scenarioKey, monthlyCursor, scope);
+        } catch (SourceCollectionException e) {
+            recordFailure(userId, e.source, e.getCause().getMessage(), startedAt);
+            throw (BusinessException) e.getCause();
         }
 
         /*
@@ -277,8 +289,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private MonthlyFetchCursor buildMonthlyFetchCursor(long userId) {
         Map<String, LocalDateTime> accounts = new HashMap<>();
         for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
-            if (account.getLastSyncAt() != null) {
-                accounts.put(account.getAccountNoEncrypted(), account.getLastSyncAt());
+            /*
+             * accountNoMasked 로 키를 만든다 — accountNoEncrypted 가 아니다.
+             * 은행 계좌는 이제 AccountLinkService 와 같은 해시 키를 쓰는데(#334, upsertBankAccount
+             * 문서 참고), 이 커서는 "목서버 계좌 ID" → "마지막 동기화 시각"을 이어줘야 하고 목서버
+             * 계좌 ID 는 해시에 안 들어간다. accountNoMasked 는 목서버 응답과 저장된 행 양쪽에
+             * 그대로 남는 유일한 값이라 여기서 조인 키로 쓴다.
+             */
+            if (account.getLastSyncAt() != null && account.getAccountNoMasked() != null) {
+                accounts.put(account.getAccountNoMasked(), account.getLastSyncAt());
             }
         }
         Map<String, LocalDateTime> cards = new HashMap<>();
@@ -288,6 +307,51 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             }
         }
         return new MonthlyFetchCursor(accounts, cards);
+    }
+
+    private SyncScope buildSyncScope(long userId, Set<String> extraInstitutionCodes) {
+        Set<String> institutionCodes = new HashSet<>();
+        Set<String> institutionNames = new HashSet<>();
+        for (ConnectedAccount account : connectedAccountMapper.findActiveByUser(userId)) {
+            if (account.getBankCode() != null) {
+                institutionCodes.add(account.getBankCode());
+            }
+            if (account.getBankName() != null) {
+                institutionNames.add(account.getBankName());
+            }
+        }
+        /*
+         * 대출·카드는 tbl_connected_account 를 쓰지 않는다 — saveLoans()/upsertCard() 참고, 각자
+         * tbl_loan/tbl_card 에만 남는다. 위 루프만으로 스코프를 만들면 최초 동기화(extraInstitutionCodes
+         * 로 부트스트랩) 이후로는 흔적이 tbl_connected_account 밖에 있다는 이유로 두 업권이 매번 다시
+         * 빠진다(#334 리뷰 지적 — 대출은 첫 동기화만 되고 이후 배치에서 사라짐). 각자의 테이블에서
+         * 직접 채워 "한 번이라도 연동됐던 기관"을 스코프가 기억하게 한다.
+         *
+         * 대출은 기관코드 컬럼이 없다(tbl_loan.bank_name 만 있다) — 이름으로만 매칭한다.
+         * SECURITIES 가 이미 이 방식이다(collectSecurities 의 includesName 참고. 그쪽은
+         * tbl_connected_account.bank_name 을 통해 자동으로 들어온다).
+         */
+        for (Loan loan : loanMapper.findByUser(userId)) {
+            if (loan.getBankName() != null) {
+                institutionNames.add(loan.getBankName());
+            }
+        }
+        for (Card card : cardMapper.findByUser(userId)) {
+            if (card.getInstitutionCode() != null) {
+                institutionCodes.add(card.getInstitutionCode());
+            }
+        }
+        /*
+         * 대출·페이머니 최초 연동용(#334) — 클래스 상단 FinancialSyncService.sync(userId, Set) 참고.
+         * null 코드가 섞여 들어오면 여기서 걸러야 한다. isDone() 이 null 을 "할 일 없음"으로 읽는
+         * AccountLinkService.requireOrganizations() 와 같은 이유다.
+         */
+        for (String code : extraInstitutionCodes) {
+            if (code != null && !code.isBlank()) {
+                institutionCodes.add(code);
+            }
+        }
+        return new SyncScope(institutionCodes, institutionNames);
     }
 
     /** lastSyncAt 이 속한 달부터 오늘(clock 기준)이 속한 달까지, 오름차순으로. */
@@ -301,9 +365,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return months;
     }
 
-    private List<BankTransactionSyncDto> fetchBankTransactions(String scenarioKey, long accountId,
+    private List<BankTransactionSyncDto> fetchBankTransactions(String scenarioKey, BankAccountSyncDto account,
                                                                 MonthlyFetchCursor cursor) {
-        LocalDateTime lastSyncAt = cursor.accountLastSyncAt(accountId);
+        long accountId = account.getAccountId();
+        LocalDateTime lastSyncAt = cursor.accountLastSyncAt(account.getAccountNoMasked());
         if (lastSyncAt == null) {
             return client.getBankTransactions(scenarioKey, accountId, null);
         }
@@ -327,55 +392,127 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return merged;
     }
 
-    /** 전부 트랜잭션 밖. 하나라도 실패하면 즉시 BusinessException 이 올라간다(fail-fast). */
-    private SyncBundle collectAll(String scenarioKey, SourceCursor cursor, MonthlyFetchCursor monthlyCursor) {
+    /**
+     * 전부 트랜잭션 밖. BANK/DEPOSIT/SECURITIES/LOAN/PAY_MONEY/CARD 6개 소스는 서로 결과를
+     * 참조하지 않고 {@link SyncBundle} 의 서로 다른 필드에만 쓰므로 병렬로 돌린다 — 목서버
+     * 왕복이 순차로 쌓이던 게 가장 느린 소스 하나 수준으로 줄어든다.
+     *
+     * ⚠ 각 소스는 자기 필드만 쓰고 다른 소스의 필드는 절대 건드리지 않는다. 여러 스레드가 SyncBundle
+     *   하나를 같이 채워도 안전한 건 이 "쓰기 대상 분리" 때문이다 — 필드가 겹치면 별도 동기화가
+     *   필요해진다.
+     *
+     * 하나라도 실패하면 {@link SourceCollectionException} 으로 감싸 올라간다(fail-fast였던 예전과
+     * 달리, 병렬이라 실패한 소스 하나 때문에 다른 소스 호출이 취소되지는 않는다 — 이미 동시에
+     * 날아간 뒤라 취소할 수 없고, 실패든 성공이든 결과는 collectAll() 을 벗어나지 못하므로 실질적인
+     * 차이는 없다).
+     */
+    private SyncBundle collectAll(String scenarioKey, MonthlyFetchCursor monthlyCursor, SyncScope scope) {
         SyncBundle bundle = new SyncBundle();
 
-        cursor.value = "BANK";
-        for (BankAccountSyncDto account : client.getBankAccounts(scenarioKey)) {
-            bundle.bankAccounts.add(account);
-            bundle.bankTransactions.put(account.getAccountId(),
-                    fetchBankTransactions(scenarioKey, account.getAccountId(), monthlyCursor));
+        CompletableFuture<Void> bank = collectAsync("BANK",
+                () -> collectBank(scenarioKey, bundle, monthlyCursor, scope));
+        CompletableFuture<Void> deposit = collectAsync("DEPOSIT",
+                () -> collectDeposit(scenarioKey, bundle, scope));
+        CompletableFuture<Void> securities = collectAsync("SECURITIES",
+                () -> collectSecurities(scenarioKey, bundle, scope));
+        CompletableFuture<Void> loan = collectAsync("LOAN",
+                () -> collectLoan(scenarioKey, bundle, scope));
+        CompletableFuture<Void> payMoney = collectAsync("PAY_MONEY",
+                () -> collectPayMoney(scenarioKey, bundle, scope));
+        CompletableFuture<Void> card = collectAsync("CARD",
+                () -> collectCard(scenarioKey, bundle, monthlyCursor, scope));
+
+        try {
+            CompletableFuture.allOf(bank, deposit, securities, loan, payMoney, card).join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof SourceCollectionException) {
+                throw (SourceCollectionException) e.getCause();
+            }
+            throw e;
         }
 
-        cursor.value = "DEPOSIT";
+        return bundle;
+    }
+
+    /** action 이 던지는 BusinessException 에 source 이름을 붙여 감싼다 — 실패 이력에 남길 소스명이다. */
+    private CompletableFuture<Void> collectAsync(String source, Runnable action) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                action.run();
+            } catch (BusinessException e) {
+                throw new SourceCollectionException(source, e);
+            }
+        }, syncExecutor);
+    }
+
+    private void collectBank(String scenarioKey, SyncBundle bundle, MonthlyFetchCursor monthlyCursor,
+                             SyncScope scope) {
+        for (BankAccountSyncDto account : client.getBankAccounts(scenarioKey)) {
+            if (!scope.includesCode(account.getInstitutionCode())) {
+                continue;
+            }
+            bundle.bankAccounts.add(account);
+            bundle.bankTransactions.put(account.getAccountId(),
+                    fetchBankTransactions(scenarioKey, account, monthlyCursor));
+        }
+    }
+
+    private void collectDeposit(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (DepositSyncDto deposit : client.getDeposits(scenarioKey)) {
+            if (!scope.includesCode(deposit.getInstitutionCode())) {
+                continue;
+            }
             bundle.deposits.add(deposit);
             bundle.depositTransactions.put(deposit.getDepositAccountId(),
                     client.getDepositTransactions(scenarioKey, deposit.getDepositAccountId()));
         }
+    }
 
-        cursor.value = "SECURITIES";
+    private void collectSecurities(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         StockAssetSyncDto stock = client.getStockAsset(scenarioKey);
-        if (stock != null) {
+        if (stock != null && scope.includesName(stock.getInstitutionName())) {
             bundle.stock = stock;
             bundle.securitiesTransactions.put(stock.getAccountId(),
                     client.getSecuritiesTransactions(scenarioKey, stock.getAccountId()));
         }
+    }
 
-        cursor.value = "LOAN";
+    private void collectLoan(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (LoanSyncDto loan : client.getLoans(scenarioKey)) {
+            /* tbl_loan 은 기관코드를 저장하지 않아 재동기화 스코프는 이름으로만 재구성된다 —
+               buildSyncScope() 참고. 그래서 코드·이름 둘 중 하나만 맞아도 포함시킨다. */
+            if (!scope.includesCode(loan.getInstitutionCode())
+                    && !scope.includesName(loan.getInstitutionName())) {
+                continue;
+            }
             bundle.loans.add(loan);
             bundle.loanTransactions.put(loan.getLoanId(),
                     client.getLoanTransactions(scenarioKey, loan.getLoanId()));
         }
+    }
 
-        cursor.value = "PAY_MONEY";
+    private void collectPayMoney(String scenarioKey, SyncBundle bundle, SyncScope scope) {
         for (PayMoneySyncDto payMoney : client.getPayMoney(scenarioKey)) {
+            if (!scope.includesCode(payMoney.getProviderCode())) {
+                continue;
+            }
             bundle.payMoney.add(payMoney);
             bundle.payMoneyTransactions.put(payMoney.getPayMoneyId(),
                     client.getPayMoneyTransactions(scenarioKey, payMoney.getPayMoneyId()));
         }
+    }
 
-        cursor.value = "CARD";
+    private void collectCard(String scenarioKey, SyncBundle bundle, MonthlyFetchCursor monthlyCursor,
+                             SyncScope scope) {
         for (CardSyncDto card : client.getCards(scenarioKey)) {
+            if (!scope.includesCode(card.getInstitutionCode())) {
+                continue;
+            }
             bundle.cards.add(card);
             bundle.cardApprovals.put(card.getCardId(),
                     fetchCardApprovals(scenarioKey, card.getCardId(), card.getCardNoMasked(), monthlyCursor));
             bundle.cardBills.put(card.getCardId(), client.getCardBills(scenarioKey, card.getCardId()));
         }
-
-        return bundle;
     }
 
     private void recordFailure(long userId, String failedSource, String failReason,
@@ -621,6 +758,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             String accountNoEncrypted = "MOCK-PAYMONEY-" + payMoney.getPayMoneyId();
             ConnectedAccount row = ConnectedAccount.builder()
                     .userId(userId)
+                    .bankCode(payMoney.getProviderCode())
                     .bankName(payMoney.getProviderName())
                     .accountName(payMoney.getWalletName())
                     .accountNoEncrypted(accountNoEncrypted)
@@ -653,11 +791,22 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
     /* ── upsert 헬퍼 ───────────────────────────────────── */
 
+    /**
+     * ⚠ 은행 계좌만 예외적으로 AccountLinkService 와 **같은 해시 키**를 쓴다(#334).
+     *
+     * 은행(BANK/DEMAND_DEPOSIT)은 목서버의 `/api/v1/assets/accounts` 를 계좌 연동
+     * (AccountLinkService.link(), accountNumbers.hash(bankCode, accountNoMasked)) 과 이 배치 동기화가
+     * **둘 다** 부르는 유일한 자산 종류다 — 예적금·증권·대출·페이머니·카드는 연동 흐름이 아예 모르는
+     * 별도 엔드포인트라 이 배치만 만든다. 그래서 은행만 "MOCK-BANK-{id}" 같은 소스전용 키를 쓰면
+     * 두 흐름이 **같은 실계좌**를 서로 다른 행으로 각각 만든다 — 실제로 재현됐다: 계좌 연동 직후
+     * 화면에 같은 계좌(같은 마스킹 번호·같은 잔액)가 두 번 떴다. 목서버는 마스킹된 계좌번호만 주므로
+     * (AccountLinkService 문서 참고) accountNoMasked 를 그대로 해시 입력에 써도 두 쪽이 같은 값을 낸다.
+     */
     private Long upsertBankAccount(long userId, BankAccountSyncDto account, LocalDateTime now,
                                    Set<String> inactiveKeys) {
         String accountType = "SAVINGS".equalsIgnoreCase(account.getAccountTypeCode())
                 ? "SAVINGS" : "DEMAND_DEPOSIT";
-        String accountNoEncrypted = "MOCK-BANK-" + account.getAccountId();
+        String accountNoEncrypted = accountNumbers.hash(account.getInstitutionCode(), account.getAccountNoMasked());
         ConnectedAccount row = ConnectedAccount.builder()
                 .userId(userId)
                 .bankCode(account.getInstitutionCode())
@@ -676,8 +825,10 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     /**
      * BANK/DEPOSIT/SECURITIES/PAYMONEY 공통 upsert (reactivate 시도 → 0행이면 insert). PK 를 돌려준다.
      *
-     * ⚠ 계좌번호 원본이 없는 목서버 데이터라 account_no_encrypted 에 "MOCK-{소스}-{목서버ID}" 를 넣는다.
-     *   HMAC 해시가 아니므로 AccountLinkService 로 연결한 실제 계좌 행과 겹치지 않는다.
+     * ⚠ DEPOSIT/SECURITIES/PAYMONEY 는 account_no_encrypted 에 "MOCK-{소스}-{목서버ID}" 를 넣는다.
+     *   AccountLinkService 의 연동 흐름이 이 세 종류를 아예 다루지 않아(별도 엔드포인트) 겹칠 행이
+     *   없기 때문이다. **BANK 는 예외다** — upsertBankAccount() 의 문서 참고. 그쪽은 연동 흐름과
+     *   같은 해시 키를 써서 일부러 겹치게 한다.
      *
      * ⚠ 사용자가 해제한 계좌면 **아무것도 하지 않고 null 을 돌려준다**(이슈 #199 최종 리뷰).
      *   reactivate 의 SQL 은 is_active=1 을 무조건 세우는데, 그 동작 자체는 AccountLinkService 의
@@ -957,9 +1108,35 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
-    /** collectAll 이 지금 어느 소스를 처리 중인지. 호출마다 새로 만들어 넘긴다(싱글턴 빈이라 필드 금지). */
-    private static final class SourceCursor {
-        private String value;
+    /**
+     * collectAll() 의 병렬 소스 중 하나가 실패했을 때 어느 소스였는지 실어 올리는 래퍼.
+     * 스레드마다 자기가 맡은 소스 이름을 아는 채로 던지므로 SourceCursor 같은 공유 상태가 필요 없다.
+     */
+    private static final class SourceCollectionException extends RuntimeException {
+        private final String source;
+
+        private SourceCollectionException(String source, BusinessException cause) {
+            super(cause);
+            this.source = source;
+        }
+    }
+
+    private static final class SyncScope {
+        private final Set<String> institutionCodes;
+        private final Set<String> institutionNames;
+
+        private SyncScope(Set<String> institutionCodes, Set<String> institutionNames) {
+            this.institutionCodes = institutionCodes;
+            this.institutionNames = institutionNames;
+        }
+
+        private boolean includesCode(String code) {
+            return institutionCodes.isEmpty() || institutionCodes.contains(code);
+        }
+
+        private boolean includesName(String name) {
+            return institutionNames.isEmpty() || institutionNames.contains(name);
+        }
     }
 
     /**
@@ -978,8 +1155,8 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
             this.cardLastSyncByMaskedNo = cardLastSyncByMaskedNo;
         }
 
-        LocalDateTime accountLastSyncAt(long mockAccountId) {
-            return accountLastSyncByKey.get("MOCK-BANK-" + mockAccountId);
+        LocalDateTime accountLastSyncAt(String accountNoMasked) {
+            return accountLastSyncByKey.get(accountNoMasked);
         }
 
         LocalDateTime cardLastSyncAt(String cardNoMasked) {

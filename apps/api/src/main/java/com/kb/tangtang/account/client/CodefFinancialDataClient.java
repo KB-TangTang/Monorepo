@@ -372,7 +372,8 @@ public class CodefFinancialDataClient implements FinancialDataClient {
     }
 
     @Override
-    public List<FinancialAccountDto> fetchAccounts(String connectionId, String organization) {
+    public List<FinancialAccountDto> fetchAccounts(long userId, String connectionId, String organization) {
+        /* 실 CODEF 는 connectionId(=connectedId) 로 이미 사용자를 식별한다 — userId 는 안 쓴다. */
         Session session = session(connectionId);
         if (session.connectedId == null) {
             throw new BusinessException("TOKEN_EXPIRED", "인증이 만료됐어요. 다시 연결해 주세요.");
