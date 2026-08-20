@@ -26,6 +26,23 @@ public interface GroupMemberMapper {
     List<Long> findUserIdsByGroupId(@Param("groupId") long groupId);
 
     /**
+     * 참여 정원의 <b>최종</b> 판정용 참여자 목록 (이슈 #354).
+     * {@code ChallengeGroupMapper.lockGroupForJoin} 으로 그룹 행을 잠근 <b>뒤에</b> 부른다.
+     *
+     * <p><b>이것도 {@code FOR UPDATE} 여야 한다.</b> MySQL 기본 격리수준(REPEATABLE READ)에서
+     * 일반 SELECT 는 트랜잭션의 첫 읽기 시점 스냅샷을 본다. 그룹 행을 잠근 뒤
+     * {@link #findByGroupIds} 로 다시 세면 <b>그 사이 커밋된 참여가 스냅샷에 없어</b>
+     * 잠금을 걸고도 예전 숫자를 그대로 읽는다 — 정원 방어가 통째로 무력해진다.
+     * 잠금 읽기는 스냅샷이 아니라 최신 커밋본을 본다.
+     *
+     * <p>{@code tbl_user} 를 조인하지 않는다. 조인하면 참여자들의 사용자 행까지 잠긴다.
+     * 채워지는 것은 {@code groupId} · {@code userId} 뿐이다 — 판정에 쓰는 것이
+     * 「이미 참여자인가」와 「몇 명인가」뿐이라 그 외에는 필요 없다.
+     * <b>표시용으로 쓰지 말 것</b>({@code nickname} · {@code livesCount} 가 NULL 이다).
+     */
+    List<GroupMember> findByGroupIdForUpdate(@Param("groupId") long groupId);
+
+    /**
      * 유죄 확정 — 목숨 1개 차감 (이슈 #172).
      *
      * <p><b>음수 방어를 SQL 이 한다</b>({@code AND lives_count > 0}). 자바에서 읽고 빼서 쓰면

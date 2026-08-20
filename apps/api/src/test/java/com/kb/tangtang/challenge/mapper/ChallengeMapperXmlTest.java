@@ -45,6 +45,28 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findGroupsToClose"));
         assertTrue(configuration.hasStatement(namespace + ".updateStatusIfCurrent"));
         assertTrue(configuration.hasStatement(namespace + ".deleteIfCurrent"));
+        assertTrue(configuration.hasStatement(namespace + ".lockGroupForJoin"));
+    }
+
+    /**
+     * 정원 경합 방어의 전부가 이 두 글자에 걸려 있다(이슈 #354). 빠져도 SQL 은 정상 실행되고
+     * 평상시에는 아무 차이가 없다 — 동시에 참여할 때만 조용히 정원이 넘는다.
+     *
+     * <p>{@code tbl_category} 조인이 들어가면 {@code FOR UPDATE} 가 모든 그룹이 공유하는
+     * 참조 테이블의 행까지 잠가 서로 무관한 참여끼리 막힌다. 그래서 조인이 없는 것도 함께 못박는다.
+     */
+    @Test
+    @DisplayName("참여 정원 판정은 그룹 행을 FOR UPDATE 로 잠근다")
+    void lockGroupForJoinTakesRowLock() throws Exception {
+        Configuration configuration = parse("mapper/challenge/ChallengeGroupMapper.xml");
+
+        String sql = sqlOf(configuration,
+                ChallengeGroupMapper.class.getName() + ".lockGroupForJoin");
+
+        assertTrue(sql.contains("FOR UPDATE"),
+                "잠금이 없으면 읽고-쓰는 사이에 다른 참여가 끼어들어 정원을 넘긴다");
+        assertFalse(sql.contains("tbl_category"),
+                "카테고리를 조인하면 공유 참조 테이블 행까지 잠겨 무관한 참여끼리 막힌다");
     }
 
     /**
@@ -117,6 +139,28 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findUserIdsByGroupId"));
         assertTrue(configuration.hasStatement(namespace + ".decreaseLife"));
         assertTrue(configuration.hasStatement(namespace + ".finalizeMember"));
+        assertTrue(configuration.hasStatement(namespace + ".findByGroupIdForUpdate"));
+    }
+
+    /**
+     * <b>그룹 행만 잠그고 참여자를 일반 SELECT 로 세면 방어가 통째로 무력해진다</b>(이슈 #354).
+     * MySQL 기본 격리수준(REPEATABLE READ)에서 일반 SELECT 는 트랜잭션 첫 읽기 시점의 스냅샷을
+     * 읽어, 잠금을 기다리는 동안 커밋된 참여가 보이지 않는다. 잠금 읽기만 최신 커밋본을 본다.
+     *
+     * <p>{@code tbl_user} 조인이 들어가면 참여자들의 사용자 행까지 잠기므로 그것도 함께 못박는다.
+     */
+    @Test
+    @DisplayName("참여자 최종 집계도 FOR UPDATE 로 읽는다 — 스냅샷을 읽으면 잠금이 무의미해진다")
+    void findByGroupIdForUpdateTakesLockingRead() throws Exception {
+        Configuration configuration = parse("mapper/challenge/GroupMemberMapper.xml");
+
+        String sql = sqlOf(configuration,
+                GroupMemberMapper.class.getName() + ".findByGroupIdForUpdate");
+
+        assertTrue(sql.contains("FOR UPDATE"),
+                "일반 SELECT 는 REPEATABLE READ 스냅샷을 읽어 그 사이 커밋된 참여를 못 본다");
+        assertFalse(sql.contains("tbl_user"),
+                "조인하면 참여자들의 사용자 행까지 잠긴다");
     }
 
     /**

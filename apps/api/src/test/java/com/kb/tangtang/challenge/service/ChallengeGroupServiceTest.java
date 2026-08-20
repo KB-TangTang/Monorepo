@@ -516,6 +516,48 @@ class ChallengeGroupServiceTest {
         assertEquals("GROUP_FULL", e.getCode());
     }
 
+    /**
+     * 사전 판정을 통과한 뒤 잠금 안에서 정원이 차는 경로 (이슈 #354).
+     * 예전에는 사전 판정이 곧 최종 판정이라 이 상황에서 <b>7번째 참여자가 그대로 들어갔다.</b>
+     */
+    @Test
+    @DisplayName("사전 판정을 통과해도 잠금 안에서 마지막 자리가 차 있으면 GROUP_FULL 이다 (#354)")
+    void joinLosesRaceForLastSeat() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        for (long userId = 10L; userId < 14L; userId++) {
+            service.join(userId, created.getInviteCode());   // 방장 포함 5명 — 한 자리 남는다
+        }
+        // 잠금을 잡는 순간 경쟁자가 마지막 자리를 채운다
+        groupMapper.onLockGroup(() -> memberMapper.insertMember(GroupMember.builder()
+                .groupId(created.getGroupId())
+                .userId(99L)
+                .livesCount(1)
+                .build()));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.join(GUEST_ID, created.getInviteCode()));
+
+        assertEquals("GROUP_FULL", e.getCode(), "새 오류 코드를 만들면 프론트가 모른다");
+        assertEquals(6, memberMapper.findByGroupIds(List.of(created.getGroupId())).size(),
+                "정원 6명을 넘지 않는다");
+    }
+
+    /**
+     * 잠금을 기다리는 사이 미성립 배치나 방장 삭제가 그룹을 지울 수 있다. 그대로 INSERT 하면
+     * FK 위반으로 500 이 된다 — 초대 코드 경로라 「없는 코드」와 같은 오류로 돌려준다.
+     */
+    @Test
+    @DisplayName("잠금 시점에 그룹이 사라졌으면 GROUP_INVITE_CODE_NOT_FOUND 다 (#354)")
+    void joinWhenGroupVanishesUnderLock() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        groupMapper.onLockGroup(() -> groupMapper.deleteIfCurrent(created.getGroupId(), "RECRUITING"));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.join(GUEST_ID, created.getInviteCode()));
+
+        assertEquals("GROUP_INVITE_CODE_NOT_FOUND", e.getCode());
+    }
+
     @Test
     @DisplayName("두 번 참여하면 GROUP_ALREADY_JOINED 로 거절한다")
     void joinRejectedWhenAlreadyMember() {
@@ -837,6 +879,20 @@ class ChallengeGroupServiceTest {
         private long sequence;
         private List<String> lastStatuses;
 
+        /**
+         * 잠금을 기다리는 사이 다른 트랜잭션이 커밋한 상황을 흉내내는 훅 (이슈 #354).
+         *
+         * <p>실제 {@code FOR UPDATE} 는 앞선 트랜잭션이 끝날 때까지 그 자리에서 멈춰 서고,
+         * 깨어났을 때는 그 트랜잭션의 결과가 이미 반영돼 있다. 「깨어나는 순간」이 여기다 —
+         * 스레드를 쓰지 않고도 <b>사전 판정을 통과한 뒤 잠금 안에서 상황이 뒤집히는</b> 경로를
+         * 그대로 태울 수 있다. (실제 잠금 동작 자체는 {@code ChallengeGroupJoinRaceIntegrationTest})
+         */
+        private Runnable onLockGroup = () -> { };
+
+        void onLockGroup(Runnable action) {
+            this.onLockGroup = action;
+        }
+
         @Override
         public int insertGroup(ChallengeGroup group) {
             group.setId(++sequence);   // useGeneratedKeys 흉내
@@ -930,6 +986,16 @@ class ChallengeGroupServiceTest {
             return groups.removeIf(g -> g.getId().equals(groupId) && g.getStatus().equals(status)) ? 1 : 0;
         }
 
+        /** 실제 구현은 판정용 4개 컬럼만 채운다. 페이크는 구분할 이유가 없어 행 그대로 준다. */
+        @Override
+        public ChallengeGroup lockGroupForJoin(Long groupId) {
+            onLockGroup.run();
+            return groups.stream()
+                    .filter(g -> g.getId().equals(groupId))
+                    .findFirst()
+                    .orElse(null);
+        }
+
         /** 최종 확정 배치 전용(#172). 이 테스트가 보는 흐름과 무관하다. */
         @Override
         public List<ChallengeGroup> findGroupsToClose(String status) {
@@ -951,6 +1017,12 @@ class ChallengeGroupServiceTest {
             return members.stream()
                     .filter(m -> groupIds.contains(m.getGroupId()))
                     .toList();
+        }
+
+        /** 실제 구현은 group_id · user_id 만 채우는 잠금 읽기다. 페이크에서는 결과가 같다. */
+        @Override
+        public List<GroupMember> findByGroupIdForUpdate(long groupId) {
+            return findByGroupIds(List.of(groupId));
         }
 
         @Override

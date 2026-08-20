@@ -42,6 +42,24 @@
     </select>
 
     <!--
+      참여 정원의 최종 판정 (이슈 #354). ChallengeGroupMapper.lockGroupForJoin 다음에 부른다.
+
+      ⚠ FOR UPDATE 를 빼면 방어가 통째로 무력해진다. MySQL 기본 격리수준(REPEATABLE READ)에서
+        일반 SELECT 는 트랜잭션 첫 읽기 시점의 스냅샷을 읽는다 — 그룹 행을 잠그고 다시 세도
+        그 사이 커밋된 참여가 안 보여 예전 숫자가 그대로 나온다. 잠금 읽기만 최신 커밋본을 본다.
+
+      ⚠ tbl_user 를 조인하지 않는다. 조인하면 참여자들의 사용자 행까지 잠긴다.
+        판정에 쓰는 것은 "이미 참여자인가"와 "몇 명인가"뿐이라 두 컬럼이면 된다.
+        (그래서 이 결과를 표시용으로 쓰면 안 된다 — nickname 이 NULL 이다)
+    -->
+    <select id="findByGroupIdForUpdate" resultType="com.kb.tangtang.challenge.domain.GroupMember">
+        SELECT group_id, user_id
+          FROM tbl_group_member
+         WHERE group_id = #{groupId}
+         FOR UPDATE
+    </select>
+
+    <!--
       유죄 확정 시 목숨 차감 (이슈 #172).
 
       ⚠ lives_count &gt; 0 이 음수 방어다. lives_count 는 UNSIGNED 가 아니라 그냥 INT 라

@@ -14,6 +14,7 @@ import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
+import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;

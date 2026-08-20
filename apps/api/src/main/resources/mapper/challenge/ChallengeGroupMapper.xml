@@ -170,4 +170,21 @@
         WHERE id = #{groupId}
           AND status = #{status}
     </delete>
+
+    <!--
+      참여 정원 경합 방어 (이슈 #354). 저장소에서 유일한 FOR UPDATE 다.
+
+      ⚠ columns 조각을 쓰지 않는다. 그 조각은 tbl_category 를 조인하는데, FOR UPDATE 는
+        조회한 모든 테이블의 행을 잠근다 — 카테고리는 모든 그룹이 공유하는 참조 테이블이라
+        서로 무관한 그룹의 참여끼리 막히게 된다. 판정에 쓰는 4개 컬럼만 읽는다.
+        (그래서 이 결과로 응답 DTO 를 만들면 안 된다. category_name 이 NULL 이다)
+
+      ⚠ 잠금 순서는 tbl_challenge_group → tbl_group_member 다. 반대로 잡는 곳을 만들면 데드락.
+    -->
+    <select id="lockGroupForJoin" resultType="com.kb.tangtang.challenge.domain.ChallengeGroup">
+        SELECT id, status, start_date, max_members
+          FROM tbl_challenge_group
+         WHERE id = #{groupId}
+         FOR UPDATE
+    </select>
 </mapper>

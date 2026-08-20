@@ -145,4 +145,26 @@ public interface ChallengeGroupMapper {
      */
     int deleteIfCurrent(@Param("groupId") Long groupId,
                         @Param("status") String status);
+
+    /**
+     * 참여 판정을 위해 그룹 행을 잠근다 (이슈 #354). <b>저장소에서 유일한 {@code FOR UPDATE} 다.</b>
+     *
+     * <p>정원 판정이 「참여자 수를 읽고 → 비교하고 → INSERT」 세 단계라, 그 사이에 다른 참여가
+     * 끼어들면 둘 다 「자리 있음」을 보고 둘 다 들어간다. PK {@code (group_id, user_id)} 는
+     * <b>같은 사람의 중복만</b> 막고 정원은 못 막는다. 그룹 행 하나를 잠가 참여를 직렬화한다.
+     *
+     * <p><b>잠금 순서는 {@code tbl_challenge_group} → {@code tbl_group_member} 다.</b>
+     * 반대로 잡는 곳을 만들면 데드락이 된다. 현재 그룹 챌린지의 쓰기 경로는 전부 이 순서다 —
+     * {@code deleteIfCurrent}(그룹만) · {@code updateStatusIfCurrent}(그룹만) ·
+     * {@code startOrCancel}(멤버는 잠금 없는 일반 SELECT 뒤 그룹 UPDATE).
+     *
+     * <p><b>카테고리를 조인하지 않는다.</b> 조인하면 {@code FOR UPDATE} 가 {@code tbl_category}
+     * 행까지 잠근다 — 모든 그룹이 공유하는 참조 테이블이라 서로 무관한 참여끼리 막히게 된다.
+     * 그래서 채워지는 것은 <b>판정에 필요한 4개뿐</b>이다:
+     * {@code id} · {@code status} · {@code startDate} · {@code maxMembers}.
+     * 응답 DTO 를 만드는 데 쓰지 말 것 — {@code categoryName} 이 NULL 이다.
+     *
+     * @return 잠근 그룹. {@code NULL} 이면 그 사이 미성립·방장 삭제로 사라졌다는 뜻이다
+     */
+    ChallengeGroup lockGroupForJoin(@Param("groupId") Long groupId);
 }
