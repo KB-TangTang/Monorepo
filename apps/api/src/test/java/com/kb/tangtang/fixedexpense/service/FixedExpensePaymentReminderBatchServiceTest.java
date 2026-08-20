@@ -49,12 +49,12 @@ class FixedExpensePaymentReminderBatchServiceTest {
         NotificationRequestedEvent today = events.requests.get(0);
         assertEquals("PAYMENT_DUE", today.type().name());
         assertEquals("오늘결제 · 오늘 결제 예정", today.params().get("content"));
-        assertEquals("/asset/fixed-expenses/101", today.deepLinkUrl());
+        assertEquals("/asset/fixed-expenses/101?source=api", today.deepLinkUrl());
 
         NotificationRequestedEvent sevenDays = events.requests.get(1);
         assertEquals("PAYMENT_DUE", sevenDays.type().name());
         assertEquals("일주일결제 · 7일 후 결제 예정", sevenDays.params().get("content"));
-        assertEquals("/asset/fixed-expenses/102", sevenDays.deepLinkUrl());
+        assertEquals("/asset/fixed-expenses/102?source=api", sevenDays.deepLinkUrl());
     }
 
     @Test

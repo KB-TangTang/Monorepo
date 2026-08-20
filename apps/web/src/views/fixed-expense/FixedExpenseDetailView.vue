@@ -10,7 +10,12 @@ import FixedExpenseReceiptPanel from '@/components/fixed-expense/FixedExpenseRec
 import FixedExpenseSummaryCard from '@/components/fixed-expense/FixedExpenseSummaryCard.vue';
 import TempFixedExpenseSourceToggle from '@/components/fixed-expense/TempFixedExpenseSourceToggle.vue';
 import { useFixedExpenseStore } from '@/stores/fixedExpense';
-import { formatPaymentDate, formatWon, resolveFixedExpenseState } from '@/utils/fixedExpense';
+import {
+    formatPaymentDate,
+    formatWon,
+    resolveFixedExpenseState,
+    shouldUseFixedExpenseApiSource,
+} from '@/utils/fixedExpense';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,7 +44,12 @@ async function switchSource(nextSource) {
     await store.loadExpense(route.params.expenseId);
 }
 
-onMounted(() => store.loadExpense(route.params.expenseId));
+onMounted(() => {
+    if (shouldUseFixedExpenseApiSource(route.query.source)) {
+        store.setSource('api');
+    }
+    return store.loadExpense(route.params.expenseId);
+});
 </script>
 
 <template>
