@@ -77,10 +77,10 @@ class RelativeMissionAssignmentSchedulerTest {
         var order = inOrder(assignmentBatch, evaluationBatch);
         order.verify(assignmentBatch).assignDailyMissions(firstMissingDate, false);
         order.verify(evaluationBatch).evaluateDailyMissions(
-                firstMissingDate, firstMissingDate.plusDays(1).atStartOfDay());
+                firstMissingDate, firstMissingDate.plusDays(1).atStartOfDay(), false);
         order.verify(assignmentBatch).assignDailyMissions(firstMissingDate.plusDays(1), false);
         order.verify(evaluationBatch).evaluateDailyMissions(
-                firstMissingDate.plusDays(1), today.atStartOfDay());
+                firstMissingDate.plusDays(1), today.atStartOfDay(), false);
         order.verify(assignmentBatch).assignDailyMissions(today);
     }
 }

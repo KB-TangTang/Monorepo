@@ -58,7 +58,7 @@ public class RelativeMissionAssignmentScheduler {
         while (recoveryDate != null && recoveryDate.isBefore(today)) {
             batchService.assignDailyMissions(recoveryDate, false);
             evaluationBatchService.evaluateDailyMissions(
-                    recoveryDate, recoveryDate.plusDays(1).atStartOfDay());
+                    recoveryDate, recoveryDate.plusDays(1).atStartOfDay(), false);
             recoveryDate = recoveryDate.plusDays(1);
         }
         batchService.assignDailyMissions(today);
