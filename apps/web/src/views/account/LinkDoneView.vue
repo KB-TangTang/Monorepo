@@ -16,7 +16,7 @@ import BaseButton from '@/components/common/BaseButton.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import { useAccountStore } from '@/stores/account';
 import { useAuthStore } from '@/stores/auth';
-import { PROGRESS_STATUS } from '@/utils/account';
+import { connectedAccountsForDone, PROGRESS_STATUS } from '@/utils/account';
 import { NICKNAME_SETUP_ROUTE } from '@/utils/user';
 import successAnimation from '@/assets/images/link-success.svg';
 
@@ -51,15 +51,7 @@ const playsAnimation = !window.matchMedia('(prefers-reduced-motion: reduce)').ma
  * 기관의 배지 라벨을 함께 실어 화면이 다시 조회하지 않게 한다.
  */
 const selectedAccounts = computed(() =>
-    linkableGroups.value.flatMap((group) =>
-        group.accounts
-            .filter((account) => selectedAccountIds.value.includes(account.accountId))
-            .map((account) => ({
-                ...account,
-                shortLabel: group.shortLabel,
-                bankCode: group.bankCode,
-            })),
-    ),
+    connectedAccountsForDone(linkableGroups.value, selectedAccountIds.value),
 );
 
 /**
@@ -71,9 +63,8 @@ const selectedAccounts = computed(() =>
  * 어긋나면 목록을 접고 저장된 건수만 말한다 — 틀린 목록보다 없는 목록이 낫다.
  * 제대로 고치려면 서버가 저장한 계좌 식별자를 응답에 실어야 한다(이슈 #12 후속).
  */
-const linkedAccounts = computed(() =>
-    selectedAccounts.value.length === linkedCount.value ? selectedAccounts.value : [],
-);
+const linkedAccounts = computed(() => selectedAccounts.value);
+const displayedLinkedCount = computed(() => linkedAccounts.value.length || linkedCount.value);
 
 const failedCount = computed(
     () =>
@@ -201,10 +192,10 @@ onBeforeUnmount(() => {
                 }}
             </p>
 
-            <section v-if="linkedCount" class="link-done__card">
+            <section v-if="displayedLinkedCount" class="link-done__card">
                 <header class="link-done__card-head">
                     <h2 class="link-done__card-title">연결된 계좌</h2>
-                    <span class="link-done__card-count">{{ linkedCount }}개</span>
+                    <span class="link-done__card-count">{{ displayedLinkedCount }}개</span>
                 </header>
                 <ul v-if="linkedAccounts.length" class="link-done__list">
                     <li
@@ -224,11 +215,11 @@ onBeforeUnmount(() => {
             </section>
 
             <!--
-              은행 없이 대출·페이머니만 골랐을 때(#334) — linkedCount 가 0이라 위 카드 자체가 안 뜬다.
+              은행 없이 대출·페이머니·카드만 골랐을 때(#334) — linkedCount 가 0이라 위 카드 자체가 안 뜬다.
               여기서만이라도 뭔가 되고 있다는 걸 말해준다. 실제 완료는 아래 syncing 이 끝나면서다.
             -->
-            <p v-if="!linkedCount && directAssetsPending" class="link-done__direct-assets">
-                선택한 대출·페이머니는 자동으로 연동돼요.
+            <p v-if="!displayedLinkedCount && directAssetsPending" class="link-done__direct-assets">
+                선택한 대출·페이머니·카드는 자동으로 연동돼요.
             </p>
 
             <div class="link-done__next">

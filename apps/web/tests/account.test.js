@@ -6,6 +6,7 @@ import {
     LINK_STEPS,
     calcLinkProgress,
     canEnterLinkStep,
+    connectedAccountsForDone,
     consentExpiryLabel,
     formatAmount,
     formatBirthDate,
@@ -27,6 +28,30 @@ import {
     resolveSyncBadge,
     validateSimpleAuthForm,
 } from '../src/utils/account.js';
+
+test('완료 화면에는 선택 계좌와 자동 연동 대출을 함께 표시한다', () => {
+    const accounts = connectedAccountsForDone(
+        [
+            {
+                bankCode: '0004',
+                shortLabel: 'KB',
+                accounts: [{ accountId: 1, accountName: '입출금' }],
+            },
+            {
+                bankCode: '0004',
+                shortLabel: 'KB',
+                autoIncluded: true,
+                accounts: [{ accountId: -11, accountName: 'KB 신용대출' }],
+            },
+        ],
+        [1],
+    );
+
+    assert.deepEqual(
+        accounts.map((account) => [account.accountId, account.bankCode]),
+        [[1, '0004'], [-11, '0004']],
+    );
+});
 
 test('연결 플로우 단계를 앞뒤로 이동한다', () => {
     assert.deepEqual(LINK_STEPS, ['institutions', 'auth', 'progress', 'select', 'done']);

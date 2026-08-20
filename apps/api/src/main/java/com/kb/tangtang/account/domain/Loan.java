@@ -23,6 +23,7 @@ public class Loan {
     private Long id;
     private Long userId;
     private String loanNoEncrypted;
+    private String loanNoMasked;
     private String bankName;
     private String loanType;
     private BigDecimal loanAmount;
@@ -33,13 +34,14 @@ public class Loan {
     private BigDecimal monthlyPayment;
     private LocalDate nextPaymentDate;
 
-    public Loan(Long id, Long userId, String loanNoEncrypted, String bankName, String loanType,
+    public Loan(Long id, Long userId, String loanNoEncrypted, String loanNoMasked, String bankName, String loanType,
                 BigDecimal loanAmount, BigDecimal balance, BigDecimal interestRate,
                 LocalDate startDate, LocalDate maturityDate, BigDecimal monthlyPayment,
                 LocalDate nextPaymentDate) {
         this.id = id;
         this.userId = userId;
         this.loanNoEncrypted = loanNoEncrypted;
+        this.loanNoMasked = loanNoMasked;
         this.bankName = bankName;
         this.loanType = loanType;
         this.loanAmount = loanAmount;

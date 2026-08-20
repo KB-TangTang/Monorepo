@@ -10,7 +10,10 @@ import java.util.List;
 @Builder
 public class StockAssetSyncDto {
     private final long accountId;
+    private final String institutionCode;
     private final String institutionName;
+    private final String accountName;
+    private final String accountNoMasked;
     private final String currency;
     private final BigDecimal cashBalance;
     private final BigDecimal totalMarketValue;

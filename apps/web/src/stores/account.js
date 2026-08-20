@@ -92,7 +92,9 @@ export const useAccountStore = defineStore('account', () => {
      */
     const selectableAccountCount = computed(() =>
         linkableGroups.value.reduce(
-            (sum, group) => sum + group.accounts.filter((item) => !item.alreadyLinked).length,
+            (sum, group) => sum + (group.autoIncluded
+                ? 0
+                : group.accounts.filter((item) => !item.alreadyLinked).length),
             0,
         ),
     );

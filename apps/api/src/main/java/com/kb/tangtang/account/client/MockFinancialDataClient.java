@@ -185,16 +185,15 @@ public class MockFinancialDataClient implements FinancialDataClient {
                     /*
                      * 구버전 목서버는 계좌 종류를 DEMAND_DEPOSIT / SAVINGS 로 판정해 내려줬다.
                      * v2 는 그 필드를 없애고 accountTypeCode('1001') 로 바꿨는데, 이건 우리 도메인 값이 아니라
-                     * 그대로 넘기면 안 된다. v2 는 예적금을 deposit_account 로 분리했고
-                     * 이 엔드포인트는 bank_account(입출금)만 주므로, 값이 없으면 아래 판정이
-                     * depositTypeCode == null 을 보고 DEMAND_DEPOSIT 으로 정한다
-                     * (AccountLinkService#accountType).
+                     * 그대로 넘기면 안 된다. 다만 v2 의 예적금 코드(2001/2002)는
+                     * deposit_account 를 함께 내려줄 때 예적금 판정에 필요한 짧은 코드이므로
+                     * 아래에서 숫자 코드로만 안전하게 보존한다.
                      *
                      * CODEF 의 숫자 코드(resAccountDeposit)가 아니므로 depositTypeCode 에 넣으면 안 된다
                      * — 그 컬럼은 VARCHAR(5) 라 저장이 깨진다.
                      */
                     .accountType(domainAccountType(row))
-                    .depositTypeCode(null)
+                    .depositTypeCode(mockDepositTypeCode(row))
                     .currency(text(row.get("currency")))
                     .balance(decimal(row.get("balance")))
                     .build());
@@ -234,6 +233,12 @@ public class MockFinancialDataClient implements FinancialDataClient {
     private static String domainAccountType(Map<?, ?> row) {
         String given = text(row.get("accountType"));
         return "DEMAND_DEPOSIT".equals(given) || "SAVINGS".equals(given) ? given : null;
+    }
+
+    /** 목서버 v2 예적금 코드만 CODEF 호환 필드에 보존한다. 은행·증권 내부 코드는 제외한다. */
+    private static String mockDepositTypeCode(Map<?, ?> row) {
+        String code = text(row.get("accountTypeCode"));
+        return code != null && code.matches("2\\d{3}") ? code : null;
     }
 
     private static BigDecimal decimal(Object value) {

@@ -157,7 +157,10 @@ public class MockFinancialSyncClient implements FinancialSyncClient {
         }
         return StockAssetSyncDto.builder()
                 .accountId(longVal(data.get("accountId")))
+                .institutionCode(text(data.get("institutionCode")))
                 .institutionName(text(data.get("institutionName")))
+                .accountName(text(data.get("accountName")))
+                .accountNoMasked(text(data.get("accountNoMasked")))
                 .currency(text(data.get("currency")))
                 .cashBalance(decimal(data.get("cashBalance")))
                 .totalMarketValue(decimal(data.get("totalMarketValue")))

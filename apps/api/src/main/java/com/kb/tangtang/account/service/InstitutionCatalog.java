@@ -127,6 +127,11 @@ public class InstitutionCatalog {
         return PAY_MONEY.containsKey(code);
     }
 
+    /** 카드 기관코드인지. 카드만 선택한 경우에도 자동 연동을 완료할 수 있게 쓴다. */
+    public boolean isCardCode(String code) {
+        return CARDS.containsKey(code);
+    }
+
     /** 기관명. 알 수 없는 코드는 코드 그대로 돌려준다(화면이 빈칸이 되지 않게). */
     public String nameOf(String code) {
         for (Map<String, String[]> group : ALL_GROUPS) {
@@ -146,6 +151,18 @@ public class InstitutionCatalog {
             }
         }
         return "";
+    }
+
+    /** 저장된 자산의 기관명으로 연결 화면용 코드·로고를 되찾는다. */
+    public String codeOfName(String name) {
+        for (Map<String, String[]> group : ALL_GROUPS) {
+            for (Map.Entry<String, String[]> entry : group.entrySet()) {
+                if (entry.getValue()[0].equals(name)) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return null;
     }
 
     private static List<InstitutionDto> build(Map<String, String[]> source,

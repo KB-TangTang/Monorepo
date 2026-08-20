@@ -75,6 +75,20 @@ export const LINK_STEP_ROUTES = {
     done: 'accountLinkDone',
 };
 
+/** 완료 화면에 보여줄 계좌. 자동 연동 업권도 사용자가 고른 결과라 제외하지 않는다. */
+export function connectedAccountsForDone(groups, selectedAccountIds) {
+    const selectedIds = Array.isArray(selectedAccountIds) ? selectedAccountIds : [];
+    return (Array.isArray(groups) ? groups : []).flatMap((group) =>
+        (Array.isArray(group.accounts) ? group.accounts : [])
+            .filter((account) => group.autoIncluded || selectedIds.includes(account.accountId))
+            .map((account) => ({
+                ...account,
+                shortLabel: group.shortLabel,
+                bankCode: group.bankCode,
+            })),
+    );
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);

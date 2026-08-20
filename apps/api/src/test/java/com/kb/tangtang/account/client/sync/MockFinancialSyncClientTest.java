@@ -105,6 +105,29 @@ class MockFinancialSyncClientTest {
     }
 
     @Test
+    @DisplayName("증권 동기화는 연결 계좌와 같은 기관·계좌 식별자를 읽는다")
+    void getStockAssetReadsConnectionIdentity() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo(BASE_URL + "/api/v1/assets/stocks"))
+                .andRespond(withSuccess("""
+                        {"code":"SUCCESS","message":"ok","data":{
+                          "accountId":301,"institutionCode":"0218","institutionName":"KB증권",
+                          "accountName":"KB 증권 투자계좌","accountNoMasked":"301-***-INV2002",
+                          "currency":"KRW","cashBalance":0,"totalMarketValue":1303600,"holdings":[]
+                        }}
+                        """, MediaType.APPLICATION_JSON));
+
+        MockFinancialSyncClient client = new MockFinancialSyncClient(restTemplate, BASE_URL);
+        StockAssetSyncDto result = client.getStockAsset("1");
+
+        assertEquals("0218", result.getInstitutionCode());
+        assertEquals("301-***-INV2002", result.getAccountNoMasked());
+        assertEquals("KB 증권 투자계좌", result.getAccountName());
+        server.verify();
+    }
+
+    @Test
     @DisplayName("13개 메서드 모두 정확한 요청 경로로 호출한다 (경로 오타 회귀 방지)")
     void allMethodsHitExpectedPaths() {
         RestTemplate restTemplate = restTemplate();
