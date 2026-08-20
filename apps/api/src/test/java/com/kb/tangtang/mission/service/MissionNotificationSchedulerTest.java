@@ -11,8 +11,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
@@ -24,6 +27,19 @@ class MissionNotificationSchedulerTest {
     @Mock private RelativeMissionAssignmentMapper assignmentMapper;
     @Mock private MissionScoreMapper scoreMapper;
     @Mock private ApplicationEventPublisher events;
+
+    @Test
+    void sendsCertificateNotificationAfterAiTitleBatch() throws IOException {
+        Properties properties = new Properties();
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("application.properties")) {
+            properties.load(input);
+        }
+
+        assertEquals("${MISSION_CERTIFICATE_TITLE_BATCH_CRON:0 40 0 1 * *}",
+                properties.getProperty("mission.certificate.title.batch.cron"));
+        assertEquals("${MISSION_NOTIFICATION_CERTIFICATE_CRON:0 50 0 1 * *}",
+                properties.getProperty("mission.notification.certificate.cron"));
+    }
 
     @Test
     void sendsDeadlineOnlyToPendingMissionTargets() {
