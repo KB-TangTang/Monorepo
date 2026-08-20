@@ -59,6 +59,7 @@ public class InstitutionCatalog {
         CARDS.put("0371", new String[]{"롯데카드", "롯데"});
 
         SECURITIES.put("0240", new String[]{"삼성증권", "삼성"});
+        SECURITIES.put("0218", new String[]{"KB증권", "KB"});
         SECURITIES.put("0243", new String[]{"한국투자증권", "한투"});
         SECURITIES.put("0247", new String[]{"NH투자증권", "NH"});
         SECURITIES.put("0261", new String[]{"교보증권", "교보"});

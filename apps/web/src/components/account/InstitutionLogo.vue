@@ -26,6 +26,7 @@ import { resolveInstitutionTone } from '@/utils/account';
 const LOGO_ALIASES = {
     '0301': '0088', // 신한카드 → 신한
     '0381': '0004', // KB국민카드 → KB
+    '0218': '0004', // KB증권 → KB
     '0247': '0011', // NH투자증권 → NH농협
     /* 대출 업권(#344) — 캐피탈은 지주사 심볼을 그대로 쓴다. */
     CP_KB: '0004', // KB캐피탈 → KB
