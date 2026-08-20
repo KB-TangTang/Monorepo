@@ -9,28 +9,20 @@ import {
 } from '@/api/challengeReport';
 import ChallengeMonthPicker from '@/components/challenge/report/ChallengeMonthPicker.vue';
 import ChallengeReportContent from '@/components/challenge/report/ChallengeReportContent.vue';
+import ChallengeReportOnboarding from '@/components/challenge/report/ChallengeReportOnboarding.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import ChallengeSavingsGuide from '@/components/challenge/report/ChallengeSavingsGuide.vue';
 import TempChallengeReportSourceToggle from '@/components/challenge/report/TempChallengeReportSourceToggle.vue';
-import BaseButton from '@/components/common/BaseButton.vue';
-import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMissionRankings } from '@/api/personalMission';
 import {
-    formatPeriod,
     getPreviousPeriod,
     getEmptyReportCopy,
     resolveChallengeReportState,
 } from '@/utils/challengeReport';
 import { hasSeenNetSavingsGuide, markNetSavingsGuideSeen } from '@/services/challengeReportGuide';
 import { useChallengeReportStore } from '@/stores/challengeReport';
-
-const emit = defineEmits([
-    'change-difficulty',
-    'open-monthly-report',
-    'start-challenge',
-]);
 
 const route = useRoute();
 const router = useRouter();
@@ -79,6 +71,7 @@ async function loadReport() {
     try {
         if (challengeReportStore.reportSource === 'mock') {
             report.value = await fetchMockChallengeReport(selectedPeriod.value);
+            entryState.value = report.value.entryState ?? null;
         } else {
             const [challengeReport, ranking] = await Promise.all([
                 fetchChallengeReport(selectedPeriod.value),
@@ -169,6 +162,10 @@ function openGroupHistory() {
     router.push({ name: 'groupChallengeList', query: { tab: 'ended' } });
 }
 
+function startPersonalChallenge() {
+    router.push({ name: 'personalMissionChallenge' });
+}
+
 onMounted(initialize);
 </script>
 
@@ -191,32 +188,14 @@ onMounted(initialize);
             message="챌린지 기록을 정리하고 있어요"
         />
         <StateError v-else-if="state === 'error'" :message="errorMessage" @retry="initialize" />
-        <section
+        <ChallengeReportOnboarding
             v-else-if="['empty', 'not-agreed', 'preparing'].includes(state)"
-            class="challenge-report__empty"
-        >
-            <span v-if="selectedPeriod" class="challenge-report__period-pill">{{
-                formatPeriod(selectedPeriod)
-            }}</span>
-            <StateEmpty :title="emptyCopy.title" :description="emptyCopy.description">
-                <template #icon><span class="challenge-report__empty-circle"></span></template>
-                <template #action>
-                    <div class="challenge-report__empty-info">
-                        <strong>성적표에서 볼 수 있는 것</strong>
-                        <p>미션 성공률 · 카테고리별 절감액</p>
-                        <p>난이도별 성과 · 그룹 전적</p>
-                    </div>
-                    <BaseButton
-                        v-if="state !== 'preparing'"
-                        block
-                        size="lg"
-                        @click="emit('start-challenge')"
-                    >
-                        첫 챌린지 시작하기
-                    </BaseButton>
-                </template>
-            </StateEmpty>
-        </section>
+            :state="state"
+            :period="selectedPeriod"
+            :title="emptyCopy.title"
+            :description="emptyCopy.description"
+            @start-challenge="startPersonalChallenge"
+        />
         <ChallengeReportContent
             v-else
             :report="report"
@@ -276,59 +255,6 @@ onMounted(initialize);
     background: transparent;
     border: 0;
     cursor: pointer;
-}
-
-.challenge-report__period-pill {
-    display: inline-block;
-    margin-bottom: calc(var(--tt-space-4) * -1);
-    padding: var(--tt-space-2) var(--tt-space-4);
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-primary);
-    background: var(--tt-primary-subtle);
-    border-radius: var(--tt-radius-full);
-}
-
-.challenge-report__empty :deep(.tt-state) {
-    min-height: 66vh;
-    justify-content: flex-start;
-    padding-top: var(--tt-space-12);
-}
-
-.challenge-report__empty :deep(.tt-state__icon) {
-    width: 132px;
-    height: 132px;
-    margin-bottom: var(--tt-space-6);
-    color: transparent;
-    background: color-mix(in srgb, var(--tt-bg-subtle) 45%, var(--tt-border));
-}
-
-.challenge-report__empty :deep(.tt-state__title) {
-    font-size: var(--tt-fs-title);
-    font-weight: var(--tt-fw-black);
-}
-
-.challenge-report__empty :deep(.tt-state__desc) {
-    white-space: pre-line;
-}
-
-.challenge-report__empty :deep(.tt-state__action) {
-    width: 100%;
-    margin-top: auto;
-}
-
-.challenge-report__empty-info {
-    margin-bottom: var(--tt-space-5);
-    padding: var(--tt-space-4);
-    text-align: left;
-    background: color-mix(in srgb, var(--tt-bg-subtle) 45%, var(--tt-border));
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
-}
-
-.challenge-report__empty-info p {
-    margin-top: var(--tt-space-2);
-    color: var(--tt-text-muted);
 }
 
 @media (max-width: 360px) {

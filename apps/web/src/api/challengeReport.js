@@ -23,9 +23,14 @@ export async function fetchMockChallengeReportMonths(referenceDate = new Date())
     return clone(
         AVAILABLE_MONTHS.map((month) => ({
             ...month,
-            available: month.hasReport && month.value <= latestPeriod,
+            available:
+                month.value <= latestPeriod && (month.hasReport || Boolean(month.entryState)),
             reason:
-                month.value > latestPeriod ? 'future' : month.hasReport ? undefined : 'unavailable',
+                month.value > latestPeriod
+                    ? 'future'
+                    : month.hasReport || month.entryState
+                      ? undefined
+                      : 'unavailable',
         })),
     );
 }

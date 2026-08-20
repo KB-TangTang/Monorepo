@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { toChallengeReportModel } from '../src/utils/challengeReport.js';
+import { AVAILABLE_MONTHS, REPORTS } from '../src/fixtures/challengeReport.js';
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('API 개인 성과 응답을 기존 챌린지 리포트 화면 모델로 변환한다', () => {
     const report = toChallengeReportModel({
@@ -88,4 +94,25 @@ test('재판 진행 상태는 부분 확정 전적이 있어도 그대로 보존
 
     assert.equal(report.groupRecordState, 'JUDGING');
     assert.deepEqual(report.groupRecord, { participatingGroups: 1 });
+});
+
+test('목업 5월과 6월은 각각 챌린지 동의 및 첫 리포트 준비 상태를 재현한다', () => {
+    const may = AVAILABLE_MONTHS.find((month) => month.value === '2026-05');
+    const june = AVAILABLE_MONTHS.find((month) => month.value === '2026-06');
+    const challengeReportApi = source('src/api/challengeReport.js');
+
+    assert.deepEqual(
+        { hasReport: may.hasReport, entryState: may.entryState },
+        { hasReport: false, entryState: 'NOT_AGREED' },
+    );
+    assert.deepEqual(
+        { hasReport: june.hasReport, entryState: june.entryState },
+        { hasReport: false, entryState: 'PREPARING_FIRST_REPORT' },
+    );
+    assert.equal(REPORTS['2026-05'].entryState, 'NOT_AGREED');
+    assert.equal(REPORTS['2026-06'].entryState, 'PREPARING_FIRST_REPORT');
+    assert.match(
+        challengeReportApi,
+        /month\.value <= latestPeriod && \(month\.hasReport \|\| Boolean\(month\.entryState\)\)/,
+    );
 });
