@@ -124,6 +124,12 @@ services:
       # Swagger 문서 Basic 인증. 비워두면 배포 환경에서 문서가 404 로 숨는다(안전한 기본값).
       SWAGGER_ACCESS_USERNAME: ${SWAGGER_ACCESS_USERNAME:-}
       SWAGGER_ACCESS_PASSWORD: ${SWAGGER_ACCESS_PASSWORD:-}
+      # 고정지출 탐지 배치 시각(이슈 #387). application.properties 의 기본값과 같은 값을
+      # 여기에도 적어야 한다 — 이 줄이 없으면 .env 에 적은 값이 컨테이너에 닿지 않고
+      # 조용히 무시된다(2026-08-20 이전 상태가 그랬다).
+      # ⚠ 빈 문자열을 넘기면 Spring 이 cron 표현식 파싱에 실패해 앱이 기동하지 못한다.
+      #   그래서 `${VAR:-}` 가 아니라 기본값을 그대로 적은 `${VAR:-0 0 23 * * *}` 로 둔다.
+      FIXED_EXPENSE_DETECTION_CRON: "${FIXED_EXPENSE_DETECTION_CRON:-0 0 23 * * *}"
       TZ: Asia/Seoul
     # 업로드된 프로필 이미지. 이 볼륨이 없으면 배포(down && up --build)마다 사진이 전부 사라진다.
     volumes:
