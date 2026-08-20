@@ -43,7 +43,7 @@ class InstitutionCatalogTest {
     void keepsInstitutionCountPerGroup() {
         assertEquals(9, catalog.banks(List.of()).size());
         assertEquals(6, catalog.cards(List.of()).size());
-        assertEquals(4, catalog.securities(List.of()).size());
+        assertEquals(5, catalog.securities(List.of()).size());
         assertEquals(8, catalog.loans(List.of()).size());
         assertEquals(6, catalog.payMoney(List.of()).size());
     }
@@ -94,6 +94,7 @@ class InstitutionCatalogTest {
         assertEquals("KB국민은행", catalog.nameOf("0004"));
         assertEquals("신한카드", catalog.nameOf("0301"));
         assertEquals("삼성증권", catalog.nameOf("0240"));
+        assertEquals("KB증권", catalog.nameOf("0218"));
         assertEquals("KB캐피탈", catalog.nameOf("CP_KB"));
         assertEquals("웰컴저축은행", catalog.nameOf("SB_WELCOME"));
         assertEquals("카카오페이", catalog.nameOf("PAY_KAKAO"));
@@ -106,6 +107,7 @@ class InstitutionCatalogTest {
         assertEquals("KB", catalog.shortLabelOf("0004"));
         assertEquals("신한", catalog.shortLabelOf("0301"));
         assertEquals("삼성", catalog.shortLabelOf("0240"));
+        assertEquals("KB", catalog.shortLabelOf("0218"));
         assertEquals("현대", catalog.shortLabelOf("CP_HYUNDAI"));
         assertEquals("토스", catalog.shortLabelOf("PAY_TOSS"));
     }
@@ -130,5 +132,18 @@ class InstitutionCatalogTest {
         /* 다른 업권 코드를 넘겨도 이 업권에는 아무 표시가 붙지 않는다 */
         assertEquals(0, catalog.banks(List.of("PAY_TOSS")).stream()
                 .filter(InstitutionDto::isConnected).count());
+    }
+
+    @Test
+    @DisplayName("KB증권은 증권 업권에서 연결 상태로 표시한다")
+    void marksKbSecuritiesAsConnected() {
+        InstitutionDto kbSecurities = catalog.securities(List.of("0218")).stream()
+                .filter(item -> "0218".equals(item.getCode()))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals("KB증권", kbSecurities.getName());
+        assertEquals("KB", kbSecurities.getShortLabel());
+        assertTrue(kbSecurities.isConnected());
     }
 }
