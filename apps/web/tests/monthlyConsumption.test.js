@@ -284,6 +284,17 @@ test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다
     assert.equal(report.monthlyTrend.at(-1).hasData, true);
 });
 
+test('4월과 5월 목업 리포트는 AI 활용 미동의 상태를 재현한다', async () => {
+    for (const period of ['2026-04', '2026-05']) {
+        const report = await fetchTempMonthlyConsumptionReport(period);
+
+        assert.equal(report.aiAnalysisStatus, 'NOT_CONSENTED');
+        assert.equal(report.hasPreviousComparison, true);
+        assert.deepEqual(report.feedbacks, []);
+        assert.equal(report.savingsAnalogy, null);
+    }
+});
+
 test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지한다', () => {
     assert.equal(REPORTS['2026-02'].status, MONTHLY_REPORT_STATUS.ONBOARDING);
     assert.equal(REPORTS['2026-03'].status, MONTHLY_REPORT_STATUS.FIRST_REPORT);
@@ -361,7 +372,7 @@ test('AI 조회 결과는 소비 리포트에 선택적으로 결합하고 피�
     assert.equal(report.savingsAnalogy, '이번달 아낀 10,000원은 커피 2잔');
 });
 
-test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순서로 표시한다', () => {
+test('절약 비유 카드는 AI 비유, 미동의 소비 증감, 기본 대체 순서로 표시한다', () => {
     assert.deepEqual(
         resolveMonthlySavingsAnalogyCard({ savingsAnalogy: '이번달 아낀 소비는 쌀 3포대' }),
         {
@@ -382,6 +393,20 @@ test('절약 비유 카드는 AI 비유, 소비 증가 대체, 기본 대체 순
             eyebrow: '소비 흐름 점검',
             title: '지난달보다 소비가 늘어났어요',
             description: '가장 자주 쓴 항목부터 가볍게 점검해봐요.',
+        },
+    );
+    assert.deepEqual(
+        resolveMonthlySavingsAnalogyCard({
+            savingsAnalogy: null,
+            aiAnalysisStatus: 'NOT_CONSENTED',
+            hasPreviousComparison: true,
+            monthOverMonthRate: -12.5,
+        }),
+        {
+            variant: 'decrease',
+            eyebrow: '소비 흐름 점검',
+            title: '지난달보다 소비가 줄었어요',
+            description: '이 흐름, 다음달에도 이어가봐요.',
         },
     );
     assert.deepEqual(

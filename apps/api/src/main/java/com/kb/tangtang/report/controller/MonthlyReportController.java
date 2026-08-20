@@ -70,9 +70,6 @@ public class MonthlyReportController implements MonthlyReportControllerDocs {
     public ApiResponse<MonthlyAiAnalysisDto> getAiAnalysis(
             @LoginUser Long userId,
             @RequestParam String yearMonth) {
-        MonthlyAiAnalysisDto generated = monthlyAiAnalysisService.generateIfSnapshotMissing(userId, yearMonth);
-        return ApiResponse.ok(generated != null
-                ? generated
-                : monthlyAiAnalysisQueryService.get(userId, yearMonth));
+        return ApiResponse.ok(monthlyAiAnalysisQueryService.get(userId, yearMonth));
     }
 }

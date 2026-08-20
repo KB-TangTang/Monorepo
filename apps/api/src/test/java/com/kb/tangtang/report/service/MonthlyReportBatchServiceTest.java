@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,13 +48,13 @@ class MonthlyReportBatchServiceTest {
         LocalDateTime now = LocalDateTime.of(2026, 8, 1, 0, 15);
         when(batchMapper.findEligibleCandidates(
                 "2026-07", LocalDateTime.of(2026, 8, 1, 0, 0), 3, now.minusMinutes(20)))
-                .thenReturn(List.of(new MonthlyReportBatchCandidate(1L)));
+                .thenReturn(List.of(new MonthlyReportBatchCandidate(1L, true)));
 
         service.generatePreviousMonthReports();
 
         verify(batchMapper).findEligibleCandidates(
                 eq("2026-07"), eq(LocalDateTime.of(2026, 8, 1, 0, 0)), eq(3), eq(now.minusMinutes(20)));
-        verify(snapshotService).savePendingSnapshot(1L, "2026-07");
+        verify(snapshotService).saveSnapshot(1L, "2026-07", true);
         verify(aiAnalysisService).generateUsingPreparedSnapshot(1L, "2026-07");
     }
 
@@ -62,14 +63,27 @@ class MonthlyReportBatchServiceTest {
         LocalDateTime now = LocalDateTime.of(2026, 8, 1, 0, 40);
         when(batchMapper.findEligibleCandidates(
                 "2026-07", LocalDateTime.of(2026, 8, 1, 0, 0), 3, now.minusMinutes(20)))
-                .thenReturn(List.of(new MonthlyReportBatchCandidate(1L), new MonthlyReportBatchCandidate(2L)));
+                .thenReturn(List.of(new MonthlyReportBatchCandidate(1L, true), new MonthlyReportBatchCandidate(2L, true)));
         doThrow(new BusinessException("AI_PROVIDER_UNAVAILABLE", "temporary"))
                 .when(aiAnalysisService).generateUsingPreparedSnapshot(1L, "2026-07");
 
         service.generateReports(YearMonth.of(2026, 7), now);
 
-        verify(snapshotService).savePendingSnapshot(1L, "2026-07");
-        verify(snapshotService).savePendingSnapshot(2L, "2026-07");
+        verify(snapshotService).saveSnapshot(1L, "2026-07", true);
+        verify(snapshotService).saveSnapshot(2L, "2026-07", true);
         verify(aiAnalysisService).generateUsingPreparedSnapshot(2L, "2026-07");
+    }
+
+    @Test
+    void storesNotConsentedSnapshotWithoutCallingAi() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 1, 0, 15);
+        when(batchMapper.findEligibleCandidates(
+                "2026-07", LocalDateTime.of(2026, 8, 1, 0, 0), 3, now.minusMinutes(20)))
+                .thenReturn(List.of(new MonthlyReportBatchCandidate(1L, false)));
+
+        service.generatePreviousMonthReports();
+
+        verify(snapshotService).saveSnapshot(1L, "2026-07", false);
+        verify(aiAnalysisService, never()).generateUsingPreparedSnapshot(1L, "2026-07");
     }
 }

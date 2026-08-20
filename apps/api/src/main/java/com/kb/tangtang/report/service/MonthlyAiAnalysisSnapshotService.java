@@ -17,6 +17,9 @@ import java.math.BigDecimal;
 @Service
 public class MonthlyAiAnalysisSnapshotService {
 
+    private static final String STATUS_NOT_REQUESTED = "NOT_REQUESTED";
+    private static final String STATUS_NOT_CONSENTED = "NOT_CONSENTED";
+
     private final MonthlyReportService monthlyReportService;
     private final MonthlyReportMapper monthlyReportMapper;
     private final ObjectMapper objectMapper;
@@ -30,7 +33,7 @@ public class MonthlyAiAnalysisSnapshotService {
     }
 
     @Transactional
-    public void savePendingSnapshot(long userId, String yearMonth) {
+    public void saveSnapshot(long userId, String yearMonth, boolean aiUsageConsented) {
         MonthlyCategoryReportDto categorySummary = monthlyReportService.getCategories(userId, yearMonth);
         BigDecimal totalAsset = zeroIfNull(monthlyReportMapper.sumActiveTotalAssets(userId));
         BigDecimal totalDebt = zeroIfNull(monthlyReportMapper.sumLoanBalances(userId));
@@ -42,7 +45,8 @@ public class MonthlyAiAnalysisSnapshotService {
                     totalAsset,
                     totalDebt,
                     totalAsset.subtract(totalDebt),
-                    objectMapper.writeValueAsString(categorySummary));
+                    objectMapper.writeValueAsString(categorySummary),
+                    aiUsageConsented ? STATUS_NOT_REQUESTED : STATUS_NOT_CONSENTED);
         } catch (JsonProcessingException ex) {
             throw new BusinessException("AI_ANALYSIS_SNAPSHOT_UNAVAILABLE",
                     "월간 분석 스냅샷을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.",

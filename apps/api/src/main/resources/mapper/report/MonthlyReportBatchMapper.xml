@@ -5,11 +5,18 @@
 
     <select id="findEligibleCandidates"
             resultType="com.kb.tangtang.report.domain.MonthlyReportBatchCandidate">
-        SELECT u.id AS user_id
+        SELECT u.id AS user_id,
+               CASE
+                   WHEN c.status = 1 AND c.withdrawn_at IS NULL THEN TRUE
+                   ELSE FALSE
+               END AS ai_usage_consented
         FROM tbl_user u
         LEFT JOIN tbl_asset_snapshot s
                ON s.user_id = u.id
               AND s.`year_month` = #{yearMonth}
+        LEFT JOIN tbl_user_consent c
+               ON c.user_id = u.id
+              AND c.consent_type = 'AI_USAGE'
         WHERE u.status = 'ACTIVE'
           AND u.created_at &lt; #{targetMonthEnd}
           AND (

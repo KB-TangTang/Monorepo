@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 public class MonthlyAiAnalysisQueryService {
 
     private static final String STATUS_NOT_REQUESTED = "NOT_REQUESTED";
+    private static final String STATUS_NOT_CONSENTED = "NOT_CONSENTED";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
 
@@ -49,7 +50,7 @@ public class MonthlyAiAnalysisQueryService {
         validateReportPeriod(userId, rawYearMonth);
         MonthlyAiAnalysisSnapshot snapshot = monthlyReportMapper.findAiAnalysisSnapshot(userId, rawYearMonth);
         if (snapshot == null) {
-            return emptyResult(rawYearMonth, STATUS_NOT_REQUESTED);
+            return emptyResult(rawYearMonth, STATUS_NOT_CONSENTED);
         }
         if (STATUS_COMPLETED.equals(snapshot.getAiAnalysisStatus())) {
             return resultReader.readCompleted(snapshot, rawYearMonth);

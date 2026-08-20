@@ -110,7 +110,8 @@
             total_debt,
             category_summary_json,
             ai_comment,
-            compare_comment
+            compare_comment,
+            ai_analysis_status
         ) VALUES (
             #{userId},
             #{yearMonth},
@@ -119,7 +120,8 @@
             #{totalDebt},
             CAST(#{categorySummaryJson} AS JSON),
             NULL,
-            NULL
+            NULL,
+            #{aiAnalysisStatus}
         )
         ON DUPLICATE KEY UPDATE
             net_worth = CASE
@@ -137,6 +139,10 @@
             category_summary_json = CASE
                 WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(category_summary_json)
                 ELSE category_summary_json
+            END,
+            ai_analysis_status = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN #{aiAnalysisStatus}
+                ELSE ai_analysis_status
             END
     </insert>
 

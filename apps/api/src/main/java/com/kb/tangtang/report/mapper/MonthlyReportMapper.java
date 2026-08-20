@@ -41,7 +41,8 @@ public interface MonthlyReportMapper {
                                         @Param("totalAsset") BigDecimal totalAsset,
                                         @Param("totalDebt") BigDecimal totalDebt,
                                         @Param("netWorth") BigDecimal netWorth,
-                                        @Param("categorySummaryJson") String categorySummaryJson);
+                                        @Param("categorySummaryJson") String categorySummaryJson,
+                                        @Param("aiAnalysisStatus") String aiAnalysisStatus);
 
     MonthlyAiAnalysisSnapshot findAiAnalysisSnapshot(@Param("userId") long userId,
                                                       @Param("yearMonth") String yearMonth);

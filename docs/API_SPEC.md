@@ -1826,6 +1826,8 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 
 월간 리포트 배치는 매월 1일 **00:15 KST**에 정확히 이전 달만 대상으로 실행한다. `ACTIVE`이면서
 대상 월의 다음 달 1일보다 전에 가입한 사용자만 처리하며, 서버 기동 시 과거 월을 일괄 보정하지 않는다.
+리포트 생성 시점에 `AI_USAGE` 동의가 없으면 스냅샷 상태를 `NOT_CONSENTED`로 고정하고 외부 AI를 호출하지 않는다.
+이후 동의해도 이미 `NOT_CONSENTED`로 저장된 과거 월 리포트에는 AI 분석을 소급 제공하지 않는다.
 같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에는 아래 #154 카테고리 응답 구조를 저장한다.
 스냅샷이 없거나 AI 상태가 `NOT_REQUESTED`·`FAILED`인 경우에만 최신 집계를 저장한다. `COMPLETED` 또는
 `IN_PROGRESS` 행은 `category_summary_json`을 포함한 스냅샷을 갱신하지 않는다.
@@ -1864,7 +1866,7 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 
 ### `POST /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
 
-이 공개 경로는 월초 자동 배치를 기다릴 수 없을 때의 수동 재처리용이다. 월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성하며, 요청 본문은 없고 `yearMonth`는 필수 쿼리 파라미터다. 스냅샷이 없거나 상태가 `NOT_REQUESTED`·`FAILED`이면 `user_id`, `year_month`, `total_asset`, `total_debt`, `net_worth`, `category_summary_json`을 최신 값으로 저장한 뒤 생성·재시도한다. `total_asset`은 활성 연결계좌 잔액을 기준으로 하되 증권계좌는 보유 종목 평가금액을 사용해 중복 집계를 막고, `total_debt`은 대출 잔액 합계, `net_worth`는 그 차이다. `COMPLETED`면 저장된 스냅샷과 성공 결과를 그대로 반환하며, `IN_PROGRESS`면 스냅샷을 바꾸지 않고 중복 생성을 막는다.
+이 공개 경로는 월초 자동 배치가 저장한 `NOT_REQUESTED`·`FAILED` 스냅샷의 수동 재처리용이다. 월간 소비 집계를 바탕으로 AI 소비 피드백과 절약 비유를 생성하며, 요청 본문은 없고 `yearMonth`는 필수 쿼리 파라미터다. 스냅샷이 없거나 `NOT_CONSENTED`면 외부 AI를 호출하지 않고 빈 결과를 반환한다. `COMPLETED`면 저장된 스냅샷과 성공 결과를 그대로 반환하며, `IN_PROGRESS`면 스냅샷을 바꾸지 않고 중복 생성을 막는다.
 
 - 인증: Bearer JWT
 - 요청 본문: 없음
@@ -1873,7 +1875,7 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 - `feedbacks`: 1~3개의 문자열만 반환한다. 각 배열 원소는 제목이나 분류 객체가 아닌 사용자에게 보여 줄 피드백 문장 하나다.
 - `savingsAnalogy`: 절감액이 양수이고 전월 비교가 가능한 경우에만 문자열로 반환한다. AI는 반드시 `이번달 아낀 {절감액}원은 {실물자산} {수량}{실물자산의 단위}` 형식으로 생성한다. 예: `이번달 아낀 128,000원은 카페라떼 26잔`.
 - 첫 리포트이거나 절감액이 0원이면 `savingsAnalogy`는 `null`이다.
-- `status`: 성공 응답은 `COMPLETED`다. 상태와 결과는 `tbl_asset_snapshot`에 함께 저장하지만, 기존 #156의 AI 입력 집계·비식별화·외부 호출 규칙은 변경하지 않는다.
+- `status`: `COMPLETED`면 생성 결과를 반환한다. `NOT_CONSENTED`면 대상 월 리포트 제공 시점에 AI 활용 동의가 없어 외부 AI를 호출하지 않았음을 뜻하며, `feedbacks`는 빈 배열이고 `savingsAnalogy`는 `null`이다. 상태와 결과는 `tbl_asset_snapshot`에 함께 저장하지만, 기존 #156의 AI 입력 집계·비식별화·외부 호출 규칙은 변경하지 않는다.
 
 ```json
 {
@@ -1894,14 +1896,14 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 
 ### `GET /api/reports/monthly/ai-analysis?yearMonth=YYYY-MM`
 
-스냅샷 행이 이미 있으면 저장된 AI 분석 상태와 결과만 조회한다. 다만 월초 배치가 누락돼 해당 사용자·월의 스냅샷 행이 전혀 없으면, 이 조회는 최신 스냅샷을 저장하고 AI 분석을 생성한 뒤 그 결과를 반환한다. 기존 행이 `NOT_REQUESTED`이면 상태만 반환하므로 화면은 이어서 `POST` 생성 경로를 호출한다. `FAILED`·`IN_PROGRESS`·`COMPLETED` 기존 행은 이 조회로 상태를 바꾸지 않는다.
+스냅샷 행이 이미 있으면 저장된 AI 분석 상태와 결과만 조회한다. 스냅샷 행이 없을 때도 이 조회는 스냅샷 저장이나 AI 분석 생성을 시작하지 않고 `NOT_CONSENTED` 빈 결과를 반환한다. 기존 행이 `NOT_REQUESTED`이면 상태만 반환하므로 화면은 이어서 `POST` 생성 경로를 호출한다. `FAILED`·`IN_PROGRESS`·`COMPLETED`·`NOT_CONSENTED` 기존 행은 이 조회로 상태를 바꾸지 않는다.
 
 - 인증: Bearer JWT
 - 요청 본문: 없음
 - `yearMonth`: `YYYY-MM` 형식, 필수
 - `COMPLETED`: `feedbacks`는 저장된 문자열 1~3개, `savingsAnalogy`는 저장된 문자열 또는 `null`
-- `NOT_REQUESTED`, `IN_PROGRESS`, `FAILED`: `feedbacks`는 빈 배열, `savingsAnalogy`는 `null`
-- 스냅샷 행이 없으면 온디맨드 생성 결과(`COMPLETED`) 또는 생성 실패 응답을 반환한다.
+- `NOT_REQUESTED`, `IN_PROGRESS`, `FAILED`, `NOT_CONSENTED`: `feedbacks`는 빈 배열, `savingsAnalogy`는 `null`
+- 스냅샷 행이 없으면 `NOT_CONSENTED` 빈 결과를 반환한다. 이 경로에서는 외부 AI를 호출하지 않는다.
 - `ai_analysis_failure_code`, 제공자·모델·프롬프트 버전·입력 해시·원문 AI 응답은 노출하지 않는다.
 
 ```json

@@ -57,6 +57,7 @@ class MonthlyReportMapperXmlTest {
         assertTrue(xml.contains("CAST(#{categorySummaryJson} AS JSON)"));
         assertTrue(xml.contains("ON DUPLICATE KEY UPDATE"));
         assertTrue(xml.contains("WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED')"));
+        assertTrue(xml.contains("#{aiAnalysisStatus}"));
         assertTrue(xml.contains("CAST(#{feedbacksJson} AS JSON)"));
         assertTrue(xml.contains("WHERE user_id = #{userId}"));
         assertTrue(xml.contains("AND `year_month` = #{yearMonth}"));

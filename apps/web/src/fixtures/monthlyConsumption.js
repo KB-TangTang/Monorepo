@@ -41,7 +41,7 @@ export const REPORTS = {
         monthOverMonthRate: -7,
         honorRank: 116,
         honorPercentile: 11,
-        comment: '첫 판결문보다 소비가 안정됐어요. 식비와 배달 지출을 잘 지켰어요!',
+        aiAnalysisStatus: 'NOT_CONSENTED',
         averageSpent: 1241000,
         monthlyTrend: [
             { month: 3, amount: 1284000 },
@@ -89,7 +89,6 @@ export const REPORTS = {
                 tone: 'soft',
             },
         ],
-        savingsStatement: { amount: 86000, category: '카페', count: 17 },
         fixedExpenseCandidates: [],
         confirmedFixedExpenseCount: 2,
     },
@@ -136,7 +135,6 @@ export const REPORTS = {
             { code: '쇼', name: '쇼핑', amount: 257000, ratio: 20, changeRate: 6, tone: 'muted' },
             { code: '교', name: '교통', amount: 115000, ratio: 9, changeRate: 0, tone: 'soft' },
         ],
-        savingsStatement: { amount: 128000, category: '카페', count: 26 },
         fixedExpenseCandidates: [{ id: 7, merchantName: '정기 구독' }],
     },
     '2026-06': {
@@ -172,11 +170,12 @@ export const REPORTS = {
     },
     '2026-05': {
         period: '2026-05',
+        hasPreviousComparison: true,
         totalSpent: 1417000,
         monthOverMonthRate: 18,
         honorRank: 221,
         honorPercentile: 22,
-        comment: '이번 달 소비는 조금 높았어요. 다음 달에 다시 무죄를 노려봐요.',
+        aiAnalysisStatus: 'NOT_CONSENTED',
         averageSpent: 1299667,
         monthlyTrend: [
             { month: 3, amount: 1284000 },
@@ -204,7 +203,6 @@ export const REPORTS = {
             { code: '쇼', name: '쇼핑', amount: 342000, ratio: 24, changeRate: 19, tone: 'muted' },
             { code: '교', name: '교통', amount: 147000, ratio: 11, changeRate: -2, tone: 'soft' },
         ],
-        savingsStatement: { amount: 143000, category: '카페', count: 18 },
         fixedExpenseCandidates: [{ id: 5, merchantName: '정기 배송' }],
     },
 };
