@@ -89,6 +89,7 @@ class AccountLinkServiceTest {
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
         when(loanMapper.findByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
+        when(mapper.findInactiveKeysByUser(anyLong())).thenReturn(List.of());
         /* 기본은 "제한 없음" — 목서버가 그렇다. 제한하는 경우는 개별 테스트에서 덮어쓴다. */
         when(client.supportedOrganizations()).thenReturn(Set.of());
     }
@@ -579,6 +580,53 @@ class AccountLinkServiceTest {
 
         /* 중복을 그대로 두면 reactivate 가 두 번 matched 를 돌려줘 "2개 연결됨" 이 된다. */
         assertEquals(1, service.link(USER_ID, linkRequest).getLinkedCount());
+    }
+
+    @Test
+    @DisplayName("#379: 체크 해제한 계좌는 연결하지 않고, 이후 동기화가 되살리지 못하게 비활성으로 남긴다")
+    void marksUnselectedAccountsInactiveSoSyncCannotRevive() {
+        /*
+         * FinancialSyncServiceImpl.buildSyncScope() 는 기관 단위로 동기화 범위를 잡는다 — 같은 기관의
+         * 다른 계좌가 연결돼 있으면 이 계좌도 다시 끌려온다. is_active=0 으로 남겨야
+         * upsertConnectedAccount() 의 inactiveKeys 검사가 걸러준다.
+         */
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004")).thenReturn(List.of(
+                account("0004", "입출금통장", "110123456723"),
+                account("0004", "저축예금", "110987654321")));
+        when(mapper.reactivate(any())).thenReturn(0);
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("0004"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of(1L));   // 두 번째 계좌(2L, 저축예금)는 체크 해제
+
+        LinkResultDto result = service.link(USER_ID, linkRequest);
+
+        assertEquals(1, result.getLinkedCount());
+
+        List<ConnectedAccount> inserted = new ArrayList<>();
+        verify(mapper, times(2)).insert(argThat(row -> {
+            inserted.add(row);
+            return true;
+        }));
+        ConnectedAccount excludedRow = inserted.stream()
+                .filter(row -> "저축예금".equals(row.getAccountName()))
+                .findFirst().orElseThrow();
+
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        String excludedHash = policy.hash("0004", "110987654321");
+        assertEquals(excludedHash, excludedRow.getAccountNoEncrypted());
+        verify(mapper).deactivateByHash(USER_ID, excludedHash);
+        /* 선택한 계좌는 비활성화하지 않는다. */
+        verify(mapper, never()).deactivateByHash(eq(USER_ID),
+                eq(policy.hash("0004", "110123456723")));
     }
 
     @Test

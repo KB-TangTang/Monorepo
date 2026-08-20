@@ -502,36 +502,43 @@ public class AccountLinkService {
         Set<Long> ids = new LinkedHashSet<>(requested);
         /* 이번 호출에서 이미 처리한 해시. `existing` 은 루프 밖에서 한 번 읽은 스냅샷이라 여기서 보완한다. */
         Set<String> seen = new HashSet<>(mapper.findActiveHashes(userId));
+        /*
+         * 체크 해제한 계좌를 기억해 둘 자리(#379). 여기서 기록하지 않으면 이 계좌는 DB 에 아무 흔적도
+         * 안 남는데, FinancialSyncServiceImpl.buildSyncScope() 는 **기관 단위**로 동기화 범위를 잡는다 —
+         * 같은 기관의 다른 계좌가 하나라도 연결돼 있으면 그 기관 코드가 스코프에 들어가고, collectBank() 는
+         * 스코프 안의 계좌를 전부(체크 해제한 것까지) 다시 끌어와 저장한다. 그 결과 방금 연결 완료 화면
+         * 직후의 최초 동기화(LinkDoneView)나 30분마다 도는 배치가 체크 해제한 계좌를 조용히 되살려
+         * "필터링이 안 된다"는 증상으로 나타난다.
+         * disconnect() 가 쓰는 것과 같은 is_active=0 자연키를 써서 남기면, upsertConnectedAccount() 의
+         * inactiveKeys 검사가 이미 이 계좌를 걸러준다 — 별도 컬럼 없이 기존 장치에 얹는다.
+         */
+        Set<String> excludedSeen = new HashSet<>(mapper.findInactiveKeysByUser(userId));
         LocalDateTime now = LocalDateTime.now(clock);
         int linked = 0;
 
-        for (Long id : ids) {
-            int index = id.intValue() - 1;
-            if (index < 0 || index >= accounts.size()) {
-                continue;
-            }
+        for (int index = 0; index < accounts.size(); index++) {
+            long id = index + 1L;
             FinancialAccountDto account = accounts.get(index);
             String hash = accountNumbers.hash(account.getOrganization(), account.getAccountNo());
+
+            if (!ids.contains(id)) {
+                /* 사용자가 체크 해제한 계좌. 이미 연결돼 있거나(다른 곳에서 먼저 연결) 이미 기록해 둔
+                   제외 대상이면 손대지 않는다 — 특히 이미 연결된 계좌를 여기서 비활성화하면 안 된다. */
+                if (seen.contains(hash) || !excludedSeen.add(hash)) {
+                    continue;
+                }
+                ConnectedAccount excludedRow = buildRow(userId, progress, account, hash, now);
+                mapper.insert(excludedRow);
+                mapper.deactivateByHash(userId, hash);
+                continue;
+            }
+
             if (!seen.add(hash)) {
                 /* 이미 연결됐거나 이번 요청에 또 실린 계좌는 조용히 건너뛴다. */
                 continue;
             }
 
-            ConnectedAccount row = ConnectedAccount.builder()
-                    .userId(userId)
-                    .codefConnectedId(progress.getConnectionId())
-                    .bankCode(account.getOrganization())
-                    .bankName(bankName(account))
-                    .accountName(account.getAccountName())
-                    .accountNoEncrypted(hash)
-                    .accountNoMasked(accountNumbers.mask(account.getAccountNo()))
-                    .accountType(accountType(account))
-                    .depositTypeCode(account.getDepositTypeCode())
-                    .balance(account.getBalance() == null ? BigDecimal.ZERO : account.getBalance())
-                    .syncStatus(SyncStatus.NORMAL.name())
-                    .lastSyncAt(now)
-                    .expiresAt(now.plusDays(CONSENT_VALID_DAYS))
-                    .build();
+            ConnectedAccount row = buildRow(userId, progress, account, hash, now);
 
             /* 해제했던 계좌면 새 행을 만들지 않고 되살린다 (UNIQUE KEY 충돌 방지). */
             if (mapper.reactivate(row) == 0) {
@@ -544,6 +551,26 @@ public class AccountLinkService {
             throw new BusinessException("EXTERNAL_API_ERROR", "연결된 계좌가 없어요.");
         }
         return LinkResultDto.builder().linkedCount(linked).directAssetsPending(hasDirectAssets).build();
+    }
+
+    /** link() 안에서 선택/제외 두 경로가 똑같이 쓰는 행 조립. 상태(active 여부)는 호출부가 정한다. */
+    private ConnectedAccount buildRow(long userId, LinkProgress progress, FinancialAccountDto account,
+                                      String hash, LocalDateTime now) {
+        return ConnectedAccount.builder()
+                .userId(userId)
+                .codefConnectedId(progress.getConnectionId())
+                .bankCode(account.getOrganization())
+                .bankName(bankName(account))
+                .accountName(account.getAccountName())
+                .accountNoEncrypted(hash)
+                .accountNoMasked(accountNumbers.mask(account.getAccountNo()))
+                .accountType(accountType(account))
+                .depositTypeCode(account.getDepositTypeCode())
+                .balance(account.getBalance() == null ? BigDecimal.ZERO : account.getBalance())
+                .syncStatus(SyncStatus.NORMAL.name())
+                .lastSyncAt(now)
+                .expiresAt(now.plusDays(CONSENT_VALID_DAYS))
+                .build();
     }
 
     /* ── 연결 계좌 관리 ─────────────────────────────────── */
