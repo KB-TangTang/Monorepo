@@ -1037,6 +1037,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | GET | `/api/group-challenges/{groupId}` | Bearer | `ChallengeGroup` |
 | GET | `/api/group-challenges/invite-codes/{inviteCode}` | Bearer | `{ challenge, joinable, reason }` |
 | POST | `/api/group-challenges/invite-codes/{inviteCode}/members` | Bearer | `ChallengeGroup` |
+| DELETE | `/api/group-challenges/{groupId}` | Bearer | `null` |
 
 생성 요청 본문은 `{ groupName, categoryId, limitAmount, evalType, startDate, endDate, memo }` 다.
 **정원(`maxMembers`)은 받지 않는다** — 생성 화면에 입력 UI 가 없어 서버가 6 으로 고정한다.
@@ -1075,6 +1076,26 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - 상태 전이(`RECRUITING` → `ACTIVE`, 모집 미달 시 삭제)와 시작 알림은 이 API 가 하지 않는다 —
   별도 배치(이슈 #152, 아래 참고). **참여 가능 판정은 날짜가 아니라 `status` 하나를 기준으로 한다.**
   그래서 배치가 밀리면 시작일이 지났어도 잠시 참여가 열려 있을 수 있다.
+- **`categoryId` 는 소분류만 받는다** (이슈 #352). 대분류를 주면 `GROUP_CATEGORY_INVALID` 다.
+  `null` 은 「총 소비」라 정상값이다. 대분류를 막는 이유는 `tbl_transaction.category_id` 에 소분류만
+  들어가는데 결과 집계가 `t.category_id = g.category_id` 로 정확히 맞춰 보기 때문이다 — 대분류로 만든
+  그룹은 **매칭 거래가 영원히 0건**이라 오류 하나 없이 「0원」만 뜨고 아무도 기소되지 않는다.
+  화면이 고를 목록은 `GET /api/categories` 의 `parentId != null` 인 것들이다.
+
+### 삭제 (이슈 #352)
+
+`DELETE /api/group-challenges/{groupId}` — **방장만, `RECRUITING` 일 때만.** 성공 응답에 `data` 는 없다.
+
+- **시작한 뒤에는 못 지운다.** 참여자들의 소비 집계·기소·투표가 이미 쌓여 있어 한 사람의 결정으로
+  남의 기록까지 CASCADE 로 지우게 된다. `ACTIVE` 이후 허용 여부는 **팀 논의 대기 중**이다.
+- 자식 행(참여자·결산·기소·투표)은 FK `ON DELETE CASCADE` 가 정리하고 **채팅방(Redis)도 즉시 지운다.**
+  되돌릴 수 없다.
+- **「나가기(멤버 탈퇴)」는 없다.** 목숨·순위가 참여자 수를 전제로 계산돼 중간 이탈을 넣으려면
+  그 계산을 전부 다시 정의해야 한다.
+- 방장을 뺀 **남은 참여자에게** `GROUP_CHALLENGE_DELETED` 알림이 간다 (딥링크 `/group-challenges` —
+  그룹이 사라져 상세로 보내면 404 다). 모집 중이라도 이미 최대 5명이 들어와 있을 수 있다.
+- 삭제는 상태 전이 배치의 미성립 처리와 **같은 절차**를 쓴다(`ChallengeGroupDeleter`).
+  조회 시점엔 `RECRUITING` 이었어도 그 사이 시작 배치가 `ACTIVE` 로 바꿨으면 `GROUP_NOT_DELETABLE` 이다.
 
 ### 초대 코드 미리보기가 200 인 이유
 
@@ -1102,9 +1123,12 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | `GROUP_PERIOD_INVALID` | 400 | 기간 누락 · 종료일이 시작일보다 앞 · 7일 초과 |
 | `GROUP_START_DATE_INVALID` | 400 | 시작일이 과거 |
 | `GROUP_MEMO_TOO_LONG` | 400 | 메모 300자 초과 |
+| `GROUP_CATEGORY_INVALID` | 400 | 없는 카테고리이거나 **대분류** (소분류만 받는다 · #352) |
 | `GROUP_STATUS_INVALID` | 400 | 알 수 없는 `status` 필터 |
 | `GROUP_NOT_FOUND` | 400 | 없는 그룹 |
 | `GROUP_NOT_MEMBER` | 400 | 참여자가 아닌데 상세 조회 |
+| `GROUP_NOT_OWNER` | 400 | 방장이 아닌데 삭제 시도 (#352) |
+| `GROUP_NOT_DELETABLE` | 400 | 이미 시작된 그룹 삭제 시도 (#352) |
 | `GROUP_INVITE_CODE_NOT_FOUND` | 400 | 없는 초대 코드 |
 | `GROUP_INVITE_CODE_EXPIRED` | 400 | 모집 마감 후 참여 시도 |
 | `GROUP_CLOSED` | 400 | 종료된 챌린지에 참여 시도 |

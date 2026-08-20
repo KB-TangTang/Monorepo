@@ -67,13 +67,26 @@ function formatAmount(val) {
 
 function onAmountInput(e) {
     const raw = e.target.value.replace(/[^0-9]/g, '');
-    const num = raw ? Number(raw) : null;
+    /* 0 을 falsy 로 보면 「0」을 치는 순간 칸이 도로 비워져 무지출 챌린지를 만들 수 없다. */
+    const num = raw === '' ? null : Number(raw);
     emit('update:limit-amount', num);
-    e.target.value = num ? num.toLocaleString('ko-KR') : '';
+    e.target.value = num === null ? '' : num.toLocaleString('ko-KR');
 }
 
+/*
+ * **0 원은 「미입력」이 아니라 무지출 챌린지의 정상 입력값이다.** 한 푼이라도 쓰면 재판이 열린다.
+ * 서버도 음수만 막고(ChallengeGroupService.validateCreate), 목록·상세 카드도 0 이면 「무지출」로
+ * 표기한다 — 만들기 화면만 truthy 검사로 0 을 떨어뜨려 그 컨셉을 만들 수 없었다.
+ * 그래서 「비어 있는지」와 「0 인지」를 갈라 둔다.
+ */
+const isEmpty = computed(() => props.limitAmount === null || props.limitAmount === '');
+const isNoSpend = computed(() => !isEmpty.value && Number(props.limitAmount) === 0);
+
 const isValid = computed(() => {
-    return props.startDate && props.endDate && props.limitAmount && props.limitAmount > 0;
+    if (!props.startDate || !props.endDate) {
+        return false;
+    }
+    return !isEmpty.value && Number(props.limitAmount) >= 0;
 });
 </script>
 
@@ -121,12 +134,16 @@ const isValid = computed(() => {
                     type="text"
                     inputmode="numeric"
                     class="amount-field__input"
-                    placeholder="0"
+                    placeholder="금액 입력"
                     :value="formatAmount(limitAmount)"
                     @input="onAmountInput"
                 />
                 <span class="amount-field__unit">원</span>
             </div>
+
+            <p v-if="isNoSpend" class="step-settings__no-spend">
+                0원은 <b>무지출 챌린지</b>예요. 한 푼이라도 쓰면 재판이 열려요.
+            </p>
 
             <div class="step-settings__info-box">
                 <template v-if="evalType === 'DAILY'">
@@ -235,6 +252,18 @@ const isValid = computed(() => {
     font-weight: var(--tt-fw-bold);
     flex: none;
     margin-left: var(--tt-space-2);
+}
+
+/* 0원을 골랐을 때만 뜬다. 금액 칸의 「0」이 미입력으로 오해되지 않게 뜻을 적어 준다. */
+.step-settings__no-spend {
+    margin-top: 9px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--tt-primary);
+}
+
+.step-settings__no-spend b {
+    font-weight: var(--tt-fw-black);
 }
 
 /* ── info box (warm yellow) ──────────────── */

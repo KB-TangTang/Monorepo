@@ -121,6 +121,22 @@ export async function fetchGroupDetail(groupId) {
 }
 
 /**
+ * 그룹 삭제 — **방장만, 모집 중일 때만** (이슈 #352).
+ *
+ * 되돌릴 수 없다. 참여자·채팅방까지 함께 사라지므로 호출 전에 확인 모달을 반드시 거친다.
+ * 나가기(멤버 탈퇴)는 없다 — 목숨·순위·기소가 모두 고정된 인원을 전제로 계산된다.
+ *
+ * 실패는 `err.code` 로 갈린다: `GROUP_NOT_OWNER` · `GROUP_NOT_DELETABLE`(이미 시작됨) ·
+ * `GROUP_NOT_FOUND`. 응답 본문은 없다.
+ */
+export async function deleteGroupChallenge(groupId) {
+    if (isMockMode.value) {
+        return { mocked: true };
+    }
+    return http.delete(`/group-challenges/${groupId}`);
+}
+
+/**
  * 초대 코드 미리보기.
  *
  * 코드 자체가 없으면 reject 된다(`GROUP_INVITE_CODE_NOT_FOUND`).

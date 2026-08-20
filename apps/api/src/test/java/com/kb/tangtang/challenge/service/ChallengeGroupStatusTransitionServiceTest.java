@@ -57,7 +57,10 @@ class ChallengeGroupStatusTransitionServiceTest {
     void setUp() {
         ApplicationEventPublisher publisher =
                 event -> published.add((NotificationRequestedEvent) event);
-        service = new ChallengeGroupStatusTransitionService(groupMapper, memberMapper, chatMessageStore, publisher);
+        // 삭제 절차는 방장 삭제(#352)와 공유한다. 얇은 위임이라 Mock 대신 진짜를 끼워 넣는다 —
+        // 그래야 deleteIfCurrent·deleteRoom 이 실제로 불렸는지 아래 검증이 그대로 성립한다.
+        service = new ChallengeGroupStatusTransitionService(groupMapper, memberMapper,
+                new ChallengeGroupDeleter(groupMapper, chatMessageStore), publisher);
     }
 
     @Test

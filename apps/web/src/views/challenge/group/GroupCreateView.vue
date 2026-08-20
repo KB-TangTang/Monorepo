@@ -18,6 +18,8 @@ const form = reactive({
     evalType: 'DAILY',
     groupName: '',
     categoryId: null,
+    /* 최종 확인 화면의 「대상」 표시 전용. 생성 요청에는 보내지 않는다 (이슈 #352) */
+    categoryName: '총 소비',
     rules: '',
     startDate: '',
     endDate: '',
@@ -125,8 +127,10 @@ function goToInvite(groupId) {
                 v-else-if="currentStep === 1"
                 :key="1"
                 :category-id="form.categoryId"
+                :category-name="form.categoryName"
                 :rules="form.rules"
                 @update:category-id="form.categoryId = $event"
+                @update:category-name="form.categoryName = $event"
                 @update:rules="form.rules = $event"
                 @next="goNext"
             />

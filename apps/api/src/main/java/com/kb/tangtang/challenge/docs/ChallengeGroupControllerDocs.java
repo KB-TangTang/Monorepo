@@ -104,4 +104,18 @@ public interface ChallengeGroupControllerDocs {
                     + "`GROUP_ALREADY_JOINED` · `GROUP_CLOSED` · `GROUP_INVITE_CODE_EXPIRED`(모집 마감) · `GROUP_FULL`")
     ApiResponse<ChallengeGroupDto> join(@ApiIgnore Long userId,
                                         @ApiParam(value = "초대 코드", required = true) String inviteCode);
+
+    @ApiOperation(value = "그룹 챌린지 삭제",
+            notes = "**방장만, 모집 중(`RECRUITING`)일 때만** 지울 수 있다.\n\n"
+                    + "시작한 뒤에는 참여자들의 소비 집계·기소·투표가 쌓여 있어 한 사람의 결정으로 남의 기록까지 "
+                    + "지우게 된다. ACTIVE 이후 허용 여부는 팀 논의 대기 중이다.\n\n"
+                    + "참여자·기소·투표·결산 행은 FK CASCADE 로 함께 사라지고 **채팅방도 즉시 삭제**된다. "
+                    + "되돌릴 수 없다.\n\n"
+                    + "**「나가기(멤버 탈퇴)」는 없다.** 목숨·순위가 참여자 수를 전제로 계산돼 중간 이탈을 "
+                    + "넣으려면 그 계산을 다시 정의해야 한다.\n\n"
+                    + "남은 참여자에게 삭제 알림이 간다(방장 제외). 돌려줄 게 없어 `data` 는 없다.\n\n"
+                    + "오류 코드: `GROUP_NOT_FOUND`(그룹 없음) · `GROUP_NOT_OWNER`(방장 아님) · "
+                    + "`GROUP_NOT_DELETABLE`(이미 시작됨)")
+    ApiResponse<Void> deleteGroup(@ApiIgnore Long userId,
+                                  @ApiParam(value = "그룹 ID", required = true) Long groupId);
 }

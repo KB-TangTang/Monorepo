@@ -1,41 +1,34 @@
 <script setup>
 import BaseInput from '@/components/common/BaseInput.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
+import GroupCategoryPicker from '@/components/challenge/group/GroupCategoryPicker.vue';
 
 defineProps({
     categoryId: { type: Number, default: null },
+    categoryName: { type: String, default: '총 소비' },
     rules: { type: String, required: true },
 });
 
-const emit = defineEmits(['update:category-id', 'update:rules', 'next']);
-
-// API 연동 시 실제 DB 값으로 교체 예정
-const CATEGORIES = [
-    { id: null, label: '총 소비' },
-    { id: 1, label: '식비' },
-    { id: 2, label: '카페' },
-    { id: 3, label: '편의점' },
-    { id: 4, label: '택시' },
-    { id: 5, label: '쇼핑' },
-];
+/*
+ * 선택한 카테고리는 **id 와 이름을 함께** 올려보낸다. 최종 확인 화면이 「대상」 줄에 이름을
+ * 보여줘야 하는데, 거기서 목록을 한 번 더 부르면 같은 이름을 두 곳에서 따로 풀게 된다.
+ * 선택지 목록을 부르고 그리는 일은 GroupCategoryPicker 가 한다 — 이 단계는 그대로 흘려보낸다.
+ */
+const emit = defineEmits(['update:category-id', 'update:category-name', 'update:rules', 'next']);
 </script>
 
 <template>
     <div class="step-scope">
         <div class="step-scope__card step-scope__card--raised">
-            <p class="step-scope__desc">서비스 대금 카테고리 중 하나를 선택할 수 있어요.</p>
-            <div class="step-scope__chips">
-                <button
-                    v-for="cat in CATEGORIES"
-                    :key="cat.id ?? 'all'"
-                    type="button"
-                    class="scope-chip"
-                    :class="{ 'scope-chip--active': categoryId === cat.id }"
-                    @click="emit('update:category-id', cat.id)"
-                >
-                    {{ cat.label }}
-                </button>
-            </div>
+            <p class="step-scope__desc">지켜볼 소비 카테고리 하나를 선택할 수 있어요.</p>
+
+            <GroupCategoryPicker
+                :category-id="categoryId"
+                :category-name="categoryName"
+                @update:category-id="emit('update:category-id', $event)"
+                @update:category-name="emit('update:category-name', $event)"
+            />
+
             <div class="step-scope__info-box">
                 기타 소비를 목록에 넣고 싶다면 카테고리 대신 <b>'총 소비'</b>를 선택해요.
             </div>
@@ -94,32 +87,6 @@ const CATEGORIES = [
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     line-height: 1.5;
-}
-
-/* ── category chips ──────────────────────── */
-.step-scope__chips {
-    margin-top: var(--tt-space-3);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--tt-space-2);
-}
-
-.scope-chip {
-    background: var(--tt-bg-fill);
-    color: var(--tt-text-body);
-    font-size: 13px;
-    font-weight: var(--tt-fw-bold);
-    padding: 8px 15px;
-    border-radius: var(--tt-radius-full);
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.scope-chip--active {
-    background: var(--tt-primary);
-    color: var(--tt-text-inverse);
-    font-weight: var(--tt-fw-black);
 }
 
 /* ── info box (warm yellow) ──────────────── */

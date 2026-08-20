@@ -10,14 +10,27 @@ let scrollLockCount = 0;
 let savedPaddingRight = '';
 let savedOverflow = '';
 
+/*
+ * 여백을 「예상」하지 않고 **잠근 뒤에 실제로 넓어진 만큼**을 잰다.
+ *
+ * 예전에는 `window.innerWidth - clientWidth` 로 스크롤바 너비를 재서 그만큼 padding 을 줬다.
+ * 그런데 base.css 의 `html { scrollbar-gutter: stable }` 이 스크롤바 자리를 항상 예약해 두기
+ * 때문에, overflow:hidden 을 걸어도 그 자리는 돌아오지 않는다. 결국 돌려받지도 않은 15px 을
+ * 보정한 셈이 되어, 가운데 정렬된 .tt-app(max-width 480px)이 시트가 열리는 순간 그만큼
+ * 좁아졌다가 닫으면 되돌아왔다 — 화면이 「뭉개지는」 것처럼 보인 원인이다.
+ *
+ * clientWidth 를 읽으면 강제 리플로우가 일어나므로 잠금 직후 값은 정확하다.
+ * scrollbar-gutter 가 없는 환경에서는 예전과 똑같이 스크롤바 너비가 잡힌다.
+ */
 function lockScroll() {
     if (scrollLockCount === 0) {
-        const scrollbar = window.innerWidth - document.documentElement.clientWidth;
         savedOverflow = document.body.style.overflow;
         savedPaddingRight = document.body.style.paddingRight;
+        const widthBefore = document.documentElement.clientWidth;
         document.body.style.overflow = 'hidden';
-        if (scrollbar > 0) {
-            document.body.style.paddingRight = `${scrollbar}px`;
+        const reclaimed = document.documentElement.clientWidth - widthBefore;
+        if (reclaimed > 0) {
+            document.body.style.paddingRight = `${reclaimed}px`;
         }
     }
     scrollLockCount += 1;
