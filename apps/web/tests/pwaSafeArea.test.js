@@ -100,6 +100,28 @@ test('오버레이가 키보드 높이만큼 떠오른다', () => {
     );
 });
 
+/*
+ * html 에 scrollbar-gutter: stable 이 걸려 있어 overflow:hidden 을 줘도 스크롤바 자리는
+ * 돌아오지 않는다. 잠그기 「전에」 스크롤바 너비를 재서 보정하면 돌려받지도 않은 폭을 깎아,
+ * 가운데 정렬된 .tt-app 이 오버레이가 열릴 때마다 좁아진다.
+ */
+test('스크롤 잠금 보정폭은 잠근 뒤에 잰다 — 오버레이가 열릴 때 화면이 좁아지지 않는다', () => {
+    const overlay = source('src/components/common/useOverlay.js');
+    assert.ok(
+        !/window\.innerWidth - document\.documentElement\.clientWidth/.test(overlay),
+        '잠그기 전 스크롤바 너비로 보정하고 있다 — scrollbar-gutter 와 이중 보정된다',
+    );
+    assert.match(
+        overlay,
+        /const widthBefore = document\.documentElement\.clientWidth;[\s\S]{0,200}?overflow = 'hidden';[\s\S]{0,200}?document\.documentElement\.clientWidth - widthBefore/,
+        '잠금 전후 clientWidth 차이로 보정폭을 재지 않는다',
+    );
+    assert.ok(
+        source('src/assets/base.css').includes('scrollbar-gutter: stable'),
+        'base.css 의 scrollbar-gutter 가 사라졌다 — 위 보정 방식의 전제가 바뀌었으니 함께 검토할 것',
+    );
+});
+
 test('로그인 화면은 dvh 를 써서 주소창 높이만큼 스크롤이 생기지 않는다', () => {
     const login = source('src/views/auth/LoginView.vue');
     assert.ok(login.includes('min-height: 100dvh'), '로그인 화면이 100dvh 를 쓰지 않는다');
