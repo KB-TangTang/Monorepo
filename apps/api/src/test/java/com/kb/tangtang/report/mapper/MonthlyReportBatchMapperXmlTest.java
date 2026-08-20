@@ -34,6 +34,9 @@ class MonthlyReportBatchMapperXmlTest {
         assertTrue(xml.contains("u.status = 'ACTIVE'"));
         assertTrue(xml.contains("u.created_at &lt; #{targetMonthEnd}"));
         assertTrue(xml.contains("s.`year_month` = #{yearMonth}"));
+        assertTrue(xml.contains("LEFT JOIN tbl_user_consent c"));
+        assertTrue(xml.contains("c.consent_type = 'AI_USAGE'"));
+        assertTrue(xml.contains("AS ai_usage_consented"));
         assertTrue(xml.contains("s.ai_analysis_attempt_count &lt; #{maxAutoAttempts}"));
         assertTrue(xml.contains("s.ai_analysis_failed_at &lt;= #{retryNotBefore}"));
         assertTrue(xml.contains("'TOO_MANY_REQUESTS', 'AI_PROVIDER_UNAVAILABLE'"));

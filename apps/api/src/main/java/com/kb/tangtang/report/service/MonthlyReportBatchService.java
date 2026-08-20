@@ -75,7 +75,10 @@ public class MonthlyReportBatchService {
         for (MonthlyReportBatchCandidate candidate : candidates) {
             Long userId = candidate.getUserId();
             try {
-                snapshotService.savePendingSnapshot(userId, yearMonth);
+                snapshotService.saveSnapshot(userId, yearMonth, candidate.isAiUsageConsented());
+                if (!candidate.isAiUsageConsented()) {
+                    continue;
+                }
                 aiAnalysisService.generateUsingPreparedSnapshot(userId, yearMonth);
                 completed++;
             } catch (BusinessException exception) {

@@ -80,7 +80,8 @@ const tangiAlt = computed(() =>
     height: 134px;
     object-fit: contain;
 }
-.savings-analogy-card--saving {
+.savings-analogy-card--saving,
+.savings-analogy-card--decrease {
     background: linear-gradient(
         135deg,
         var(--tt-bg),
@@ -88,11 +89,14 @@ const tangiAlt = computed(() =>
     );
     border-color: color-mix(in srgb, var(--tt-success) 36%, var(--tt-border));
 }
-.savings-analogy-card--saving::after {
+.savings-analogy-card--saving::after,
+.savings-analogy-card--decrease::after {
     background: color-mix(in srgb, var(--tt-success) 18%, transparent);
 }
 .savings-analogy-card--saving .savings-analogy-card__eyebrow,
-.savings-analogy-card--saving .savings-analogy-card__description {
+.savings-analogy-card--saving .savings-analogy-card__description,
+.savings-analogy-card--decrease .savings-analogy-card__eyebrow,
+.savings-analogy-card--decrease .savings-analogy-card__description {
     color: var(--tt-success);
 }
 .savings-analogy-card--increase {

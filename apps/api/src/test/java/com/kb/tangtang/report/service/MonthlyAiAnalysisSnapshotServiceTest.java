@@ -61,12 +61,13 @@ class MonthlyAiAnalysisSnapshotServiceTest {
         MonthlyAiAnalysisSnapshotService service = new MonthlyAiAnalysisSnapshotService(
                 monthlyReportService, mapper, new ObjectMapper());
 
-        service.savePendingSnapshot(USER_ID, "2026-07");
+        service.saveSnapshot(USER_ID, "2026-07", true);
 
         ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
         verify(mapper).upsertPendingAiAnalysisSnapshot(
                 eq(USER_ID), eq("2026-07"), eq(new BigDecimal("16000000")),
-                eq(new BigDecimal("2500000")), eq(new BigDecimal("13500000")), jsonCaptor.capture());
+                eq(new BigDecimal("2500000")), eq(new BigDecimal("13500000")), jsonCaptor.capture(),
+                eq("NOT_REQUESTED"));
         JsonNode saved = new ObjectMapper().readTree(jsonCaptor.getValue());
         assertEquals("2026-07", saved.get("yearMonth").asText());
         assertEquals(3802832, saved.get("totalSpent").asInt());
@@ -74,5 +75,17 @@ class MonthlyAiAnalysisSnapshotServiceTest {
         assertEquals(13, saved.get("categories").get(0).get("categoryId").asInt());
         assertEquals(136374, saved.get("categories").get(0).get("previousMonthAmount").asInt());
         assertTrue(saved.get("categories").get(0).has("changeRate"));
+    }
+
+    @Test
+    void savesNotConsentedStatusWithoutAiCall() {
+        MonthlyAiAnalysisSnapshotService service = new MonthlyAiAnalysisSnapshotService(
+                monthlyReportService, mapper, new ObjectMapper());
+
+        service.saveSnapshot(USER_ID, "2026-07", false);
+
+        verify(mapper).upsertPendingAiAnalysisSnapshot(
+                eq(USER_ID), eq("2026-07"), eq(BigDecimal.ZERO), eq(BigDecimal.ZERO), eq(BigDecimal.ZERO),
+                eq("null"), eq("NOT_CONSENTED"));
     }
 }

@@ -124,6 +124,19 @@ export function resolveMonthlySavingsAnalogyCard(report) {
         };
     }
 
+    if (
+        report.aiAnalysisStatus === 'NOT_CONSENTED' &&
+        report.hasPreviousComparison &&
+        Number(report.monthOverMonthRate) < 0
+    ) {
+        return {
+            variant: 'decrease',
+            eyebrow: '소비 흐름 점검',
+            title: '지난달보다 소비가 줄었어요',
+            description: '이 흐름, 다음달에도 이어가봐요.',
+        };
+    }
+
     return {
         variant: 'start',
         eyebrow: '다음 달을 위한 한 걸음',

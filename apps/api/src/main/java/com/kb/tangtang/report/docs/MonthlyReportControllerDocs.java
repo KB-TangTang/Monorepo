@@ -40,7 +40,8 @@ public interface MonthlyReportControllerDocs {
     ApiResponse<MonthlyReportMonthsDto> getAvailableMonths(@ApiIgnore Long userId);
 
     @ApiOperation(value = "AI 소비 분석 생성",
-            notes = "**외부 LLM 을 호출하므로 응답이 느리고 비용이 든다.** 화면 진입 때마다 부르지 말 것.\n\n"
+            notes = "**AI 활용 동의가 있는 리포트 스냅샷에서만 외부 LLM 을 호출하므로 응답이 느리고 비용이 든다.** 화면 진입 때마다 부르지 말 것.\n\n"
+                    + "미동의로 고정된 리포트 또는 스냅샷이 없는 과거 월은 `NOT_CONSENTED` 빈 결과를 돌려주고 LLM을 호출하지 않는다.\n"
                     + "생성 결과는 DB 에 저장된다. 이미 생성돼 있으면 저장본을 그대로 돌려준다.\n"
                     + "저장된 결과만 필요하면 아래 조회 API 를 쓴다.")
     ApiResponse<MonthlyAiAnalysisDto> generateAiAnalysis(
@@ -48,7 +49,7 @@ public interface MonthlyReportControllerDocs {
             @ApiParam(value = "조회 연월 (YYYY-MM)", required = true, example = "2026-08") String yearMonth);
 
     @ApiOperation(value = "AI 소비 분석 조회",
-            notes = "**저장된 결과만 읽는다. 없으면 생성하지 않는다.** LLM 을 호출하지 않으므로 빠르다.")
+            notes = "**저장된 결과만 읽는다. 없으면 생성하지 않는다.** 미동의·스냅샷 없음은 `NOT_CONSENTED` 빈 결과를 반환한다. LLM 을 호출하지 않으므로 빠르다.")
     ApiResponse<MonthlyAiAnalysisDto> getAiAnalysis(
             @ApiIgnore Long userId,
             @ApiParam(value = "조회 연월 (YYYY-MM)", required = true, example = "2026-08") String yearMonth);

@@ -43,12 +43,12 @@ class MonthlyAiAnalysisQueryServiceTest {
     }
 
     @Test
-    void returnsNotRequestedWithoutCreatingASnapshot() {
+    void returnsNotConsentedWithoutCreatingASnapshot() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07")).thenReturn(null);
 
         MonthlyAiAnalysisDto result = service.get(USER_ID, "2026-07");
 
-        assertEquals("NOT_REQUESTED", result.getStatus());
+        assertEquals("NOT_CONSENTED", result.getStatus());
         assertEquals(List.of(), result.getFeedbacks());
         assertNull(result.getSavingsAnalogy());
         verify(mapper).findAiAnalysisSnapshot(USER_ID, "2026-07");

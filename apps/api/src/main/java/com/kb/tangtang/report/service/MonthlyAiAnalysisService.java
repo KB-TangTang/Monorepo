@@ -35,6 +35,7 @@ public class MonthlyAiAnalysisService {
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_NOT_CONSENTED = "NOT_CONSENTED";
     private static final String PROVIDER_OPENAI = "OPENAI";
     private static final String PROMPT_VERSION = "monthly-report-ai-v10";
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
@@ -95,35 +96,21 @@ public class MonthlyAiAnalysisService {
         return generate(userId, period);
     }
 
-    /**
-     * 월초 배치가 실행되지 않아 스냅샷 행이 전혀 없는 경우에만 온디맨드 생성을 시작한다.
-     * 이미 존재하는 행의 상태 변경과 재시도 결정은 호출자에게 맡긴다.
-     *
-     * @return 새로 생성한 결과. 스냅샷 행이 이미 있으면 {@code null}
-     */
-    public MonthlyAiAnalysisDto generateIfSnapshotMissing(long userId, String rawYearMonth) {
-        ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
-        MonthlyAiAnalysisSnapshot snapshot = monthlyReportMapper.findAiAnalysisSnapshot(
-                userId, period.yearMonth.toString());
-        if (snapshot != null) {
-            return null;
-        }
-        return generate(userId, period);
-    }
-
     private MonthlyAiAnalysisDto generate(long userId, ReportPeriod period) {
         MonthlyAiAnalysisSnapshot initialSnapshot = monthlyReportMapper.findAiAnalysisSnapshot(
                 userId, period.yearMonth.toString());
+        if (initialSnapshot == null || STATUS_NOT_CONSENTED.equals(initialSnapshot.getAiAnalysisStatus())) {
+            return notConsentedResult(period.yearMonth.toString());
+        }
         if (initialSnapshot != null && STATUS_COMPLETED.equals(initialSnapshot.getAiAnalysisStatus())) {
             return resultReader.readCompleted(initialSnapshot, period.yearMonth.toString());
         }
         if (initialSnapshot != null && STATUS_IN_PROGRESS.equals(initialSnapshot.getAiAnalysisStatus())) {
             throwInProgress();
         }
-        if (initialSnapshot == null
-                || STATUS_NOT_REQUESTED.equals(initialSnapshot.getAiAnalysisStatus())
+        if (STATUS_NOT_REQUESTED.equals(initialSnapshot.getAiAnalysisStatus())
                 || STATUS_FAILED.equals(initialSnapshot.getAiAnalysisStatus())) {
-            snapshotService.savePendingSnapshot(userId, period.yearMonth.toString());
+            snapshotService.saveSnapshot(userId, period.yearMonth.toString(), true);
         }
 
         return generateUsingPreparedSnapshot(userId, period);
@@ -136,6 +123,9 @@ public class MonthlyAiAnalysisService {
 
     private MonthlyAiAnalysisDto generateUsingPreparedSnapshot(long userId, ReportPeriod period) {
         MonthlyAiAnalysisSnapshot snapshot = requireSnapshot(userId, period.yearMonth);
+        if (STATUS_NOT_CONSENTED.equals(snapshot.getAiAnalysisStatus())) {
+            return notConsentedResult(period.yearMonth.toString());
+        }
         if (STATUS_COMPLETED.equals(snapshot.getAiAnalysisStatus())) {
             return resultReader.readCompleted(snapshot, period.yearMonth.toString());
         }
@@ -202,6 +192,15 @@ public class MonthlyAiAnalysisService {
     private void throwInProgress() {
         throw new BusinessException("AI_ANALYSIS_IN_PROGRESS",
                 "해당 월의 AI 분석이 생성 중입니다.", HttpStatus.CONFLICT);
+    }
+
+    private MonthlyAiAnalysisDto notConsentedResult(String yearMonth) {
+        return MonthlyAiAnalysisDto.builder()
+                .yearMonth(yearMonth)
+                .status(STATUS_NOT_CONSENTED)
+                .feedbacks(List.of())
+                .savingsAnalogy(null)
+                .build();
     }
 
     private MonthlyAiAnalysisInput buildInput(long userId, ReportPeriod period) {

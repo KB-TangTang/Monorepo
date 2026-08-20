@@ -60,8 +60,8 @@ test('NOT_REQUESTED 분석은 리포트 진입 시 한 번 생성하고 결과�
     assert.equal(report.savingsAnalogy, '이번달 아낀 10,000원은 커피 2잔');
 });
 
-test('완료·진행 중·실패 분석은 리포트 진입 시 자동 생성하지 않는다', async () => {
-    for (const status of ['COMPLETED', 'IN_PROGRESS', 'FAILED']) {
+test('완료·진행 중·실패·미동의 분석은 리포트 진입 시 자동 생성하지 않는다', async () => {
+    for (const status of ['COMPLETED', 'IN_PROGRESS', 'FAILED', 'NOT_CONSENTED']) {
         stub.reset();
         setMonthlyReportResponses({ status, feedbacks: [], savingsAnalogy: null });
 

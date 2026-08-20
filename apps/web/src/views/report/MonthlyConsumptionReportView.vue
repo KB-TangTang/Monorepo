@@ -217,6 +217,9 @@ onMounted(async () => {
                 <ul v-if="report.feedbacks?.length" aria-label="AI 소비 피드백">
                     <li v-for="feedback in report.feedbacks" :key="feedback">{{ feedback }}</li>
                 </ul>
+                <p v-else-if="report.aiAnalysisStatus === 'NOT_CONSENTED'">
+                    AI 소비 분석 활용에 동의하지 않아 탕이가 소비 피드백을 제공할 수 없어요.
+                </p>
                 <p v-else>탕이가 서류를 검토중이에요!</p>
             </section>
 
