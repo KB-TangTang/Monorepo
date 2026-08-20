@@ -55,6 +55,11 @@ export function resolveFixedExpenseState({ loading, error, data }) {
     return 'ready';
 }
 
+/** 실제 알림 딥링크만 서버 데이터를 조회한다. 일반 진입은 기존 목업 출처를 유지한다. */
+export function shouldUseFixedExpenseApiSource(source) {
+    return source === 'api';
+}
+
 export function applyCandidateDecision(source, candidateId, decision) {
     const state = JSON.parse(JSON.stringify(source));
     const candidate = state.candidates.find((item) => item.id === candidateId);

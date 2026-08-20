@@ -108,6 +108,10 @@ public class FixedExpensePaymentReminderBatchService {
     }
 
     private String deepLink(long candidateId) {
-        return "/asset/fixed-expenses/" + candidateId;
+        /*
+         * 실제 결제 예정 알림은 서버에서 만든 후보 ID를 가리킨다. 고정지출 화면의 기본 목업 출처로
+         * 열면 그 ID를 찾지 못하므로, 이 경로로 들어올 때만 API 출처를 명시한다.
+         */
+        return "/asset/fixed-expenses/" + candidateId + "?source=api";
     }
 }

@@ -10,6 +10,7 @@ import {
     formatSavingsWon,
     formatWon,
     resolveFixedExpenseState,
+    shouldUseFixedExpenseApiSource,
 } from '../src/utils/fixedExpense.js';
 
 test('고정지출 표시 값을 포맷한다', () => {
@@ -26,6 +27,12 @@ test('조회 상태의 우선순위를 판정한다', () => {
     assert.equal(resolveFixedExpenseState({ error: '오류', data: {} }), 'error');
     assert.equal(resolveFixedExpenseState({ data: null }), 'empty');
     assert.equal(resolveFixedExpenseState({ data: {} }), 'ready');
+});
+
+test('실제 알림 딥링크만 API 출처를 선택한다', () => {
+    assert.equal(shouldUseFixedExpenseApiSource('api'), true);
+    assert.equal(shouldUseFixedExpenseApiSource(undefined), false);
+    assert.equal(shouldUseFixedExpenseApiSource('mock'), false);
 });
 
 test('목록과 상세가 같은 식별자로 연결된다', () => {
