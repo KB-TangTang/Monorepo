@@ -29,6 +29,11 @@ public class MissionEvaluationService {
 
     @Transactional
     public void evaluate(long assignmentId, LocalDateTime evaluatedAt) {
+        evaluate(assignmentId, evaluatedAt, true);
+    }
+
+    @Transactional
+    public void evaluate(long assignmentId, LocalDateTime evaluatedAt, boolean notifyVerdict) {
         MissionEvaluationTarget target = mapper.lockPendingAssignment(assignmentId);
         if (target == null) {
             return;
@@ -44,9 +49,11 @@ public class MissionEvaluationService {
         mapper.recalculateStreak(target.getUserId(), evaluatedAt);
         missionScoreService.recalculate(
                 target.getUserId(), YearMonth.from(target.getAssignDate()));
-        String verdict = success ? "어제 미션을 성공적으로 마쳤어요" : "결과를 확인해 보세요";
-        events.publishEvent(new NotificationRequestedEvent(target.getUserId(), NotificationType.MISSION_VERDICT,
-                java.util.Map.of("result", verdict), "/mission/personal?date=" + target.getAssignDate()));
+        if (notifyVerdict) {
+            String verdict = success ? "어제 미션을 성공적으로 마쳤어요" : "결과를 확인해 보세요";
+            events.publishEvent(new NotificationRequestedEvent(target.getUserId(), NotificationType.MISSION_VERDICT,
+                    java.util.Map.of("result", verdict), "/mission/personal?date=" + target.getAssignDate()));
+        }
     }
 
     private BigDecimal amount(BigDecimal value) {

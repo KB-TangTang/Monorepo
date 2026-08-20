@@ -72,6 +72,20 @@ class MissionEvaluationServiceTest {
     }
 
     @Test
+    void recoveryEvaluationUpdatesResultAndScoreWithoutVerdictNotification() {
+        MissionEvaluationTarget target = target("12000", "15000");
+        when(mapper.lockPendingAssignment(11L)).thenReturn(target);
+        when(mapper.updateMissionResult(11L, "SUCCESS", EVALUATED_AT)).thenReturn(1);
+
+        service.evaluate(11L, EVALUATED_AT, false);
+
+        verify(mapper).updateMissionResult(11L, "SUCCESS", EVALUATED_AT);
+        verify(mapper).recalculateStreak(7L, EVALUATED_AT);
+        verify(missionScoreService).recalculate(7L, YearMonth.of(2026, 8));
+        verify(events, never()).publishEvent(org.mockito.ArgumentMatchers.any(Object.class));
+    }
+
+    @Test
     void ignoresAssignmentAlreadyEvaluatedByAnotherWorker() {
         when(mapper.lockPendingAssignment(11L)).thenReturn(null);
 
