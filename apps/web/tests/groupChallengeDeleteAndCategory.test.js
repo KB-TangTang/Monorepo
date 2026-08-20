@@ -103,11 +103,56 @@ test('빈 응답이어도 터지지 않는다', () => {
 
 /* ── 만들기 화면 회귀 ────────────────────────────────── */
 
-test('만들기 대상 단계에 하드코딩된 카테고리 목록이 남아 있지 않다', () => {
-    const src = source('src/components/challenge/group/GroupCreateStepScope.vue');
-    assert.ok(src.includes('fetchCategories'), '서버 목록을 부르지 않는다');
-    assert.ok(src.includes('toGroupCategorySections'), '대분류로 묶지 않는다');
-    assert.ok(!/\{ id: [0-9]+, label:/.test(src), '하드코딩된 카테고리 목록이 남아 있다');
+test('카테고리 선택지는 서버 목록에서 만든다 — 하드코딩 목록이 남아 있지 않다', () => {
+    const picker = source('src/components/challenge/group/GroupCategoryPicker.vue');
+    assert.ok(picker.includes('fetchCategories'), '서버 목록을 부르지 않는다');
+    assert.ok(picker.includes('toGroupCategorySections'), '대분류로 묶지 않는다');
+    assert.ok(!/\{ id: [0-9]+, label:/.test(picker), '하드코딩된 카테고리 목록이 남아 있다');
+
+    /* 옛 목록이 대상 단계에 되살아나는 것도 막는다. */
+    const scope = source('src/components/challenge/group/GroupCreateStepScope.vue');
+    assert.ok(!/\{ id: [0-9]+, label:/.test(scope), '대상 단계에 하드코딩된 목록이 되살아났다');
+});
+
+/*
+ * 소분류 15개를 대분류 5섹션으로 단계 안에 늘어놓으면 400px 가까이 되어 규칙 입력칸과
+ * 다음 버튼이 화면 밖으로 밀린다. 트리거 한 줄 + 시트로 접어 둔다.
+ */
+test('카테고리 선택지는 바텀시트 안에 있다 — 단계 화면을 세로로 밀지 않는다', () => {
+    const src = source('src/components/challenge/group/GroupCategoryPicker.vue');
+    assert.ok(src.includes('BaseBottomSheet'), '오버레이를 직접 만들고 있다');
+    assert.ok(src.includes('v-model="isOpen"'), '시트가 열림 상태와 묶여 있지 않다');
+    assert.ok(src.includes('gcp-trigger'), '접힌 상태의 트리거가 없다');
+
+    const scope = source('src/components/challenge/group/GroupCreateStepScope.vue');
+    assert.ok(scope.includes('GroupCategoryPicker'), '대상 단계가 선택기를 쓰지 않는다');
+    assert.ok(!/v-for="section in sections"/.test(scope), '섹션 목록이 단계에 그대로 남아 있다');
+});
+
+/* 고르고 나서 시트가 안 닫히면 무엇이 반영됐는지 보이지 않는다. */
+test('카테고리를 고르면 시트가 닫힌다', () => {
+    const src = source('src/components/challenge/group/GroupCategoryPicker.vue');
+    assert.match(
+        src,
+        /function select\(id, name\) \{[\s\S]*?isOpen\.value = false;[\s\S]*?\}/,
+        'select 가 시트를 닫지 않는다',
+    );
+});
+
+/*
+ * 트리거 이름을 id 로 다시 풀면, 목록을 못 불러온 채 이 단계로 되돌아왔을 때 고른 카테고리가
+ * 「총 소비」로 둔갑한다. 부모가 들고 있는 이름을 그대로 받아 찍는다.
+ */
+test('트리거는 부모가 넘긴 이름을 그대로 보여준다', () => {
+    const picker = source('src/components/challenge/group/GroupCategoryPicker.vue');
+    assert.ok(picker.includes('categoryName: { type: String'), 'categoryName prop 이 없다');
+    assert.ok(picker.includes('{{ categoryName || ALL_LABEL }}'), '트리거가 이름을 찍지 않는다');
+
+    const view = source('src/views/challenge/group/GroupCreateView.vue');
+    assert.ok(
+        view.includes(':category-name="form.categoryName"'),
+        '만들기 화면이 이름을 내려보내지 않는다',
+    );
 });
 
 test('최종 확인 화면은 id→이름 표를 갖지 않는다 — 대상 선택 단계가 넘긴 이름을 쓴다', () => {

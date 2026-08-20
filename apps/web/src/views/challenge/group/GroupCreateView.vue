@@ -127,6 +127,7 @@ function goToInvite(groupId) {
                 v-else-if="currentStep === 1"
                 :key="1"
                 :category-id="form.categoryId"
+                :category-name="form.categoryName"
                 :rules="form.rules"
                 @update:category-id="form.categoryId = $event"
                 @update:category-name="form.categoryName = $event"
