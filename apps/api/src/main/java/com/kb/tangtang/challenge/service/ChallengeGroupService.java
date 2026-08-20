@@ -196,6 +196,11 @@ public class ChallengeGroupService {
      * <p><b>groupId 가 아니라 초대 코드로 그룹을 찾는다.</b> 예전에는 groupId 를 받았는데, 코드 검증이
      * {@link #previewInviteCode} 에만 있고 여기에는 없어 <b>코드 없이 참여할 수 있었다</b>(이슈 #346).
      * 코드를 「그룹을 찾는 유일한 수단」으로 만들면 검증을 빠뜨릴 자리 자체가 없어진다.
+     *
+     * <p><b>판정이 두 번인 것은 의도한 것이다</b>(이슈 #354). 앞의 것은 잠금 없는 빠른 실패고,
+     * 참여를 실제로 허락하는 것은 <b>그룹 행을 잠근 뒤의 두 번째 판정</b>이다. 같은
+     * {@link #joinBlockReason} 을 그대로 다시 부르므로 경합에서 밀린 요청도 기존과
+     * <b>똑같은 오류 코드</b>({@code GROUP_FULL} 등)를 받는다 — 프론트가 모르는 코드가 생기지 않는다.
      */
     @Transactional
     public ChallengeGroupDto join(long userId, String inviteCode) {
@@ -213,7 +218,12 @@ public class ChallengeGroupService {
             throw joinBlocked(reason);
         }
 
+        assertJoinableUnderLock(userId, groupId, today);
+
         groupMemberMapper.insertMember(newMember(group, userId));
+        // ⚠ REPEATABLE READ 스냅샷이 위 findMembers 시점에 고정돼 있어, 잠금 직전에 커밋된 다른
+        //   참여가 이 목록에는 안 보일 수 있다(내가 넣은 행은 보인다). 정원은 잠금이 지켰고
+        //   화면은 새로고침하면 맞는다 — 표시용 조회까지 잠금 읽기로 바꾸면 tbl_user 까지 잠긴다.
         List<GroupMember> joined = findMembers(groupId);
         log.info("그룹 참여 완료 userId={} groupId={} memberCount={}", userId, groupId, joined.size());
 
@@ -458,6 +468,41 @@ public class ChallengeGroupService {
     }
 
     /**
+     * 정원 판정을 원자적으로 다시 한다 (이슈 #354). 통과하면 INSERT 해도 되는 상태다.
+     *
+     * <p><b>「읽고 → 세고 → 넣는」 사이가 비어 있던 것이 이 이슈의 버그다.</b> 같은 초대 링크를
+     * 여러 명이 동시에 열면 둘 다 「자리 있음」을 보고 둘 다 들어갔다. PK {@code (group_id,user_id)}
+     * 는 같은 사람의 중복만 막고, {@code @Transactional} 만으로는 팬텀 삽입을 못 막는다.
+     * 그룹 행을 잠가 이 구간을 한 줄로 세운다.
+     *
+     * <p><b>두 조회 모두 잠금 읽기다.</b> 그룹 행만 잠그고 참여자를 일반 SELECT 로 세면,
+     * REPEATABLE READ 스냅샷이 트랜잭션 첫 읽기 시점에 고정돼 있어 <b>그 사이 커밋된 참여가
+     * 안 보인다</b> — 잠금을 걸고도 예전 숫자를 읽어 방어가 무력해진다.
+     * 근거는 {@code GroupMemberMapper.findByGroupIdForUpdate} 주석에 있다.
+     *
+     * <p>잠금 순서는 <b>{@code tbl_challenge_group} → {@code tbl_group_member}</b> 다.
+     * 그룹 챌린지의 다른 쓰기 경로(상태 전이 · 미성립 삭제 · 방장 삭제)도 그룹 행부터 잡는다.
+     * 반대로 잡는 경로를 새로 만들면 데드락이 된다.
+     */
+    private void assertJoinableUnderLock(long userId, long groupId, LocalDate today) {
+        ChallengeGroup locked = challengeGroupMapper.lockGroupForJoin(groupId);
+        if (locked == null) {
+            /* 잠금을 기다리는 사이 미성립 배치나 방장 삭제가 그룹을 지웠다.
+               초대 코드로 들어온 경로라 「없는 코드」와 같은 오류로 돌려준다 — 프론트가 이미 아는 코드다. */
+            log.warn("그룹 참여 차단 userId={} groupId={} — 잠금 시점에 그룹이 사라졌다", userId, groupId);
+            throw new BusinessException("GROUP_INVITE_CODE_NOT_FOUND", "유효하지 않은 초대 코드입니다.");
+        }
+
+        List<GroupMember> lockedMembers = groupMemberMapper.findByGroupIdForUpdate(groupId);
+        String reason = joinBlockReason(locked, lockedMembers, userId, today);
+        if (reason != null) {
+            log.warn("그룹 참여 차단(잠금 후 재판정) userId={} groupId={} reason={} status={} memberCount={}",
+                    userId, groupId, reason, locked.getStatus(), lockedMembers.size());
+            throw joinBlocked(reason);
+        }
+    }
+
+    /**
      * 참여를 막는 사유. 참여할 수 있으면 NULL.
      *
      * <p>순서에 의미가 있다. 이미 참여 중이면 종료·만료 여부와 무관하게 그룹으로 보내야 하므로
@@ -479,6 +524,9 @@ public class ChallengeGroupService {
      *
      * <p>늦게 들어온 사람도 목숨은 같게 받는다(create 주석 참고). 시작일에 들어오면 그 날
      * 0시부터의 소비가 집계된다 — 참여 화면이 미리 알린다.
+     *
+     * <p><b>참여 시에는 두 번 불린다</b> — 잠금 없는 사전 판정과 {@link #assertJoinableUnderLock}
+     * 의 최종 판정(이슈 #354). 여기에 조건을 더하면 양쪽에 그대로 적용된다.
      */
     private String joinBlockReason(ChallengeGroup group, List<GroupMember> members,
                                    long userId, LocalDate today) {
