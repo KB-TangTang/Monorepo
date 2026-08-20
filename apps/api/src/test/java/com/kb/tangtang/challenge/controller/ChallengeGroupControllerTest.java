@@ -37,6 +37,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -181,6 +182,30 @@ class ChallengeGroupControllerTest {
     }
 
     @Test
+    @DisplayName("삭제는 groupId 를 서비스에 넘기고 data 없이 성공만 알린다 (#352)")
+    void deleteGroup() throws Exception {
+        mockMvc().perform(delete("/api/group-challenges/7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        assertEquals(USER_ID, stubService.lastDeleteUserId);
+        assertEquals(7L, stubService.lastDeleteGroupId);
+    }
+
+    @Test
+    @DisplayName("방장이 아닌 삭제 요청은 400 + GROUP_NOT_OWNER 로 내려간다 (#352)")
+    void deleteBlockedForNonOwner() throws Exception {
+        stubService.deleteFailure =
+                new BusinessException("GROUP_NOT_OWNER", "방장만 챌린지를 삭제할 수 있습니다.");
+
+        mockMvc().perform(delete("/api/group-challenges/7"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("GROUP_NOT_OWNER"));
+    }
+
+    @Test
     @DisplayName("업무 규칙 위반은 400 + code 로 내려간다")
     void joinBlocked() throws Exception {
         stubService.joinFailure = new BusinessException("GROUP_FULL", "정원이 가득 찼습니다.");
@@ -262,9 +287,12 @@ class ChallengeGroupControllerTest {
         private String lastInviteCode;
         private String lastJoinCode;
         private BusinessException joinFailure;
+        private Long lastDeleteUserId;
+        private Long lastDeleteGroupId;
+        private BusinessException deleteFailure;
 
         StubService() {
-            super(null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null);
         }
 
         @Override
@@ -301,6 +329,15 @@ class ChallengeGroupControllerTest {
                 throw joinFailure;
             }
             return findDetail(userId, 7L);
+        }
+
+        @Override
+        public void deleteGroup(long userId, long groupId) {
+            this.lastDeleteUserId = userId;
+            this.lastDeleteGroupId = groupId;
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
         }
     }
 

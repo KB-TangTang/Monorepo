@@ -14,6 +14,10 @@ import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
+import com.kb.tangtang.transaction.domain.Category;
+import com.kb.tangtang.transaction.mapper.CategoryMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,10 +63,18 @@ class ChallengeGroupServiceTest {
      */
     private static final LocalDate START = TODAY.plusDays(1);
 
+    /** 소분류 id. {@code tbl_category} 는 AUTO_INCREMENT 라 실제 값은 환경마다 다르다 — 여기선 관계 구조만 흉내낸다. */
+    private static final long SUB_CATEGORY_ID = 11L;
+
+    /** 대분류 id. 그룹 챌린지가 이 값을 쓰면 거래가 하나도 매칭되지 않아 집계가 영원히 0원이다(이슈 #352). */
+    private static final long PARENT_CATEGORY_ID = 1L;
+
     private FakeGroupMapper groupMapper;
     private FakeMemberMapper memberMapper;
     private IndictmentMapper indictmentMapper;
+    private FakeCategoryMapper categoryMapper;
     private ChatMessageStore chatMessageStore;
+    private final List<NotificationRequestedEvent> published = new ArrayList<>();
     private ChallengeGroupService service;
 
     @BeforeEach
@@ -71,15 +83,19 @@ class ChallengeGroupServiceTest {
         memberMapper = new FakeMemberMapper();
         // 배지 집계는 목록 테스트에서만 쓴다. 기본값(빈 목록)이면 재판이 하나도 없는 평시와 같다.
         indictmentMapper = mock(IndictmentMapper.class);
+        categoryMapper = new FakeCategoryMapper();
         chatMessageStore = mock(ChatMessageStore.class);
+        published.clear();
         service = newService(TODAY);
     }
 
     private ChallengeGroupService newService(LocalDate today) {
         ZoneId zone = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(today.atStartOfDay(zone).toInstant(), zone);
-        return new ChallengeGroupService(groupMapper, memberMapper, indictmentMapper,
-                new InviteCodeGenerator(groupMapper), chatMessageStore, clock);
+        return new ChallengeGroupService(groupMapper, memberMapper, indictmentMapper, categoryMapper,
+                new InviteCodeGenerator(groupMapper), chatMessageStore,
+                new ChallengeGroupDeleter(groupMapper, chatMessageStore),
+                event -> published.add((NotificationRequestedEvent) event), clock);
     }
 
     /* ══ 생성 ══════════════════════════════════════════════ */
@@ -211,6 +227,121 @@ class ChallengeGroupServiceTest {
                 () -> service.create(OWNER_ID, request(r -> r.setEvalType("WEEKLY"))));
 
         assertEquals("GROUP_EVAL_TYPE_INVALID", e.getCode());
+    }
+
+    /* ══ 카테고리 검증 (이슈 #352) ═══════════════════════════ */
+
+    @Test
+    @DisplayName("카테고리 없음(총 소비)은 그대로 통과한다")
+    void allowsNullCategory() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> r.setCategoryId(null)));
+
+        assertNull(groupMapper.findById(created.getGroupId()).getCategoryId());
+    }
+
+    @Test
+    @DisplayName("소분류는 허용한다")
+    void allowsSubCategory() {
+        ChallengeGroupCreatedDto created =
+                service.create(OWNER_ID, request(r -> r.setCategoryId(SUB_CATEGORY_ID)));
+
+        assertEquals(SUB_CATEGORY_ID, groupMapper.findById(created.getGroupId()).getCategoryId());
+    }
+
+    /**
+     * <b>#352 회귀 방지.</b> 생성 화면이 대분류 id 를 하드코딩해 두고 있었다.
+     * tbl_transaction.category_id 에는 소분류만 들어가는데 결과 집계는 정확히 일치하는 값만 세므로,
+     * 대분류로 만든 그룹은 매칭 거래가 영원히 0건 — 오류 하나 없이 「0원」만 뜨고 아무도 기소되지 않는다.
+     */
+    @Test
+    @DisplayName("대분류는 거절한다 — 집계가 조용히 0원이 되는 것을 생성 시점에 막는다")
+    void rejectsParentCategory() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.create(OWNER_ID, request(r -> r.setCategoryId(PARENT_CATEGORY_ID))));
+
+        assertEquals("GROUP_CATEGORY_INVALID", e.getCode());
+    }
+
+    @Test
+    @DisplayName("없는 카테고리 id 는 거절한다")
+    void rejectsUnknownCategory() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.create(OWNER_ID, request(r -> r.setCategoryId(9999L))));
+
+        assertEquals("GROUP_CATEGORY_INVALID", e.getCode());
+    }
+
+    /* ══ 삭제 (이슈 #352) ══════════════════════════════════ */
+
+    @Test
+    @DisplayName("방장이 모집 중인 그룹을 지우면 그룹과 채팅방이 함께 사라진다")
+    void ownerDeletesRecruitingGroup() {
+        long groupId = service.create(OWNER_ID, request(r -> { })).getGroupId();
+
+        service.deleteGroup(OWNER_ID, groupId);
+
+        assertNull(groupMapper.findById(groupId));
+        verify(chatMessageStore).deleteRoom(groupId);
+    }
+
+    @Test
+    @DisplayName("삭제하면 방장을 뺀 남은 참여자에게만 알림이 간다")
+    void deleteNotifiesRemainingMembersOnly() {
+        String code = service.create(OWNER_ID, request(r -> { })).getInviteCode();
+        service.join(GUEST_ID, code);
+        long groupId = groupMapper.findByInviteCode(code).getId();
+        published.clear();
+
+        service.deleteGroup(OWNER_ID, groupId);
+
+        assertEquals(1, published.size(), "방장은 자기가 누른 결과라 알림이 필요 없다");
+        assertEquals(GUEST_ID, published.get(0).userId());
+        assertEquals(NotificationType.GROUP_CHALLENGE_DELETED, published.get(0).type());
+        assertEquals("커피값 줄이기", published.get(0).params().get("groupName"));
+        assertEquals("/group-challenges", published.get(0).deepLinkUrl(),
+                "그룹이 사라졌으므로 상세가 아니라 홈으로 보낸다");
+    }
+
+    @Test
+    @DisplayName("방장이 아니면 삭제할 수 없다")
+    void nonOwnerCannotDelete() {
+        String code = service.create(OWNER_ID, request(r -> { })).getInviteCode();
+        service.join(GUEST_ID, code);
+        long groupId = groupMapper.findByInviteCode(code).getId();
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.deleteGroup(GUEST_ID, groupId));
+
+        assertEquals("GROUP_NOT_OWNER", e.getCode());
+        assertNotNull(groupMapper.findById(groupId), "차단됐으면 그룹이 남아 있어야 한다");
+        assertTrue(published.isEmpty());
+    }
+
+    /**
+     * 참여자들의 소비 집계·기소·투표가 이미 쌓여 있어, 한 사람의 결정으로 남의 기록까지
+     * CASCADE 로 지우게 된다. ACTIVE 이후 허용 여부는 팀 논의 대기 중이다.
+     */
+    @Test
+    @DisplayName("이미 시작된 그룹은 방장도 삭제할 수 없다")
+    void cannotDeleteStartedGroup() {
+        long groupId = service.create(OWNER_ID, request(r -> { })).getGroupId();
+        groupMapper.updateStatusIfCurrent(groupId, "RECRUITING", "ACTIVE");
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.deleteGroup(OWNER_ID, groupId));
+
+        assertEquals("GROUP_NOT_DELETABLE", e.getCode());
+        assertNotNull(groupMapper.findById(groupId));
+        verify(chatMessageStore, never()).deleteRoom(groupId);
+    }
+
+    @Test
+    @DisplayName("없는 그룹을 지우려 하면 GROUP_NOT_FOUND 다")
+    void deleteUnknownGroupThrows() {
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.deleteGroup(OWNER_ID, 9999L));
+
+        assertEquals("GROUP_NOT_FOUND", e.getCode());
     }
 
     /* ══ 초대 코드 미리보기 ═════════════════════════════════ */
@@ -681,6 +812,24 @@ class ChallengeGroupServiceTest {
         request.setEndDate(START.plusDays(2));
         tweak.apply(request);
         return request;
+    }
+
+    /** 대분류 1개 · 그 아래 소분류 1개. 「소분류인가」만 보므로 이 둘이면 분기가 다 덮인다. */
+    private static class FakeCategoryMapper implements CategoryMapper {
+        @Override
+        public List<Category> findAll() {
+            return List.of(category(PARENT_CATEGORY_ID, "식비", null),
+                    category(SUB_CATEGORY_ID, "카페/간식", PARENT_CATEGORY_ID));
+        }
+
+        @Override
+        public Category findById(Long id) {
+            return findAll().stream().filter(c -> c.getId().equals(id)).findFirst().orElse(null);
+        }
+
+        private static Category category(long id, String name, Long parentId) {
+            return Category.builder().id(id).categoryName(name).parentId(parentId).build();
+        }
     }
 
     private static class FakeGroupMapper implements ChallengeGroupMapper {

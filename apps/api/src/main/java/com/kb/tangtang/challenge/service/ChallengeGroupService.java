@@ -16,8 +16,13 @@ import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.notification.domain.NotificationType;
+import com.kb.tangtang.transaction.domain.Category;
+import com.kb.tangtang.transaction.mapper.CategoryMapper;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,34 +68,53 @@ public class ChallengeGroupService {
     /** {@code ck_cg_period} 가 강제하는 최대 기간(시작일 포함 7일). */
     private static final int MAX_PERIOD_DAYS = 7;
 
+    /**
+     * 그룹 챌린지 홈. 삭제 알림의 딥링크다 — 그룹이 사라진 뒤라 상세({@code /group-challenges/:id})로
+     * 보내면 404 가 된다. {@code ChallengeGroupStatusTransitionService} 의 미성립 알림과 같은 이유다.
+     */
+    private static final String GROUP_CHALLENGE_HOME = "/group-challenges";
+
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
     private final IndictmentMapper indictmentMapper;
+    private final CategoryMapper categoryMapper;
     private final InviteCodeGenerator inviteCodeGenerator;
     private final ChatMessageStore chatMessageStore;
+    private final ChallengeGroupDeleter challengeGroupDeleter;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Autowired
     public ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                                  GroupMemberMapper groupMemberMapper,
                                  IndictmentMapper indictmentMapper,
+                                 CategoryMapper categoryMapper,
                                  InviteCodeGenerator inviteCodeGenerator,
-                                 ChatMessageStore chatMessageStore) {
-        this(challengeGroupMapper, groupMemberMapper, indictmentMapper, inviteCodeGenerator,
-                chatMessageStore, Clock.systemDefaultZone());
+                                 ChatMessageStore chatMessageStore,
+                                 ChallengeGroupDeleter challengeGroupDeleter,
+                                 ApplicationEventPublisher events) {
+        this(challengeGroupMapper, groupMemberMapper, indictmentMapper, categoryMapper,
+                inviteCodeGenerator, chatMessageStore, challengeGroupDeleter, events,
+                Clock.systemDefaultZone());
     }
 
     ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
                           GroupMemberMapper groupMemberMapper,
                           IndictmentMapper indictmentMapper,
+                          CategoryMapper categoryMapper,
                           InviteCodeGenerator inviteCodeGenerator,
                           ChatMessageStore chatMessageStore,
+                          ChallengeGroupDeleter challengeGroupDeleter,
+                          ApplicationEventPublisher events,
                           Clock clock) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
         this.indictmentMapper = indictmentMapper;
+        this.categoryMapper = categoryMapper;
         this.inviteCodeGenerator = inviteCodeGenerator;
         this.chatMessageStore = chatMessageStore;
+        this.challengeGroupDeleter = challengeGroupDeleter;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -205,6 +229,63 @@ public class ChallengeGroupService {
         return toDto(userId, group, joined, today);
     }
 
+    /* ══ 삭제 ══════════════════════════════════════════════ */
+
+    /**
+     * 방장이 모집 중인 그룹을 없앤다 (이슈 #352).
+     *
+     * <p><b>모집 중(RECRUITING)만 지울 수 있다.</b> 시작한 뒤에는 참여자들의 소비 집계·기소·투표가
+     * 쌓여 있어, 한 사람의 결정으로 지우면 남의 기록까지 CASCADE 로 함께 사라진다.
+     * ACTIVE 이후를 열어 줄지는 팀 논의 대기 중이다.
+     *
+     * <p>참여자를 <b>지우기 전에</b> 읽는다. {@code tbl_group_member} 는 FK CASCADE 로 함께
+     * 사라지므로 삭제 뒤에 조회하면 알릴 대상이 빈 목록이 된다.
+     *
+     * <p>「나가기(멤버 탈퇴)」는 만들지 않는다. 목숨·순위·기소가 참여자 수를 전제로 계산돼
+     * 중간 이탈을 넣으려면 그 계산을 전부 다시 정의해야 한다.
+     */
+    @Transactional
+    public void deleteGroup(long userId, long groupId) {
+        ChallengeGroup group = findGroupOrThrow(groupId);
+        if (group.getAdminId() == null || group.getAdminId() != userId) {
+            log.warn("그룹 삭제 차단 userId={} groupId={} adminId={} — 방장이 아니다",
+                    userId, groupId, group.getAdminId());
+            throw new BusinessException("GROUP_NOT_OWNER", "방장만 챌린지를 삭제할 수 있습니다.");
+        }
+
+        List<GroupMember> members = findMembers(groupId);
+        if (!challengeGroupDeleter.deleteIfRecruiting(groupId)) {
+            // 조회 시점엔 RECRUITING 이었어도 그 사이 시작 배치가 ACTIVE 로 바꿨을 수 있다.
+            log.warn("그룹 삭제 차단 userId={} groupId={} status={} — 모집 중이 아니다",
+                    userId, groupId, group.getStatus());
+            throw new BusinessException("GROUP_NOT_DELETABLE", "이미 시작된 챌린지는 삭제할 수 없습니다.");
+        }
+
+        publishDeleted(group, members);
+        log.info("그룹 챌린지 삭제 userId={} groupId={} groupName={} memberCount={}",
+                userId, groupId, group.getGroupName(), members.size());
+    }
+
+    /**
+     * 방장을 뺀 남은 참여자에게만 알린다. 방장은 자기가 누른 결과라 알림이 필요 없다.
+     *
+     * <p>모집 중이라도 이미 최대 5명이 들어와 있을 수 있다 — 「혼자였을 테니 알림이 필요 없다」는
+     * 가정은 틀렸다. 딥링크는 그룹 홈이다. 상세로 보내면 방금 지운 그룹이라 404 가 된다.
+     */
+    private void publishDeleted(ChallengeGroup group, List<GroupMember> members) {
+        Map<String, String> params = Map.of("groupName", group.getGroupName());
+        for (GroupMember member : members) {
+            if (member.getUserId() == null || member.getUserId().equals(group.getAdminId())) {
+                continue;
+            }
+            events.publishEvent(new NotificationRequestedEvent(
+                    member.getUserId(),
+                    NotificationType.GROUP_CHALLENGE_DELETED,
+                    params,
+                    GROUP_CHALLENGE_HOME));
+        }
+    }
+
     /* ══ 조회 ══════════════════════════════════════════════ */
 
     /**
@@ -292,7 +373,31 @@ public class ChallengeGroupService {
                     "리워드·벌칙 메모는 " + MAX_MEMO_LENGTH + "자를 넘을 수 없습니다.");
         }
 
+        validateCategory(request.getCategoryId());
+
         return evalType;
+    }
+
+    /**
+     * 카테고리는 <b>소분류만</b> 받는다 (이슈 #352). {@code null} 은 「총 소비」라 그대로 통과시킨다.
+     *
+     * <p>대분류를 막는 이유는 집계가 조용히 0원이 되기 때문이다. {@code tbl_transaction.category_id}
+     * 에는 소분류만 들어가는데 {@code GroupChallengeResultMapper} 는 {@code t.category_id =
+     * g.category_id} 로 정확히 맞춰 본다 — 대분류 id 로 그룹을 만들면 <b>매칭되는 거래가 영원히 0건</b>
+     * 이라 아무도 기소되지 않고, 화면에는 오류 없이 「0원」만 뜬다. 실제로 화면이 대분류 id 를 하드코딩해
+     * 두고 있었다.
+     *
+     * <p>허용 목록을 15개 id 로 박아 두지 않은 이유는 {@code tbl_category.id} 가 AUTO_INCREMENT 라
+     * 환경마다 값이 다를 수 있어서다. 「소분류인가」만 본다 — 화면이 보여줄 목록을 좁히는 일은 화면이 한다.
+     */
+    private void validateCategory(Long categoryId) {
+        if (categoryId == null) {
+            return;
+        }
+        Category category = categoryMapper.findById(categoryId);
+        if (category == null || category.getParentId() == null) {
+            throw new BusinessException("GROUP_CATEGORY_INVALID", "선택할 수 없는 카테고리입니다.");
+        }
     }
 
     private EvalType parseEvalType(String raw) {

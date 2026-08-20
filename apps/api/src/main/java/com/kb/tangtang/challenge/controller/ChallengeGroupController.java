@@ -14,6 +14,7 @@ import com.kb.tangtang.challenge.service.GroupRankingService;
 import com.kb.tangtang.challenge.service.GroupTrialService;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -134,5 +135,18 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
     public ApiResponse<ChallengeGroupDto> join(@LoginUser Long userId,
                                                      @PathVariable String inviteCode) {
         return ApiResponse.ok(challengeGroupService.join(userId, inviteCode));
+    }
+
+    /**
+     * 삭제 (이슈 #352). <b>방장만</b> 지울 수 있고 <b>모집 중</b>일 때만 지워진다.
+     *
+     * <p>돌려줄 게 없어 {@code Void} 다. 삭제 뒤에 그룹 정보를 내려주면 「지웠는데 아직 있다」로
+     * 읽히고, 프론트는 어차피 목록으로 넘어간다.
+     */
+    @DeleteMapping("/{groupId}")
+    public ApiResponse<Void> deleteGroup(@LoginUser Long userId,
+                                         @PathVariable Long groupId) {
+        challengeGroupService.deleteGroup(userId, groupId);
+        return ApiResponse.ok();
     }
 }

@@ -1,6 +1,5 @@
 package com.kb.tangtang.challenge.service;
 
-import com.kb.tangtang.challenge.chat.store.ChatMessageStore;
 import com.kb.tangtang.challenge.domain.ChallengeGroup;
 import com.kb.tangtang.challenge.domain.ChallengeGroupStatus;
 import com.kb.tangtang.challenge.domain.GroupMember;
@@ -59,16 +58,16 @@ public class ChallengeGroupStatusTransitionService {
 
     private final ChallengeGroupMapper challengeGroupMapper;
     private final GroupMemberMapper groupMemberMapper;
-    private final ChatMessageStore chatMessageStore;
+    private final ChallengeGroupDeleter challengeGroupDeleter;
     private final ApplicationEventPublisher events;
 
     public ChallengeGroupStatusTransitionService(ChallengeGroupMapper challengeGroupMapper,
                                                  GroupMemberMapper groupMemberMapper,
-                                                 ChatMessageStore chatMessageStore,
+                                                 ChallengeGroupDeleter challengeGroupDeleter,
                                                  ApplicationEventPublisher events) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
-        this.chatMessageStore = chatMessageStore;
+        this.challengeGroupDeleter = challengeGroupDeleter;
         this.events = events;
     }
 
@@ -112,25 +111,19 @@ public class ChallengeGroupStatusTransitionService {
     /**
      * 모집 미달 그룹을 지운다.
      *
-     * <p>알림을 삭제 뒤에 발행하는 것은 의도적이다. {@code deleteIfCurrent} 가 0 을 내면
-     * 다른 실행이 이미 처리했다는 뜻이라 알림을 보내면 안 된다. 그룹 정보는 파라미터로 이미
-     * 손에 있으므로 행이 사라진 뒤에도 문구를 만들 수 있다.
+     * <p>알림을 삭제 뒤에 발행하는 것은 의도적이다. {@code deleteIfRecruiting} 이 {@code false}
+     * 를 내면 다른 실행이 이미 처리했다는 뜻이라 알림을 보내면 안 된다. 그룹 정보는 파라미터로
+     * 이미 손에 있으므로 행이 사라진 뒤에도 문구를 만들 수 있다.
+     *
+     * <p>삭제 절차 자체는 {@link ChallengeGroupDeleter} 가 갖는다 — 방장의 삭제(이슈 #352)와
+     * 같은 절차라 한 곳에 뒀다.
      */
     private boolean cancel(ChallengeGroup group) {
-        int deleted = challengeGroupMapper.deleteIfCurrent(
-                group.getId(), ChallengeGroupStatus.RECRUITING.name());
-        if (deleted == 0) {
+        if (!challengeGroupDeleter.deleteIfRecruiting(group.getId())) {
             log.info("그룹 챌린지 미성립 처리 건너뜀 groupId={} — 이미 RECRUITING 이 아니다", group.getId());
             return false;
         }
         publishCanceled(group);
-        // TTL 만 믿지 않는다. 종료 = 즉시 차단 + 즉시 삭제(이슈 #174)
-        // Redis 장애로 삭제가 실패해도 그룹 삭제·알림이라는 본업은 이미 끝났다 — 조용히 삼키지 않고 로그만 남긴다.
-        try {
-            chatMessageStore.deleteRoom(group.getId());
-        } catch (Exception e) {
-            log.error("채팅방 삭제 실패 groupId={} — TTL 로 뒤늦게 정리된다", group.getId(), e);
-        }
         log.info("그룹 챌린지 미성립 삭제 groupId={} groupName={}", group.getId(), group.getGroupName());
         return true;
     }

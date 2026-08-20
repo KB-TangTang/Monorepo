@@ -30,6 +30,14 @@ public enum NotificationType {
     GROUP_CHALLENGE_CANCELED("챌린지가 성립되지 않았어요", "{groupName} · 참여자가 모자라 종료됐어요"),
 
     /*
+     * 방장이 모집 중인 그룹을 직접 없앨 때 남은 참여자에게 발행한다 (이슈 #352).
+     *
+     * 바로 위 GROUP_CHALLENGE_CANCELED 를 재활용하지 않았다. 그 문구는 "참여자가 모자라"라고
+     * 단정하는데, 방장 삭제는 5명이 모여 있어도 일어난다 — 사실이 아닌 이유를 알리게 된다.
+     */
+    GROUP_CHALLENGE_DELETED("챌린지가 사라졌어요", "{groupName} · 방장이 챌린지를 삭제했어요"),
+
+    /*
      * 아래 6종은 문구가 아직 정해지지 않았다. {content} 는 "발행자가 넘긴 문구를 그대로 쓴다" 는 뜻이다.
      * 담당자가 기능을 붙일 때 이 자리에 실제 템플릿을 써 넣으면 문구가 이 파일로 모인다.
      *   예) GROUP_JUDGMENT("판결이 확정됐어요", "{trialName} · 내 사건 {verdict}")
