@@ -51,7 +51,7 @@ onMounted(load);
                         :label="account.label"
                         :meta="account.meta"
                         :amount="account.amount"
-                        :tone="account.tone"
+                        :institution-code="account.institutionCode"
                     />
                 </ul>
             </section>

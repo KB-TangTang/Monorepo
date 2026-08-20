@@ -35,7 +35,8 @@ class AssetLoanDetailServiceTest {
                 .id(1L)
                 .userId(USER_ID)
                 .loanNoEncrypted("MOCK-1")
-                .bankName("하나은행")
+                .bankName("하나캐피탈")
+                .bankCode("CP_HANA")
                 .loanType("신용대출")
                 .loanAmount(new BigDecimal("2000000"))
                 .balance(new BigDecimal("1500000"))
@@ -52,7 +53,8 @@ class AssetLoanDetailServiceTest {
 
         assertEquals(new BigDecimal("1500000"), result.getTotal());
         assertEquals(1, result.getLoans().size());
-        assertEquals("하나은행", result.getLoans().get(0).getBankName());
+        assertEquals("하나캐피탈", result.getLoans().get(0).getBankName());
+        assertEquals("CP_HANA", result.getLoans().get(0).getBankCode());
         assertEquals(new BigDecimal("4.50"), result.getLoans().get(0).getInterestRate());
         assertEquals(LocalDate.of(2027, 12, 10), result.getLoans().get(0).getMaturityDate());
     }

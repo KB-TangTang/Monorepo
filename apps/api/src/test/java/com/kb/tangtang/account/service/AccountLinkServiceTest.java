@@ -14,6 +14,7 @@ import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
+import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
@@ -874,10 +875,10 @@ class AccountLinkServiceTest {
     }
 
     @Test
-    @DisplayName("동기화된 대출은 연결 계좌 관리에 읽기 전용 항목으로 보인다")
+    @DisplayName("동기화된 대출은 연결 계좌 관리에 읽기 전용 항목으로 보인다 (bank_code 가 저장돼 있으면 그대로 쓴다)")
     void includesSyncedLoansInConnectedAccounts() {
         when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(Loan.builder()
-                .id(31L).userId(USER_ID).bankName("KB국민은행").loanType("KB 신용대출")
+                .id(31L).userId(USER_ID).bankName("KB캐피탈").bankCode("CP_KB").loanType("KB 신용대출")
                 .loanNoMasked("LN-2025-****-0001")
                 .balance(new BigDecimal("14200000")).build()));
 
@@ -885,9 +886,23 @@ class AccountLinkServiceTest {
 
         assertEquals(1, result.getAccounts().size());
         assertEquals(-31L, result.getAccounts().get(0).getAccountId());
-        assertEquals("0004", result.getAccounts().get(0).getBankCode());
+        assertEquals("CP_KB", result.getAccounts().get(0).getBankCode());
         assertEquals("LN-2025-****-0001", result.getAccounts().get(0).getAccountNoMasked());
         assertFalse(result.getAccounts().get(0).isManageable());
+    }
+
+    @Test
+    @DisplayName("2026-08-20 마이그레이션 이전에 저장돼 bank_code 가 없는 옛 대출 행은 기관명으로 역추적한다")
+    void fallsBackToNameLookupWhenLoanHasNoBankCode() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(Loan.builder()
+                .id(32L).userId(USER_ID).bankName("KB캐피탈").loanType("KB 신용대출")
+                .loanNoMasked("LN-2025-****-0002")
+                .balance(new BigDecimal("5000000")).build()));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(1, result.getAccounts().size());
+        assertEquals("CP_KB", result.getAccounts().get(0).getBankCode());
     }
 
     private FinancialAccountDto balanced(String organization, String no, String balance) {

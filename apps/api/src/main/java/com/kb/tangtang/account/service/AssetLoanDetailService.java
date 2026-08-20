@@ -34,6 +34,7 @@ public class AssetLoanDetailService {
                 .map(loan -> AssetLoanItemDto.builder()
                         .loanId(loan.getId())
                         .bankName(loan.getBankName())
+                        .bankCode(loan.getBankCode())
                         .loanType(loan.getLoanType())
                         .loanAmount(loan.getLoanAmount())
                         .balance(loan.getBalance())

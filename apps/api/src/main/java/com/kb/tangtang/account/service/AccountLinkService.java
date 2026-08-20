@@ -627,8 +627,14 @@ public class AccountLinkService {
         return account.getBankCode() + "|" + account.getAccountNoMasked();
     }
 
+    /**
+     * bank_code 는 2026-08-20 마이그레이션 이후 동기화분부터 채워진다 — 그 이전에 저장된 대출 행은
+     * null 일 수 있어, 그럴 때만 기관명으로 역추적한다(catalog.codeOfName). 정상 경로는 저장된
+     * 코드를 그대로 쓰는 쪽이 이름 문자열이 카탈로그와 한 글자라도 다르면 조용히 깨지는
+     * codeOfName() 보다 안전하다.
+     */
     private ConnectedAccountDto loanAsConnectedAccount(Loan loan) {
-        String bankCode = catalog.codeOfName(loan.getBankName());
+        String bankCode = loan.getBankCode() != null ? loan.getBankCode() : catalog.codeOfName(loan.getBankName());
         return ConnectedAccountDto.builder()
                 .accountId(-loan.getId())
                 .bankCode(bankCode)

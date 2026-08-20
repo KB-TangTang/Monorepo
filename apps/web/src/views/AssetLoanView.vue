@@ -49,7 +49,7 @@ onMounted(load);
                         :label="loan.label"
                         :meta="loan.meta"
                         :amount="-loan.amount"
-                        :tone="loan.tone"
+                        :institution-code="loan.institutionCode"
                     />
                 </ul>
             </section>

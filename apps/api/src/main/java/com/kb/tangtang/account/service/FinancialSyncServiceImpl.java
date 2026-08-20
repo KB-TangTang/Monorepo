@@ -327,11 +327,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
          * 빠진다(#334 리뷰 지적 — 대출은 첫 동기화만 되고 이후 배치에서 사라짐). 각자의 테이블에서
          * 직접 채워 "한 번이라도 연동됐던 기관"을 스코프가 기억하게 한다.
          *
-         * 대출은 기관코드 컬럼이 없다(tbl_loan.bank_name 만 있다) — 이름으로만 매칭한다.
-         * SECURITIES 가 이미 이 방식이다(collectSecurities 의 includesName 참고. 그쪽은
-         * tbl_connected_account.bank_name 을 통해 자동으로 들어온다).
+         * 대출은 2026-08-20 이전엔 기관코드 컬럼이 없어 이름으로만 매칭했다(tbl_loan.bank_code
+         * 추가로 지금은 코드도 쓸 수 있다). bank_code 가 비어 있는 옛 행(마이그레이션 이전 동기화분)
+         * 도 있을 수 있어 이름 매칭은 계속 남겨 둔다 — collectLoan() 이 코드·이름 둘 중 하나만
+         * 맞아도 포함시키는 이유다.
          */
         for (Loan loan : loanMapper.findByUser(userId)) {
+            if (loan.getBankCode() != null) {
+                institutionCodes.add(loan.getBankCode());
+            }
             if (loan.getBankName() != null) {
                 institutionNames.add(loan.getBankName());
             }
@@ -754,6 +758,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
                     .loanNoEncrypted("MOCK-LOAN-" + loan.getLoanId())
                     .loanNoMasked(loan.getLoanNoMasked())
                     .bankName(loan.getInstitutionName())
+                    .bankCode(loan.getInstitutionCode())
                     .loanType(loan.getProductName())
                     .loanAmount(loan.getPrincipal())
                     .balance(loan.getBalance())
