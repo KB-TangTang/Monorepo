@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia, setActivePinia } from 'pinia';
-import { isBackendUnreachable } from '../src/utils/auth.js';
+import { isBackendUnreachable, toSummonsCaseNumber } from '../src/utils/auth.js';
 import { useAuthStore } from '../src/stores/auth.js';
 
 test('네트워크 오류(status 0)는 백엔드 미도달로 본다', () => {
@@ -142,4 +142,14 @@ test('applyOnboardingFlags 는 철회 응답처럼 일부만 오는 값도 안�
     auth.applyOnboardingFlags(undefined);
     assert.equal(auth.needsConsent, true);
     assert.equal(auth.needsFinancialConsent, true);
+});
+
+/*
+ * 로그인 화면(출석요구서) 조판값. 사건번호는 앱의 기존 조판(2026-재판-0619)과 같은 꼴이어야 한다 —
+ * 로그인 화면만 다른 모양을 쓰면 로그인 직후 화면과 어휘가 어긋난다.
+ */
+test('사건번호는 연도-소환-월일 꼴이고 월·일을 두 자리로 채운다', () => {
+    assert.equal(toSummonsCaseNumber(new Date(2026, 7, 20)), '2026-소환-0820');
+    assert.equal(toSummonsCaseNumber(new Date(2026, 0, 3)), '2026-소환-0103');
+    assert.equal(toSummonsCaseNumber(new Date(2026, 11, 31)), '2026-소환-1231');
 });

@@ -25,3 +25,26 @@ export function isBackendUnreachable(error) {
     }
     return status === 0 || status >= 500;
 }
+
+/*
+ * 로그인 화면의 사건번호 조판. 화면에서 직접 만들지 않고 여기 두는 이유는
+ * 월·일 0 채움을 빠뜨리면 `2026-소환-83` 같은 값이 그대로 나가기 때문이다 — 테스트로 막는다.
+ */
+
+/** 2자리 0 채움. `String.padStart` 를 매번 쓰면 조판 코드가 길어진다 */
+function pad2(value) {
+    return String(value).padStart(2, '0');
+}
+
+/**
+ * 로그인 화면에 찍는 사건번호.
+ *
+ * 앱의 기존 사건번호 조판(`2026-재판-0619` · `2026-고정-0729`)과 같은 꼴을 쓴다.
+ * 여기만 다른 모양을 쓰면 로그인 후 화면과 어휘가 어긋난다.
+ *
+ * @param {Date} date 기준 날짜
+ * @returns {string} 예: `2026-소환-0820`
+ */
+export function toSummonsCaseNumber(date) {
+    return `${date.getFullYear()}-소환-${pad2(date.getMonth() + 1)}${pad2(date.getDate())}`;
+}
