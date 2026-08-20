@@ -356,9 +356,14 @@ async function handleDelete() {
                 />
 
                 <!-- 목숨 바 (일일결산) / 기간 카드 (기간결산) -->
+                <!--
+                  ?? 를 쓴다. 목숨 0은 「탈락」이라는 유효한 값이라 || 로 두면
+                  전부 잃은 사람에게 만땅이 그려진다. 폴백은 비참여자 응답의
+                  livesCount === null 전용이다 (서버는 참여자면 항상 정수를 내린다).
+                -->
                 <GroupDetailLivesBar
                     v-if="isDaily"
-                    :lives-count="ch.livesCount || ch.maxLives"
+                    :lives-count="ch.livesCount ?? ch.maxLives"
                     :max-lives="ch.maxLives"
                     :mode="isRecruiting ? 'upcoming' : 'active'"
                     :size="isRecruiting ? 21 : 19"
