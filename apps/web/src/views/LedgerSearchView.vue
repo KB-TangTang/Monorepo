@@ -107,14 +107,17 @@ const filteredResults = computed(() => {
     return [...list].sort((a, b) => b.date.localeCompare(a.date));
 });
 
-/* TRANSFER(계좌간 이체)는 지출도 입금도 아니라 합계에서 뺀다 — 백엔드 summary.totalSpent/
+/* "전체" 탭에서만 TRANSFER(계좌간 이체)를 합계에서 뺀다 — 백엔드 summary.totalSpent/
  * totalDeposit과 같은 규칙(TransactionQueryService.resolveSignedAmount 주석 참고). 이걸 빼지
- * 않으면 "전체" 탭 합계가 "지출" 탭 합계 + "입금" 탭 합계와 안 맞아 보인다(이체만큼 차이 남). */
-const resultsTotal = computed(() =>
-    filteredResults.value
-        .filter((tx) => tx.classification !== 'TRANSFER')
-        .reduce((sum, tx) => sum + tx.amount, 0),
-);
+ * 않으면 "전체" 탭 합계가 "지출" 탭 합계 + "입금" 탭 합계와 안 맞아 보인다(이체만큼 차이 남).
+ * "입금" 탭은 TRANSFER 로 분류된 유입(적금 납입 등)도 목록에 포함하므로(filterTransactionsByTab
+ * 참고), 여기서 또 빼면 화면에 보이는 줄과 합계가 어긋난다 — "전체" 탭일 때만 뺀다. */
+const resultsTotal = computed(() => {
+    const list = directionTab.value === 'ALL'
+        ? filteredResults.value.filter((tx) => tx.classification !== 'TRANSFER')
+        : filteredResults.value;
+    return list.reduce((sum, tx) => sum + tx.amount, 0);
+});
 
 function resetAmountRange() {
     amountMin.value = amountBounds.value.min;
