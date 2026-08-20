@@ -66,6 +66,13 @@ openai.read-timeout-millis=15000
 #mission.assignment.recovery-cron=0 */5 * * * *
 #mission.assignment.zone=Asia/Seoul
 
+# AI 명예 타이틀 생성은 실제 OpenAI 비용이 발생한다. 공통 기본값(매월 1일 00:40)과
+# 인증서 알림 기본값(매월 1일 00:50)을 사용하고, 로컬 검증 중에만 필요한 값을 덮어쓴다.
+# 매분 실행 예시는 실 API 키를 넣은 환경에서 사용하지 않는다.
+#mission.certificate.title.batch.cron=0 40 0 1 * *
+#mission.certificate.title.batch.recovery-cron=0 10 1 1 * *
+#mission.notification.certificate.cron=0 50 0 1 * *
+
 # ── 그룹 챌린지 상태 전이 배치 시간(선택) ─────────────────
 # 공통 기본값은 매일 Asia/Seoul 00:01이다. 시연·테스트로 자정을 기다릴 수 없을 때만
 # 주석을 해제한다. 예시는 매분 0초에 실행한다.

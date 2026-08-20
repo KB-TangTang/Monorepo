@@ -953,7 +953,9 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - 프론트에서 이 목록을 기준으로 월 선택 버튼과 연도 이동을 활성화한다.
 - 인증서는 서울 시간 기준 전월 이전만 발급할 수 있다. 당월·미래 월 요청은 `CERTIFICATE_NOT_FINALIZED` 오류를 반환한다.
 - 인증서 응답은 `{ yearMonth, totalUsers, myRanking, streakDays, bestStreakDays, completedMissionCount, successMissionCount }` 형식이다.
-- AI 명예 타이틀은 매월 1일, 전월 마지막 미션 판정과 당월 미션 배정 후 생성해 저장한다. 조회 API는 `{ yearMonth, titles, source }` 형식이며 AI 생성 전·실패 시 `source: "FALLBACK"` 타이틀을 반환한다.
+- AI 명예 타이틀은 매월 1일 00:40 KST에 전월 마지막 미션 판정과 당월 미션 배정 후 생성해 저장한다.
+  인증서 발급 알림은 타이틀 생성 이후인 00:50 KST에 발송한다. 조회 API는
+  `{ yearMonth, titles, source }` 형식이며 AI 생성 전·실패 시 `source: "FALLBACK"` 타이틀을 반환한다.
 
 ## 메인 챌린지 카테고리 분석 (이슈 #119)
 
