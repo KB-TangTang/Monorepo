@@ -215,6 +215,27 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("증권 연결 계좌에는 현금과 보유주식 평가액을 합친 금액을 저장한다")
+    void storesSecuritiesCashAndMarketValueTogether() {
+        when(client.getStockAsset("1")).thenReturn(
+                StockAssetSyncDto.builder().accountId(301L).institutionCode("0218")
+                        .institutionName("KB증권").accountName("KB 증권 투자계좌")
+                        .accountNoMasked("301-***-INV2002")
+                        .currency("KRW").cashBalance(BigDecimal.ZERO)
+                        .totalMarketValue(new BigDecimal("1303600")).build());
+        when(client.getSecuritiesTransactions(eq("1"), eq(301L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                "SECURITIES".equals(account.getAccountType())
+                        && "0218".equals(account.getBankCode())
+                        && accountNumbers.hash("0218", "301-***-INV2002")
+                        .equals(account.getAccountNoEncrypted())
+                        && new BigDecimal("1303600").compareTo(account.getBalance()) == 0));
+    }
+
+    @Test
     @DisplayName("한 소스라도 실패하면 DB 를 건드리지 않고 실패 이력만 남긴다")
     void oneSourceFailsAbortsWholeSync() {
         when(client.getCards("1")).thenThrow(
@@ -484,6 +505,36 @@ class FinancialSyncServiceImplTest {
                 "DEPOSIT".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
         verify(transactionMapper).insert(argThat(t ->
                 "SECURITIES".equals(t.getSourceType()) && "TRANSFER".equals(t.getClassification())));
+    }
+
+    @Test
+    @DisplayName("적금 동기화는 계좌 선택 저장과 같은 마스킹 번호 해시를 쓴다")
+    void depositSyncUsesSameAccountKeyAsLinkSelection() {
+        when(client.getDeposits("1")).thenReturn(List.of(
+                DepositSyncDto.builder().depositAccountId(201L).institutionCode("0004")
+                        .institutionName("KB국민은행").productName("KB 매월 챌린지 적금")
+                        .accountNoMasked("110-***-SAVING2").balance(new BigDecimal("1500000")).build()));
+        when(client.getDepositTransactions(eq("1"), eq(201L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(connectedAccountMapper).insert(argThat(account ->
+                accountNumbers.hash("0004", "110-***-SAVING2").equals(account.getAccountNoEncrypted())));
+    }
+
+    @Test
+    @DisplayName("대출 동기화는 목서버의 마스킹 대출번호를 보존한다")
+    void loanSyncPreservesMaskedLoanNumber() {
+        when(client.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(301L).institutionName("KB국민은행")
+                        .productName("KB 신용대출").loanNoMasked("LN-2025-****-0001")
+                        .principal(new BigDecimal("15000000")).balance(new BigDecimal("14200000")).build()));
+        when(client.getLoanTransactions(eq("1"), eq(301L))).thenReturn(List.of());
+
+        service.sync(1L);
+
+        verify(loanMapper).insert(argThat(loan ->
+                "LN-2025-****-0001".equals(loan.getLoanNoMasked())));
     }
 
     @Test

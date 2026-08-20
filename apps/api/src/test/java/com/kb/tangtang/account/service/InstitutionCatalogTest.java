@@ -113,6 +113,13 @@ class InstitutionCatalogTest {
     }
 
     @Test
+    @DisplayName("카드 코드는 자동 연동 대상 여부를 판별한다")
+    void identifiesCardCodes() {
+        assertTrue(catalog.isCardCode("0381"));
+        assertFalse(catalog.isCardCode("0004"));
+    }
+
+    @Test
     @DisplayName("모르는 코드는 이름 대신 코드 자체를 돌려준다")
     void fallsBackToCodeWhenUnknown() {
         assertEquals("9999", catalog.nameOf("9999"));

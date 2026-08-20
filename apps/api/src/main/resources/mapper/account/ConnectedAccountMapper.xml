@@ -60,20 +60,20 @@
     -->
     <update id="reactivate" parameterType="com.kb.tangtang.account.domain.ConnectedAccount">
         UPDATE tbl_connected_account
-        SET codef_connected_id = #{codefConnectedId},
-            bank_code          = #{bankCode},
-            bank_name          = #{bankName},
-            account_name       = #{accountName},
-            account_no_masked  = #{accountNoMasked},
-            account_type       = #{accountType},
-            deposit_type_code  = #{depositTypeCode},
-            provider           = #{provider},
+        SET codef_connected_id = COALESCE(#{codefConnectedId}, codef_connected_id),
+            bank_code          = COALESCE(#{bankCode}, bank_code),
+            bank_name          = COALESCE(#{bankName}, bank_name),
+            account_name       = COALESCE(#{accountName}, account_name),
+            account_no_masked  = COALESCE(#{accountNoMasked}, account_no_masked),
+            account_type       = COALESCE(#{accountType}, account_type),
+            deposit_type_code  = COALESCE(#{depositTypeCode}, deposit_type_code),
+            provider           = COALESCE(#{provider}, provider),
             balance            = #{balance},
             sync_status        = #{syncStatus},
             last_sync_at       = #{lastSyncAt},
             sync_fail_reason   = NULL,
             is_active          = 1,
-            expires_at         = #{expiresAt}
+            expires_at         = COALESCE(#{expiresAt}, expires_at)
         WHERE user_id = #{userId}
           AND account_no_encrypted = #{accountNoEncrypted}
     </update>

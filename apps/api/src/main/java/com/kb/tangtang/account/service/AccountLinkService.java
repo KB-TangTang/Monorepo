@@ -8,15 +8,18 @@ import com.kb.tangtang.account.client.dto.FinancialAccountDto;
 import com.kb.tangtang.account.client.dto.IdentityDto;
 import com.kb.tangtang.account.client.sync.FinancialSyncClient;
 import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
+import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
+import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.domain.ProgressStatus;
 import com.kb.tangtang.account.domain.SyncStatus;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
+import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.user.domain.ConsentScope;
 import com.kb.tangtang.user.service.ConsentService;
@@ -60,15 +63,16 @@ public class AccountLinkService {
 
     private final FinancialDataClient client;
     private final ConnectedAccountMapper mapper;
+    private final LoanMapper loanMapper;
     private final LinkProgressStore progressStore;
     private final InstitutionCatalog catalog;
     private final AccountNumberPolicy accountNumbers;
     /**
-     * 대출·페이머니 미리보기 전용(#334) — FinancialSyncServiceImpl 의 배치 동기화와 같은 클라이언트다.
-     * client(FinancialDataClient)는 fetchAccounts() 가 은행 엔드포인트만 알아 대출·페이머니를 아예
+     * 대출·페이머니·카드 미리보기 전용(#334) — FinancialSyncServiceImpl 의 배치 동기화와 같은 클라이언트다.
+     * client(FinancialDataClient)는 fetchAccounts() 가 은행 엔드포인트만 알아 대출·페이머니·카드를 아예
      * 못 본다. 계좌 선택 화면에 "이것도 연동됩니다"를 보여주려고 여기서만 직접 부른다 — 실제 연결
      * 저장은 이 미리보기가 아니라 최초 동기화(FinancialSyncService.sync(userId, extraCodes))가 한다.
-     * 실 CODEF 모드에서는 대출·페이머니 기관코드가 애초에 목록에 없어(onlySupported()) 이 경로를
+     * 실 CODEF 모드에서는 대출·페이머니·카드 기관코드가 애초에 목록에 없어(onlySupported()) 이 경로를
      * 타지 않는다.
      */
     private final FinancialSyncClient syncClient;
@@ -98,6 +102,7 @@ public class AccountLinkService {
     @Autowired
     public AccountLinkService(FinancialDataClient client,
                               ConnectedAccountMapper mapper,
+                              LoanMapper loanMapper,
                               LinkProgressStore progressStore,
                               InstitutionCatalog catalog,
                               AccountNumberPolicy accountNumbers,
@@ -106,13 +111,14 @@ public class AccountLinkService {
                               ApplicationEventPublisher events,
                               ConsentService consentService,
                               @Value("${financial.sync.batch.fixed-delay-ms}") long batchFixedDelayMs) {
-        this(client, mapper, progressStore, catalog, accountNumbers, syncClient, scenarioKeyProvider,
+        this(client, mapper, loanMapper, progressStore, catalog, accountNumbers, syncClient, scenarioKeyProvider,
                 events, consentService, batchFixedDelayMs, Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
     AccountLinkService(FinancialDataClient client,
                        ConnectedAccountMapper mapper,
+                       LoanMapper loanMapper,
                        LinkProgressStore progressStore,
                        InstitutionCatalog catalog,
                        AccountNumberPolicy accountNumbers,
@@ -124,6 +130,7 @@ public class AccountLinkService {
                        Clock clock) {
         this.client = client;
         this.mapper = mapper;
+        this.loanMapper = loanMapper;
         this.progressStore = progressStore;
         this.catalog = catalog;
         this.accountNumbers = accountNumbers;
@@ -146,7 +153,7 @@ public class AccountLinkService {
         /* 공급자가 다루지 못하는 기관은 아예 내려보내지 않는다 — 인증 수단과 같은 원칙이다. */
         Set<String> supported = client.supportedOrganizations();
         /*
-         * 대출·페이머니도 같은 필터를 탄다. 실 CODEF 모드에서는 supportedOrganizations() 가
+         * 대출·페이머니·카드도 같은 필터를 탄다. 실 CODEF 모드에서는 supportedOrganizations() 가
          * 은행 20곳만 돌려주므로 두 업권이 자동으로 빈 배열이 된다 — 의도한 동작이다.
          * 목 모드(제한 없음)에서만 카탈로그 전체가 그대로 내려간다.
          */
@@ -379,7 +386,7 @@ public class AccountLinkService {
     }
 
     /**
-     * 대출·페이머니 미리보기 그룹(#334).
+     * 대출·페이머니·카드 미리보기 그룹(#334).
      *
      * fetchAccounts() 가 다루지 못해 위 루프의 progress.getAccounts() 에는 절대 안 나오지만,
      * 사용자가 기관 선택에서 골랐다면(progress 의 대상 목록) 계좌 선택 화면에도 "연동됩니다"를
@@ -388,50 +395,63 @@ public class AccountLinkService {
      * 실제 저장은 계좌 연동 완료 직후 최초 동기화가 한다(LinkDoneView → syncAssets).
      */
     private List<LinkableGroupDto> directAssetPreviewGroups(long userId, LinkProgress progress) {
-        List<String> targetCodes = directAssetTargetCodes(progress);
-        if (targetCodes.isEmpty()) {
+        List<String> selectedCodes = new ArrayList<>(progress.getStatuses().keySet());
+        if (selectedCodes.isEmpty()) {
             return List.of();
         }
 
         String scenarioKey = scenarioKeyProvider.resolve(userId);
         List<LoanSyncDto> loans = syncClient.getLoans(scenarioKey);
         List<PayMoneySyncDto> payMoney = syncClient.getPayMoney(scenarioKey);
+        List<CardSyncDto> cards = syncClient.getCards(scenarioKey);
 
         List<LinkableGroupDto> preview = new ArrayList<>();
         long previewAccountId = -1L;   // 음수로 둬 은행 계좌의 실 accountId(1L 부터)와 절대 안 겹치게 한다.
-        for (String code : targetCodes) {
+        for (String code : selectedCodes) {
             List<LinkableAccountDto> accounts = new ArrayList<>();
-            if (catalog.isLoanCode(code)) {
-                for (LoanSyncDto loan : loans) {
-                    if (!code.equals(loan.getInstitutionCode())) {
-                        continue;
-                    }
-                    accounts.add(LinkableAccountDto.builder()
-                            .accountId(previewAccountId--)
-                            .bankCode(code)
-                            .bankName(loan.getInstitutionName())
-                            .accountType("LOAN")
-                            .accountName(loan.getProductName())
-                            .accountNoMasked(loan.getLoanNoMasked())
-                            .currency("KRW")
-                            .balance(loan.getBalance())
-                            .build());
+            for (LoanSyncDto loan : loans) {
+                if (!code.equals(loan.getInstitutionCode())) {
+                    continue;
                 }
-            } else {
-                for (PayMoneySyncDto wallet : payMoney) {
-                    if (!code.equals(wallet.getProviderCode())) {
-                        continue;
-                    }
-                    accounts.add(LinkableAccountDto.builder()
-                            .accountId(previewAccountId--)
-                            .bankCode(code)
-                            .bankName(wallet.getProviderName())
-                            .accountType("PAYMONEY")
-                            .accountName(wallet.getWalletName())
-                            .currency("KRW")
-                            .balance(wallet.getBalance())
-                            .build());
+                accounts.add(LinkableAccountDto.builder()
+                        .accountId(previewAccountId--)
+                        .bankCode(code)
+                        .bankName(loan.getInstitutionName())
+                        .accountType("LOAN")
+                        .accountName(loan.getProductName())
+                        .accountNoMasked(loan.getLoanNoMasked())
+                        .currency("KRW")
+                        .balance(loan.getBalance())
+                        .build());
+            }
+            for (PayMoneySyncDto wallet : payMoney) {
+                if (!code.equals(wallet.getProviderCode())) {
+                    continue;
                 }
+                accounts.add(LinkableAccountDto.builder()
+                        .accountId(previewAccountId--)
+                        .bankCode(code)
+                        .bankName(wallet.getProviderName())
+                        .accountType("PAYMONEY")
+                        .accountName(wallet.getWalletName())
+                        .currency("KRW")
+                        .balance(wallet.getBalance())
+                        .build());
+            }
+            for (CardSyncDto card : cards) {
+                if (!code.equals(card.getInstitutionCode())) {
+                    continue;
+                }
+                accounts.add(LinkableAccountDto.builder()
+                        .accountId(previewAccountId--)
+                        .bankCode(code)
+                        .bankName(card.getInstitutionName())
+                        .accountType("CARD")
+                        .accountName(card.getProductName())
+                        .accountNoMasked(card.getCardNoMasked())
+                        .currency(card.getCurrency() == null ? "KRW" : card.getCurrency())
+                        .balance(BigDecimal.ZERO)
+                        .build());
             }
             if (!accounts.isEmpty()) {
                 preview.add(LinkableGroupDto.builder()
@@ -446,10 +466,11 @@ public class AccountLinkService {
         return preview;
     }
 
-    /** 선택한 기관 중 대출·페이머니 코드만. directAssetPreviewGroups()·link() 가 같이 쓴다. */
+    /** 은행 계좌 없이도 연동을 완료할 수 있는 업권 코드. */
     private List<String> directAssetTargetCodes(LinkProgress progress) {
         return progress.getStatuses().keySet().stream()
-                .filter(code -> catalog.isLoanCode(code) || catalog.isPayMoneyCode(code))
+                .filter(code -> catalog.isLoanCode(code) || catalog.isPayMoneyCode(code)
+                        || catalog.isCardCode(code))
                 .toList();
     }
 
@@ -460,7 +481,7 @@ public class AccountLinkService {
         LinkProgress progress = progressStore.get(userId, request.getConnectionId());
         List<Long> requested = request.getAccountIds();
         /*
-         * 대출·페이머니만 고른 경우 은행 계좌가 하나도 없어 requested 가 비어 있는 게 정상이다(#334)
+         * 대출·페이머니·카드만 고른 경우 은행 계좌가 하나도 없어 requested 가 비어 있는 게 정상이다(#334)
          * — 그 업권은 여기서 선택할 대상 자체가 없다(계좌 선택 화면의 자동 연동 미리보기 참고).
          * 그때는 빈 선택을 오류로 보지 않는다.
          */
@@ -529,7 +550,18 @@ public class AccountLinkService {
 
     @Transactional(readOnly = true)
     public ConnectedAccountListDto connectedAccounts(long userId) {
-        List<ConnectedAccountDto> accounts = mapper.findActiveByUser(userId).stream()
+        List<ConnectedAccount> activeAccounts = mapper.findActiveByUser(userId);
+        Set<String> canonicalSecuritiesInstitutions = activeAccounts.stream()
+                .filter(AccountLinkService::isCanonicalSecuritiesAccount)
+                .map(ConnectedAccount::getBankName)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> canonicalDepositKeys = activeAccounts.stream()
+                .filter(AccountLinkService::isCanonicalDepositAccount)
+                .map(AccountLinkService::accountIdentity)
+                .collect(java.util.stream.Collectors.toSet());
+        List<ConnectedAccountDto> accounts = new java.util.ArrayList<>(activeAccounts.stream()
+                .filter(row -> !isLegacySecuritiesShadow(row, canonicalSecuritiesInstitutions))
+                .filter(row -> !isLegacyDepositShadow(row, canonicalDepositKeys))
                 .map(row -> ConnectedAccountDto.builder()
                         .accountId(row.getId())
                         .bankCode(row.getBankCode())
@@ -544,7 +576,10 @@ public class AccountLinkService {
                         .syncFailReason(row.getSyncFailReason())
                         .expiresAt(text(row.getExpiresAt()))
                         .build())
-                .toList();
+                .toList());
+        accounts.addAll(loanMapper.findByUser(userId).stream()
+                .map(this::loanAsConnectedAccount)
+                .toList());
 
         /*
          * 자동 동기화는 FinancialSyncBatchScheduler 가 fixedDelay 간격(financial.sync.batch.fixed-delay-ms,
@@ -558,6 +593,64 @@ public class AccountLinkService {
                 .accounts(accounts)
                 .nextAutoSyncAt(text(nextSync))
                 .build();
+    }
+
+    private static boolean isCanonicalSecuritiesAccount(ConnectedAccount account) {
+        return "SECURITIES".equals(account.getAccountType())
+                && account.getBankCode() != null && !account.getBankCode().isBlank()
+                && account.getAccountName() != null && !account.getAccountName().isBlank()
+                && account.getBankName() != null && !account.getBankName().isBlank();
+    }
+
+    private static boolean isCanonicalDepositAccount(ConnectedAccount account) {
+        return "SAVINGS".equals(account.getAccountType())
+                && !isLegacyDepositKey(account)
+                && accountIdentity(account) != null;
+    }
+
+    private static boolean isLegacyDepositShadow(ConnectedAccount account, Set<String> canonicalDepositKeys) {
+        return "SAVINGS".equals(account.getAccountType())
+                && isLegacyDepositKey(account)
+                && canonicalDepositKeys.contains(accountIdentity(account));
+    }
+
+    private static boolean isLegacyDepositKey(ConnectedAccount account) {
+        return account.getAccountNoEncrypted() != null
+                && account.getAccountNoEncrypted().startsWith("MOCK-DEPOSIT-");
+    }
+
+    private static String accountIdentity(ConnectedAccount account) {
+        if (account.getBankCode() == null || account.getBankCode().isBlank()
+                || account.getAccountNoMasked() == null || account.getAccountNoMasked().isBlank()) {
+            return null;
+        }
+        return account.getBankCode() + "|" + account.getAccountNoMasked();
+    }
+
+    private ConnectedAccountDto loanAsConnectedAccount(Loan loan) {
+        String bankCode = catalog.codeOfName(loan.getBankName());
+        return ConnectedAccountDto.builder()
+                .accountId(-loan.getId())
+                .bankCode(bankCode)
+                .bankName(loan.getBankName())
+                .shortLabel(catalog.shortLabelOf(bankCode))
+                .accountName(loan.getLoanType())
+                .accountNoMasked(loan.getLoanNoMasked())
+                .accountType("LOAN")
+                .balance(loan.getBalance())
+                .syncStatus("NORMAL")
+                .manageable(false)
+                .build();
+    }
+
+    /** 식별자 없이 저장된 과거 MOCK-SECURITIES 행은 같은 기관의 실제 연결 행이 있을 때만 숨긴다. */
+    private static boolean isLegacySecuritiesShadow(ConnectedAccount account,
+                                                     Set<String> canonicalInstitutions) {
+        return "SECURITIES".equals(account.getAccountType())
+                && (account.getBankCode() == null || account.getBankCode().isBlank())
+                && (account.getAccountName() == null || account.getAccountName().isBlank())
+                && account.getBankName() != null
+                && canonicalInstitutions.contains(account.getBankName());
     }
 
     @Transactional
@@ -693,6 +786,12 @@ public class AccountLinkService {
                         "금융기관에서 이 계좌를 찾지 못했어요.");
                 events.publishEvent(reconnectNotification(userId, account));
                 aggregate = SyncStatus.NEED_RECONNECT;
+                continue;
+            }
+            if ("SECURITIES".equals(account.getAccountType())) {
+                /* /assets/accounts 의 증권 balance 는 현금잔액뿐이다. 보유주식 평가액을 포함한
+                   연결 계좌 잔액은 FinancialSyncService 가 계산하므로 여기서 덮어쓰지 않는다. */
+                mapper.updateSync(account.getId(), userId, SyncStatus.NORMAL.name(), now, null);
                 continue;
             }
             /* 살아 있는 계좌는 그대로 갱신한다 — 하나가 실패했다고 나머지를 버리지 않는다 */

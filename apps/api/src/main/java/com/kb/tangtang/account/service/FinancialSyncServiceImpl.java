@@ -623,7 +623,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private void saveDeposits(long userId, SyncBundle bundle, LocalDateTime now,
                               List<Transaction> upserted, Set<String> inactiveKeys) {
         for (DepositSyncDto deposit : bundle.deposits) {
-            String accountNoEncrypted = "MOCK-DEPOSIT-" + deposit.getDepositAccountId();
+            String accountNoEncrypted = depositAccountKey(deposit);
             ConnectedAccount row = ConnectedAccount.builder()
                     .userId(userId)
                     .bankCode(deposit.getInstitutionCode())
@@ -652,19 +652,34 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
+    /**
+     * 예적금도 계좌 선택 단계와 같은 자연키를 쓴다.
+     * 과거에는 여기만 MOCK-DEPOSIT-id 를 써서, 선택 저장 뒤 첫 동기화가 같은 적금을 한 번 더 만들었다.
+     */
+    private String depositAccountKey(DepositSyncDto deposit) {
+        if (deposit.getInstitutionCode() != null && !deposit.getInstitutionCode().isBlank()
+                && deposit.getAccountNoMasked() != null && !deposit.getAccountNoMasked().isBlank()) {
+            return accountNumbers.hash(deposit.getInstitutionCode(), deposit.getAccountNoMasked());
+        }
+        return "MOCK-DEPOSIT-" + deposit.getDepositAccountId();
+    }
+
     private void saveSecurities(long userId, SyncBundle bundle, LocalDateTime now,
                                 List<Transaction> upserted, Set<String> inactiveKeys) {
         if (bundle.stock == null) {
             return;
         }
-        String accountNoEncrypted = "MOCK-SECURITIES-" + bundle.stock.getAccountId();
+        String accountNoEncrypted = securitiesAccountKey(bundle.stock);
         ConnectedAccount row = ConnectedAccount.builder()
                 .userId(userId)
+                .bankCode(bundle.stock.getInstitutionCode())
                 .bankName(bundle.stock.getInstitutionName())
+                .accountName(bundle.stock.getAccountName())
                 .accountNoEncrypted(accountNoEncrypted)
+                .accountNoMasked(bundle.stock.getAccountNoMasked())
                 .accountType("SECURITIES")
-                /* 현금잔액·평가금액은 상품 조회값을 쓴다. 거래 합산으로 재계산하지 않는다(설계 §7). */
-                .balance(bundle.stock.getCashBalance())
+                /* 연결 계좌 화면은 현금과 보유주식 평가액을 합쳐 현재 증권자산을 보여준다. */
+                .balance(securitiesBalance(bundle.stock))
                 .syncStatus("NORMAL")
                 .lastSyncAt(now)
                 .build();
@@ -714,12 +729,30 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         }
     }
 
+    /** 새 목서버 응답은 연결 단계와 같은 기관·마스킹 계좌번호로 자연키를 만든다. */
+    private String securitiesAccountKey(StockAssetSyncDto stock) {
+        if (stock.getInstitutionCode() != null && !stock.getInstitutionCode().isBlank()
+                && stock.getAccountNoMasked() != null && !stock.getAccountNoMasked().isBlank()) {
+            return accountNumbers.hash(stock.getInstitutionCode(), stock.getAccountNoMasked());
+        }
+        /* 이전 응답 또는 실 데이터가 식별자를 아직 주지 않는 경우의 호환 경로. */
+        return "MOCK-SECURITIES-" + stock.getAccountId();
+    }
+
+    private static BigDecimal securitiesBalance(StockAssetSyncDto stock) {
+        BigDecimal cash = stock.getCashBalance() == null ? BigDecimal.ZERO : stock.getCashBalance();
+        BigDecimal marketValue = stock.getTotalMarketValue() == null
+                ? BigDecimal.ZERO : stock.getTotalMarketValue();
+        return cash.add(marketValue);
+    }
+
     private void saveLoans(long userId, SyncBundle bundle, List<Transaction> upserted) {
         for (LoanSyncDto loan : bundle.loans) {
             Loan row = Loan.builder()
                     .userId(userId)
                     /* 목서버는 마스킹된 대출번호만 준다 — 해시할 원본이 없어 소스 식별자를 그대로 쓴다. */
                     .loanNoEncrypted("MOCK-LOAN-" + loan.getLoanId())
+                    .loanNoMasked(loan.getLoanNoMasked())
                     .bankName(loan.getInstitutionName())
                     .loanType(loan.getProductName())
                     .loanAmount(loan.getPrincipal())

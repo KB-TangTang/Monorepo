@@ -155,7 +155,11 @@ class MockFinancialDataClientTest {
                           {"accountId":2,"institutionCode":"0088","institutionName":"Shinhan Bank",
                            "accountTypeCode":"1001","accountStatusCode":"01",
                            "productName":"신한 주거래통장","accountNoMasked":"110-***-****23",
-                           "currency":"KRW","balance":500000,"availableAmount":500000}
+                           "currency":"KRW","balance":500000,"availableAmount":500000},
+                          {"accountId":3,"institutionCode":"0004","institutionName":"KB Kookmin Bank",
+                           "accountTypeCode":"2001","accountStatusCode":"01",
+                           "productName":"KB Time Deposit","accountNoMasked":"777777******0001",
+                           "currency":"KRW","balance":5032000,"availableAmount":5032000}
                         ]}}
                         """, MediaType.APPLICATION_JSON));
 
@@ -164,7 +168,7 @@ class MockFinancialDataClientTest {
 
         List<FinancialAccountDto> accounts = client.fetchAccounts(1L, "mock-1", "0004");
 
-        assertEquals(1, accounts.size());
+        assertEquals(2, accounts.size());
         FinancialAccountDto account = accounts.get(0);
         assertEquals("0004", account.getOrganization());
         assertEquals("KB Kookmin Bank", account.getBankName());
@@ -177,6 +181,9 @@ class MockFinancialDataClientTest {
          */
         assertNull(account.getAccountType());
         assertNull(account.getDepositTypeCode());
+        FinancialAccountDto deposit = accounts.get(1);
+        assertEquals("KB Time Deposit", deposit.getAccountName());
+        assertEquals("2001", deposit.getDepositTypeCode());
         server.verify();
     }
 

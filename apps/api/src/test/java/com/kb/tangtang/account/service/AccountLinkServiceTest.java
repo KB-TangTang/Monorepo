@@ -6,6 +6,7 @@ import com.kb.tangtang.account.client.dto.ConnectionResult;
 import com.kb.tangtang.account.client.dto.FinancialAccountDto;
 import com.kb.tangtang.account.client.sync.FinancialSyncClient;
 import com.kb.tangtang.account.client.sync.ScenarioKeyProvider;
+import com.kb.tangtang.account.client.sync.dto.CardSyncDto;
 import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
@@ -15,6 +16,7 @@ import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.dto.*;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
+import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.user.service.ConsentService;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +55,7 @@ class AccountLinkServiceTest {
 
     private FinancialDataClient client;
     private ConnectedAccountMapper mapper;
+    private LoanMapper loanMapper;
     private LinkProgressStore store;
     private ConsentService consentService;
     private FinancialSyncClient syncClient;
@@ -67,11 +70,12 @@ class AccountLinkServiceTest {
     void setUp() {
         client = mock(FinancialDataClient.class);
         mapper = mock(ConnectedAccountMapper.class);
+        loanMapper = mock(LoanMapper.class);
         store = new LinkProgressStore(CLOCK);
         consentService = mock(ConsentService.class);
         syncClient = mock(FinancialSyncClient.class);
         scenarioKeyProvider = mock(ScenarioKeyProvider.class);
-        service = new AccountLinkService(client, mapper, store, new InstitutionCatalog(),
+        service = new AccountLinkService(client, mapper, loanMapper, store, new InstitutionCatalog(),
                 new AccountNumberPolicy("test-secret-key-for-account-hash-0001"),
                 syncClient, scenarioKeyProvider, capturingPublisher,
                 consentService, BATCH_FIXED_DELAY_MS, CLOCK);
@@ -82,6 +86,7 @@ class AccountLinkServiceTest {
         when(consentService.needsConsent(anyLong(), any())).thenReturn(false);
 
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
+        when(loanMapper.findByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
         /* 기본은 "제한 없음" — 목서버가 그렇다. 제한하는 경우는 개별 테스트에서 덮어쓴다. */
         when(client.supportedOrganizations()).thenReturn(Set.of());
@@ -291,6 +296,41 @@ class AccountLinkServiceTest {
         assertEquals(0, new BigDecimal("130000").compareTo(row.getBalance()));
         /* 미리보기 accountId 는 link() 이 절대 인덱스로 못 쓰게 음수여야 한다. */
         assertTrue(row.getAccountId() < 0);
+    }
+
+    @Test
+    @DisplayName("은행에서 내려온 대출과 카드도 계좌 선택 화면에 자동 연동으로 보인다")
+    void showsBankLoanAndCardAsAutoIncludedPreview() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004", "0381")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
+                .thenReturn(List.of(account("0004", "KB 입출금통장", "110123456723")));
+        when(client.fetchAccounts(USER_ID, "conn-1", "0381")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("0004")
+                        .institutionName("KB국민은행").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+        when(syncClient.getPayMoney("1")).thenReturn(List.of());
+        when(syncClient.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(21L).institutionCode("0381")
+                        .institutionName("KB국민카드").productName("KB My WE:SH 카드")
+                        .cardNoMasked("1234-****-****-5678").currency("KRW").build()));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("0004", "0381"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        List<LinkableGroupDto> groups = service.linkableAccounts(USER_ID, "conn-1");
+
+        assertEquals(3, groups.size());
+        assertEquals("KB 입출금통장", groups.get(0).getAccounts().get(0).getAccountName());
+        assertTrue(groups.get(1).isAutoIncluded());
+        assertEquals("KB 신용대출", groups.get(1).getAccounts().get(0).getAccountName());
+        assertTrue(groups.get(2).isAutoIncluded());
+        assertEquals("KB My WE:SH 카드", groups.get(2).getAccounts().get(0).getAccountName());
     }
 
     @Test
@@ -609,6 +649,26 @@ class AccountLinkServiceTest {
     }
 
     @Test
+    @DisplayName("증권 계좌 수동 새로고침은 현금잔액으로 보유주식 평가액을 덮어쓰지 않는다")
+    void refreshPreservesSecuritiesTotalBalance() {
+        AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
+        String hash = policy.hash("0218", "301-***-INV2002");
+        ConnectedAccount securities = ConnectedAccount.builder()
+                .id(17L).userId(USER_ID).codefConnectedId("conn-1")
+                .bankCode("0218").bankName("KB증권").accountName("KB 증권 투자계좌")
+                .accountNoEncrypted(hash).accountNoMasked("301-***-INV2002")
+                .accountType("SECURITIES").balance(new BigDecimal("1303600")).build();
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(securities));
+        when(client.fetchAccounts(USER_ID, "conn-1", "0218"))
+                .thenReturn(List.of(balanced("0218", "301-***-INV2002", "0")));
+
+        service.refresh(USER_ID);
+
+        verify(mapper).updateSync(eq(17L), eq(USER_ID), eq("NORMAL"), any(), isNull());
+        verify(mapper, never()).updateSynced(eq(17L), eq(USER_ID), any(), any());
+    }
+
+    @Test
     @DisplayName("기관 행의 금액은 그 기관 계좌의 합계다")
     void sumsBalancePerInstitution() {
         AccountNumberPolicy policy = new AccountNumberPolicy("test-secret-key-for-account-hash-0001");
@@ -769,6 +829,65 @@ class AccountLinkServiceTest {
         ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
 
         assertEquals(LocalDateTime.of(2026, 8, 5, 18, 30).toString(), result.getNextAutoSyncAt());
+    }
+
+    @Test
+    @DisplayName("같은 증권 계좌의 이전 동기화 그림자 행은 연결 계좌 관리에서 숨긴다")
+    void hidesLegacySecuritiesShadowWhenCanonicalAccountExists() {
+        ConnectedAccount canonical = ConnectedAccount.builder()
+                .id(1L).userId(USER_ID).bankCode("0218").bankName("KB증권")
+                .accountName("KB 증권 투자계좌").accountNoEncrypted("canonical")
+                .accountType("SECURITIES").balance(new BigDecimal("1303600"))
+                .syncStatus("NORMAL").build();
+        ConnectedAccount legacyShadow = ConnectedAccount.builder()
+                .id(2L).userId(USER_ID).bankName("KB증권")
+                .accountNoEncrypted("MOCK-SECURITIES-301").accountType("SECURITIES")
+                .balance(BigDecimal.ZERO).syncStatus("NORMAL").build();
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(canonical, legacyShadow));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(1, result.getAccounts().size());
+        assertEquals(1L, result.getAccounts().get(0).getAccountId());
+        assertEquals(0, new BigDecimal("1303600").compareTo(result.getAccounts().get(0).getBalance()));
+    }
+
+    @Test
+    @DisplayName("첫 동기화가 만든 이전 적금 그림자 행은 연결 계좌 관리에서 숨긴다")
+    void hidesLegacyDepositShadowWhenCanonicalAccountExists() {
+        ConnectedAccount canonical = ConnectedAccount.builder()
+                .id(1L).userId(USER_ID).bankCode("0004").bankName("KB국민은행")
+                .accountName("KB 매월 챌린지 적금").accountNoEncrypted("canonical")
+                .accountNoMasked("110-***-SAVING2").accountType("SAVINGS")
+                .balance(new BigDecimal("1500000")).syncStatus("NORMAL").build();
+        ConnectedAccount legacyShadow = ConnectedAccount.builder()
+                .id(2L).userId(USER_ID).bankCode("0004").bankName("KB국민은행")
+                .accountName("KB 매월 챌린지 적금").accountNoEncrypted("MOCK-DEPOSIT-201")
+                .accountNoMasked("110-***-SAVING2").accountType("SAVINGS")
+                .balance(new BigDecimal("1500000")).syncStatus("NORMAL").build();
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(canonical, legacyShadow));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(1, result.getAccounts().size());
+        assertEquals(1L, result.getAccounts().get(0).getAccountId());
+    }
+
+    @Test
+    @DisplayName("동기화된 대출은 연결 계좌 관리에 읽기 전용 항목으로 보인다")
+    void includesSyncedLoansInConnectedAccounts() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(Loan.builder()
+                .id(31L).userId(USER_ID).bankName("KB국민은행").loanType("KB 신용대출")
+                .loanNoMasked("LN-2025-****-0001")
+                .balance(new BigDecimal("14200000")).build()));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(1, result.getAccounts().size());
+        assertEquals(-31L, result.getAccounts().get(0).getAccountId());
+        assertEquals("0004", result.getAccounts().get(0).getBankCode());
+        assertEquals("LN-2025-****-0001", result.getAccounts().get(0).getAccountNoMasked());
+        assertFalse(result.getAccounts().get(0).isManageable());
     }
 
     private FinancialAccountDto balanced(String organization, String no, String balance) {

@@ -32,7 +32,7 @@ const {
 const position = linkStepPosition('select');
 
 /*
- * 은행 없이 대출·페이머니만 고르면 체크할 계좌가 하나도 없다(#334) — 그래도 완료 버튼은 눌러야
+ * 은행 없이 대출·페이머니·카드만 고르면 체크할 계좌가 하나도 없다(#334) — 그래도 완료 버튼은 눌러야
  * 한다. selectedAccountCount 만 보고 막으면 아무것도 못 하는 화면이 된다.
  */
 const hasAutoIncludedGroups = computed(() =>
@@ -87,7 +87,7 @@ async function onSubmit() {
         <div v-else class="account-select__body">
             <section
                 v-for="group in linkableGroups"
-                :key="group.bankCode"
+                :key="`${group.bankCode}-${group.autoIncluded ? 'automatic' : 'selectable'}`"
                 class="account-select__group"
             >
                 <h2 class="account-select__group-title">
@@ -98,7 +98,7 @@ async function onSubmit() {
                     />
                     {{ group.bankName }}
                 </h2>
-                <!-- 대출·페이머니는 기관당 1건이라 고를 게 없다 — 최초 동기화가 자동으로 연동한다. -->
+                <!-- 대출·페이머니·카드는 최초 동기화가 자동으로 연동한다. -->
                 <p v-if="group.autoIncluded" class="account-select__auto-notice">
                     선택한 기관이라 자동으로 연동돼요. 계좌를 따로 고를 필요는 없어요.
                 </p>
