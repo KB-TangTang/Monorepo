@@ -28,6 +28,10 @@ const categoryLabel = computed(() => props.form.categoryName || '총 소비');
 const evalLabel = computed(() => props.form.evalType === 'DAILY' ? '일일결산' : '기간결산');
 const periodLabel = computed(() => `${formatDate(props.form.startDate)} ~ ${formatDate(props.form.endDate)}`);
 const limitLabel = computed(() => {
+    /* 0 원은 무지출 챌린지다. 「하루 0원」보다 뜻이 분명하고 목록·상세 카드의 표기와도 맞는다. */
+    if (props.form.limitAmount !== null && Number(props.form.limitAmount) === 0) {
+        return props.form.evalType === 'DAILY' ? '매일 무지출' : '기간 내 무지출';
+    }
     const amt = formatAmount(props.form.limitAmount);
     return props.form.evalType === 'DAILY' ? `하루 ${amt}원` : `총 ${amt}원`;
 });

@@ -44,7 +44,8 @@ const limitDesc = computed(() => {
         const prefix = ch.evalType === 'DAILY' ? '일' : '총';
         return `${type} · ${prefix} ${ch.limitAmount.toLocaleString()}원`;
     }
-    return type;
+    /* 0 원은 무지출 챌린지다. 값이 없는 것처럼 타입만 보여주면 시작 전 카드(「· 무지출」)와 어긋난다. */
+    return ch.limitAmount === 0 ? `${type} · 무지출` : type;
 });
 
 const AVATAR_COLORS = [
