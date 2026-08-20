@@ -1,0 +1,52 @@
+# 도커 빌드 컨텍스트에서 제외할 것 (이슈 #376)
+#
+# docker-compose.yml 의 api 서비스가 context 를 레포 루트(`.`)로 잡는다.
+# 이 파일이 없으면 레포 전체(EC2 기준 약 116MB)가 매 빌드마다 도커 데몬으로 전송된다.
+#
+# ⚠ apps/api/Dockerfile 이 실제로 COPY 하는 것은 아래 6개뿐이다. 지우지 말 것.
+#     gradlew · settings.gradle · build.gradle · gradle/ ·
+#     apps/api/build.gradle · apps/api/src
+#
+# ⚠ 이 파일은 **빌드 컨텍스트**에만 영향을 준다.
+#    db 서비스의 `./db:/docker-entrypoint-initdb.d` 는 런타임 바인드 마운트라
+#    여기서 db/ 를 제외해도 초기화 스크립트는 정상 동작한다.
+#    docker compose 가 읽는 .env 도 마찬가지로 영향받지 않는다.
+
+# --- 버전 관리 · CI ---
+.git
+.gitignore
+.gitattributes
+.github
+
+# --- 빌드 산출물 · 캐시 ---
+**/build
+**/.gradle
+**/node_modules
+**/dist
+
+# --- 백엔드 빌드에 불필요한 하위 프로젝트 ---
+# settings.gradle 이 `include 'apps:api'` 뿐이라 프론트는 Gradle 빌드와 무관하다.
+apps/web
+
+# --- 런타임 바인드 마운트로 들어가는 것 (컨텍스트에는 불필요) ---
+db
+
+# --- 문서 · 도구 · 부하테스트 ---
+docs
+docs.local
+perf
+.claude
+.gemini
+**/*.md
+
+# --- 시크릿 · 로컬 설정 (컨텍스트에 절대 넣지 않는다) ---
+.env
+.env.*
+**/*.key
+**/*.pem
+**/application-local.properties
+
+# --- 에디터 · OS ---
+.idea
+.vscode
+**/.DS_Store

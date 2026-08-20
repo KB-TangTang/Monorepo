@@ -1,8 +1,20 @@
+# 컨테이너 로그 상한 (이슈 #376).
+# json-file 드라이버의 기본값에는 상한이 없어 로그가 디스크를 채울 때까지 커진다.
+# 서버에 /etc/docker/daemon.json 이 없어 데몬 차원의 기본값도 설정돼 있지 않다.
+# 지금 로그가 작아 보이는 것은 배포마다 down/up 이 컨테이너를 다시 만들어 로그가
+# 초기화되기 때문이다 — 배포가 멈추는 기간(시연 준비 등)에 그대로 노출된다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # === 1. 데이터베이스 ===
   db:
     image: mysql:8.0
+    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -30,6 +42,7 @@ services:
     build:
       context: ../Financial-Mock-Server
       dockerfile: Dockerfile
+    logging: *default-logging
     environment:
       # 목서버는 자기 DB(financial_mock)를 이 db 컨테이너에서 쓴다.
       # 이 값을 주지 않으면 목서버가 자기 컨테이너의 localhost 를 찾다가 DB 에 못 붙는다.
@@ -62,6 +75,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    logging: *default-logging
     environment:
       APP_ENV: docker
       JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
@@ -142,6 +156,7 @@ services:
     image: redis:7-alpine
     container_name: tangtang-redis
     restart: unless-stopped
+    logging: *default-logging
     # AOF 필수. 장애 시 손실을 최대 1초로 제한한다 — 이 전제가 깨지면
     # "채팅 원본을 MySQL 에 두지 않는다"는 결정(DECISIONS.md 2026-08-15)이 성립하지 않는다.
     command: redis-server --appendonly yes --appendfsync everysec
