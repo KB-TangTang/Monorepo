@@ -199,7 +199,7 @@ public class RootConfig {
      *   ChallengeGroupStatusScheduler.runDailyTransitions 안에 붙였다. #172 의 JUDGING → CLOSED
      *   최종 확정도 같은 방식으로 GroupVerdictScheduler.confirmDueVerdicts 안에 붙였다.
      *
-     * 일별·월별 cron 은 자정 직후(00:01·00:10·00:15·00:30·00:40)와 18:30 에 몰린다.
+     * 일별·월별 cron 은 자정 직후(00:01·00:10·00:15·00:30·00:40)와 21:00·23:00 에 몰린다.
      * 특히 고정지출 배치 둘은 같은 프로퍼티(${fixed.expense.detection.cron})를 써서 반드시 겹친다.
      */
     @Bean
