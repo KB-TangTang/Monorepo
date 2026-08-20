@@ -6,8 +6,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchGroupChallengeDetail } from '@/api/groupChallenge';
+import { fetchGroupChallengeDetail, deleteGroupChallenge } from '@/api/groupChallenge';
 
+import BaseModal from '@/components/common/BaseModal.vue';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
 import GroupDetailInkCard from '@/components/challenge/group/GroupDetailInkCard.vue';
 import GroupDetailLivesBar from '@/components/challenge/group/GroupDetailLivesBar.vue';
@@ -179,6 +180,46 @@ function goToTrialProgress(item) {
  * 예전 목데이터가 쓰던 `chat.unreadCount` 를 보고 있어서 배지가 항상 0 이었다(이슈 #271).
  */
 const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
+
+/*
+ * 그룹 삭제 (이슈 #352).
+ *
+ * **방장 + 모집 중일 때만** 버튼을 띄운다. 시작한 뒤로는 남의 목숨·기소 기록까지 사라져서
+ * 막았다 (ACTIVE 이후 허용 여부는 팀 논의 대기).
+ * 화면에서 가려도 서버가 다시 검증한다 — 여기 조건은 편의일 뿐 방어선이 아니다.
+ */
+const showDeleteModal = ref(false);
+const isDeleting = ref(false);
+const deleteError = ref('');
+const canDelete = computed(() => Boolean(ch.value?.isOwner) && isRecruiting.value);
+
+const DELETE_ERROR_MESSAGES = {
+    GROUP_NOT_OWNER: '방장만 챌린지를 삭제할 수 있어요.',
+    GROUP_NOT_DELETABLE: '이미 시작된 챌린지는 삭제할 수 없어요.',
+    GROUP_NOT_FOUND: '이미 사라진 챌린지예요.',
+};
+
+function openDeleteModal() {
+    deleteError.value = '';
+    showDeleteModal.value = true;
+}
+
+async function handleDelete() {
+    if (isDeleting.value) return;
+    isDeleting.value = true;
+    deleteError.value = '';
+    try {
+        await deleteGroupChallenge(ch.value.id);
+        showDeleteModal.value = false;
+        /* 방금 지운 그룹의 상세가 히스토리에 남으면 뒤로가기가 없는 방으로 되돌아간다. */
+        router.replace({ name: 'groupChallengeList' });
+    } catch (e) {
+        deleteError.value =
+            DELETE_ERROR_MESSAGES[e.code] ?? e.message ?? '챌린지를 삭제하지 못했어요.';
+    } finally {
+        isDeleting.value = false;
+    }
+}
 </script>
 
 <template>
@@ -390,8 +431,42 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
                 >
                     그룹 목록으로
                 </button>
+                <button
+                    v-if="canDelete"
+                    class="gc-detail__btn gc-detail__btn--danger"
+                    @click="openDeleteModal"
+                >
+                    삭제
+                </button>
             </div>
         </div>
+
+        <!-- 삭제 확인 (방장 · 모집 중에만 열린다) -->
+        <BaseModal v-model="showDeleteModal" title="이 챌린지를 삭제할까요?">
+            <p class="gc-detail__delete-text">
+                <b>{{ ch.groupName }}</b> 을(를) 없앱니다.<br />
+                참여 중인 친구들과 나눈 <b>채팅도 함께 사라져요.</b><br />
+                <b>되돌릴 수 없어요.</b>
+            </p>
+            <p v-if="deleteError" class="gc-detail__delete-error">{{ deleteError }}</p>
+
+            <template #footer>
+                <button
+                    class="gc-detail__btn gc-detail__btn--outline"
+                    :disabled="isDeleting"
+                    @click="showDeleteModal = false"
+                >
+                    그만두기
+                </button>
+                <button
+                    class="gc-detail__btn gc-detail__btn--danger gc-detail__btn--grow"
+                    :disabled="isDeleting"
+                    @click="handleDelete"
+                >
+                    {{ isDeleting ? '삭제 중…' : '삭제할게요' }}
+                </button>
+            </template>
+        </BaseModal>
 
         <!-- 채팅 플로팅 버튼 (종료 제외) -->
         <div v-if="!isClosed" class="gc-detail__chat-fab" @click="goToChat">
@@ -603,6 +678,44 @@ const unreadCount = computed(() => ch.value?.unreadChatCount ?? 0);
     border: 1.5px solid var(--tt-border);
     color: var(--tt-text-body);
     font-size: var(--tt-fs-body);
+}
+
+/* ── 삭제 (방장 · 모집 중) ── */
+.gc-detail__btn--danger {
+    flex: none;
+    background: transparent;
+    border: 1.5px solid var(--tt-danger);
+    color: var(--tt-danger);
+}
+
+.gc-detail__btn--grow {
+    flex: 1;
+}
+
+.gc-detail__btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.gc-detail__delete-text {
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text-body);
+    line-height: 1.6;
+}
+
+.gc-detail__delete-text b {
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.gc-detail__delete-error {
+    margin-top: var(--tt-space-3);
+    padding: 10px 12px;
+    background: var(--tt-danger-subtle);
+    border-radius: var(--tt-radius-md);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-danger-deep);
 }
 
 /* ── 종료 결과 카드 ── */

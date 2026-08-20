@@ -8,16 +8,6 @@ const props = defineProps({
 
 const emit = defineEmits(['confirm']);
 
-// API 연동 시 실제 DB 값으로 교체 예정
-const CATEGORY_MAP = {
-    null: '총 소비',
-    1: '식비',
-    2: '카페',
-    3: '편의점',
-    4: '택시',
-    5: '쇼핑',
-};
-
 function formatDate(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -29,7 +19,12 @@ function formatAmount(val) {
     return Number(val).toLocaleString('ko-KR');
 }
 
-const categoryLabel = computed(() => CATEGORY_MAP[props.form.categoryId] ?? '총 소비');
+/*
+ * 카테고리 이름은 대상 선택 단계가 서버 목록에서 골라 form 에 실어 둔다 (이슈 #352).
+ * 여기서 id→이름 표를 따로 갖고 있으면 그 표가 실제 카테고리와 어긋나도 아무도 모른다 —
+ * 실제로 그래서 「식비」를 골랐는데 저장된 건 다른 카테고리인 상태로 오래 있었다.
+ */
+const categoryLabel = computed(() => props.form.categoryName || '총 소비');
 const evalLabel = computed(() => props.form.evalType === 'DAILY' ? '일일결산' : '기간결산');
 const periodLabel = computed(() => `${formatDate(props.form.startDate)} ~ ${formatDate(props.form.endDate)}`);
 const limitLabel = computed(() => {
