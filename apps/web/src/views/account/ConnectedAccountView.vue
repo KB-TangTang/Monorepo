@@ -19,6 +19,7 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
 import BaseBackButton from '@/components/common/BaseBackButton.vue';
+import BaseModal from '@/components/common/BaseModal.vue';
 import AccountActionSheet from '@/components/account/AccountActionSheet.vue';
 import ConnectedAccountRow from '@/components/account/ConnectedAccountRow.vue';
 import DisconnectConfirmSheet from '@/components/account/DisconnectConfirmSheet.vue';
@@ -34,6 +35,13 @@ const actionTarget = ref(null);
 const sheetOpen = ref(false);
 const sheetTarget = ref(null);
 const disconnecting = ref(false);
+/*
+ * store.loading 은 이 화면의 모든 액션(목록 조회·해제·동기화)이 공유하는 플래그라, "지금 동기화"만
+ * 가리키는 전용 상태를 따로 둔다. resync() 가 이제 실제 거래 동기화(POST /financial-syncs)를 부르는
+ * 만큼 몇 초~수십 초 걸릴 수 있어, 그동안 화면을 막는 모달로 진행 중임을 알린다(#389 후속).
+ * 모달이 화면을 가리는 동안엔 버튼을 다시 누를 수 없으니 중복 실행 방지도 겸한다.
+ */
+const syncing = ref(false);
 
 const hasAccounts = computed(() => connectedAccounts.value.length > 0);
 const nextSyncLabel = computed(() => formatSyncTime(nextAutoSyncAt.value));
@@ -112,7 +120,13 @@ async function confirmDisconnect(account) {
 function onResync(account) {
     /* 화면 이동이 없는 액션은 시트를 닫고 그 자리에서 처리한다. */
     actionOpen.value = false;
-    store.resync(account.accountId).catch(() => {});
+    syncing.value = true;
+    store
+        .resync(account.accountId)
+        .catch(() => {})
+        .finally(() => {
+            syncing.value = false;
+        });
 }
 
 function onReconnect(account) {
@@ -209,6 +223,19 @@ function leaveTo(target) {
             @confirm="confirmDisconnect"
             @update:model-value="(open) => (open ? null : closeSheets())"
         />
+
+        <!-- 닫을 방법을 안 준다 — 동기화가 끝날 때까지 화면을 막아 중복 실행도 함께 막는다. -->
+        <BaseModal
+            :model-value="syncing"
+            :close-on-overlay="false"
+            :close-on-esc="false"
+            :show-close="false"
+        >
+            <div class="connected-accounts__syncing">
+                <StateLoading size="lg" message="거래내역을 가져오고 있어요" />
+                <p class="connected-accounts__syncing-desc">최대 1분 정도 걸릴 수 있어요</p>
+            </div>
+        </BaseModal>
     </div>
 </template>
 
@@ -319,5 +346,20 @@ function leaveTo(target) {
 
 .connected-accounts__add:hover {
     background: var(--tt-info-subtle);
+}
+
+.connected-accounts__syncing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tt-space-2);
+    padding: var(--tt-space-4) 0;
+    text-align: center;
+}
+
+.connected-accounts__syncing-desc {
+    margin: 0;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
 }
 </style>
