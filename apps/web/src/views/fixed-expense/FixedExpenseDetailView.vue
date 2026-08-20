@@ -47,8 +47,6 @@ onMounted(() => store.loadExpense(route.params.expenseId));
         <FixedExpensePageHeader
             title="고정지출 상세"
             back-label="고정지출 관리로 이동"
-            action-label="수정"
-            action-disabled
             @back="goBack"
         />
 

@@ -1,6 +1,8 @@
 <script setup>
 import BaseBadge from '@/components/common/BaseBadge.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
+import CategoryIcon from '@/components/common/CategoryIcon.vue';
+import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
 import { formatWon } from '@/utils/fixedExpense';
 
 const props = defineProps({
@@ -28,8 +30,12 @@ function accessibleLabel() {
         <span class="fixed-item__holes" aria-hidden="true">
             <span v-for="index in 3" :key="index" class="fixed-item__hole"></span>
         </span>
-        <span class="fixed-item__category" :class="`fixed-item__category--${item.categoryCode}`">
-            {{ item.categoryLabel }}
+        <span
+            class="fixed-item__category"
+            :class="`fixed-item__category--${resolveCategoryTone(item.category)}`"
+            aria-hidden="true"
+        >
+            <CategoryIcon :icon="resolveCategoryIcon(item.category)" />
         </span>
         <span class="fixed-item__copy">
             <strong>{{ item.name }}</strong>
@@ -126,22 +132,30 @@ function accessibleLabel() {
 
 .fixed-item__category {
     display: grid;
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
     place-items: center;
-    font-size: var(--tt-fs-section);
-    font-weight: var(--tt-fw-black);
     border-radius: var(--tt-radius-full);
 }
 
-.fixed-item__category--subscription {
-    color: var(--tt-accent-strong);
-    background: var(--tt-category-subscription);
+.fixed-item__category--primary {
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
 }
 
-.fixed-item__category--living {
+.fixed-item__category--accent {
+    color: var(--tt-accent-strong);
+    background: var(--tt-accent-subtle);
+}
+
+.fixed-item__category--success {
     color: var(--tt-success);
-    background: var(--tt-category-living);
+    background: var(--tt-success-subtle);
+}
+
+.fixed-item__category--muted {
+    color: var(--tt-text-muted);
+    background: var(--tt-gray-100);
 }
 
 .fixed-item__copy,
