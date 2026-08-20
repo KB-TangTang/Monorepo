@@ -355,10 +355,18 @@ async function handleDelete() {
                     :remaining-amount="ch.myRemainingAmount"
                 />
 
-                <!-- 목숨 바 (일일결산) / 기간 카드 (기간결산) -->
+                <!--
+                  목숨 바 (일일결산) / 기간 카드 (기간결산)
+
+                  livesCount 는 `??` 로 받는다. `||` 로 두면 **0 이 falsy 라 maxLives 로 대체돼**
+                  목숨을 전부 잃은(ELIMINATED) 사람에게 「7 / 7개」와 살아있는 판사봉 7개가 그려진다
+                  (이슈 #353). 0 은 이 화면에서 가장 중요한 상태이고, 정확히 그 상태만 정반대로
+                  표시되던 셈이다. 같은 화면의 랭킹표·홈 카드는 처음부터 `?? 0` 을 쓰고 있었다.
+                  fallback 자체는 남긴다 - 비참여자 응답에서 livesCount 가 null 일 수 있다.
+                -->
                 <GroupDetailLivesBar
                     v-if="isDaily"
-                    :lives-count="ch.livesCount || ch.maxLives"
+                    :lives-count="ch.livesCount ?? ch.maxLives"
                     :max-lives="ch.maxLives"
                     :mode="isRecruiting ? 'upcoming' : 'active'"
                     :size="isRecruiting ? 21 : 19"
