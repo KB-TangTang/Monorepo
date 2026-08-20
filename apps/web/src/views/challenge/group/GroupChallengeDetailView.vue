@@ -358,8 +358,10 @@ async function handleDelete() {
                 <!-- 목숨 바 (일일결산) / 기간 카드 (기간결산) -->
                 <!--
                   ?? 를 쓴다. 목숨 0은 「탈락」이라는 유효한 값이라 || 로 두면
-                  전부 잃은 사람에게 만땅이 그려진다. 폴백은 비참여자 응답의
-                  livesCount === null 전용이다 (서버는 참여자면 항상 정수를 내린다).
+                  전부 잃은 사람에게 만땅이 그려진다.
+                  폴백이 남아 있는 건 목데이터(isMockMode) 때문이다 — 상세 목데이터 6·7 에
+                  livesCount 가 없다. 실 API 는 /detail 이 비참여자를 GROUP_NOT_MEMBER 로
+                  막으므로 참여자에게는 항상 정수가 온다.
                 -->
                 <GroupDetailLivesBar
                     v-if="isDaily"
