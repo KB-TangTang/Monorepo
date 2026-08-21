@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 
 import {
     INK_TOP_ROUTES,
+    THEME_COLOR_COURT_DISTRICT,
+    THEME_COLOR_COURT_SUPREME,
     THEME_COLOR_INK,
     THEME_COLOR_PAPER,
     applyThemeColor,
@@ -24,18 +26,40 @@ function source(path) {
     return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('잉크 헤더 화면은 잉크색, 나머지는 종이색을 쓴다', () => {
-    for (const name of INK_TOP_ROUTES) {
-        assert.equal(resolveThemeColor(name), THEME_COLOR_INK, `${name} 은 잉크색이어야 한다`);
-    }
+test('어두운 헤더 화면은 각자의 상단 색, 나머지는 종이색을 쓴다', () => {
+    assert.equal(resolveThemeColor('login'), THEME_COLOR_INK);
+    assert.equal(resolveThemeColor('personalMissionChallenge'), THEME_COLOR_COURT_SUPREME);
+    assert.equal(resolveThemeColor('groupChallenge'), THEME_COLOR_COURT_DISTRICT);
+
     for (const name of ['home', 'asset', 'ledger', 'myPage', 'assetChecking']) {
         assert.equal(resolveThemeColor(name), THEME_COLOR_PAPER, `${name} 은 종이색이어야 한다`);
+    }
+});
+
+test('INK_TOP_ROUTES 는 어두운 상단 라우트를 빠짐없이 담는다', () => {
+    assert.deepEqual(INK_TOP_ROUTES, ['login', 'personalMissionChallenge', 'groupChallenge']);
+    for (const name of INK_TOP_ROUTES) {
+        assert.notEqual(
+            resolveThemeColor(name),
+            THEME_COLOR_PAPER,
+            `${name} 이 종이색이면 목록에 있을 이유가 없다`,
+        );
     }
 });
 
 test('이름 없는 라우트도 종이색으로 떨어진다 (undefined 로 크래시하지 않는다)', () => {
     assert.equal(resolveThemeColor(undefined), THEME_COLOR_PAPER);
     assert.equal(resolveThemeColor(null), THEME_COLOR_PAPER);
+});
+
+/*
+ * 객체 리터럴로 대응표를 만들면 'constructor' · '__proto__' 같은 이름이
+ * Object.prototype 의 값을 맞아 색이 아닌 것을 돌려준다. Map 이라 그 일이 없다.
+ */
+test('Object.prototype 의 키 이름을 라우트로 넣어도 종이색이다', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+        assert.equal(resolveThemeColor(name), THEME_COLOR_PAPER, `${name} 은 종이색이어야 한다`);
+    }
 });
 
 /** meta 태그 하나만 흉내 내는 최소 문서 스텁. */
