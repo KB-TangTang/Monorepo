@@ -292,7 +292,7 @@ class ChallengeGroupControllerTest {
         private BusinessException deleteFailure;
 
         StubService() {
-            super(null, null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null, null);
         }
 
         @Override
