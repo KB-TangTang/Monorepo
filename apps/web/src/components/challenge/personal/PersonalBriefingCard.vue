@@ -153,13 +153,22 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     margin-top: var(--tt-space-3);
 }
 
+/*
+ * 카드에서 가장 먼저 읽혀야 하는 줄이다. 본문(13.5px)과 같은 크기라 묻혀 있었다.
+ * 인장(우상단 46px)을 피하려고 오른쪽에 여백을 준다.
+ */
 .briefing-card__mission strong {
-    font-size: var(--tt-fs-body);
+    padding-right: 56px;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    letter-spacing: -0.01em;
     color: var(--tt-text);
+    word-break: keep-all;
 }
 
 .briefing-card__mission span {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
 }
 

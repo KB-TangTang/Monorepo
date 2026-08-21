@@ -5,12 +5,35 @@
     background: var(--tt-bg-subtle);
 }
 
+/*
+ * 첫 섹션 제목('오늘의 미션')은 본문이 아니라 헤더 하단 곡면 안에 있다.
+ * 그래서 위 여백은 곡면의 padding-bottom 에 이어 붙는 만큼만 준다.
+ */
 .personal-home__content {
     display: flex;
     flex-direction: column;
     gap: var(--tt-card-gap);
-    padding: var(--tt-space-3) var(--tt-screen-padding)
+    padding: var(--tt-space-2) var(--tt-screen-padding)
         calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
+}
+
+/*
+ * 두 번째 섹션부터는 제목을 카드 밖에 세운다.
+ * 카드 안에 제목을 두면 카드가 무엇에 대한 것인지 스크롤 중에 놓친다.
+ */
+.personal-home__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-2);
+}
+
+.personal-home__section-title {
+    margin: 0;
+    font-size: var(--tt-fs-label);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
 }
 
 .personal-home__content--withdrawn {

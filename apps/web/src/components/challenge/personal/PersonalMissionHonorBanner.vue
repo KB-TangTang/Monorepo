@@ -1,159 +1,97 @@
 <!--
-  용도: 개인 미션 홈에서 월간 명예의 전당 랭킹으로 이동시키는 티켓형 배너
-  양옆 노치는 이미지가 아니라 카드 뒤 배경색을 칠한 원으로 표현
+  용도: 개인 미션 홈에서 월간 명예의 전당(성적표)으로 이동시키는 배너.
+  홈 탭의 명예의 전당 카드(HomeView.vue `.honor-court`)와 같은 모양이다 —
+  같은 곳으로 가는 입구가 화면마다 다르게 생기면 사용자가 다른 기능으로 읽는다.
 -->
 <script setup>
+import honorCourtImage from '@/assets/images/emotions/56_with_trophy_ver4.png';
+
 defineProps({
     title: { type: String, default: '명예의 전당' },
     description: { type: String, default: '월간 랭킹 순위를 확인해보세요.' },
-    buttonLabel: { type: String, default: '확인하기' },
 });
 
 defineEmits(['open']);
 </script>
 
 <template>
-    <article class="honor-banner">
-        <div class="honor-banner__content">
-            <div class="honor-banner__heading">
-                <h2>{{ title }}</h2>
-                <span aria-hidden="true"></span>
-            </div>
-            <p>{{ description }}</p>
-        </div>
+    <button type="button" class="honor-banner" @click="$emit('open')">
+        <span class="honor-banner__content">
+            <strong class="honor-banner__title">{{ title }}</strong>
+            <span class="honor-banner__description">{{ description }}</span>
+        </span>
 
-        <button type="button" class="honor-banner__button" @click="$emit('open')">
-            {{ buttonLabel }}
-        </button>
-    </article>
+        <img class="honor-banner__image" :src="honorCourtImage" alt="" />
+    </button>
 </template>
 
 <style scoped>
 .honor-banner {
-    --tt-notch-bg: var(--tt-bg-subtle);
-
     position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    column-gap: var(--tt-space-4);
-    row-gap: var(--tt-space-1);
+    display: flex;
     align-items: center;
-    min-height: 100px;
-    padding: var(--tt-space-5);
+    width: 100%;
+    min-height: 108px;
+    padding: var(--tt-space-4);
     overflow: hidden;
-    color: var(--tt-text-inverse);
-    background: var(--tt-info);
+    font-family: var(--tt-font-sans);
+    text-align: left;
+    cursor: pointer;
+    background: var(--tt-info-subtle);
+    border: 1px solid var(--tt-info-subtle);
     border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-3);
-}
-
-/* 양옆의 원을 카드 바깥으로 절반 밀어 티켓 모양의 반원 홈을 만든다. */
-.honor-banner::before,
-.honor-banner::after {
-    position: absolute;
-    top: 50%;
-    width: 24px;
-    height: 24px;
-    content: '';
-    background: var(--tt-notch-bg);
-    border-radius: var(--tt-radius-full);
-    transform: translateY(-50%);
-}
-
-.honor-banner::before {
-    left: -12px;
-}
-
-.honor-banner::after {
-    right: -12px;
 }
 
 .honor-banner__content {
-    display: contents;
-}
-
-.honor-banner__heading {
-    grid-row: 1;
-    grid-column: 1 / -1;
+    position: relative;
+    z-index: 1;
     display: flex;
-    gap: var(--tt-space-3);
-    align-items: center;
+    flex-direction: column;
+    gap: var(--tt-space-2);
+    /* 탕이(92px)가 오른쪽 아래에 얹히므로 글이 그 밑으로 들어가지 않게 비워둔다 */
+    min-width: 0;
+    padding-right: 96px;
 }
 
-.honor-banner__heading h2 {
-    flex: 0 0 auto;
-    margin: 0;
+.honor-banner__title {
     font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-snug);
-}
-
-.honor-banner__heading span {
-    flex: 1;
-    min-width: var(--tt-space-5);
-    border-top: 1px dashed var(--tt-info-subtle);
-    opacity: 0.72;
-}
-
-.honor-banner__content p {
-    grid-row: 2;
-    grid-column: 1;
-    margin: 0;
-    font-size: var(--tt-fs-body);
-    line-height: var(--tt-lh-normal);
-    color: var(--tt-info-subtle);
-}
-
-.honor-banner__button {
-    grid-row: 2;
-    grid-column: 2;
-    min-height: 40px;
-    padding: 0 var(--tt-space-4);
-    font-family: var(--tt-font-sans);
-    font-size: var(--tt-fs-button);
-    font-weight: var(--tt-fw-black);
     color: var(--tt-text);
-    background: var(--tt-primary-gold);
-    border: 0;
-    border-radius: var(--tt-radius-sm);
-    cursor: pointer;
 }
 
-.honor-banner__button:hover {
-    filter: brightness(0.96);
+.honor-banner__description {
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-info);
 }
 
-.honor-banner__button:focus-visible {
-    outline: 2px solid var(--tt-text-inverse);
+.honor-banner__image {
+    position: absolute;
+    right: var(--tt-space-3);
+    bottom: var(--tt-space-3);
+    width: 92px;
+    height: 92px;
+    object-fit: contain;
+}
+
+.honor-banner:hover {
+    filter: brightness(0.98);
+}
+
+.honor-banner:focus-visible {
+    outline: 2px solid var(--tt-info);
     outline-offset: 2px;
 }
 
-@media (max-width: 390px) {
-    .honor-banner {
-        gap: var(--tt-space-3);
-        padding-right: var(--tt-space-4);
-        padding-left: var(--tt-space-4);
-    }
-
-    .honor-banner__button {
-        padding: 0 var(--tt-space-3);
-    }
-}
-
 @media (max-width: 359px) {
-    .honor-banner {
-        min-height: 92px;
-        padding: var(--tt-space-3);
+    .honor-banner__content {
+        padding-right: 84px;
     }
 
-    .honor-banner__heading h2 {
-        font-size: var(--tt-fs-body);
-    }
-
-    .honor-banner__button {
-        padding: 0 var(--tt-space-2);
-        white-space: nowrap;
+    .honor-banner__image {
+        width: 80px;
+        height: 80px;
     }
 }
 </style>

@@ -247,10 +247,26 @@
  *
  * .court-header 자체에 border-radius 를 주면 안 된다 — 건물 이미지가 풀블리드라 위쪽까지 깎인다.
  * 높이는 반드시 라운드 반경 이상이어야 한다. 작으면 브라우저가 반경을 그만큼 줄여버린다.
+ *
+ * 첫 섹션 제목(skirtTitle)이 이 안에 앉는다. 높이는 제목 유무와 **무관하게 고정**이다 —
+ * 한쪽 화면만 제목을 넘기면 그 순간 두 헤더의 높이가 갈라지기 때문이다.
  */
 .court-header__skirt {
     flex: none;
-    height: var(--tt-radius-2xl);
+    /* 곡률(30px) 아래로 제목 한 줄이 들어갈 만큼. 고정값이라 variant 가 건드리지 못한다 */
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    padding: 0 var(--tt-screen-padding) var(--tt-space-2);
     background: var(--tt-bg-subtle);
     border-radius: var(--tt-radius-2xl) var(--tt-radius-2xl) 0 0;
+}
+
+.court-header__skirt-title {
+    margin: 0;
+    font-size: var(--tt-fs-label);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
 }

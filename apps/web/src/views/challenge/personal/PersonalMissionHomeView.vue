@@ -8,6 +8,7 @@ import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vu
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
 import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard.vue';
+import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiSheet.vue';
 import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdictModal.vue';
 import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
@@ -77,6 +78,14 @@ const headerQuote = computed(() => {
 });
 const headerTangiImage = computed(() => store.selectedProsecutor?.image ?? defaultProsecutorTangi);
 const headerTangiName = computed(() => store.selectedProsecutor?.name ?? '탕이');
+
+/*
+ * 헤더 하단 곡면에 얹는 첫 섹션 제목. 오늘 볼 사건이 없는 상태(계좌 미연동·철회)에서는
+ * 비운다 — 곡면 높이는 제목이 없어도 그대로다.
+ */
+const headerSkirtTitle = computed(() =>
+    ['active', 'verdict', 'insufficient'].includes(store.screenState) ? '오늘의 미션' : '',
+);
 
 const cumulativeTransactionCount = computed(() => {
     const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
@@ -414,6 +423,7 @@ async function reassignTodayMission() {
             tangi-role="검사"
             :tangi-name="headerTangiName"
             :quote="headerQuote"
+            :skirt-title="headerSkirtTitle"
         />
 
         <!-- 메인 컨텐츠 -->
@@ -474,13 +484,25 @@ async function reassignTodayMission() {
                     :analysis-period="watchCategoryModel.period"
                 />
 
-                <PersonalScoreCard
-                    :week-days="weeklyVerdictModel.days"
-                    :streak-days="weeklyVerdictModel.streakDays"
-                    :prosecutor-image="store.selectedProsecutor?.image"
-                    :score="store.monthlyScore.score"
-                    :top-percent="store.monthlyScore.topPercent"
-                    @report-click="openPersonalRanking"
+                <section class="personal-home__section">
+                    <h2 class="personal-home__section-title">이번 주 판정</h2>
+                    <PersonalScoreCard
+                        :week-days="weeklyVerdictModel.days"
+                        :streak-days="weeklyVerdictModel.streakDays"
+                        :prosecutor-image="store.selectedProsecutor?.image"
+                        :score="store.monthlyScore.score"
+                        :top-percent="store.monthlyScore.topPercent"
+                    />
+                </section>
+
+                <!--
+                    배너가 제목을 이미 품고 있어 위에 섹션 제목을 또 세우지 않는다.
+                    인증서는 지난달치만 발급되므로 월 선택이 있는 성적표(랭킹)를 거쳐 들어간다.
+                -->
+                <PersonalMissionHonorBanner
+                    title="명예의 전당"
+                    description="월간 랭킹과 지난달 명예 인증서를 확인해보세요."
+                    @open="openPersonalRanking"
                 />
 
                 <div class="personal-home__verdict-info">

@@ -31,42 +31,67 @@ onBeforeUnmount(() => {
     if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
 });
 
-defineEmits(['report-click']);
-
-function dayLabel(status) {
+function dayAriaLabel(status) {
     if (status === 'success') return '인정';
     if (status === 'failed') return '기각';
-    return '';
+    if (status === 'today') return '오늘 · 판정 전';
+    return '판정 없음';
 }
 </script>
 
 <template>
     <div class="score-card">
-        <!-- ── 이번 주 판정 ──────────────────── -->
+        <!-- ── 이번 주 판정 ────────────────────
+             제목은 카드 밖 섹션 헤더에 있다. 여기서 또 쓰면 같은 말이 두 번 나온다. -->
         <div v-if="weekDays.length" class="score-card__weekly">
-            <div class="score-card__weekly-header">
-                <span class="score-card__weekly-title">이번 주 판정</span>
-                <span class="score-card__streak-badge">🔥 연속 {{ streakDays }}일</span>
-            </div>
-
             <div class="score-card__week-grid">
                 <div v-for="day in weekDays" :key="day.dow" class="score-card__day">
                     <small class="score-card__dow">{{ day.dow }}</small>
-                    <div class="score-card__circle" :class="`score-card__circle--${day.status}`">
-                        <template v-if="day.status === 'today'">
-                            <img
-                                v-if="prosecutorImage"
-                                :src="prosecutorImage"
-                                alt=""
-                                class="score-card__tangi"
-                            />
-                        </template>
-                        <template v-else>
-                            {{ dayLabel(day.status) }}
-                        </template>
+                    <div
+                        class="score-card__circle"
+                        :class="`score-card__circle--${day.status}`"
+                        :aria-label="`${day.dow}요일 ${dayAriaLabel(day.status)}`"
+                    >
+                        <img
+                            v-if="day.status === 'today' && prosecutorImage"
+                            :src="prosecutorImage"
+                            alt=""
+                            class="score-card__tangi"
+                        />
+                        <!-- 인정: 채운 파랑 + 흰 체크 / 기각: 연한 빨강 + X.
+                             기각을 성공과 같은 채도로 채우면 실패가 이어진 주가 붉은 벽이 된다. -->
+                        <svg
+                            v-else-if="day.status === 'success'"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path d="M5 12.5l4.5 4.5L19 7" />
+                        </svg>
+                        <svg
+                            v-else-if="day.status === 'failed'"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                        >
+                            <path d="M6 6l12 12M18 6L6 18" />
+                        </svg>
                     </div>
                 </div>
             </div>
+
+            <p class="score-card__streak">🔥 연속 성공 {{ streakDays }}일째</p>
         </div>
 
         <div v-if="weekDays.length" class="score-card__divider" />
@@ -99,10 +124,6 @@ function dayLabel(status) {
                     :style="{ width: `${displayedRankingProgress}%` }"
                 ></div>
             </div>
-
-            <button type="button" class="score-card__report-link" @click="$emit('report-click')">
-                성적표 보기 ›
-            </button>
         </div>
     </div>
 </template>
@@ -121,26 +142,12 @@ function dayLabel(status) {
     padding-bottom: 14px;
 }
 
-.score-card__weekly-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.score-card__weekly-title {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text-hint);
-    letter-spacing: 0.08em;
-}
-
-.score-card__streak-badge {
-    padding: 4px 10px;
-    font-size: 11.5px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-accent-deep);
-    background: var(--tt-accent-subtle);
-    border-radius: var(--tt-radius-full);
+.score-card__streak {
+    margin: 11px 0 0;
+    text-align: center;
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
 }
 
 /* ── 주간 그리드 ───────────────────────── */
@@ -148,7 +155,6 @@ function dayLabel(status) {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
-    margin-top: 12px;
 }
 
 .score-card__day {
@@ -171,23 +177,23 @@ function dayLabel(status) {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    font-size: 10px;
-    font-weight: var(--tt-fw-black);
     border: 1.5px solid var(--tt-border);
     background: var(--tt-bg-fill);
     color: var(--tt-text-hint);
 }
 
+/* 인정만 꽉 채운다. 한 주에서 눈에 먼저 들어와야 하는 건 성공한 날이다 */
 .score-card__circle--success {
-    background: var(--tt-success-subtle);
-    border-color: var(--tt-success);
-    color: var(--tt-success-deep);
+    background: var(--tt-primary);
+    border-color: var(--tt-primary);
+    color: var(--tt-text-inverse);
 }
 
+/* 기각은 같은 채도로 채우지 않는다 — 실패가 이어진 주가 붉은 벽이 된다 */
 .score-card__circle--failed {
     background: var(--tt-danger-subtle);
-    border-color: var(--tt-danger);
-    color: var(--tt-danger-deep);
+    border-color: var(--tt-danger-subtle);
+    color: var(--tt-danger);
 }
 
 .score-card__circle--today {
@@ -284,26 +290,10 @@ function dayLabel(status) {
     }
 }
 
-.score-card__report-link {
-    display: block;
-    margin-top: var(--tt-space-3);
-    margin-left: auto;
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-info);
-    white-space: nowrap;
-    cursor: pointer;
-    font-family: var(--tt-font-sans);
-}
-
 @media (max-width: 359px) {
     .score-card__circle {
         width: 30px;
         height: 30px;
-        font-size: 9px;
     }
 }
 </style>

@@ -31,6 +31,11 @@ defineProps({
     tangiName: { type: String, required: true },
     /** 말풍선 본문. 줄바꿈은 \n 으로 넣는다 (pre-line 으로 그린다). */
     quote: { type: String, default: '' },
+    /**
+     * 헤더 하단 곡면에 얹는 첫 섹션 제목 ('오늘의 미션' 같은 것).
+     * **비워도 곡면 높이는 그대로다.** 두 화면의 헤더 높이가 어긋나지 않게 고정해 뒀다.
+     */
+    skirtTitle: { type: String, default: '' },
 });
 </script>
 
@@ -59,8 +64,13 @@ defineProps({
             </div>
         </div>
 
-        <!-- 다크 헤더와 밝은 본문 사이를 이어주는 곡면. 본문 배경색과 같아야 한다. -->
-        <div class="court-header__skirt" aria-hidden="true"></div>
+        <!--
+          다크 헤더와 밝은 본문 사이를 이어주는 곡면. 본문 배경색과 같아야 한다.
+          첫 섹션 제목이 여기 앉는다 — 본문에 또 제목 줄을 두면 그만큼 화면이 밀린다.
+        -->
+        <div class="court-header__skirt">
+            <h2 v-if="skirtTitle" class="court-header__skirt-title">{{ skirtTitle }}</h2>
+        </div>
     </header>
 </template>
 

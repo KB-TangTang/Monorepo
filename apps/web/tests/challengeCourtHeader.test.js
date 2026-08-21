@@ -74,11 +74,13 @@ test('헤더 높이를 정하는 값은 전부 본문 길이와 무관한 고정
         /overflow:\s*hidden;/,
         '문구가 넘치면 늘어나는 게 아니라 잘려야 한다',
     );
-    assert.match(
-        rule(css, '.court-header__skirt {'),
-        /height:\s*var\(--tt-radius-2xl\);/,
-        '하단 곡면도 고정 높이여야 한다',
-    );
+    /*
+     * 곡면은 첫 섹션 제목을 품는다. 제목을 넘기지 않는 화면이 있어도 높이가 같아야 하므로
+     * min-height 나 padding 만으로 두지 않고 height 를 못 박는다.
+     */
+    const skirt = rule(css, '.court-header__skirt {');
+    assert.match(skirt, /height:\s*\d+px;/, '하단 곡면도 제목 유무와 무관한 고정 높이여야 한다');
+    assert.doesNotMatch(skirt, /min-height/, '내용에 따라 늘어나면 두 화면의 헤더가 갈라진다');
 });
 
 /*
