@@ -1,0 +1,256 @@
+/*
+ * 높이 규칙 — 이 파일에서 가장 중요한 것.
+ *
+ * 개인챌린지와 그룹챌린지의 헤더 높이는 픽셀 단위로 같아야 한다. 그래서 높이에 관여하는 값을
+ * 전부 **본문 길이와 무관한 고정값**으로 잡았다. variant 클래스는 아래 커스텀 프로퍼티만
+ * 갈아 끼우고 높이 관련 속성에는 손대지 않는다.
+ *
+ *   statusbar  env(safe-area-inset-top)     두 화면 동일
+ *   hero       aspect-ratio                 두 화면 동일
+ *   foot       고정 padding + 1줄 부제 + talk
+ *   talk       탕이 고정 height / 말풍선 aspect-ratio → 문구가 길어져도 안 늘어난다
+ *   skirt      고정 height                  두 화면 동일
+ *
+ * 말풍선을 텍스트 높이에 맡기면 문구 길이가 다른 두 화면의 헤더가 조용히 어긋난다.
+ * 실제로 그렇게 어긋났었다. 문구가 넘치면 늘어나는 게 아니라 잘린다(overflow: hidden).
+ */
+.court-header {
+    display: flex;
+    flex-direction: column;
+    background: var(--tt-court-header-bg);
+}
+
+/*
+ * variant 가 바꾸는 것은 색 두 개와 이미지 배치 세 개뿐이다.
+ * 규칙을 통째로 복제하지 않으므로 두 화면의 구조가 갈라질 일이 없다.
+ *
+ * --court-img-w   건물 이미지 폭. 100% 보다 크면 좌우가 잘리는 대신 여백이 절대 안 생긴다.
+ *                 원본 가장자리의 1px 헤어라인 테두리를 잘라내는 역할도 겸한다.
+ * --court-img-x   좌우 미세 보정. 일러스트의 건물 중심이 캔버스 중심과 어긋난 것을 맞춘다.
+ *                 translateX 안에 들어가므로 % 는 **박스가 아니라 이미지 자기 폭** 기준이다.
+ *
+ * 두 값은 **눈으로 맞추는 수치**다. 프레이밍이 마음에 안 들면 여기 두 줄만 고치면 된다.
+ */
+.court-header--supreme {
+    --court-top: var(--tt-court-header-top-supreme);
+    --court-fade: var(--tt-court-header-fade-supreme);
+    /* 대법원 원본 650x448. 6% 씩 잘려도 현판 리본 끝(원본 x=46)이 7px 남는다 */
+    --court-img-w: 112%;
+    --court-img-x: 0%;
+    --court-tangi-scale: 1;
+}
+
+.court-header--district {
+    --court-top: var(--tt-court-header-top-district);
+    --court-fade: var(--tt-court-header-fade-district);
+    /* 지방법원 원본 654x496. 지붕 용마루가 캔버스 중심보다 왼쪽이라 오른쪽으로 조금 민다 */
+    --court-img-w: 103%;
+    --court-img-x: 1%;
+    /* 판사탕이(48_judging.png)는 아트워크가 캔버스의 72% 뿐이라 그냥 두면 검사탕이보다 작아 보인다 */
+    --court-tangi-scale: 1.15;
+}
+
+/*
+ * 상단 스트립. 디자인 목업의 46px `9:41` 줄은 시계를 흉내 낸 것이라 실제 앱에서는 그리지 않는다.
+ * 세이프에어리어만 이미지 상단과 같은 색으로 채운다 — 브라우저·안드로이드에서는 0px 이다.
+ */
+.court-header__statusbar {
+    flex: none;
+    height: env(safe-area-inset-top, 0px);
+    background: var(--court-top);
+}
+
+/*
+ * 건물 이미지 박스.
+ *
+ * 두 일러스트는 비율도(1.451 vs 1.319) 안쪽 여백도(건물 위 13.4% vs 7.1%) 다르다.
+ * 그대로 폭에 맞추면 높이가 27px 어긋나고, 지방법원은 지붕이 화면 맨 위에 붙는다.
+ *
+ * 그래서 박스 비율을 **두 이미지보다 세로로 길게** 잡고(327/268) 이미지를 아래에 붙인다.
+ * 위에 남는 띠는 --court-top 으로 채우는데, 이 색이 이미지 최상단 행의 실측 색과
+ * 채널당 4/255 안쪽이라 이음매가 보이지 않는다(측정값은 tokens.css 주석 참고).
+ *
+ * 390px 기준: 박스 높이 319.6px
+ *   대법원   폭 112% → 높이 301.1, 위 띠 18.5px, 건물 위 여백 58.8px
+ *   지방법원 폭 103% → 높이 304.6, 위 띠 15.0px, 건물 위 여백 36.5px  (이전 21.0px)
+ * 폭을 항상 100% 보다 크게 두므로 좌우에 배경이 드러나는 일은 없다.
+ */
+.court-header__hero {
+    position: relative;
+    flex: none;
+    width: 100%;
+    aspect-ratio: 327 / 268;
+    overflow: hidden;
+    background: var(--court-top);
+}
+
+.court-header__hero-img {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(calc(-50% + var(--court-img-x)));
+    width: var(--court-img-w);
+    height: auto;
+    display: block;
+}
+
+/* ── 알림 벨 ─────────────────────────────────────────
+ * TheNotificationBell 은 홈 탭도 쓰는 공용이라 고치지 않는다. 여기서만 덮어쓴다. */
+.court-header__bell {
+    position: absolute;
+    top: var(--tt-space-2);
+    right: var(--tt-screen-padding);
+}
+
+.court-header__bell :deep(.tt-bell) {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-court-bell-bg);
+    color: var(--tt-court-bell-fg);
+    box-shadow: var(--tt-elevation-court-bell);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.court-header__bell :deep(.tt-bell svg) {
+    width: 19px;
+    height: 19px;
+}
+
+.court-header__bell :deep(.tt-bell__badge) {
+    top: -4px;
+    right: -4px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 var(--tt-space-1);
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    line-height: 17px;
+}
+
+/* ── 부제 + 탕이 말풍선 ──────────────────────────── */
+.court-header__foot {
+    flex: none;
+    padding: 6px var(--tt-screen-padding) 10px;
+    background: linear-gradient(180deg, var(--court-fade) 0%, var(--tt-court-header-bg) 100%);
+}
+
+.court-header__subtitle {
+    margin: 0;
+    text-align: center;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-court-header-caption);
+}
+
+.court-header__talk {
+    margin-top: var(--tt-space-3);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 폭·높이 모두 고정이라 행 높이와 말풍선 폭이 variant 로 갈라지지 않는다 */
+.court-header__tangi {
+    flex: none;
+    width: 96px;
+    height: 84px;
+    object-fit: contain;
+    /*
+     * 확대는 transform 으로 한다. width/height 를 키우면 행 높이가 variant 마다 달라지고
+     * 말풍선에 남는 폭까지 따라 달라진다.
+     */
+    transform-origin: center bottom;
+    animation: tt-court-float 3.4s ease-in-out infinite;
+}
+
+/* 확대 배율을 키프레임 안에서 같이 걸어야 float 이 scale 을 덮어쓰지 않는다 */
+@keyframes tt-court-float {
+    0%,
+    100% {
+        transform: translateY(0) scale(var(--court-tangi-scale));
+    }
+    50% {
+        transform: translateY(-5px) scale(var(--court-tangi-scale));
+    }
+}
+
+/*
+ * 양피지 말풍선. 배경 이미지라 aspect-ratio 로 높이가 고정된다 —
+ * 문구 길이가 헤더 높이를 못 건드리게 하는 장치이기도 하다.
+ * inset 값은 이미지 안의 금색 테두리 · 판사봉 엠블럼 · 구분선을 피해 잡은 것이다.
+ */
+.court-header__speech {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    aspect-ratio: 1600 / 680;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
+    filter: drop-shadow(var(--tt-elevation-court-speech));
+}
+
+/*
+ * 화자 이름. 말풍선 머리의 판사봉 엠블럼 오른쪽 빈칸에 앉힌다.
+ * 자리를 **말풍선 기준 % 로만** 잡으므로 폭이 달라져도 엠블럼·구분선을 침범하지 않는다.
+ * 원본 1600x680 실측값: 안쪽 금테 위 11.3% · 엠블럼 오른쪽 끝 18.3% · 구분선 35.9% · 안쪽 금테 오른쪽 96.5%.
+ * 아래 inset 은 그 사이에 여유를 두고 잡은 것이다.
+ */
+.court-header__speech-name {
+    position: absolute;
+    inset: 13% 8% 65% 20%;
+    display: flex;
+    align-items: center;
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    line-height: 1;
+    color: var(--tt-wood);
+    letter-spacing: 0.02em;
+    /* 이름이 길어도 구분선 아래로 흘러내리면 안 된다. 넘치면 늘어나는 게 아니라 잘린다 */
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* 아래 14% 는 안쪽 금테(87.1%)를 넘지 않으려는 값이다. 8% 였을 때는 프레임 밖으로 흘렀다 */
+.court-header__speech-text {
+    position: absolute;
+    inset: 38% 7% 14% 12%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
+    word-break: keep-all;
+    white-space: pre-line;
+}
+
+@media (max-width: 390px) {
+    .court-header__speech-text {
+        font-size: var(--tt-fs-label);
+    }
+}
+
+/*
+ * 다크 헤더 → 밝은 본문 곡면.
+ *
+ * 헤더가 각진 채로 끝나면 경계가 자로 그은 것처럼 끊긴다. 그래서 본문 배경색과 **같은 색** 패널을
+ * 헤더 마지막에 붙이고 위 두 모서리만 굴린다. 굴린 자리에 헤더 배경(--tt-court-header-bg)이 비쳐
+ * 밝은 면이 다크 위로 올라타는 것처럼 보인다.
+ *
+ * .court-header 자체에 border-radius 를 주면 안 된다 — 건물 이미지가 풀블리드라 위쪽까지 깎인다.
+ * 높이는 반드시 라운드 반경 이상이어야 한다. 작으면 브라우저가 반경을 그만큼 줄여버린다.
+ */
+.court-header__skirt {
+    flex: none;
+    height: var(--tt-radius-2xl);
+    background: var(--tt-bg-subtle);
+    border-radius: var(--tt-radius-2xl) var(--tt-radius-2xl) 0 0;
+}

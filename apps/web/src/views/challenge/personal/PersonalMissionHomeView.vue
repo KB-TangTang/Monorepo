@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
 import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
-import PersonalCourtHeader from '@/components/challenge/personal/PersonalCourtHeader.vue';
+import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vue';
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
 import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard.vue';
@@ -19,7 +19,6 @@ import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 import { useConsentStore } from '@/stores/consent';
 import { useAuthStore } from '@/stores/auth';
 import {
-    formatCourtDate,
     formatMissionWatchQuote,
     formatWon,
     formatMissionAssignmentSummary,
@@ -29,7 +28,8 @@ import {
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
 import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
 import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
-import courtSupreme from '@/assets/images/court/court_supreme.png';
+import buildingSupreme from '@/assets/images/court/building_supreme_v2.png';
+import defaultProsecutorTangi from '@/assets/images/prosecutor_tangtang/prosecutor_tangtang_A.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
 import insufficientTangi from '@/assets/images/emotions/03_gentle_smile.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
@@ -58,14 +58,25 @@ const hasPendingMissionUnlock = ref(false);
 const isMissionUnlockPreview = ref(false);
 const isMissionUnlockDifficultyFlow = ref(false);
 
-const courtDate = computed(() => formatCourtDate());
-const shortDate = computed(() => {
-    const d = new Date();
-    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
-});
 const missionWatchQuote = computed(() =>
     formatMissionWatchQuote(store.todayBriefing?.categoryName),
 );
+
+/*
+ * 헤더는 화면 상태와 무관하게 항상 같은 높이로 그린다(계좌 미연동·철회 포함).
+ * 상태에 따라 바뀌는 건 말풍선 문구뿐이다.
+ */
+const headerQuote = computed(() => {
+    if (store.screenState === 'no-account') {
+        return '수사할 증거가 없습니다.\n먼저 계좌를 연결해 주세요.';
+    }
+    if (store.screenState === 'withdrawn') {
+        return '챌린지 참여가 중지됐어요.\n언제든 다시 오세요.';
+    }
+    return missionWatchQuote.value;
+});
+const headerTangiImage = computed(() => store.selectedProsecutor?.image ?? defaultProsecutorTangi);
+const headerTangiName = computed(() => store.selectedProsecutor?.name ?? '탕이');
 
 const cumulativeTransactionCount = computed(() => {
     const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
@@ -393,34 +404,16 @@ async function reassignTodayMission() {
             @acknowledge="handleVerdictAcknowledge"
         />
 
-        <!-- 오늘 미션이 있는 화면은 법원·담당 탕이 헤더를 동일하게 유지한다. -->
-        <PersonalCourtHeader
-            v-if="
-                store.screenState === 'active' ||
-                store.screenState === 'verdict' ||
-                store.screenState === 'insufficient'
-            "
-            :court-image="courtSupreme"
-            :date="courtDate"
-            :prosecutor-image="store.selectedProsecutor?.image"
-            :prosecutor-name="store.selectedProsecutor?.name"
-            :quote="missionWatchQuote"
-        />
-
-        <!-- 헤더: 축소 모드 (no-account) -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'no-account'"
-            :court-image="courtSupreme"
-            :date="shortDate"
-            compact
-            compact-title="수사할 증거가<br>없습니다"
-        />
-
-        <!-- 철회 후 오늘 미션 없음: 법원·날짜·알림 헤더는 기본 크기로 유지 -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'withdrawn'"
-            :court-image="courtSupreme"
-            :date="courtDate"
+        <!-- 화면 상태와 무관하게 같은 헤더를 쓴다. 바뀌는 건 말풍선 문구뿐이다. -->
+        <ChallengeCourtHeader
+            variant="supreme"
+            :court-image="buildingSupreme"
+            court-alt="탕탕 대법원"
+            subtitle="스스로의 소비 습관을 심판받는 곳"
+            :tangi-image="headerTangiImage"
+            tangi-role="검사"
+            :tangi-name="headerTangiName"
+            :quote="headerQuote"
         />
 
         <!-- 메인 컨텐츠 -->
