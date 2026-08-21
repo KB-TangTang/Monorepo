@@ -915,6 +915,55 @@ class AccountLinkServiceTest {
     }
 
     @Test
+    @DisplayName("bank_code 가 비어 있으면 기관명으로 코드를 역추적해 로고가 살아난다")
+    void fillsMissingBankCodeFromInstitutionName() {
+        /*
+         * 목서버가 증권 동기화에 institutionCode 를 주지 않아 bank_code 가 빈 채로 저장된
+         * 행이 실제로 있다(2026-08-21 운영 확인 — 삼성증권 8행·KB Pay 8행).
+         * 코드가 비면 화면이 로고 파일을 못 찾아 약칭 글자 배지로 떨어진다.
+         */
+        ConnectedAccount securities = ConnectedAccount.builder()
+                .id(1L).userId(USER_ID).bankName("삼성증권")
+                .accountName("삼성증권 종합계좌").accountNoEncrypted("MOCK-SECURITIES-1")
+                .accountType("SECURITIES").balance(new BigDecimal("1000"))
+                .syncStatus("NORMAL").build();
+        ConnectedAccount payMoney = ConnectedAccount.builder()
+                .id(2L).userId(USER_ID).bankCode("").bankName("KB Pay")
+                .accountName("KB Pay 머니").accountNoEncrypted("MOCK-PAYMONEY-1")
+                .accountType("PAYMONEY").balance(new BigDecimal("2000"))
+                .syncStatus("NORMAL").build();
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(securities, payMoney));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        // null 인 경우와 빈 문자열인 경우를 모두 구제한다
+        assertEquals("0240", result.getAccounts().get(0).getBankCode());
+        assertEquals("PAY_KB", result.getAccounts().get(1).getBankCode());
+        // 약칭도 같은 코드로 뽑아야 배지 글자가 빈칸이 되지 않는다
+        assertEquals("삼성", result.getAccounts().get(0).getShortLabel());
+        assertEquals("KB", result.getAccounts().get(1).getShortLabel());
+    }
+
+    @Test
+    @DisplayName("저장된 bank_code 가 있으면 기관명 역추적보다 항상 우선한다")
+    void storedBankCodeWinsOverNameLookup() {
+        /*
+         * codeOfName 은 이름이 한 글자라도 다르면 null 이라 폴백에 의존하면 조용히 깨진다.
+         * 저장값이 있으면 이름이 카탈로그와 달라도 저장값을 그대로 써야 한다.
+         */
+        ConnectedAccount account = ConnectedAccount.builder()
+                .id(1L).userId(USER_ID).bankCode("0240").bankName("삼성증권(구)")
+                .accountName("종합계좌").accountNoEncrypted("MOCK-SECURITIES-9")
+                .accountType("SECURITIES").balance(new BigDecimal("1000"))
+                .syncStatus("NORMAL").build();
+        when(mapper.findActiveByUser(USER_ID)).thenReturn(List.of(account));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals("0240", result.getAccounts().get(0).getBankCode());
+    }
+
+    @Test
     @DisplayName("같은 증권 계좌의 이전 동기화 그림자 행은 연결 계좌 관리에서 숨긴다")
     void hidesLegacySecuritiesShadowWhenCanonicalAccountExists() {
         ConnectedAccount canonical = ConnectedAccount.builder()

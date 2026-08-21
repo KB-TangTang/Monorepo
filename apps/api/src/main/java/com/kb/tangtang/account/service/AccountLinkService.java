@@ -598,11 +598,13 @@ public class AccountLinkService {
         List<ConnectedAccountDto> accounts = new java.util.ArrayList<>(activeAccounts.stream()
                 .filter(row -> !isLegacySecuritiesShadow(row, canonicalSecuritiesInstitutions))
                 .filter(row -> !isLegacyDepositShadow(row, canonicalDepositKeys))
-                .map(row -> ConnectedAccountDto.builder()
+                .map(row -> {
+                    String bankCode = displayBankCode(row);
+                    return ConnectedAccountDto.builder()
                         .accountId(row.getId())
-                        .bankCode(row.getBankCode())
+                        .bankCode(bankCode)
                         .bankName(row.getBankName())
-                        .shortLabel(catalog.shortLabelOf(row.getBankCode()))
+                        .shortLabel(catalog.shortLabelOf(bankCode))
                         .accountName(row.getAccountName())
                         .accountNoMasked(row.getAccountNoMasked())
                         .accountType(row.getAccountType())
@@ -611,7 +613,8 @@ public class AccountLinkService {
                         .lastSyncAt(text(row.getLastSyncAt()))
                         .syncFailReason(row.getSyncFailReason())
                         .expiresAt(text(row.getExpiresAt()))
-                        .build())
+                        .build();
+                })
                 .toList());
         accounts.addAll(loanMapper.findByUser(userId).stream()
                 .map(this::loanAsConnectedAccount)
@@ -661,6 +664,29 @@ public class AccountLinkService {
             return null;
         }
         return account.getBankCode() + "|" + account.getAccountNoMasked();
+    }
+
+    /**
+     * 화면에 쓸 기관 코드. 저장된 값이 있으면 그대로, 비어 있으면 기관명으로 역추적한다.
+     *
+     * 목서버가 증권 동기화에 institutionCode 를 주지 않아 `tbl_connected_account.bank_code` 가
+     * 빈 채로 저장되는 행이 있다(2026-08-21 확인 — 삼성증권 8행·KB Pay 8행). 코드가 비면
+     * 화면이 로고 파일을 못 찾아 약칭 글자 배지로 떨어진다. 대출은 loanAsConnectedAccount()
+     * 가 진작부터 같은 폴백을 써서 이 문제를 겪지 않았다 — 같은 장치를 나머지 계좌에도 건다.
+     *
+     * ⚠ 이건 **표시 전용**이다. 저장값을 바꾸지 않는다. 동기화 쪽에서 채우려면
+     *   securitiesAccountKey() 가 institutionCode 로 자연키를 만드는 것을 먼저 봐야 한다 —
+     *   거기 값이 생기면 키가 바뀌어 기존 행을 못 찾고 계좌가 중복된다(이슈 #375 와 같은 사고).
+     *
+     * ⚠ codeOfName 은 이름이 한 글자라도 다르면 null 을 돌려준다. 그래서 저장된 코드가 있으면
+     *   언제나 그쪽이 우선이다. 폴백은 빈 값 구제용이지 이름 매칭으로 갈아타는 게 아니다.
+     */
+    private String displayBankCode(ConnectedAccount account) {
+        String stored = account.getBankCode();
+        if (stored != null && !stored.isBlank()) {
+            return stored;
+        }
+        return catalog.codeOfName(account.getBankName());
     }
 
     /**
