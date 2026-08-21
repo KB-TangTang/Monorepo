@@ -11,6 +11,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
 import com.kb.tangtang.challenge.dto.GroupMemberDto;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.mapper.ChallengeGroupMapper;
 import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
@@ -82,6 +83,8 @@ public class ChallengeGroupService {
     private final ChatMessageStore chatMessageStore;
     private final ChallengeGroupDeleter challengeGroupDeleter;
     private final ApplicationEventPublisher events;
+    /** 프로필 이미지 키 → URL. 저장소 규칙을 프론트가 알지 않게 여기서 바꿔 내려준다. */
+    private final ImageStorage imageStorage;
     private final Clock clock;
 
     @Autowired
@@ -92,10 +95,11 @@ public class ChallengeGroupService {
                                  InviteCodeGenerator inviteCodeGenerator,
                                  ChatMessageStore chatMessageStore,
                                  ChallengeGroupDeleter challengeGroupDeleter,
-                                 ApplicationEventPublisher events) {
+                                 ApplicationEventPublisher events,
+                                 ImageStorage imageStorage) {
         this(challengeGroupMapper, groupMemberMapper, indictmentMapper, categoryMapper,
                 inviteCodeGenerator, chatMessageStore, challengeGroupDeleter, events,
-                Clock.systemDefaultZone());
+                imageStorage, Clock.systemDefaultZone());
     }
 
     ChallengeGroupService(ChallengeGroupMapper challengeGroupMapper,
@@ -106,6 +110,7 @@ public class ChallengeGroupService {
                           ChatMessageStore chatMessageStore,
                           ChallengeGroupDeleter challengeGroupDeleter,
                           ApplicationEventPublisher events,
+                          ImageStorage imageStorage,
                           Clock clock) {
         this.challengeGroupMapper = challengeGroupMapper;
         this.groupMemberMapper = groupMemberMapper;
@@ -115,6 +120,7 @@ public class ChallengeGroupService {
         this.chatMessageStore = chatMessageStore;
         this.challengeGroupDeleter = challengeGroupDeleter;
         this.events = events;
+        this.imageStorage = imageStorage;
         this.clock = clock;
     }
 
@@ -667,6 +673,13 @@ public class ChallengeGroupService {
         return GroupMemberDto.builder()
                 .userId(member.getUserId())
                 .nickname(member.getNickname())
+                /*
+                 * 이 목록을 쓰는 화면(그룹 상세 멤버 그리드 · 채팅 아바타)이 프로필 사진을 그린다.
+                 * 없던 동안 두 화면 모두 프로필을 바꿔도 이니셜만 보여줬다(이슈 #407).
+                 * 조회는 GroupMember 가 tbl_user.profile_image_key 를 이미 조인해 온다 —
+                 * 쿼리를 더 날리지 않는다.
+                 */
+                .profileImageUrl(imageStorage.urlOf(member.getProfileImageKey()))
                 .owner(member.getUserId().equals(adminId))
                 .build();
     }
