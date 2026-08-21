@@ -343,5 +343,41 @@ export const usePersonalMissionChallengeStore = defineStore('personalMissionChal
             this.demoScreenState = null;
             this.pendingVerdict = verdict;
         },
+
+        /*
+         * 데모용: 이번 주 판정에 인정·기각·대기를 섞어 넣는다.
+         *
+         * 주간 판정은 서버(/missions/streak)에서만 오므로, 실패한 날이 없는 계정으로는
+         * 기각 표시를 화면에서 확인할 방법이 없었다. 이 화면의 다른 데모 버튼과 같은 방식으로
+         * 스토어 상태만 갈아 끼운다 - 서버에는 아무것도 보내지 않는다.
+         */
+        setDemoWeeklyResults(today = new Date()) {
+            const monday = new Date(today);
+            monday.setHours(0, 0, 0, 0);
+            monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+
+            /* toISOString 은 UTC 로 밀려 KST 자정이 전날이 된다 - 로컬 기준으로 만든다 */
+            const toKey = (offset) => {
+                const date = new Date(monday);
+                date.setDate(monday.getDate() + offset);
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${date.getFullYear()}-${month}-${day}`;
+            };
+
+            const todayOffset = (today.getDay() + 6) % 7;
+            const results = ['SUCCESS', 'FAIL', 'SUCCESS', 'SUCCESS', 'FAIL', 'SUCCESS', 'SUCCESS'];
+
+            this.missionStreak = {
+                weekStartDate: toKey(0),
+                streakCount: 2,
+                longestStreakCount: 5,
+                /* 오늘은 판정 전(PENDING), 내일부터는 결과 자체를 보내지 않는다 */
+                weeklyResults: results.slice(0, todayOffset + 1).map((result, index) => ({
+                    date: toKey(index),
+                    result: index === todayOffset ? 'PENDING' : result,
+                })),
+            };
+        },
     },
 });

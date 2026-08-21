@@ -121,6 +121,22 @@ test('라우터가 afterEach 에서 상태바 색을 적용한다', () => {
     assert.doesNotMatch(guardBody, /applyThemeColor\(/, 'beforeEach 안에서 적용하면 안 된다');
 });
 
+/*
+ * 종이색은 tokens.css · themeColor.js · index.html · manifest 네 곳에 흩어져 있다
+ * (CSS 변수를 JS 나 manifest 에서 읽을 방법이 없다). 한쪽만 고치면 조용히 어긋난다.
+ */
+test('tokens.css 의 --tt-neutral-paper 와 종이색 상수가 같다', () => {
+    const match = source('src/assets/tokens.css').match(/--tt-neutral-paper:\s*(#[0-9a-fA-F]{6});/);
+    assert.ok(match, '--tt-neutral-paper 토큰이 tokens.css 에 있어야 한다');
+    assert.equal(match[1].toLowerCase(), THEME_COLOR_PAPER);
+});
+
+test('manifest 의 배경·테마색이 종이색과 같다', () => {
+    const manifest = JSON.parse(source('public/manifest.webmanifest'));
+    assert.equal(manifest.theme_color.toLowerCase(), THEME_COLOR_PAPER);
+    assert.equal(manifest.background_color.toLowerCase(), THEME_COLOR_PAPER);
+});
+
 test('index.html 기본 theme-color 가 종이색과 같다', () => {
     const html = source('index.html');
     const match = html.match(/<meta name="theme-color" content="([^"]+)"/);

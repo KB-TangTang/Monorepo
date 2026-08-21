@@ -392,6 +392,11 @@ function showInsufficientDemo() {
     store.setDemoInsufficient();
 }
 
+function showWeeklyResultsDemo() {
+    store.setDemoWeeklyResults();
+    devActionMessage.value = '이번 주 판정에 인정·기각을 섞었다. 새로고침하면 실제 값으로 돌아간다';
+}
+
 function showMissionUnlockDemo() {
     isMissionUnlockPreview.value = true;
     missionUnlockError.value = '';
@@ -514,10 +519,7 @@ async function reassignTodayMission() {
                     @prosecutor-click="openTangiSheet"
                 />
 
-                <PersonalWatchlistCard
-                    :items="watchCategoryModel.items"
-                    :analysis-period="watchCategoryModel.period"
-                />
+                <PersonalWatchlistCard :items="watchCategoryModel.items" />
 
                 <section class="personal-home__section">
                     <h2 class="personal-home__section-title">이번 주 판정</h2>
@@ -711,6 +713,9 @@ async function reassignTodayMission() {
             <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
             <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
                 데이터 부족 화면
+            </button>
+            <button type="button" class="personal-home__dev-btn" @click="showWeeklyResultsDemo">
+                이번 주 판정 인정·기각 섞기
             </button>
             <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
                 맞춤 사건 개시 안내

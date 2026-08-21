@@ -87,7 +87,7 @@
 }
 
 .personal-home__verdict-info span:last-child {
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -118,7 +118,7 @@
 }
 
 .personal-home__insufficient-sub {
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-accent-warn);
     font-weight: var(--tt-fw-semibold);
     margin-top: 5px;
@@ -177,13 +177,13 @@
 
 .personal-home__condition-label {
     flex: 1;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
 
 .personal-home__condition-value {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     font-family: var(--tt-font-mono);
 }
@@ -221,7 +221,7 @@
     background: none;
     border: none;
     padding: 0;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-info);
     cursor: pointer;
@@ -243,14 +243,14 @@
     justify-content: space-between;
     gap: var(--tt-space-2);
     color: var(--tt-text-hint);
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
 }
 
 .personal-home__common-badge {
     background: var(--tt-bg-fill);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
     border-radius: var(--tt-radius-full);
@@ -266,7 +266,7 @@
 .personal-home__common-description {
     margin-top: var(--tt-space-1);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-semibold);
     line-height: 1.45;
     word-break: keep-all;
@@ -280,7 +280,7 @@
     display: flex;
     align-items: center;
     gap: var(--tt-space-2);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }

@@ -145,7 +145,7 @@ function dayAriaLabel(status) {
 .score-card__streak {
     margin: 11px 0 0;
     text-align: center;
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
 }
@@ -165,7 +165,7 @@ function dayAriaLabel(status) {
 }
 
 .score-card__dow {
-    font-size: 11px;
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -182,10 +182,15 @@ function dayAriaLabel(status) {
     color: var(--tt-text-hint);
 }
 
-/* 인정만 꽉 채운다. 한 주에서 눈에 먼저 들어와야 하는 건 성공한 날이다 */
+/*
+ * 인정만 꽉 채운다. 한 주에서 눈에 먼저 들어와야 하는 건 성공한 날이다.
+ * 잉크색 단색은 도장처럼 무거워 파랑 그라데이션 + 흰 체크로 바꿨다.
+ * 테두리는 색 대신 투명으로 둔다 — 배경 그리기 기준이 border-box 라
+ * 테두리 자리까지 그라데이션이 이어져 색을 따로 맞출 필요가 없다.
+ */
 .score-card__circle--success {
-    background: var(--tt-primary);
-    border-color: var(--tt-primary);
+    background: var(--tt-info-gradient);
+    border-color: transparent;
     color: var(--tt-text-inverse);
 }
 
@@ -229,7 +234,7 @@ function dayAriaLabel(status) {
 }
 
 .score-card__overline {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
     letter-spacing: 0.08em;
@@ -259,7 +264,7 @@ function dayAriaLabel(status) {
 .score-card__percentile {
     background: var(--tt-accent-subtle);
     color: var(--tt-accent-deep);
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     padding: 5px 11px;
     border-radius: var(--tt-radius-full);

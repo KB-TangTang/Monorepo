@@ -11,7 +11,7 @@
  */
 
 /** --tt-neutral-paper. 대부분의 화면이 쓰는 배경 */
-export const THEME_COLOR_PAPER = '#f7f8fa';
+export const THEME_COLOR_PAPER = '#fafafb';
 
 /** --tt-ink-deep. 잉크 패널 그라데이션의 시작색(제일 위) */
 export const THEME_COLOR_INK = '#1e2338';

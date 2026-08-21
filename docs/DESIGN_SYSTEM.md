@@ -40,7 +40,7 @@
 | `--tt-neutral-muted` | `#8A8FA3` | 보조 설명 |
 | `--tt-neutral-hint` | `#A6A9B6` | 힌트 · placeholder |
 | `--tt-neutral-surface` | `#FFFFFF` | 카드 배경 |
-| `--tt-neutral-paper` | `#F7F8FA` | 페이지 · 섹션 배경 |
+| `--tt-neutral-paper` | `#FAFAFB` | 페이지 · 섹션 배경 |
 | `--tt-neutral-fill` | `#EFF1F5` | 입력 필드 · 비활성 |
 | `--tt-neutral-border` | `#E5E8EF` | 구분선 · 카드 테두리 |
 | `--tt-neutral-track` | `#E9ECF2` | 진행바 트랙 |
@@ -53,6 +53,9 @@
 | **Gold** | `#F5B921` | `#FFF3D1` | `#B67D06` | `#F0E0B8` | 주의 · 진행 중 · 기소 |
 | **Red** | `#E0664B` | `#FBE9E4` | `#C24B31` | `#F3D3C9` | 초과 · 탈락 · 유죄 |
 | **Blue** | `#3E63D6` | `#EAF0FF` | `#3E5299` | `#C9D6F5` | 정보 · 링크 · 기간 |
+
+Blue 에는 그라데이션용 양끝값이 더 있다 — `--tt-blue-bright` `#5B82EE` · `--tt-blue-strong` `#2C46A8`.
+이 둘은 `--tt-info-gradient` 정의에서만 쓰고 컴포넌트가 직접 참조하지 않는다.
 
 ### 종이 · 목재 (절제 사용)
 
@@ -97,6 +100,7 @@
 | `--tt-info` | `--tt-blue` | 정보 · 링크 · 기간 |
 | `--tt-info-deep` | `--tt-blue-deep` | Blue soft 위 텍스트 |
 | `--tt-info-subtle` | `--tt-blue-soft` | 정보 배경 |
+| `--tt-info-gradient` | `--tt-blue-bright` → `--tt-blue` → `--tt-blue-strong` | 성취를 꽉 채우는 원·칩 배경 (주간 판정 「인정」) |
 | `--tt-accent` | `--tt-gold` | 배지 · 판사봉 포인트 |
 | `--tt-accent-deep` | `--tt-gold-deep` | Gold soft 위 텍스트 |
 | `--tt-accent-subtle` | `--tt-gold-soft` | 배지 배경 |
@@ -244,3 +248,5 @@
 | 2026-08-21 | 재판탭 법원 헤더 토큰(`--tt-court-*`) · `--tt-elevation-court-bell` · `--tt-elevation-court-speech` 신설 |
 | 2026-08-21 | 법원 헤더 말풍선을 양피지 PNG 로 되돌리며 `--tt-court-speech-*` 3개 삭제, `--tt-elevation-court-speech` 를 drop-shadow 용으로 교체, `--tt-elevation-court-nameplate` 추가 |
 | 2026-08-21 | 목재 명패를 없애고 화자 이름을 말풍선 머리로 옮기며 `--tt-elevation-court-nameplate` 삭제 (신규 토큰 없음 — 헤더 하단 곡면은 기존 `--tt-radius-2xl` 사용) |
+| 2026-08-21 | 페이지 배경 `--tt-neutral-paper` `#F7F8FA` → `#FAFAFB` (회색기 완화). `index.html` · `manifest.webmanifest` · `utils/themeColor.js` 의 종이색도 같은 값으로 맞춤 |
+| 2026-08-21 | `--tt-blue-bright` · `--tt-blue-strong` 팔레트와 `--tt-info-gradient` 의미 토큰 신설 (첫 그라데이션 토큰) |
