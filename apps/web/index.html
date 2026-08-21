@@ -13,7 +13,16 @@
 
         <!-- ── 설치형 웹앱(PWA) ── 이슈 #185. Web Push 는 범위 밖이다(2026-08-13 결정) -->
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#FFFFFF" />
+        <!--
+          설치형에서 상태바(시계·배터리 줄)의 배경색이다. 그 자리는 시스템 영역이라
+          웹 화면이 위에 못 그리고, 이 값만 색을 정한다.
+
+          여기 적힌 건 「첫 화면이 뜨기 전까지의 기본값」일 뿐이다. 라우트마다 화면
+          맨 위 색이 달라서(로그인·재판·그룹챌린지는 잉크 패널) 실제 값은
+          router 가 utils/themeColor.js 로 갈아 끼운다. 기본값은 화면 63개 중 57개가
+          쓰는 밝은 배경(--tt-neutral-paper)에 맞춰 둔다.
+        -->
+        <meta name="theme-color" content="#f7f8fa" />
         <meta name="description" content="새는 돈을 법정에 세우는 자산관리 서비스" />
         <!--
           iOS 는 manifest 의 아이콘을 쓰지 않는다. 이 링크가 홈 화면 아이콘이 된다.
