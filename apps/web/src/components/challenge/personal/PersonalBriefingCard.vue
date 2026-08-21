@@ -1,7 +1,11 @@
 <script setup>
 import { computed } from 'vue';
 import { tangiSceneWatch } from '@/fixtures/personalChallenge';
-import { formatWon, calculatePersonalMissionProgress } from '@/services/personalMissionFlow';
+import {
+    formatWon,
+    calculatePersonalMissionProgress,
+    getPersonalMissionBudgetStatus,
+} from '@/services/personalMissionFlow';
 
 const props = defineProps({
     missionTitle: { type: String, default: '' },
@@ -14,6 +18,8 @@ const props = defineProps({
     limitAmount: { type: Number, required: true },
     prosecutorName: { type: String, default: '' },
     prosecutorImage: { type: String, default: '' },
+    upcomingProsecutorName: { type: String, default: '' },
+    upcomingProsecutorImage: { type: String, default: '' },
 });
 
 defineEmits(['prosecutor-click']);
@@ -22,7 +28,9 @@ const progress = computed(() =>
     calculatePersonalMissionProgress(props.currentAmount, props.limitAmount),
 );
 
-const remaining = computed(() => props.limitAmount - props.currentAmount);
+const budgetStatus = computed(() =>
+    getPersonalMissionBudgetStatus(props.currentAmount, props.limitAmount),
+);
 const hasSpendingProgress = computed(() => props.currentAmount !== null);
 const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 </script>
@@ -77,12 +85,27 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
             </div>
         </div>
 
+        <div
+            v-if="upcomingProsecutorName && upcomingProsecutorImage"
+            class="briefing-card__upcoming"
+        >
+            <img :src="upcomingProsecutorImage" :alt="upcomingProsecutorName" />
+            <span class="briefing-card__upcoming-copy">
+                <span>다음 수사부터</span>
+                <strong>{{ upcomingProsecutorName }}</strong>
+            </span>
+        </div>
+
         <div v-if="isAbsoluteMission" class="briefing-card__no-spend">
             현재까지 {{ categoryName }} 지출
             <strong>{{ formatWon(currentAmount) }}</strong>
             <span>· 자정까지 0원이면 인정</span>
         </div>
-        <div v-else-if="hasSpendingProgress" class="briefing-card__gauge-section">
+        <div
+            v-else-if="hasSpendingProgress"
+            class="briefing-card__gauge-section"
+            :class="{ 'briefing-card__gauge-section--over': budgetStatus.isOverLimit }"
+        >
             <div class="briefing-card__gauge-wrap">
                 <img
                     :src="tangiSceneWatch"
@@ -96,8 +119,12 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
                 </div>
                 <div class="briefing-card__gauge-labels">
                     <span class="briefing-card__gauge-remain">
-                        한도까지
-                        <b>{{ formatWon(remaining) }}</b>
+                        <template v-if="budgetStatus.isOverLimit">
+                            한도 <b>{{ formatWon(budgetStatus.exceededAmount) }} 초과</b>
+                        </template>
+                        <template v-else>
+                            한도까지 <b>{{ formatWon(budgetStatus.remainingAmount) }}</b>
+                        </template>
                     </span>
                     <span class="briefing-card__gauge-limit">
                         한도 {{ formatWon(limitAmount) }}
@@ -240,6 +267,39 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     color: var(--tt-info);
 }
 
+.briefing-card__upcoming {
+    display: flex;
+    align-items: center;
+    gap: var(--tt-space-2);
+    margin-top: var(--tt-space-3);
+    padding: var(--tt-space-2) var(--tt-space-3);
+    border-radius: var(--tt-radius-md);
+    background: var(--tt-accent-subtle);
+}
+
+.briefing-card__upcoming img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+}
+
+.briefing-card__upcoming-copy {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-3);
+    color: var(--tt-text-muted);
+    font-size: var(--tt-fs-caption);
+    white-space: nowrap;
+}
+
+.briefing-card__upcoming-copy strong {
+    margin-right: var(--tt-space-3);
+    color: var(--tt-text);
+    font-weight: var(--tt-fw-black);
+}
+
 .briefing-card__gauge-section {
     margin-top: var(--tt-space-3);
     border-top: 1px dashed var(--tt-border-divider);
@@ -336,6 +396,15 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 
 .briefing-card__gauge-remain b {
     color: var(--tt-accent-deep);
+}
+
+.briefing-card__gauge-section--over .briefing-card__gauge-fill {
+    background: var(--tt-danger);
+}
+
+.briefing-card__gauge-section--over .briefing-card__gauge-remain,
+.briefing-card__gauge-section--over .briefing-card__gauge-remain b {
+    color: var(--tt-danger);
 }
 
 .briefing-card__gauge-limit {
