@@ -263,7 +263,7 @@ test('데이터 부족 화면도 같은 법원 헤더를 쓰고 오늘 미션을
     );
     assert.doesNotMatch(
         insufficientBody[1],
-        /<PersonalScoreCard/,
+        /<PersonalScoreCard|<PersonalWeeklyVerdictCard/,
         '데이터 부족 화면에는 이번 주 판정과 이번 달 누적 카드를 표시하지 않는다',
     );
     assert.doesNotMatch(

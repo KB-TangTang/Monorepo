@@ -72,6 +72,18 @@
     word-break: keep-all;
 }
 
+/*
+ * 이번 달 누적 · 명예의 전당을 반씩 나눠 세운다.
+ * 1fr 1fr 이라야 두 카드의 세로선이 맞는다 — auto 로 두면 글 길이에 따라 폭이 어긋난다.
+ * stretch 라야 짧은 쪽이 긴 쪽 높이를 따라간다(각 카드가 height:100% 로 받는다).
+ */
+.personal-home__month-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: stretch;
+}
+
 /* ── 판정 안내 텍스트 ──────────────────────────────── */
 .personal-home__verdict-info {
     display: flex;
@@ -309,7 +321,27 @@
     z-index: var(--tt-z-sticky);
     display: flex;
     flex-direction: column;
+    /* 손잡이가 목록 맨 아래에 붙으므로 오른쪽 끝을 기준으로 세운다 */
+    align-items: flex-end;
     gap: 4px;
+}
+
+/* 접었을 때 화면에 남는 유일한 흔적. 개발 전용이라 눈에 띄되 작게 둔다. */
+.personal-home__dev-toggle {
+    padding: var(--tt-space-1) var(--tt-space-3);
+    font: inherit;
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-text-inverse);
+    background: var(--tt-surface-inverse);
+    border: none;
+    border-radius: var(--tt-radius-full);
+    cursor: pointer;
+    opacity: 0.45;
+}
+
+.personal-home__dev-toggle:hover,
+.personal-home__dev-toggle[aria-expanded='true'] {
+    opacity: 1;
 }
 
 .personal-home__dev-btn {

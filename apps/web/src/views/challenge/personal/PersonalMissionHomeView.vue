@@ -7,6 +7,7 @@ import PersonalMissionUnlockSheet from '@/components/challenge/personal/Personal
 import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vue';
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
+import PersonalWeeklyVerdictCard from '@/components/challenge/personal/PersonalWeeklyVerdictCard.vue';
 import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard.vue';
 import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiSheet.vue';
@@ -57,6 +58,8 @@ const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
 const devActionMessage = ref('');
+/* 데모 버튼 8개를 펼쳐두면 화면 오른쪽 절반을 가려 디자인을 확인할 수 없다. 기본은 접어둔다. */
+const isDevPanelOpen = ref(false);
 const toastMessage = ref('');
 let toastTimer = null;
 const isMissionUnlockOpen = ref(false);
@@ -523,24 +526,30 @@ async function reassignTodayMission() {
 
                 <section class="personal-home__section">
                     <h2 class="personal-home__section-title">이번 주 판정</h2>
-                    <PersonalScoreCard
+                    <PersonalWeeklyVerdictCard
                         :week-days="weeklyVerdictModel.days"
                         :streak-days="weeklyVerdictModel.streakDays"
                         :prosecutor-image="missionProsecutors.current?.image"
-                        :score="store.monthlyScore.score"
-                        :top-percent="store.monthlyScore.topPercent"
                     />
                 </section>
 
                 <!--
-                    배너가 제목을 이미 품고 있어 위에 섹션 제목을 또 세우지 않는다.
+                    월간 이야기는 한 줄에 나란히 세운다 — 이번 달 누적 점수와 그 순위를 보러
+                    가는 입구(명예의 전당)는 같은 「월간」 맥락이라 붙어 있어야 이어 읽힌다.
+                    두 카드 모두 제목을 스스로 품고 있어 위에 섹션 제목을 세우지 않는다.
                     인증서는 지난달치만 발급되므로 월 선택이 있는 성적표(랭킹)를 거쳐 들어간다.
                 -->
-                <PersonalMissionHonorBanner
-                    title="명예의 전당"
-                    description="월간 랭킹과 지난달 명예 인증서를 확인해보세요."
-                    @open="openPersonalRanking"
-                />
+                <div class="personal-home__month-row">
+                    <PersonalScoreCard
+                        :score="store.monthlyScore.score"
+                        :top-percent="store.monthlyScore.topPercent"
+                    />
+                    <PersonalMissionHonorBanner
+                        compact
+                        title="명예의 전당"
+                        @open="openPersonalRanking"
+                    />
+                </div>
 
                 <div class="personal-home__verdict-info">
                     <svg
@@ -697,41 +706,55 @@ async function reassignTodayMission() {
             </div>
         </Transition>
 
-        <!-- 데모 버튼 -->
+        <!-- 데모 버튼. 펼치기 전에는 손잡이 하나만 떠 있어 화면을 가리지 않는다. -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
-            <span v-if="devActionMessage" class="personal-home__dev-message">{{
-                devActionMessage
-            }}</span>
+            <template v-if="isDevPanelOpen">
+                <span v-if="devActionMessage" class="personal-home__dev-message">{{
+                    devActionMessage
+                }}</span>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    :disabled="isReassigning"
+                    @click="reassignTodayMission"
+                >
+                    {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="resetDemo">
+                    초기화
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
+                    데이터 부족 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showWeeklyResultsDemo">
+                    이번 주 판정 인정·기각 섞기
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
+                    맞춤 사건 개시 안내
+                </button>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    @click="showWithdrawnWithoutMissionDemo"
+                >
+                    철회·미션 없음 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
+                    미션 성공 팝업
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoFail">
+                    미션 실패 팝업
+                </button>
+            </template>
+
             <button
                 type="button"
-                class="personal-home__dev-btn"
-                :disabled="isReassigning"
-                @click="reassignTodayMission"
+                class="personal-home__dev-toggle"
+                :aria-expanded="isDevPanelOpen"
+                :aria-label="isDevPanelOpen ? '데모 버튼 접기' : '데모 버튼 펼치기'"
+                @click="isDevPanelOpen = !isDevPanelOpen"
             >
-                {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
-            <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
-                데이터 부족 화면
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="showWeeklyResultsDemo">
-                이번 주 판정 인정·기각 섞기
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
-                맞춤 사건 개시 안내
-            </button>
-            <button
-                type="button"
-                class="personal-home__dev-btn"
-                @click="showWithdrawnWithoutMissionDemo"
-            >
-                철회·미션 없음 화면
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
-                미션 성공 팝업
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="setDemoFail">
-                미션 실패 팝업
+                {{ isDevPanelOpen ? '✕' : '데모' }}
             </button>
         </div>
     </div>

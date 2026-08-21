@@ -9,19 +9,28 @@ import honorCourtImage from '@/assets/images/emotions/56_with_trophy_ver4.png';
 defineProps({
     title: { type: String, default: '명예의 전당' },
     description: { type: String, default: '월간 랭킹 순위를 확인해보세요.' },
+    /* 반쪽 폭 자리(이번 달 누적 카드 옆)에 설 때. 탕이를 위로 올리고 세로로 쌓는다. */
+    compact: { type: Boolean, default: false },
 });
 
 defineEmits(['open']);
 </script>
 
 <template>
-    <button type="button" class="honor-banner" @click="$emit('open')">
+    <button
+        type="button"
+        class="honor-banner"
+        :class="{ 'honor-banner--compact': compact }"
+        @click="$emit('open')"
+    >
+        <img class="honor-banner__image" :src="honorCourtImage" alt="" />
+
         <span class="honor-banner__content">
             <strong class="honor-banner__title">{{ title }}</strong>
-            <span class="honor-banner__description">{{ description }}</span>
+            <!-- 반쪽 폭에서는 설명을 뺀다. 「명예의 전당」이라는 제목과 트로피 탕이만으로
+                 어디로 가는 입구인지 이미 읽히고, 두 줄을 더 쌓으면 탕이가 밀려 작아진다. -->
+            <span v-if="!compact" class="honor-banner__description">{{ description }}</span>
         </span>
-
-        <img class="honor-banner__image" :src="honorCourtImage" alt="" />
     </button>
 </template>
 
@@ -73,6 +82,38 @@ defineEmits(['open']);
     width: 92px;
     height: 92px;
     object-fit: contain;
+}
+
+/* ── 반쪽 폭 변형 ──────────────────────
+ * 가로로 눕힌 배너를 그대로 좁히면 탕이가 글을 밀어내 제목이 두 줄로 접힌다.
+ * 탕이를 글 위로 올리고 가운데 정렬해 세로로 쌓는다.
+ */
+.honor-banner--compact {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 100%;
+    min-height: 0;
+    padding: 10px 14px;
+    text-align: center;
+}
+
+.honor-banner--compact .honor-banner__image {
+    position: static;
+    width: 76px;
+    height: 76px;
+}
+
+.honor-banner--compact .honor-banner__content {
+    gap: 2px;
+    /* 탕이가 더는 오른쪽 아래에 얹혀 있지 않으므로 비워둘 자리가 없다 */
+    padding-right: 0;
+    align-items: center;
+}
+
+.honor-banner--compact .honor-banner__title {
+    font-size: var(--tt-fs-body);
 }
 
 .honor-banner:hover {

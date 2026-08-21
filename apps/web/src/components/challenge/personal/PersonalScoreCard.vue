@@ -1,243 +1,104 @@
+<!--
+  용도: 개인 미션 홈의 「이번 달 누적」 카드. 점수와 월간 순위 게이지만 담는다.
+  주간 판정은 PersonalWeeklyVerdictCard 로 분리했다.
+  명예의 전당 배너와 좌우로 나란히 서므로 반쪽 폭에서 안 깨지게 짜여 있다.
+-->
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { calculateRankingProgress } from '@/services/missionMonthlyScore';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { calculateRankingFill } from '@/services/missionMonthlyScore';
 
 const props = defineProps({
-    /* 이번 주 판정 */
-    weekDays: { type: Array, default: () => [] },
-    streakDays: { type: Number, default: 0 },
-    prosecutorImage: { type: String, default: '' },
-
-    /* 이번 달 누적 */
     score: { type: Number, required: true },
     topPercent: { type: Number, default: null },
 });
 
-const rankingProgress = computed(() => calculateRankingProgress(props.topPercent));
-const displayedRankingProgress = ref(0);
+const rankingFill = computed(() => calculateRankingFill(props.topPercent));
+
+const rankingLabel = computed(() =>
+    rankingFill.value === null
+        ? '월간 순위 집계 전'
+        : `월간 순위 상위 ${props.topPercent}% — 참여자의 ${rankingFill.value}% 보다 앞서 있다`,
+);
+
+/* 게이지가 바닥에서 차오르게 한다. 첫 프레임을 넘긴 뒤 켜야 transition 이 걸린다. */
+const gaugeRevealed = ref(false);
+const gaugeHeight = computed(() => (gaugeRevealed.value ? (rankingFill.value ?? 0) : 0));
 let animationFrameId = null;
 
-function animateRankingProgress(progress) {
-    if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+onMounted(() => {
     animationFrameId = requestAnimationFrame(() => {
-        displayedRankingProgress.value = progress;
+        gaugeRevealed.value = true;
         animationFrameId = null;
     });
-}
+});
 
-onMounted(() => animateRankingProgress(rankingProgress.value));
-watch(rankingProgress, animateRankingProgress);
 onBeforeUnmount(() => {
     if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
 });
-
-function dayAriaLabel(status) {
-    if (status === 'success') return '인정';
-    if (status === 'failed') return '기각';
-    if (status === 'today') return '오늘 · 판정 전';
-    return '판정 없음';
-}
 </script>
 
 <template>
     <div class="score-card">
-        <!-- ── 이번 주 판정 ────────────────────
-             제목은 카드 밖 섹션 헤더에 있다. 여기서 또 쓰면 같은 말이 두 번 나온다. -->
-        <div v-if="weekDays.length" class="score-card__weekly">
-            <div class="score-card__week-grid">
-                <div v-for="day in weekDays" :key="day.dow" class="score-card__day">
-                    <small class="score-card__dow">{{ day.dow }}</small>
-                    <div
-                        class="score-card__circle"
-                        :class="`score-card__circle--${day.status}`"
-                        :aria-label="`${day.dow}요일 ${dayAriaLabel(day.status)}`"
-                    >
-                        <img
-                            v-if="day.status === 'today' && prosecutorImage"
-                            :src="prosecutorImage"
-                            alt=""
-                            class="score-card__tangi"
-                        />
-                        <!-- 인정: 채운 파랑 + 흰 체크 / 기각: 연한 빨강 + X.
-                             기각을 성공과 같은 채도로 채우면 실패가 이어진 주가 붉은 벽이 된다. -->
-                        <svg
-                            v-else-if="day.status === 'success'"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="3"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            aria-hidden="true"
-                        >
-                            <path d="M5 12.5l4.5 4.5L19 7" />
-                        </svg>
-                        <svg
-                            v-else-if="day.status === 'failed'"
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="3"
-                            stroke-linecap="round"
-                            aria-hidden="true"
-                        >
-                            <path d="M6 6l12 12M18 6L6 18" />
-                        </svg>
-                    </div>
-                </div>
+        <div class="score-card__numbers">
+            <div class="score-card__overline">이번 달 누적</div>
+            <div class="score-card__score-row">
+                <span class="score-card__score">{{ score }}</span>
+                <span class="score-card__unit">점</span>
             </div>
-
-            <p class="score-card__streak">🔥 연속 성공 {{ streakDays }}일째</p>
-        </div>
-
-        <div v-if="weekDays.length" class="score-card__divider" />
-
-        <!-- ── 이번 달 누적 ──────────────────── -->
-        <div class="score-card__top">
-            <div class="score-card__numbers">
-                <div class="score-card__overline">이번 달 누적</div>
-                <div class="score-card__score-row">
-                    <span class="score-card__score">{{ score }}</span>
-                    <span class="score-card__unit">점</span>
-                </div>
-            </div>
+            <!-- 게이지가 가리키는 위치를 숫자로 한 번 말한다. 점수 바로 아래에 붙여야
+                 「이번 달 누적 → 몇 점 → 상위 몇 %」로 이어 읽힌다.
+                 카드 구석에 떼어 놓으면 어느 값에 딸린 말인지 모른 채 떠 있다. -->
             <span class="score-card__percentile">
-                {{ topPercent === null ? '순위 집계 전' : `월간 상위 ${topPercent}%` }}
+                {{ topPercent === null ? '순위 집계 전' : `상위 ${topPercent}%` }}
             </span>
         </div>
 
-        <div class="score-card__ranking-progress">
-            <div
-                class="score-card__ranking-track"
-                role="progressbar"
-                aria-label="월간 순위"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                :aria-valuenow="displayedRankingProgress"
-            >
+        <!-- 순위는 쌓이는 값이 아니라 위치라 세로 게이지로 보여준다.
+             내가 앞선 만큼이 바닥에서 차오르고 그 경계가 곧 내 위치 점선이다.
+             점선은 막대보다 좌우로 5px 씩 넘겨 그어야 「기준선」으로 읽힌다. -->
+        <div class="score-card__gauge" role="img" :aria-label="rankingLabel">
+            <small class="score-card__gauge-cap">상위</small>
+            <div class="score-card__gauge-track">
+                <div class="score-card__gauge-bar">
+                    <div class="score-card__gauge-fill" :style="{ height: `${gaugeHeight}%` }" />
+                </div>
                 <div
-                    class="score-card__ranking-fill"
-                    :style="{ width: `${displayedRankingProgress}%` }"
-                ></div>
+                    v-if="rankingFill !== null"
+                    class="score-card__gauge-mark"
+                    :style="{ bottom: `${gaugeHeight}%` }"
+                />
             </div>
+            <small class="score-card__gauge-cap">하위</small>
         </div>
     </div>
 </template>
 
 <style scoped>
 .score-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-2);
+    height: 100%;
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
-    padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-2);
+    padding: 14px;
 }
 
-/* ── 이번 주 판정 ──────────────────────── */
-.score-card__weekly {
-    padding-bottom: 14px;
-}
-
-.score-card__streak {
-    margin: 11px 0 0;
-    text-align: center;
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-muted);
-}
-
-/* ── 주간 그리드 ───────────────────────── */
-.score-card__week-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-}
-
-.score-card__day {
+.score-card__numbers {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 5px;
-}
-
-.score-card__dow {
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-hint);
-}
-
-.score-card__circle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1.5px solid var(--tt-border);
-    background: var(--tt-bg-fill);
-    color: var(--tt-text-hint);
-}
-
-/*
- * 인정만 꽉 채운다. 한 주에서 눈에 먼저 들어와야 하는 건 성공한 날이다.
- * 잉크색 단색은 도장처럼 무거워 파랑 그라데이션 + 흰 체크로 바꿨다.
- * 테두리는 색 대신 투명으로 둔다 — 배경 그리기 기준이 border-box 라
- * 테두리 자리까지 그라데이션이 이어져 색을 따로 맞출 필요가 없다.
- */
-.score-card__circle--success {
-    background: var(--tt-info-gradient);
-    border-color: transparent;
-    color: var(--tt-text-inverse);
-}
-
-/* 기각은 같은 채도로 채우지 않는다 — 실패가 이어진 주가 붉은 벽이 된다 */
-.score-card__circle--failed {
-    background: var(--tt-danger-subtle);
-    border-color: var(--tt-danger-subtle);
-    color: var(--tt-danger);
-}
-
-.score-card__circle--today {
-    background: var(--tt-surface-inverse);
-    border-color: var(--tt-surface-inverse);
-    color: var(--tt-accent);
-}
-
-.score-card__circle--pending {
-    background: var(--tt-bg-fill);
-    border-color: var(--tt-border);
-    color: var(--tt-text-hint);
-}
-
-.score-card__tangi {
-    width: 26px;
-    height: 26px;
-    object-fit: contain;
-}
-
-/* ── 구분선 ────────────────────────────── */
-.score-card__divider {
-    border-top: 1px dashed var(--tt-border-strong);
-    margin: 0 4px;
-}
-
-/* ── 이번 달 누적 (기존) ───────────────── */
-.score-card__top {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    padding-top: 14px;
+    align-items: flex-start;
+    min-width: 0;
 }
 
 .score-card__overline {
     font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
-    letter-spacing: 0.08em;
+    /* 반쪽 폭이라 자간을 벌리면 「이번 달 누적」이 두 줄로 접힌다 */
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 
 .score-card__score-row {
@@ -248,7 +109,7 @@ function dayAriaLabel(status) {
 }
 
 .score-card__score {
-    font-size: var(--tt-fs-stat);
+    font-size: var(--tt-fs-title);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
     letter-spacing: -0.02em;
@@ -262,43 +123,82 @@ function dayAriaLabel(status) {
 }
 
 .score-card__percentile {
+    margin-top: 6px;
     background: var(--tt-accent-subtle);
     color: var(--tt-accent-deep);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
-    padding: 5px 11px;
+    padding: 3px 8px;
     border-radius: var(--tt-radius-full);
     white-space: nowrap;
 }
 
-.score-card__ranking-progress {
-    margin-top: var(--tt-space-4);
+/* ── 월간 순위 게이지 ──────────────────── */
+.score-card__gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: none;
 }
 
-.score-card__ranking-track {
+/* 방향 라벨. 어느 쪽이 잘한 것인지 없으면 게이지를 거꾸로 읽는다. */
+.score-card__gauge-cap {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-bold);
+    line-height: 1;
+    color: var(--tt-text-hint);
+}
+
+.score-card__gauge-track {
     position: relative;
-    height: 8px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-border-track);
+    width: 18px;
+    /* 옆 명예의 전당 카드가 이 높이를 따라온다 — 너무 낮으면 두 카드가 납작해진다 */
+    height: 56px;
 }
 
-.score-card__ranking-fill {
-    height: 100%;
-    border-radius: var(--tt-radius-full);
+.score-card__gauge-bar {
+    position: absolute;
+    inset: 0;
+    /* 완전한 pill 로 두면 위아래가 캡슐처럼 잘려 눈금이 어디까지인지 흐려진다 */
+    border-radius: 4px;
+    background: var(--tt-border-track);
+    overflow: hidden;
+}
+
+.score-card__gauge-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: var(--tt-accent);
-    transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * 내 위치 점선. 금색 채움과 회색 트랙에 반씩 걸치므로 양쪽에서 다 읽히면서
+ * 눈을 찌르지 않는 회색을 쓴다. 막대 폭만큼만 그으면 점선인지 알 수 없어 좌우로 넘긴다.
+ */
+.score-card__gauge-mark {
+    position: absolute;
+    left: -5px;
+    right: -5px;
+    height: 0;
+    border-top: 2px dashed var(--tt-text-body);
+    transform: translateY(1px);
+    transition: bottom 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .score-card__ranking-fill {
+    .score-card__gauge-fill,
+    .score-card__gauge-mark {
         transition: none;
     }
 }
 
 @media (max-width: 359px) {
-    .score-card__circle {
-        width: 30px;
-        height: 30px;
+    .score-card__gauge-track {
+        width: 14px;
     }
 }
 </style>
