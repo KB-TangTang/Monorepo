@@ -141,10 +141,8 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 <style scoped>
 .briefing-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 20px;
     padding: 15px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-3);
     position: relative;
     overflow: hidden;
 }

@@ -185,12 +185,12 @@ test('라운드는 헤더 하단 곡면에만 있다', () => {
     );
     assert.match(
         skirt,
-        /background:\s*var\(--tt-bg-subtle\);/,
+        /background:\s*var\(--tt-bg-page\);/,
         '곡면 색이 본문 배경(.personal-home · .gc-page)과 다르면 띠가 생긴다',
     );
 });
 
-/* 위 테스트의 --tt-bg-subtle 전제가 화면 쪽에서 조용히 바뀌지 않게 묶어둔다 */
+/* 위 테스트의 --tt-bg-page 전제가 화면 쪽에서 조용히 바뀌지 않게 묶어둔다 */
 test('두 화면의 본문 배경이 헤더 하단 곡면과 같은 토큰이다', () => {
     for (const [path, selector] of [
         ['src/views/challenge/personal/PersonalMissionHomeView.css', '.personal-home {'],
@@ -198,10 +198,23 @@ test('두 화면의 본문 배경이 헤더 하단 곡면과 같은 토큰이다
     ]) {
         assert.match(
             rule(source(path), selector),
-            /background:\s*var\(--tt-bg-subtle\)/,
+            /background:\s*var\(--tt-bg-page\)/,
             `${path} 의 배경이 바뀌면 헤더 곡면 아래에 다른 색 띠가 드러난다`,
         );
     }
+});
+
+/*
+ * 재판탭 홈은 카드에 테두리도 그림자도 없다. 배경만이 카드 경계라
+ * --tt-bg-subtle(흰색과 5/255)로 되돌리면 카드가 배경에 녹는다.
+ * 그래서 페이지 배경 전용 토큰을 따로 두고 값을 여기서 못 박는다.
+ */
+test('페이지 배경 토큰은 카드 배경과 눈에 띄게 다르다', () => {
+    const tokens = source('src/assets/tokens.css');
+    assert.match(tokens, /--tt-neutral-page:\s*#f2f4f6;/);
+    assert.match(tokens, /--tt-bg-page:\s*var\(--tt-neutral-page\);/);
+    /* 섹션 배경(--tt-neutral-paper)과 값을 공유하면 분리한 의미가 없다 */
+    assert.doesNotMatch(tokens, /--tt-bg-page:\s*var\(--tt-neutral-paper\)/);
 });
 
 test('헤더는 색 HEX 를 직접 쓰지 않는다', () => {

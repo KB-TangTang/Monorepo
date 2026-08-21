@@ -258,7 +258,11 @@
     display: flex;
     align-items: flex-end;
     padding: 0 var(--tt-screen-padding) var(--tt-space-2);
-    background: var(--tt-bg-subtle);
+    /*
+     * 본문 배경과 반드시 같은 값이어야 한다 — 다르면 곡면 아래에 색 띠가 생긴다.
+     * 이 헤더는 개인 미션 홈 · 그룹 챌린지 홈 두 곳에서만 쓰여 같이 옮겨도 안전하다.
+     */
+    background: var(--tt-bg-page);
     border-radius: var(--tt-radius-2xl) var(--tt-radius-2xl) 0 0;
 }
 

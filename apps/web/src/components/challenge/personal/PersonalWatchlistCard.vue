@@ -92,9 +92,7 @@ function statusBadgeClass(status) {
 <style scoped>
 .watchlist {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-2);
     overflow: hidden;
 }
 

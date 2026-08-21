@@ -22,9 +22,7 @@
 <style scoped>
 .gc-peaceful {
     background: var(--tt-bg);
-    border: 1px solid #CFE7DA;
     border-radius: var(--tt-radius-xl);
-    box-shadow: var(--tt-elevation-3);
     padding: 16px 17px;
 }
 

@@ -2,7 +2,8 @@
     min-height: calc(100vh - var(--tt-tabbar-height));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
-    background: var(--tt-bg-subtle);
+    /* 카드에 선도 그림자도 없으므로 배경이 유일한 경계다 — --tt-bg-subtle 보다 한 단계 진하다 */
+    background: var(--tt-bg-page);
 }
 
 /*
@@ -107,7 +108,6 @@
 /* ── 화면 05: 증거 부족 배너 ────────────────────────── */
 .personal-home__insufficient-banner {
     background: var(--tt-accent-subtle);
-    border: 1px solid var(--tt-accent-subtle-border);
     border-radius: var(--tt-radius-lg);
     padding: 13px 15px;
     display: flex;
@@ -141,10 +141,8 @@
 /* ── 화면 05: 조건 체크리스트 ───────────────────────── */
 .personal-home__conditions-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 20px;
     padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-3);
 }
 
 .personal-home__conditions-title {
@@ -243,10 +241,8 @@
 /* ── 화면 05: 공통 사건 카드 ────────────────────────── */
 .personal-home__common-mission {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
     padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-2);
 }
 
 .personal-home__common-meta {

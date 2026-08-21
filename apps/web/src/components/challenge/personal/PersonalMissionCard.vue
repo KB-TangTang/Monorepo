@@ -88,6 +88,16 @@ const remainingAmount = computed(() => {
 </template>
 
 <style scoped>
+/*
+ * 셸은 BaseCard(.tt-card)가 그리고 그림자·테두리도 거기서 온다.
+ * 재판탭 홈은 카드에 선도 그림자도 쓰지 않으므로 여기서만 끈다 — 팀 공용 BaseCard 는 그대로 둔다.
+ * `.tt-card` 를 같이 적어 특이도를 올려야 한다. 클래스 하나끼리는 번들 순서에 따라 져버린다.
+ */
+.personal-mission-card.tt-card {
+    border: none;
+    box-shadow: none;
+}
+
 .personal-mission-card {
     position: relative;
     overflow: hidden;
@@ -99,7 +109,6 @@ const remainingAmount = computed(() => {
         var(--tt-border) var(--tt-space-10)
     );
     border-radius: var(--tt-radius-sm);
-    box-shadow: var(--tt-elevation-2);
 }
 
 .personal-mission-card::before {

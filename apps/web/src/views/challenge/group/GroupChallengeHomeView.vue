@@ -321,7 +321,8 @@ function livesColor(challenge) {
 <style scoped>
 .gc-page {
     min-height: 100vh;
-    background: var(--tt-bg-subtle);
+    /* 카드에 선도 그림자도 없으므로 배경이 유일한 경계다 — 개인 미션 홈과 같은 값 */
+    background: var(--tt-bg-page);
     padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
 }
 

@@ -398,7 +398,8 @@ onUnmounted(() => {
     max-width: var(--tt-content-max);
     height: 100vh;
     height: 100dvh;
-    background: var(--tt-bg-subtle);
+    /* 실제 홈 화면을 흉내 내는 틀이라 그 화면의 배경을 그대로 따라간다 */
+    background: var(--tt-bg-page);
     overflow: hidden;
 }
 
