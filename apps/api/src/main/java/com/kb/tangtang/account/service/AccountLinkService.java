@@ -553,7 +553,17 @@ public class AccountLinkService {
         return LinkResultDto.builder().linkedCount(linked).directAssetsPending(hasDirectAssets).build();
     }
 
-    /** link() 안에서 선택/제외 두 경로가 똑같이 쓰는 행 조립. 상태(active 여부)는 호출부가 정한다. */
+    /**
+     * link() 안에서 선택/제외 두 경로가 똑같이 쓰는 행 조립. 상태(active 여부)는 호출부가 정한다.
+     *
+     * ⚠ lastSyncAt 은 여기서 채우지 않는다(연동 시각으로 세팅하지 않는다). 이 값은 스키마 주석대로
+     *   "마지막 동기화 *성공* 시각"이고, FinancialSyncServiceImpl.buildMonthlyFetchCursor() 가
+     *   null 여부로 "거래내역을 한 번이라도 동기화했는지"를 판단한다 — 연동 직후 첫 sync() 는 이
+     *   값을 읽어 null 이면 전체 이력을, null 이 아니면 그 달부터만 증분으로 받아온다. 여기서
+     *   연동 시각을 미리 채우면 거래를 한 건도 가져오기 전인데도 "이미 동기화됨"으로 오판해,
+     *   연동 이전 달의 거래(급여 등 은행 입금 포함)를 영원히 못 가져온다(#389). 실제 동기화 완료는
+     *   FinancialSyncServiceImpl.upsertBankAccount() 가 채운다.
+     */
     private ConnectedAccount buildRow(long userId, LinkProgress progress, FinancialAccountDto account,
                                       String hash, LocalDateTime now) {
         return ConnectedAccount.builder()
@@ -568,7 +578,6 @@ public class AccountLinkService {
                 .depositTypeCode(account.getDepositTypeCode())
                 .balance(account.getBalance() == null ? BigDecimal.ZERO : account.getBalance())
                 .syncStatus(SyncStatus.NORMAL.name())
-                .lastSyncAt(now)
                 .expiresAt(now.plusDays(CONSENT_VALID_DAYS))
                 .build();
     }

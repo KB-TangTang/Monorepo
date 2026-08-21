@@ -419,6 +419,40 @@ class AccountLinkServiceTest {
     }
 
     @Test
+    @DisplayName("연동 직후에는 lastSyncAt 을 비워 둔다 — 거래내역을 아직 한 번도 동기화하지 않았다")
+    void linkedAccountStartsWithoutLastSyncAt() {
+        /*
+         * #389: 여기서 lastSyncAt 을 연동 시각으로 채우면, FinancialSyncServiceImpl.
+         * buildMonthlyFetchCursor() 가 "이미 동기화된 계좌"로 오판해 첫 거래 동기화부터 연동한
+         * 달 이전 거래(급여 등 은행 입금 포함)를 영원히 못 가져온다. 실제 동기화 완료 시점은
+         * FinancialSyncServiceImpl.upsertBankAccount() 가 채운다 — 여기서는 null 이어야 한다.
+         */
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "0004"))
+                .thenReturn(List.of(account("0004", "입출금통장", "110123456723")));
+        when(mapper.reactivate(any())).thenReturn(0);
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("0004"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of(1L));
+        service.link(USER_ID, linkRequest);
+
+        List<ConnectedAccount> saved = new ArrayList<>();
+        verify(mapper).insert(argThat(row -> {
+            saved.add(row);
+            return true;
+        }));
+        assertNull(saved.get(0).getLastSyncAt());
+    }
+
+    @Test
     @DisplayName("공급자가 판정해 준 계좌 종류를 그대로 쓰고 코드 컬럼을 오염시키지 않는다")
     void doesNotPutLongValueIntoDepositTypeCode() {
         /*

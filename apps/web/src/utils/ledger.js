@@ -102,9 +102,18 @@ export function groupTransactionsByDate(transactions) {
         }));
 }
 
+/*
+ * "입금" 탭은 classification==='INCOME'(급여·이자 등 은행 유입)만이 아니라, 계좌로 들어오는 돈
+ * 전부를 보여준다 — 적금 납입·대출 실행금처럼 TRANSFER로 분류된 항목도 금액이 양수면 포함한다
+ * (환불은 제외: amount는 양수지만 소비의 정정일 뿐 유입이 아니다. isRefund로 걸러낸다).
+ * "지출" 탭은 그대로 classification==='CONSUMPTION' 이다 — 환불도 소비의 정정이라 여기 남는다.
+ */
 export function filterTransactionsByTab(transactions, tab) {
     if (tab === 'ALL') {
         return transactions;
+    }
+    if (tab === 'INCOME') {
+        return transactions.filter((tx) => tx.amount > 0 && !tx.isRefund);
     }
     return transactions.filter((tx) => tx.classification === tab);
 }

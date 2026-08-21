@@ -13,7 +13,6 @@ import {
     linkAccounts,
     refreshAccounts,
     requestSimpleAuth,
-    resyncAccount,
     submitExtraAuth,
 } from '@/api/account';
 import {
@@ -352,17 +351,24 @@ export const useAccountStore = defineStore('account', () => {
         });
     }
 
-    async function resync(accountId) {
+    /**
+     * 계좌 하나의 "지금 동기화" 액션이지만, 실제 거래 동기화(FinancialSyncService.sync())는
+     * 계좌 단위로 나뉘어 있지 않고 항상 연결된 기관 전체를 훑는다 — 그래서 여기서도 전체
+     * 동기화를 부르고, 끝나면 목록을 다시 읽어 모든 계좌의 lastSyncAt·syncStatus 를 새로 반영한다.
+     * accountId 는 지금은 API 호출에 쓰이지 않지만, 나중에 계좌 단위 동기화가 생기면 시그니처를
+     * 바꾸지 않아도 되게 남겨 둔다.
+     *
+     * ⚠ 예전에는 resyncAccount()(잔액만 갱신, 거래는 안 가져옴)를 불렀다 — 버튼 문구
+     * ("이 계좌의 거래를 다시 가져와요")와 실제 동작이 달랐다. 그 호출은 거래를 한 건도
+     * 안 가져오면서 lastSyncAt 만 갱신해서, FinancialSyncServiceImpl 의 월별 증분 커서가
+     * "이미 동기화된 계좌"로 오판하게 만들었다 — 실제로 #389 버그를 재현시키는 경로였다.
+     */
+    async function resync(_accountId) {
         return run(async () => {
-            const result = await resyncAccount(accountId);
-            const target = connectedAccounts.value.find(
-                (account) => account.accountId === accountId,
-            );
-            if (target) {
-                target.syncStatus = result.syncStatus;
-                target.lastSyncAt = result.lastSyncAt;
-                target.syncFailReason = null;
-            }
+            await syncFinancialAssets();
+            const result = await fetchConnectedAccounts();
+            connectedAccounts.value = result.accounts;
+            nextAutoSyncAt.value = result.nextAutoSyncAt;
             return result;
         });
     }
