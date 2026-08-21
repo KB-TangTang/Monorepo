@@ -279,5 +279,24 @@
      * (아이폰에서 12px 만큼 여유가 더 생길 뿐 가려지지 않는다).
      */
     --tt-tabbar-trim: min(env(safe-area-inset-bottom), 12px);
+    /*
+     * App.vue 의 <main> 이 고정 탭바에 가리지 않으려고 잡아두는 아래 여백.
+     * 이 자리는 페이지 요소 **밖**이라 페이지가 칠한 배경이 닿지 않고 앱 셸 배경이 드러난다.
+     * 배경이 흰색과 뚜렷이 다른 화면(재판탭 홈)은 이 값만큼 음수 마진으로 끌어내려
+     * 자기 배경을 이어 칠해야 한다. 그래서 값을 App.vue 안에 두지 않고 토큰으로 뺐다.
+     */
+    --tt-app-bottom-inset: calc(
+        var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-4)
+    );
+    /*
+     * 하단에 떠 있는 토글(ChallengeModeTabBar · AssetLedgerToggle · ChallengeReportToggle)이
+     * 본문을 가리지 않게 확보할 여백. **--tt-app-bottom-inset 위에 더해 쓴다.**
+     * 토글은 탭바 위 8px 자리에 「터치 최소 44px + 위아래 padding 4px」 높이로 뜬다.
+     * 마지막 16px 은 토글과 본문이 붙어 보이지 않게 두는 숨 쉴 틈이다.
+     * 이 값을 view 마다 손으로 적으면 토글 규격이 바뀔 때 조용히 어긋난다.
+     */
+    --tt-float-toggle-inset: calc(
+        var(--tt-touch-min) + var(--tt-space-2) + var(--tt-space-2) + var(--tt-space-4)
+    );
     --tt-content-max: 480px;
 }

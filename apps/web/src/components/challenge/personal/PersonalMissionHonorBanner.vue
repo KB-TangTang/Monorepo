@@ -47,7 +47,11 @@ defineEmits(['open']);
     text-align: left;
     cursor: pointer;
     background: var(--tt-info-subtle);
-    border: 1px solid var(--tt-info-subtle);
+    /*
+     * 이건 <button> 이라 border 를 안 적으면 브라우저 기본 테두리(2px outset)가 그려진다.
+     * 다른 카드는 <div> 라 선언을 지우면 그만이지만 여기는 반드시 none 을 적어야 한다.
+     */
+    border: none;
     border-radius: var(--tt-radius-lg);
 }
 

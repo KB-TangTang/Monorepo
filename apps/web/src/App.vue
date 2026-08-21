@@ -57,7 +57,8 @@ watch(
 /* 하단 탭바에 가리지 않도록 콘텐츠 아래 여백을 확보한다 */
 .tt-app__content {
     flex: 1;
-    padding-bottom: calc(var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-4));
+    /* 값은 tokens.css 의 --tt-app-bottom-inset. 페이지가 이 여백을 되짚어야 할 때가 있어 토큰으로 뺐다 */
+    padding-bottom: var(--tt-app-bottom-inset);
 }
 
 /* 탭바가 없는 화면(로그인 등)은 여백도 필요 없다 */

@@ -323,7 +323,11 @@ function livesColor(challenge) {
     min-height: 100vh;
     /* 카드에 선도 그림자도 없으므로 배경이 유일한 경계다 — 개인 미션 홈과 같은 값 */
     background: var(--tt-bg-page);
-    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
+    /*
+     * 탭바를 피하는 몫은 base.css 의 .tt-app__content > * 가 잡는다.
+     * 여기서는 이 화면 하단에 떠 있는 ChallengeModeTabBar 를 피할 만큼만 더 준다.
+     */
+    padding-bottom: var(--tt-float-toggle-inset);
 }
 
 .gc-dev-fab {
