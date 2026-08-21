@@ -20,6 +20,13 @@ public interface UserMapper {
     UserDto findById(@Param("id") Long id);
 
     /**
+     * 목서버 시나리오 키 수동 오버라이드 조회 (account.client.sync.UserOverridingScenarioKeyProvider 전용).
+     * 값이 없으면(NULL) null 을 돌려주고, 호출부가 풀-나머지 로직으로 폴백한다.
+     * UserDto 에 필드를 넣지 않는 이유: mock 전용 개념이라 /users/me 등 일반 응답에 섞이면 안 된다.
+     */
+    String findMockScenarioKeyById(@Param("id") Long id);
+
+    /**
      * 실명 갱신 (간편인증 화면). 반환값은 실제로 바뀐 행 수다 —
      * 0 이면 그 사용자가 없다는 뜻이라 서비스가 404 로 바꾼다.
      */

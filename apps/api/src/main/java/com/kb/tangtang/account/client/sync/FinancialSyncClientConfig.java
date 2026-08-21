@@ -1,5 +1,6 @@
 package com.kb.tangtang.account.client.sync;
 
+import com.kb.tangtang.user.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -49,13 +50,17 @@ public class FinancialSyncClientConfig {
         return new MockFinancialSyncClient(restTemplate, baseUrl);
     }
 
+    /**
+     * 시연용 유저는 tbl_user.mock_scenario_key 로 시나리오를 고정할 수 있다(UserOverridingScenarioKeyProvider).
+     * 그 값이 없는 더미 유저는 기존 풀-나머지 로직(PooledScenarioKeyProvider)으로 폴백한다.
+     */
     @Bean
-    public ScenarioKeyProvider scenarioKeyProvider() {
+    public ScenarioKeyProvider scenarioKeyProvider(UserMapper userMapper) {
         List<String> keys = Arrays.stream(scenarioKeysRaw.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
-        return new PooledScenarioKeyProvider(keys);
+        return new UserOverridingScenarioKeyProvider(userMapper, new PooledScenarioKeyProvider(keys));
     }
 
     /**
