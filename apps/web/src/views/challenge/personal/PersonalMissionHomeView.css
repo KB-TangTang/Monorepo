@@ -328,3 +328,33 @@
         display: none;
     }
 }
+.personal-home__toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    z-index: var(--tt-z-toast);
+    width: calc(100% - (var(--tt-space-4) * 2));
+    max-width: 420px;
+    padding: var(--tt-space-3) var(--tt-space-4);
+    transform: translateX(-50%);
+    border-radius: var(--tt-radius-md);
+    background: var(--tt-text);
+    box-shadow: var(--tt-elevation-3);
+    color: var(--tt-bg);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    text-align: center;
+}
+
+.personal-toast-enter-active,
+.personal-toast-leave-active {
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+}
+
+.personal-toast-enter-from,
+.personal-toast-leave-to {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+}
