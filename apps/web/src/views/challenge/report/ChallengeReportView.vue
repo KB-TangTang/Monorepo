@@ -1,18 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import {
-    fetchChallengeReport,
-    fetchChallengeReportMonths,
-    fetchMockChallengeReport,
-    fetchMockChallengeReportMonths,
-} from '@/api/challengeReport';
+import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
 import ChallengeMonthPicker from '@/components/challenge/report/ChallengeMonthPicker.vue';
 import ChallengeReportContent from '@/components/challenge/report/ChallengeReportContent.vue';
 import ChallengeReportOnboarding from '@/components/challenge/report/ChallengeReportOnboarding.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import ChallengeSavingsGuide from '@/components/challenge/report/ChallengeSavingsGuide.vue';
-import TempChallengeReportSourceToggle from '@/components/challenge/report/TempChallengeReportSourceToggle.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMissionRankings } from '@/api/personalMission';
@@ -22,11 +16,9 @@ import {
     resolveChallengeReportState,
 } from '@/utils/challengeReport';
 import { hasSeenNetSavingsGuide, markNetSavingsGuideSeen } from '@/services/challengeReportGuide';
-import { useChallengeReportStore } from '@/stores/challengeReport';
 
 const route = useRoute();
 const router = useRouter();
-const challengeReportStore = useChallengeReportStore();
 const report = ref(null);
 const months = ref([]);
 const selectedPeriod = ref('');
@@ -51,12 +43,6 @@ const selectedMonth = computed(() =>
 const pickerPeriod = computed(() => selectedPeriod.value || getPreviousPeriod());
 
 async function loadMonths() {
-    if (challengeReportStore.reportSource === 'mock') {
-        entryState.value = null;
-        months.value = await fetchMockChallengeReportMonths();
-        return;
-    }
-
     const availability = await fetchChallengeReportMonths();
     entryState.value = availability.entryState;
     months.value = availability.months ?? [];
@@ -69,19 +55,14 @@ async function loadReport() {
     isGuideOpen.value = false;
 
     try {
-        if (challengeReportStore.reportSource === 'mock') {
-            report.value = await fetchMockChallengeReport(selectedPeriod.value);
-            entryState.value = report.value.entryState ?? null;
-        } else {
-            const [challengeReport, ranking] = await Promise.all([
-                fetchChallengeReport(selectedPeriod.value),
-                fetchMissionRankings(selectedPeriod.value),
-            ]);
-            report.value = {
-                ...challengeReport,
-                ranking: ranking?.myRanking ?? null,
-            };
-        }
+        const [challengeReport, ranking] = await Promise.all([
+            fetchChallengeReport(selectedPeriod.value),
+            fetchMissionRankings(selectedPeriod.value),
+        ]);
+        report.value = {
+            ...challengeReport,
+            ranking: ranking?.myRanking ?? null,
+        };
         if (
             resolveChallengeReportState({ report: report.value }) === 'ready' &&
             report.value.netSavings != null
@@ -128,14 +109,6 @@ async function initialize() {
         errorMessage.value = error.message ?? '조회 가능한 달을 불러오지 못했습니다.';
         loading.value = false;
     }
-}
-
-async function switchReportSource(source) {
-    if (source === challengeReportStore.reportSource || loading.value) {
-        return;
-    }
-    challengeReportStore.setReportSource(source);
-    await initialize();
 }
 
 async function selectPeriod(period) {
@@ -216,12 +189,6 @@ onMounted(initialize);
             @select="selectPeriod"
         />
         <ChallengeSavingsGuide v-model="isGuideOpen" @understood="acknowledgeGuide" />
-        <TempChallengeReportSourceToggle
-            :source="challengeReportStore.reportSource"
-            :loading="loading"
-            elevated
-            @toggle="switchReportSource"
-        />
     </article>
 </template>
 

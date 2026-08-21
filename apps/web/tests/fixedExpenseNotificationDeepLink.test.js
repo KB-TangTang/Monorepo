@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-test('실제 결제 예정 알림으로 연 상세는 API 출처를 선택한다', () => {
+test('고정지출 상세은 항상 서버 데이터를 조회한다', () => {
     const source = readFileSync(
         new URL('../src/views/fixed-expense/FixedExpenseDetailView.vue', import.meta.url),
         'utf8',
     );
 
-    assert.ok(source.includes('shouldUseFixedExpenseApiSource(route.query.source)'));
-    assert.ok(source.includes("store.setSource('api');"));
+    assert.ok(source.includes('store.loadExpense(route.params.expenseId)'));
+    assert.doesNotMatch(source, /shouldUseFixedExpenseApiSource|store\.setSource|mock/);
 });

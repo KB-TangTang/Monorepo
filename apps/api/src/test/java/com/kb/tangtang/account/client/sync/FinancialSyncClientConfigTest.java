@@ -1,5 +1,6 @@
 package com.kb.tangtang.account.client.sync;
 
+import com.kb.tangtang.user.mapper.UserMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * FinancialSyncServiceImplTest 는 이 빈을 거치지 않고 서비스를 직접 new 하므로
@@ -44,6 +46,9 @@ class FinancialSyncClientConfigTest {
     void financialSyncExecutorBeanIsWiredAndBounded() {
         context = new AnnotationConfigApplicationContext();
         context.register(FinancialSyncClientConfig.class);
+        // scenarioKeyProvider() 가 UserMapper 를 요구한다 — 이 테스트는 MapperScan 을 거치지 않는
+        // 고립된 컨텍스트라 실제 매퍼 대신 mock 을 등록해 컨텍스트 refresh 가 깨지지 않게 한다.
+        context.registerBean("userMapper", UserMapper.class, () -> mock(UserMapper.class));
 
         PropertySourcesPlaceholderConfigurer placeholders = new PropertySourcesPlaceholderConfigurer();
         Properties props = new Properties();

@@ -15,6 +15,8 @@ import com.kb.tangtang.challenge.mapper.GroupMemberMapper;
 import com.kb.tangtang.challenge.mapper.IndictmentMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.notification.domain.NotificationRequestedEvent;
+import com.kb.tangtang.challenge.dto.GroupMemberDto;
+import com.kb.tangtang.common.storage.ImageStorage;
 import com.kb.tangtang.notification.domain.NotificationType;
 import com.kb.tangtang.transaction.domain.Category;
 import com.kb.tangtang.transaction.mapper.CategoryMapper;
@@ -89,13 +91,33 @@ class ChallengeGroupServiceTest {
         service = newService(TODAY);
     }
 
+    /**
+     * 프로필 이미지 저장소 대역. 키를 그대로 URL 자리에 흘려보내, 서비스가 **키가 아니라
+     * 변환된 값을 내려주는지**만 본다. 실제 URL 규칙은 ImageStorage 구현의 몫이다.
+     */
+    private static final ImageStorage IMAGE_STORAGE = new ImageStorage() {
+        @Override
+        public String store(byte[] content, String key) {
+            return key;
+        }
+
+        @Override
+        public void delete(String key) {
+        }
+
+        @Override
+        public String urlOf(String key) {
+            return key == null ? null : "https://img.test/" + key;
+        }
+    };
+
     private ChallengeGroupService newService(LocalDate today) {
         ZoneId zone = ZoneId.of("Asia/Seoul");
         Clock clock = Clock.fixed(today.atStartOfDay(zone).toInstant(), zone);
         return new ChallengeGroupService(groupMapper, memberMapper, indictmentMapper, categoryMapper,
                 new InviteCodeGenerator(groupMapper), chatMessageStore,
                 new ChallengeGroupDeleter(groupMapper, chatMessageStore),
-                event -> published.add((NotificationRequestedEvent) event), clock);
+                event -> published.add((NotificationRequestedEvent) event), IMAGE_STORAGE, clock);
     }
 
     /* ══ 생성 ══════════════════════════════════════════════ */
@@ -774,6 +796,43 @@ class ChallengeGroupServiceTest {
         assertTrue(detail.isOwner());
         assertTrue(detail.getMembers().get(0).isOwner());
         assertFalse(detail.isJoinable(), "이미 참여 중이면 다시 참여할 수 없다");
+    }
+
+    @Test
+    @DisplayName("상세의 참여자 목록에 프로필 이미지 URL 이 담긴다 — 키가 아니라 URL 이다")
+    void detailMembersCarryProfileImageUrl() {
+        /*
+         * 이슈 #407. 이 목록을 쓰는 화면(그룹 상세 멤버 그리드 · 채팅 아바타)이 프로필 사진을
+         * 그린다. 이 필드가 없던 동안 두 화면 모두 프로필을 바꿔도 이니셜만 보여줬다.
+         *
+         * 저장소 키를 그대로 내려주면 안 된다 — URL 규칙이 바뀔 때 프론트까지 고쳐야 한다.
+         */
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        memberMapper.insertMember(GroupMember.builder()
+                .groupId(created.getGroupId())
+                .userId(99L)
+                .nickname("탕이")
+                .profileImageKey("profile/99.png")
+                .livesCount(1)
+                .build());
+
+        ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
+
+        GroupMemberDto joined = detail.getMembers().stream()
+                .filter(m -> m.getUserId() == 99L)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("https://img.test/profile/99.png", joined.getProfileImageUrl());
+    }
+
+    @Test
+    @DisplayName("프로필 이미지가 없는 참여자는 URL 이 NULL 이다 — 화면이 이니셜로 그린다")
+    void detailMemberWithoutImageHasNullUrl() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+
+        ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
+
+        assertNull(detail.getMembers().get(0).getProfileImageUrl());
     }
 
     /* ══ 채팅 요약 (이슈 #271) ══════════════════════════════ */

@@ -5,16 +5,10 @@ import {
     fetchMonthlyConsumptionMonths,
     fetchMonthlyConsumptionReport,
 } from '@/api/monthlyConsumption';
-// TEMP(#154): 월간 리포트 백엔드 전체 개발 완료 후 mock API import와 source 전환 코드를 함께 삭제한다.
-import {
-    fetchTempMonthlyConsumptionMonths,
-    fetchTempMonthlyConsumptionReport,
-} from '@/api/tempMonthlyConsumptionMock';
 import MonthlyCategoryReport from '@/components/report/monthly-consumption/MonthlyCategoryReport.vue';
 import MonthlyReportOnboarding from '@/components/report/monthly-consumption/MonthlyReportOnboarding.vue';
 import MonthlyReportMonthPicker from '@/components/report/monthly-consumption/MonthlyReportMonthPicker.vue';
 import MonthlySavingsAnalogyCard from '@/components/report/monthly-consumption/MonthlySavingsAnalogyCard.vue';
-import TempMonthlyReportSourceToggle from '@/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue';
 import MonthlyVerdictSummary from '@/components/report/monthly-consumption/MonthlyVerdictSummary.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
 import BaseButton from '@/components/common/BaseButton.vue';
@@ -45,7 +39,6 @@ const errorMessage = ref('');
 const isMonthPickerOpen = ref(false);
 const selectedPeriod = ref('');
 const selectedTrendPeriod = ref('');
-const reportSource = ref('api');
 const state = computed(() =>
     resolveReportState({ loading: loading.value, error: errorMessage.value, report: report.value }),
 );
@@ -78,10 +71,7 @@ const trendMonths = computed(() => {
 });
 
 async function loadMonths() {
-    months.value =
-        reportSource.value === 'mock'
-            ? await fetchTempMonthlyConsumptionMonths()
-            : await fetchMonthlyConsumptionMonths();
+    months.value = await fetchMonthlyConsumptionMonths();
 }
 
 async function loadReport() {
@@ -90,42 +80,14 @@ async function loadReport() {
     report.value = null;
     try {
         const selectedMonth = months.value.find((month) => month.value === selectedPeriod.value);
-        const reportFetcher =
-            reportSource.value === 'mock'
-                ? fetchTempMonthlyConsumptionReport
-                : fetchMonthlyConsumptionReport;
-        report.value = await fetchMonthlyConsumptionState(selectedMonth, reportFetcher);
+        report.value = await fetchMonthlyConsumptionState(
+            selectedMonth,
+            fetchMonthlyConsumptionReport,
+        );
         selectedTrendPeriod.value = selectedPeriod.value;
     } catch (error) {
         errorMessage.value = error.message ?? '소비 리포트를 불러오지 못했습니다.';
     } finally {
-        loading.value = false;
-    }
-}
-
-// TEMP(#154): 월간 리포트 백엔드 전체 개발 완료 후 이 함수와 화면의 전환 버튼을 삭제한다.
-async function switchReportSource(source) {
-    if (source === reportSource.value || loading.value) {
-        return;
-    }
-
-    reportSource.value = source;
-    loading.value = true;
-    errorMessage.value = '';
-    try {
-        await loadMonths();
-        selectedPeriod.value = resolveSelectedReportPeriod(months.value, selectedPeriod.value);
-        if (!selectedPeriod.value) {
-            throw new Error('조회 가능한 소비 리포트가 없습니다.');
-        }
-        await router.replace({
-            name: 'monthlyConsumptionReport',
-            query: { month: selectedPeriod.value },
-        });
-        await loadReport();
-    } catch (error) {
-        report.value = null;
-        errorMessage.value = error.message ?? '리포트 데이터 소스를 전환하지 못했습니다.';
         loading.value = false;
     }
 }
@@ -338,11 +300,6 @@ onMounted(async () => {
             active="monthly"
             @open-monthly-report="openMonthlyReport"
             @open-trial-report="openTrialReport"
-        />
-        <TempMonthlyReportSourceToggle
-            :source="reportSource"
-            :loading="loading"
-            @toggle="switchReportSource"
         />
     </article>
 </template>

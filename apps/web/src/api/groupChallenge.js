@@ -60,6 +60,13 @@ function toViewModel(dto) {
         members: (dto.members ?? []).map((m) => ({
             ...m,
             initial: m.nickname ? m.nickname.charAt(0) : '?',
+            /*
+             * 서버는 Lombok 이 정한 `profileImageUrl` 을 준다. 화면은 목데이터 시절 이름인
+             * `profileImage` 를 읽는다 — 아래 toDetailViewModel 이 indictments·dailyMembers·
+             * finalMembers 에 하는 것과 같은 변환이다. **여기만 빠져 있었다**(이슈 #407):
+             * 그룹 상세 멤버 그리드와 채팅 아바타가 그 때문에 계속 이니셜만 그렸다.
+             */
+            profileImage: m.profileImageUrl ?? m.profileImage ?? null,
         })),
     };
 }
@@ -101,11 +108,7 @@ function mockGroupsByStatus(statuses) {
     if (statuses.includes('RECRUITING')) return MOCK_PRE_START_CHALLENGES;
     if (statuses.includes('ACTIVE')) return MOCK_ACTIVE_LIST_CHALLENGES;
     if (statuses.includes('CLOSED')) return MOCK_ENDED_CHALLENGES;
-    return [
-        ...MOCK_PRE_START_CHALLENGES,
-        ...MOCK_ACTIVE_LIST_CHALLENGES,
-        ...MOCK_ENDED_CHALLENGES,
-    ];
+    return [...MOCK_PRE_START_CHALLENGES, ...MOCK_ACTIVE_LIST_CHALLENGES, ...MOCK_ENDED_CHALLENGES];
 }
 
 /** 그룹 요약 조회. 참여자만 볼 수 있다. */
@@ -390,9 +393,7 @@ function toTrialDetailViewModel(dto) {
             isMine: dto.accused?.mine ?? false,
         },
         /* `defense` 가 null 이면 아직 변론이 없다는 뜻이다. 빈 객체로 채우지 않는다. */
-        defense: dto.defense
-            ? { ...dto.defense, images: dto.defense.imageUrls ?? [] }
-            : null,
+        defense: dto.defense ? { ...dto.defense, images: dto.defense.imageUrls ?? [] } : null,
     };
 }
 

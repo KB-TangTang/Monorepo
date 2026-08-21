@@ -25,6 +25,12 @@ const props = defineProps({
      * 그릴 때마다 멤버 목록에서 찾아 넘긴다. 없으면 UserAvatar 가 이니셜 원으로 그린다.
      */
     avatarUrl: { type: String, default: null },
+    /*
+     * 발신자의 **지금** 닉네임. 메시지에 실려 온 senderName 은 Redis 에 저장된 발송 시점
+     * 값이라 닉네임을 바꿔도 과거 메시지가 옛 이름으로 남는다(이슈 #414).
+     * 멤버 목록에 없는 사람(나간 참여자 등)이면 null 이 오고, 그때만 메시지 값으로 되돌아간다.
+     */
+    senderName: { type: String, default: null },
 });
 
 const timeLabel = computed(() => {
@@ -34,7 +40,7 @@ const timeLabel = computed(() => {
 });
 
 /* 닉네임 온보딩 전(서버가 senderNickname: null)이면 빈 문자열이 온다 */
-const displayName = computed(() => props.message.senderName || '익명');
+const displayName = computed(() => props.senderName || props.message.senderName || '익명');
 </script>
 
 <template>

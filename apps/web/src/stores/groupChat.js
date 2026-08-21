@@ -27,14 +27,16 @@ export const useGroupChatStore = defineStore('groupChat', () => {
     /** closed 가 아닌 그 외 진입 실패(예: CHAT_NOT_MEMBER, 네트워크 오류) */
     const error = ref(null);
     /**
-     * 발신자 id → 프로필 이미지 URL.
+     * 발신자 id → { nickname, profileImage }.
      *
-     * **메시지에 이미지 URL 을 실어 두지 않는 이유가 여기 있다.** 채팅 메시지는 Redis 에
-     * 저장돼 발송 시점 값이 그대로 굳는다. 이미지를 메시지에 넣으면 프로필을 바꿔도 과거
-     * 메시지는 옛 이미지로 남는다 — 지금 고치려는 증상이 형태만 바뀌어 그대로 재현된다.
-     * 메시지는 senderId 만 싣고, 이미지는 그릴 때마다 이 표에서 찾는다.
+     * **메시지에 프로필 값을 실어 두지 않는 이유가 여기 있다.** 채팅 메시지는 Redis 에
+     * 저장돼 발송 시점 값이 그대로 굳는다. 실제로 `senderNickname` 이 그렇게 저장돼 있어,
+     * 닉네임을 바꿔도 과거 메시지는 옛 이름으로 남았다(이슈 #414). 이미지도 메시지에 넣었다면
+     * 같은 증상이 났을 것이다.
+     *
+     * 그래서 메시지는 `senderId` 만 신뢰하고, 보이는 값(이름·사진)은 그릴 때마다 이 표에서 찾는다.
      */
-    const memberImages = ref({});
+    const membersById = ref({});
 
     /* ── 파생 ──────────────────────────────────────────── */
     const currentUserId = computed(() => {
@@ -59,7 +61,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
             messages.value = page.messages;
             hasMore.value = page.hasMore;
             await resetUnreadCount(id);
-            await loadMemberImages(id);
+            await loadMembers(id);
         } catch (e) {
             // 종료된 챌린지는 안내 화면을 보여준다. 대화는 챌린지가 CLOSED 되는 즉시 삭제된다
             // (ChatMessageStore, 이슈 #174). http.js 인터셉터는 실패를 ApiError(code, message,
@@ -84,25 +86,38 @@ export const useGroupChatStore = defineStore('groupChat', () => {
      *   여기서 던지면 곁가지 때문에 대화 전체가 안 보이게 된다. 그래서 enterRoom 의
      *   try 안에 있으면서도 자기 오류는 자기가 삼킨다.
      */
-    async function loadMemberImages(id) {
+    async function loadMembers(id) {
         try {
             const detail = await fetchGroupDetail(id);
-            memberImages.value = Object.fromEntries(
+            membersById.value = Object.fromEntries(
                 (detail?.members ?? [])
-                    .filter((m) => m?.userId != null && m?.profileImage)
-                    .map((m) => [String(m.userId), m.profileImage]),
+                    .filter((m) => m?.userId != null)
+                    .map((m) => [
+                        String(m.userId),
+                        { nickname: m.nickname ?? null, profileImage: m.profileImage ?? null },
+                    ]),
             );
         } catch {
-            memberImages.value = {};
+            membersById.value = {};
         }
     }
 
     /** 발신자 id 로 프로필 이미지를 찾는다. 없으면 null — UserAvatar 가 이니셜로 그린다. */
     function imageOf(senderId) {
-        if (senderId == null) {
-            return null;
-        }
-        return memberImages.value[String(senderId)] ?? null;
+        if (senderId == null) return null;
+        return membersById.value[String(senderId)]?.profileImage ?? null;
+    }
+
+    /**
+     * 발신자 id 로 **지금** 닉네임을 찾는다.
+     *
+     * 못 찾으면 null 이다 — 그때는 화면이 메시지에 실려 온 발송 시점 이름으로 되돌아간다.
+     * 나간 참여자·삭제된 계정처럼 멤버 목록에 없는 사람의 과거 메시지가 「익명」이 되지 않게
+     * 하려는 것이다. 지금 있는 사람이면 언제나 이 표가 이긴다.
+     */
+    function nicknameOf(senderId) {
+        if (senderId == null) return null;
+        return membersById.value[String(senderId)]?.nickname ?? null;
     }
 
     /**
@@ -156,7 +171,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         groupId.value = null;
         messages.value = [];
         roomInfo.value = null;
-        memberImages.value = {};
+        membersById.value = {};
         hasMore.value = false;
         loading.value = false;
         closed.value = false;
@@ -173,8 +188,9 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         error,
         currentUserId,
         isEnded,
-        memberImages,
+        membersById,
         imageOf,
+        nicknameOf,
         enterRoom,
         loadOlderMessages,
         appendMessage,

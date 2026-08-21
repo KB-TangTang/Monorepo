@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const STUB_URL = new URL('./stubs/fixedExpenseApiStub.js', import.meta.url).href;
 
@@ -21,9 +22,11 @@ const {
     fetchFixedExpenseSavings,
     confirmFixedExpenseCandidate,
     dismissFixedExpenseCandidate,
-    runFixedExpensePaymentReminderBatch,
-    resetFixedExpensePaymentReminders,
 } = await import('../src/api/fixedExpense.js');
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('고정지출 관리 목록은 API 모드에서 기간·카테고리 필터를 전달한다', async () => {
     stub.reset();
@@ -34,7 +37,10 @@ test('고정지출 관리 목록은 API 모드에서 기간·카테고리 필터
     assert.deepEqual(stub.calls, [
         {
             method: 'get',
-            args: ['/fixedExpenses/candidates', { params: { yearMonth: '2026-08', categoryId: 3 } }],
+            args: [
+                '/fixedExpenses/candidates',
+                { params: { yearMonth: '2026-08', categoryId: 3 } },
+            ],
         },
     ]);
 });
@@ -65,10 +71,10 @@ test('후보와 확정 항목 상세는 같은 endpoint 응답을 화면 모델�
     assert.equal(confirmed.paymentHistory.length, 1);
     assert.equal(confirmed.sixMonthTotal, 81500);
     assert.equal(candidate.isConfirmed, false);
-    assert.deepEqual(stub.calls.map((call) => call.args[0]), [
-        '/fixedExpenses/candidates/101',
-        '/fixedExpenses/candidates/201',
-    ]);
+    assert.deepEqual(
+        stub.calls.map((call) => call.args[0]),
+        ['/fixedExpenses/candidates/101', '/fixedExpenses/candidates/201'],
+    );
 });
 
 test('절약 감정서는 yearMonth를 전달하고 ApiResponse에서 풀린 payload를 그대로 쓴다', async () => {
@@ -106,16 +112,8 @@ test('후보 확정과 제외는 DB 반영 API에 각각 CONFIRM·EXCLUDE action
     ]);
 });
 
-test('개발용 결제 예정 알림은 수동 실행하고 현재 사용자의 테스트 이력만 초기화한다', async () => {
-    stub.reset();
-    stub.setPostResponses([{ batch: 'fixed-expense-payment-reminders', affected: 1 }]);
-    stub.setDeleteResponses([{ deletedNotifications: 1, deletedReminderHistory: 1 }]);
+test('고정지출 API 모듈은 개발 전용 배치 호출을 노출하지 않는다', () => {
+    const fixedExpenseApi = source('src/api/fixedExpense.js');
 
-    await runFixedExpensePaymentReminderBatch();
-    await resetFixedExpensePaymentReminders();
-
-    assert.deepEqual(stub.calls, [
-        { method: 'post', args: ['/dev/batches/fixed-expense-payment-reminders'] },
-        { method: 'delete', args: ['/dev/batches/fixed-expense-payment-reminders'] },
-    ]);
+    assert.doesNotMatch(fixedExpenseApi, /\/dev\/batches|PaymentReminder/);
 });

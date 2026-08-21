@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FIXED_EXPENSE_FIXTURE } from '../src/fixtures/fixedExpense.js';
+import { readFileSync } from 'node:fs';
 import {
-    applyCandidateDecision,
     calculateDday,
     formatBillingCycle,
     formatDday,
@@ -10,8 +9,11 @@ import {
     formatSavingsWon,
     formatWon,
     resolveFixedExpenseState,
-    shouldUseFixedExpenseApiSource,
 } from '../src/utils/fixedExpense.js';
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('고정지출 표시 값을 포맷한다', () => {
     assert.equal(formatWon(29800), '29,800원');
@@ -29,48 +31,35 @@ test('조회 상태의 우선순위를 판정한다', () => {
     assert.equal(resolveFixedExpenseState({ data: {} }), 'ready');
 });
 
-test('실제 알림 딥링크만 API 출처를 선택한다', () => {
-    assert.equal(shouldUseFixedExpenseApiSource('api'), true);
-    assert.equal(shouldUseFixedExpenseApiSource(undefined), false);
-    assert.equal(shouldUseFixedExpenseApiSource('mock'), false);
+test('고정지출 상세는 진입 경로와 무관하게 서버 데이터를 조회한다', () => {
+    const detailView = source('src/views/fixed-expense/FixedExpenseDetailView.vue');
+
+    assert.ok(detailView.includes('store.loadExpense(route.params.expenseId)'));
+    assert.doesNotMatch(detailView, /source|mock|TempFixedExpenseSourceToggle/);
 });
 
-test('목록과 상세가 같은 식별자로 연결된다', () => {
-    const listItem = FIXED_EXPENSE_FIXTURE.confirmed[0];
-    const expense = FIXED_EXPENSE_FIXTURE.confirmed.find((item) => item.id === listItem.id);
-    assert.equal(expense.name, listItem.name);
-    assert.equal(expense.status, 'ACTIVE');
-    assert.notEqual(expense.confirmedAt, null);
-    assert.equal(FIXED_EXPENSE_FIXTURE.candidates[0].confirmedAt, null);
+test('고정지출 스토어는 실 API 호출만 사용한다', () => {
+    const store = source('src/stores/fixedExpense.js');
+
+    assert.match(store, /from '@\/api\/fixedExpense';/);
+    assert.doesNotMatch(store, /tempFixedExpenseMock|source === 'mock'|setSource/);
 });
 
-test('탐지 후보를 고정지출로 지정한다', () => {
-    const { state } = applyCandidateDecision(FIXED_EXPENSE_FIXTURE, 'youtube-premium', 'confirm');
-    assert.equal(state.candidates.length, 0);
-    assert.equal(
-        state.confirmed.some((item) => item.id === 'youtube-premium'),
-        true,
-    );
-    assert.equal(state.overview.confirmedCount, 5);
-    assert.equal(state.overview.candidateCount, 1);
-    assert.equal(state.confirmed.at(-1).status, 'ACTIVE');
-    assert.notEqual(state.confirmed.at(-1).confirmedAt, null);
+test('후보 확정은 서버 요청 결과를 다시 목록에 반영한다', () => {
+    const store = source('src/stores/fixedExpense.js');
+
+    assert.match(store, /await confirmFixedExpenseCandidate\(candidateId\);/);
+    assert.match(store, /await this\.loadOverview\(\);/);
 });
 
-test('고정지출이 아닌 후보를 제외한다', () => {
-    const { state, result } = applyCandidateDecision(
-        FIXED_EXPENSE_FIXTURE,
-        'youtube-premium',
-        'dismiss',
-    );
-    assert.equal(state.candidates.length, 0);
-    assert.equal(state.overview.confirmedCount, 4);
-    assert.equal(state.overview.candidateCount, 1);
-    assert.deepEqual(result, { id: 'youtube-premium', status: 'dismissed' });
+test('후보 제외는 서버 요청으로 처리한다', () => {
+    const store = source('src/stores/fixedExpense.js');
+
+    assert.match(store, /await dismissFixedExpenseCandidate\(candidateId\);/);
 });
 
-test('존재하지 않는 항목은 명시적인 오류를 반환한다', () => {
-    assert.throws(() => applyCandidateDecision(FIXED_EXPENSE_FIXTURE, 'missing', 'confirm'), {
-        code: 'NOT_FOUND',
-    });
+test('고정지출 화면은 목업 상태 전이 유틸리티를 포함하지 않는다', () => {
+    const utils = source('src/utils/fixedExpense.js');
+
+    assert.doesNotMatch(utils, /applyCandidateDecision|FIXED_EXPENSE_FIXTURE/);
 });

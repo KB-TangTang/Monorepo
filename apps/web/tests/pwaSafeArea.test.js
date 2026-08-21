@@ -28,12 +28,6 @@ const FLOATING_ABOVE_TABBAR = [
     ['재판 대법원/지방법원 토글', 'src/components/challenge/ChallengeModeTabBar.css'],
     ['자산 현황/거래내역 토글', 'src/components/asset/AssetLedgerToggle.vue'],
     ['자료실 보고서 토글', 'src/components/challenge/report/ChallengeReportToggle.vue'],
-    ['고정지출 출처 토글', 'src/components/fixed-expense/TempFixedExpenseSourceToggle.vue'],
-    ['고정지출 개발 알림 버튼', 'src/views/fixed-expense/FixedExpenseManagementView.vue'],
-    [
-        '월간 보고서 출처 토글',
-        'src/components/report/monthly-consumption/TempMonthlyReportSourceToggle.vue',
-    ],
     ['고정지출 후보 하단 버튼', 'src/views/fixed-expense/FixedExpenseCandidateView.vue'],
     ['절약 시뮬레이션 하단 버튼', 'src/views/fixed-expense/FixedExpenseSavingsView.vue'],
     ['개인 랭킹 내 순위 독', 'src/views/challenge/personal/PersonalRankingView.css'],

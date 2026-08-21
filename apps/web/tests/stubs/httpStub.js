@@ -7,14 +7,23 @@
  */
 export const calls = [];
 
+/* GET 응답 본문. 기본값 {} 는 「호출 인자만 보는」 기존 테스트들의 동작을 그대로 유지한다. */
+let getResponse = {};
+
 export function reset() {
     calls.length = 0;
+    getResponse = {};
+}
+
+/** 응답 모양까지 봐야 하는 테스트가 쓴다. **서버가 실제로 주는 이름**을 넣을 것. */
+export function setGetResponse(body) {
+    getResponse = body;
 }
 
 const http = {
     get: (...args) => {
         calls.push({ method: 'get', args });
-        return Promise.resolve({});
+        return Promise.resolve(getResponse);
     },
     post: (...args) => {
         calls.push({ method: 'post', args });

@@ -213,3 +213,17 @@ test('버블이 그 이미지를 UserAvatar 로 흘려보낸다', () => {
         'UserAvatar 에 :image-url 을 넘겨야 사진이 뜬다',
     );
 });
+
+test('뷰가 지금 닉네임을 버블에 넘긴다', () => {
+    assert.match(source(), /:sender-name="store\.nicknameOf\(item\.data\.senderId\)"/);
+});
+
+test('버블은 넘겨받은 닉네임을 메시지에 실린 옛 이름보다 우선한다', () => {
+    /*
+     * 순서가 뒤집히면(message.senderName 먼저) 닉네임을 바꿔도 계속 옛 이름이 뜬다 —
+     * 정확히 #414 의 증상이다. 폴백은 멤버 목록에 없는 사람 전용이다.
+     */
+    const src = bubbleSource();
+    assert.match(src, /senderName:\s*\{\s*type:\s*String/, 'senderName prop 이 있어야 한다');
+    assert.match(src, /props\.senderName \|\| props\.message\.senderName/);
+});
