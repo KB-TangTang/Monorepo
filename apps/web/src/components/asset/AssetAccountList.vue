@@ -1,9 +1,16 @@
 <!--
-  용도: 자산 홈 화면의 계좌 유형별 목록. 이니셜 배지 · 이름 · 개수 · 금액을 한 행에 보여준다.
+  용도: 자산 홈 화면의 계좌 유형별 목록. 종류별 아이콘 · 이름 · 개수 · 금액을 한 행에 보여준다.
   언제 쓰는지: AssetHomeView 하단 한 곳. 대출처럼 부채인 계좌는 amount 가 음수로 들어와 빨간색으로 표시된다.
 -->
 <script setup>
 import { useRouter } from 'vue-router';
+import {
+    BanknotesIcon,
+    BuildingLibraryIcon,
+    ChartBarIcon,
+    CreditCardIcon,
+    ReceiptPercentIcon,
+} from '@heroicons/vue/24/solid';
 import { formatAssetHomeWon, toneColor } from '@/utils/asset';
 
 defineProps({
@@ -18,6 +25,15 @@ const DETAIL_ROUTE_NAMES = {
     investment: 'assetInvestment',
     loan: 'assetLoan',
     paymoney: 'assetPaymoney',
+};
+
+/* 자산 종류별 대표 아이콘. api/asset.js 의 TYPE_PRESENTATION.code 5종과 1:1 대응한다. */
+const ICON_MAP = {
+    checking: BanknotesIcon,
+    savings: BuildingLibraryIcon,
+    investment: ChartBarIcon,
+    paymoney: CreditCardIcon,
+    loan: ReceiptPercentIcon,
 };
 
 function goToDetail(account) {
@@ -39,7 +55,7 @@ function goToDetail(account) {
                         :style="{ background: toneColor(account.tone) }"
                         aria-hidden="true"
                     >
-                        {{ account.badge }}
+                        <component :is="ICON_MAP[account.code]" class="asset-accounts__icon" />
                     </span>
                     <div class="asset-accounts__info">
                         <p class="asset-accounts__name">{{ account.label }}</p>
@@ -102,9 +118,13 @@ function goToDetail(account) {
     justify-content: center;
     width: 36px;
     height: 36px;
-    font-weight: var(--tt-fw-bold);
     color: var(--tt-text-inverse);
     border-radius: var(--tt-radius-full);
+}
+
+.asset-accounts__icon {
+    width: 20px;
+    height: 20px;
 }
 
 .asset-accounts__info {
