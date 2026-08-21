@@ -1,33 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createPinia, setActivePinia } from 'pinia';
-import { useChallengeReportStore } from '../src/stores/challengeReport.js';
 
 function source(path) {
     return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('챌린지 리포트 데이터 소스 선택은 화면 이동 동안 유지된다', () => {
-    setActivePinia(createPinia());
-    const reportStore = useChallengeReportStore();
-
-    assert.equal(reportStore.reportSource, 'mock');
-    reportStore.setReportSource('api');
-
-    assert.equal(useChallengeReportStore().reportSource, 'api');
-});
-
-test('API 모드 랭킹 조회 실패는 Mock 리포트로 대체하지 않는다', () => {
+test('챌린지 리포트는 실 API와 랭킹을 함께 조회하고 목업 경로를 두지 않는다', () => {
     const reportView = source('src/views/challenge/report/ChallengeReportView.vue');
 
     assert.match(
         reportView,
-        /else \{\s*const \[challengeReport, ranking\] = await Promise\.all\(\[\s*fetchChallengeReport\(selectedPeriod\.value\),\s*fetchMissionRankings\(selectedPeriod\.value\),\s*\]\);/,
+        /const \[challengeReport, ranking\] = await Promise\.all\(\[\s*fetchChallengeReport\(selectedPeriod\.value\),\s*fetchMissionRankings\(selectedPeriod\.value\),\s*\]\);/,
     );
-    assert.match(
+    assert.doesNotMatch(
         reportView,
-        /if \(challengeReportStore\.reportSource === 'mock'\) \{\s*report\.value = await fetchMockChallengeReport\(selectedPeriod\.value\);/,
+        /fetchMockChallengeReport|reportSource|TempChallengeReportSourceToggle/,
     );
 });
 

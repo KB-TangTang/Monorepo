@@ -18,7 +18,7 @@ test('챌린지 리포트 온보딩 CTA는 개인 챌린지 메인으로 이동�
         reportView.includes('@start-challenge="startPersonalChallenge"'),
         '온보딩 CTA 이벤트가 개인 챌린지 이동 함수에 연결되어야 한다',
     );
-    assert.match(reportView, /entryState\.value = report\.value\.entryState \?\? null;/);
+    assert.match(reportView, /entryState\.value = availability\.entryState;/);
     assert.match(onboarding, /챌린지 하러가기/);
 });
 

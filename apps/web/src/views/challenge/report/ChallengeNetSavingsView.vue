@@ -1,9 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchChallengeReport, fetchMockChallengeReport } from '@/api/challengeReport';
+import { fetchChallengeReport } from '@/api/challengeReport';
 import ChallengeSavingsGuide from '@/components/challenge/report/ChallengeSavingsGuide.vue';
-import TempChallengeReportSourceToggle from '@/components/challenge/report/TempChallengeReportSourceToggle.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import {
@@ -12,11 +11,9 @@ import {
     formatWon,
     getPreviousPeriod,
 } from '@/utils/challengeReport';
-import { useChallengeReportStore } from '@/stores/challengeReport';
 
 const route = useRoute();
 const router = useRouter();
-const challengeReportStore = useChallengeReportStore();
 const report = ref(null);
 const loading = ref(false);
 const errorMessage = ref('');
@@ -37,11 +34,7 @@ async function loadReport() {
     errorMessage.value = '';
     report.value = null;
     try {
-        const fetcher =
-            challengeReportStore.reportSource === 'mock'
-                ? fetchMockChallengeReport
-                : fetchChallengeReport;
-        const data = await fetcher(selectedPeriod.value);
+        const data = await fetchChallengeReport(selectedPeriod.value);
         if (!data.hasChallengeHistory || data.netSavings == null) {
             throw new Error('해당 월에는 확인할 순 절감액이 없습니다.');
         }
@@ -55,14 +48,6 @@ async function loadReport() {
 
 function goBackToReport() {
     router.back();
-}
-
-function switchReportSource(source) {
-    if (source === challengeReportStore.reportSource || loading.value) {
-        return;
-    }
-    challengeReportStore.setReportSource(source);
-    loadReport();
 }
 
 watch(selectedPeriod, loadReport, { immediate: true });
@@ -159,12 +144,6 @@ watch(selectedPeriod, loadReport, { immediate: true });
         </template>
 
         <ChallengeSavingsGuide v-model="isGuideOpen" @understood="isGuideOpen = false" />
-        <TempChallengeReportSourceToggle
-            :source="challengeReportStore.reportSource"
-            :loading="loading"
-            elevated
-            @toggle="switchReportSource"
-        />
     </article>
 </template>
 

@@ -40,7 +40,9 @@ test('고정지출 관리와 두 상세 화면은 경로가 자산이어도 자�
     ]) {
         assert.match(
             routerSource,
-            new RegExp(`name: '${routeName}',[\\s\\S]*?meta: \\{ title: '[^']+', tabBar: 'ledger' \\}`),
+            new RegExp(
+                `name: '${routeName}',[\\s\\S]*?meta: \\{ title: '[^']+', tabBar: 'ledger' \\}`,
+            ),
             `${routeName} 라우트는 자료실 탭을 지정해야 한다`,
         );
     }
@@ -50,15 +52,11 @@ test('고정지출 관리와 두 상세 화면은 경로가 자산이어도 자�
     );
 });
 
-test('개발 환경의 고정지출 관리 화면은 결제 예정 알림 실행과 초기화 도구를 제공한다', () => {
+test('고정지출 관리 화면은 개발용 알림 실행·초기화 도구를 노출하지 않는다', () => {
     const managementSource = source('src/views/fixed-expense/FixedExpenseManagementView.vue');
 
-    assert.ok(managementSource.includes('const isDev = import.meta.env.DEV;'));
-    assert.ok(managementSource.includes('v-if="isDev"'));
-    assert.ok(managementSource.includes('runFixedExpensePaymentReminderBatch'));
-    assert.ok(managementSource.includes('resetFixedExpensePaymentReminders'));
-    assert.ok(managementSource.includes('알림 실행'));
-    assert.ok(managementSource.includes('알림 초기화'));
-    assert.ok(managementSource.includes('position: fixed;'));
-    assert.ok(managementSource.includes('left: max('));
+    assert.doesNotMatch(
+        managementSource,
+        /isDev|runFixedExpensePaymentReminderBatch|resetFixedExpensePaymentReminders|알림 실행|알림 초기화/,
+    );
 });
