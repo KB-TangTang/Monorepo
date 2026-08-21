@@ -89,6 +89,21 @@ export function connectedAccountsForDone(groups, selectedAccountIds) {
     );
 }
 
+/**
+ * 이 기관에서 고를 수 있는(이미 연결되지 않은) 계좌가 이 계좌 하나뿐인지(#396).
+ * 그 하나를 굳이 고를지 말지 물을 이유가 없으니 화면에서 체크를 잠가 항상 선택 상태로 둔다.
+ * autoIncluded 그룹(대출·페이머니, #334)은 이미 자기 방식으로 잠겨 있어 대상이 아니다.
+ */
+export function isSoleSelectableAccount(group, account) {
+    if (!group || group.autoIncluded || !account || account.alreadyLinked) {
+        return false;
+    }
+    const selectable = (Array.isArray(group.accounts) ? group.accounts : []).filter(
+        (item) => !item.alreadyLinked,
+    );
+    return selectable.length === 1;
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);
