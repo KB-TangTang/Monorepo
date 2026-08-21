@@ -30,7 +30,6 @@ defineEmits(['open-asset', 'open-ledger']);
                 <path d="M20 12.5h-3a1.5 1.5 0 0 0 0 3h3" />
             </svg>
             <span>자산 현황</span>
-            <i v-if="active === 'asset'" aria-hidden="true"></i>
         </button>
         <button
             type="button"
@@ -43,7 +42,6 @@ defineEmits(['open-asset', 'open-ledger']);
                 <path d="M9 8h6M9 12h6" />
             </svg>
             <span>거래내역</span>
-            <i v-if="active === 'ledger'" aria-hidden="true"></i>
         </button>
     </nav>
 </template>
@@ -94,27 +92,5 @@ defineEmits(['open-asset', 'open-ledger']);
 .asset-ledger-toggle .asset-ledger-toggle__active {
     color: var(--tt-text);
     background: var(--tt-accent);
-}
-
-.asset-ledger-toggle__active i {
-    position: absolute;
-    top: calc(var(--tt-space-1) * -1);
-    right: var(--tt-space-1);
-    width: 16px;
-    height: 16px;
-    background: color-mix(in srgb, var(--tt-text) 55%, var(--tt-accent));
-    border: 2px solid var(--tt-bg);
-    border-radius: var(--tt-radius-full);
-}
-
-.asset-ledger-toggle__active i::after {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 4px;
-    height: 4px;
-    content: '';
-    background: var(--tt-bg);
-    border-radius: var(--tt-radius-full);
 }
 </style>

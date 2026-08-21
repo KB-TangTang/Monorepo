@@ -23,7 +23,6 @@ defineEmits(['open-monthly-report', 'open-trial-report']);
                 <path d="M15 3.5v4h4M9 16v-3M12 16V9M15 16v-5" />
             </svg>
             <span>월간 보고서</span>
-            <i v-if="active === 'monthly'" aria-hidden="true"></i>
         </button>
         <button
             type="button"
@@ -35,7 +34,6 @@ defineEmits(['open-monthly-report', 'open-trial-report']);
                 <path d="M12 4v16M7.5 20h9M4.5 8h15M4.5 8 2 14h5zM19.5 8 17 14h5z" />
             </svg>
             <span>재판 보고서</span>
-            <i v-if="active === 'trial'" aria-hidden="true"></i>
         </button>
     </nav>
 </template>
@@ -86,27 +84,5 @@ defineEmits(['open-monthly-report', 'open-trial-report']);
 .report-toggle .report-toggle__active {
     color: var(--tt-text);
     background: var(--tt-accent);
-}
-
-.report-toggle__active i {
-    position: absolute;
-    top: calc(var(--tt-space-1) * -1);
-    right: var(--tt-space-1);
-    width: 16px;
-    height: 16px;
-    background: color-mix(in srgb, var(--tt-text) 55%, var(--tt-accent));
-    border: 2px solid var(--tt-bg);
-    border-radius: var(--tt-radius-full);
-}
-
-.report-toggle__active i::after {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 4px;
-    height: 4px;
-    content: '';
-    background: var(--tt-bg);
-    border-radius: var(--tt-radius-full);
 }
 </style>
