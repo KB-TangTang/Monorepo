@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useAccountStore } from '@/stores/account';
 import { LINK_STEP_ROUTES, canEnterLinkStep, resolveLinkEntryRoute } from '@/utils/account';
 import { resolveOnboardingRedirect } from '@/utils/user';
+import { applyThemeColor, resolveThemeColor } from '@/utils/themeColor';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -459,6 +460,17 @@ router.beforeEach((to, from) => {
     }
 
     return true;
+});
+
+/*
+ * 설치형(PWA) 상태바 색을 화면에 맞춘다.
+ *
+ * beforeEach 가 아니라 afterEach 인 이유 — beforeEach 에서 바꾸면 가드가 리다이렉트한
+ * 경우(로그인 안 된 채 홈 진입 등) 실제로 뜨지 않는 화면의 색이 남는다.
+ * 어떤 라우트가 어두운지와 그 판단 기준은 utils/themeColor.js 에 적어 뒀다.
+ */
+router.afterEach((to) => {
+    applyThemeColor(resolveThemeColor(to.name));
 });
 
 export default router;
