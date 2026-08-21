@@ -306,6 +306,7 @@ watch(
                         :is-mine="isMine(item.data)"
                         :grouped="item.grouped"
                         :show-time="item.showTime"
+                        :avatar-url="store.imageOf(item.data.senderId)"
                     />
                 </template>
             </div>

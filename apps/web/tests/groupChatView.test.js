@@ -176,6 +176,40 @@ test('메시지는 type 이 무엇이든 화면에서 사라지지 않는다', (
 test('종료 판정은 스토어의 isEnded 를 쓴다 (목업 상태값 ENDED 를 직접 비교하지 않는다)', () => {
     for (const path of LIVE_CHAT_FILES) {
         const src = readFileSync(new URL(path, import.meta.url), 'utf8');
-        assert.ok(!src.includes("'ENDED'"), `${path} 에 서버에 없는 상태값 'ENDED' 비교가 남아 있다`);
+        assert.ok(
+            !src.includes("'ENDED'"),
+            `${path} 에 서버에 없는 상태값 'ENDED' 비교가 남아 있다`,
+        );
     }
+});
+
+/*
+ * 채팅 아바타 프로필 이미지 (#407).
+ *
+ * 프로필을 바꿔도 채팅방만 이니셜 원으로 남았다. 원인은 GroupChatBubble 이 UserAvatar 에
+ * 이름만 넘기고 이미지를 안 넘긴 것이었다 — git log -S "image-url" 로 봐도 그 prop 이
+ * 이 파일에 들어간 적이 한 번도 없었다.
+ *
+ * 배선이 세 곳으로 나뉘어 있어(뷰 → 버블 → 아바타) 한 곳만 되돌아가도 조용히 이니셜로
+ * 떨어진다. 렌더링 하네스가 없으므로 세 지점을 각각 소스로 고정한다.
+ */
+function bubbleSource() {
+    return readFileSync(
+        new URL('../src/components/challenge/group/chat/GroupChatBubble.vue', import.meta.url),
+        'utf8',
+    );
+}
+
+test('뷰가 발신자 id 로 찾은 프로필 이미지를 버블에 넘긴다', () => {
+    assert.match(source(), /:avatar-url="store\.imageOf\(item\.data\.senderId\)"/);
+});
+
+test('버블이 그 이미지를 UserAvatar 로 흘려보낸다', () => {
+    const src = bubbleSource();
+    assert.match(src, /avatarUrl:\s*\{\s*type:\s*String/, 'avatarUrl prop 이 있어야 한다');
+    assert.match(
+        src,
+        /<UserAvatar[^>]*:image-url="avatarUrl"/,
+        'UserAvatar 에 :image-url 을 넘겨야 사진이 뜬다',
+    );
 });

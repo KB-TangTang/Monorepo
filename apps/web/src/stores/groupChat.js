@@ -12,6 +12,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { fetchChatRoomInfo, fetchChatMessages, resetUnreadCount } from '@/api/groupChat';
+import { fetchGroupDetail } from '@/api/groupChallenge';
 import { toChatMessage, toChatMessagePage, toChatRoom } from '@/api/groupChatAdapter';
 
 export const useGroupChatStore = defineStore('groupChat', () => {
@@ -25,6 +26,15 @@ export const useGroupChatStore = defineStore('groupChat', () => {
     const closed = ref(false);
     /** closed 가 아닌 그 외 진입 실패(예: CHAT_NOT_MEMBER, 네트워크 오류) */
     const error = ref(null);
+    /**
+     * 발신자 id → 프로필 이미지 URL.
+     *
+     * **메시지에 이미지 URL 을 실어 두지 않는 이유가 여기 있다.** 채팅 메시지는 Redis 에
+     * 저장돼 발송 시점 값이 그대로 굳는다. 이미지를 메시지에 넣으면 프로필을 바꿔도 과거
+     * 메시지는 옛 이미지로 남는다 — 지금 고치려는 증상이 형태만 바뀌어 그대로 재현된다.
+     * 메시지는 senderId 만 싣고, 이미지는 그릴 때마다 이 표에서 찾는다.
+     */
+    const memberImages = ref({});
 
     /* ── 파생 ──────────────────────────────────────────── */
     const currentUserId = computed(() => {
@@ -49,6 +59,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
             messages.value = page.messages;
             hasMore.value = page.hasMore;
             await resetUnreadCount(id);
+            await loadMemberImages(id);
         } catch (e) {
             // 종료된 챌린지는 안내 화면을 보여준다. 대화는 챌린지가 CLOSED 되는 즉시 삭제된다
             // (ChatMessageStore, 이슈 #174). http.js 인터셉터는 실패를 ApiError(code, message,
@@ -61,6 +72,37 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         } finally {
             loading.value = false;
         }
+    }
+
+    /**
+     * 멤버 프로필 이미지를 받아 발신자 id 로 찾을 수 있게 표로 만든다.
+     *
+     * 채팅 API 는 이미지를 주지 않는다(`ChatMessageDto` 에 그 필드가 없다). 그룹 상세가
+     * 이미 `members[].profileImage` 를 내려주므로 그걸 쓴다.
+     *
+     * ⚠ **실패해도 채팅은 그대로 뜬다.** 이미지는 없으면 이니셜 원으로 떨어지는 장식이라,
+     *   여기서 던지면 곁가지 때문에 대화 전체가 안 보이게 된다. 그래서 enterRoom 의
+     *   try 안에 있으면서도 자기 오류는 자기가 삼킨다.
+     */
+    async function loadMemberImages(id) {
+        try {
+            const detail = await fetchGroupDetail(id);
+            memberImages.value = Object.fromEntries(
+                (detail?.members ?? [])
+                    .filter((m) => m?.userId != null && m?.profileImage)
+                    .map((m) => [String(m.userId), m.profileImage]),
+            );
+        } catch {
+            memberImages.value = {};
+        }
+    }
+
+    /** 발신자 id 로 프로필 이미지를 찾는다. 없으면 null — UserAvatar 가 이니셜로 그린다. */
+    function imageOf(senderId) {
+        if (senderId == null) {
+            return null;
+        }
+        return memberImages.value[String(senderId)] ?? null;
     }
 
     /**
@@ -114,6 +156,7 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         groupId.value = null;
         messages.value = [];
         roomInfo.value = null;
+        memberImages.value = {};
         hasMore.value = false;
         loading.value = false;
         closed.value = false;
@@ -130,6 +173,8 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         error,
         currentUserId,
         isEnded,
+        memberImages,
+        imageOf,
         enterRoom,
         loadOlderMessages,
         appendMessage,
