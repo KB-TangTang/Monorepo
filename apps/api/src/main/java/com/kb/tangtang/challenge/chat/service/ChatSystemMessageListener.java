@@ -38,11 +38,16 @@ import java.time.ZoneId;
  * 발행하고(이슈 #318), 로컬 개발 트리거({@code DevChatTriggerController})에도 트랜잭션이 없다.
  * 빠뜨리면 그 이벤트들이 <b>아무 오류 없이 조용히 버려진다.</b>
  *
- * <p>알림 종류는 {@link NotificationType} 에 이미 있는 GROUP_TRIAL_OPENED · GROUP_DEFENSE_REGISTERED ·
- * GROUP_JUDGMENT 세 개를 그대로 쓴다. 소비 위반 적발(ViolationDetected)은 별도 종류가 없어
- * GROUP_TRIAL_OPENED 를 재사용한다 — 기소 후보가 곧 재판으로 이어지는 같은 흐름의 알림이라서다.
- * 다만 <b>화면이 고르는 카드는 {@link ChatSystemType} 으로 따로 구분</b>한다. 알림 종류를 재사용한다고
+ * <p>알림 종류는 GROUP_TRIAL_NOTICE · GROUP_DEFENSE_REGISTERED · GROUP_JUDGMENT 세 개를 쓴다.
+ * 셋 다 문구 틀이 {@code {content}} 라 여기서 넘기는 완성된 문장이 그대로 실린다.
+ * 다만 <b>화면이 고르는 카드는 {@link ChatSystemType} 으로 따로 구분</b>한다. 알림 종류를 공유한다고
  * 해서 적발과 개시가 같은 카드로 보여야 하는 것은 아니다.
+ *
+ * <p>⚠ <b>{@code GROUP_TRIAL_OPENED} 를 여기서 쓰면 안 된다.</b> 그 종류의 문구 틀은
+ * {@code {groupName} · {period} {amount} …} 로 자리표시자가 셋인데 이 경로는 {@code content}
+ * 하나만 넘긴다. {@code NotificationType#render} 가 못 채운 자리표시자에 예외를 던져
+ * 알림이 통째로 DLQ 로 떨어진다. 2026-08-21 배포 점검에서 실제로 그랬다 — 배심원 알림 4건이
+ * 전부 실패해, 피고인이 변론을 낼 때까지 아무도 재판이 열린 줄 몰랐다.
  */
 @Component
 public class ChatSystemMessageListener {
@@ -72,7 +77,7 @@ public class ChatSystemMessageListener {
     public void onViolationDetected(GroupTrialEvents.ViolationDetected event) {
         post(event.getGroupId(), event.getIndictmentId(),
                 event.getTargetNickname() + "님의 소비가 한도를 넘었어요.",
-                ChatSystemType.VIOLATION_DETECTED, NotificationType.GROUP_TRIAL_OPENED);
+                ChatSystemType.VIOLATION_DETECTED, NotificationType.GROUP_TRIAL_NOTICE);
     }
 
     @Async("chatExecutor")
@@ -80,7 +85,7 @@ public class ChatSystemMessageListener {
     public void onTrialOpened(GroupTrialEvents.TrialOpened event) {
         post(event.getGroupId(), event.getIndictmentId(),
                 event.getTargetNickname() + "님이 피고인이에요. 변론이 시작됩니다.",
-                ChatSystemType.TRIAL_OPENED, NotificationType.GROUP_TRIAL_OPENED);
+                ChatSystemType.TRIAL_OPENED, NotificationType.GROUP_TRIAL_NOTICE);
     }
 
     @Async("chatExecutor")

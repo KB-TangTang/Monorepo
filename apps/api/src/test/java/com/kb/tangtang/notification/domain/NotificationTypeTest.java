@@ -17,10 +17,11 @@ class NotificationTypeTest {
      * 문구를 빠뜨리는 것을 이 테스트가 잡는다. 늘렸으면 이 숫자와 아래 설명을 함께 고친다.
      */
     @Test
-    @DisplayName("알림 13종이 모두 정의돼 있다. 참고화면 6종 + 그룹챌린지 시작·미성립 2종(#152)"
-            + " + 그룹챌린지 변론 등록 1종(#174) + 개인 미션 3종(#282) + 그룹챌린지 방장 삭제 1종(#352)")
+    @DisplayName("알림 14종이 모두 정의돼 있다. 참고화면 6종 + 그룹챌린지 시작·미성립 2종(#152)"
+            + " + 그룹챌린지 변론 등록 1종(#174) + 개인 미션 3종(#282) + 그룹챌린지 방장 삭제 1종(#352)"
+            + " + 채팅 파생 재판 소식 1종(2026-08-21 배포 점검)")
     void hasAllTypes() {
-        assertEquals(13, NotificationType.values().length);
+        assertEquals(14, NotificationType.values().length);
     }
 
     @Test
