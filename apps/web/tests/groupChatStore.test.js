@@ -293,7 +293,7 @@ test('isEnded 는 서버 상태 CLOSED 에서만 참이다', async () => {
  * 남았다. 메시지에 이미지 URL 을 실으면 Redis 에 발송 시점 값이 굳어 같은 증상이 재현되므로,
  * 메시지는 senderId 만 싣고 이미지는 멤버 목록에서 찾는다. 그 연결을 여기서 고정한다.
  */
-test('채팅방에 들어가면 멤버 프로필 이미지를 발신자 id 로 찾을 수 있다', async () => {
+test('채팅방에 들어가면 멤버 프로필을 발신자 id 로 찾을 수 있다', async () => {
     const store = newStore();
     groupStub.setGroupDetailResponse({
         members: [
@@ -341,7 +341,7 @@ test('멤버 조회가 실패해도 채팅은 그대로 뜬다', async () => {
     assert.equal(store.imageOf(7), null);
 });
 
-test('채팅방을 나가면 멤버 이미지 표를 비운다', async () => {
+test('채팅방을 나가면 멤버 표를 비운다', async () => {
     /* 다음 방에 들어갔을 때 이전 방 멤버의 이미지가 남아 엉뚱한 얼굴이 뜨는 것을 막는다. */
     const store = newStore();
     groupStub.setGroupDetailResponse({
@@ -353,4 +353,35 @@ test('채팅방을 나가면 멤버 이미지 표를 비운다', async () => {
     store.leaveRoom();
 
     assert.equal(store.imageOf(7), null);
+});
+
+/*
+ * 닉네임도 메시지에 실려 온 값이 아니라 멤버 목록에서 찾는다 (#414).
+ * senderNickname 은 Redis 에 저장된 발송 시점 값이라, 닉네임을 바꿔도 과거 메시지가
+ * 옛 이름으로 남았다. 이미지와 같은 뿌리의 문제다.
+ */
+test('닉네임도 발신자 id 로 지금 값을 찾는다', async () => {
+    const store = newStore();
+    groupStub.setGroupDetailResponse({
+        members: [{ userId: 7, nickname: '바뀐닉', profileImage: null }],
+    });
+
+    await store.enterRoom(3);
+
+    assert.equal(store.nicknameOf(7), '바뀐닉');
+    assert.equal(store.nicknameOf('7'), '바뀐닉');
+});
+
+test('멤버 목록에 없는 발신자는 null 이다 — 화면이 메시지의 옛 이름으로 되돌아간다', async () => {
+    /*
+     * 나간 참여자·삭제된 계정의 과거 메시지가 「익명」이 되면 안 된다.
+     * 못 찾을 때 null 을 주어야 버블이 message.senderName 으로 되돌아간다.
+     */
+    const store = newStore();
+    groupStub.setGroupDetailResponse({ members: [{ userId: 7, nickname: '탕이' }] });
+
+    await store.enterRoom(3);
+
+    assert.equal(store.nicknameOf(999), null);
+    assert.equal(store.nicknameOf(null), null);
 });

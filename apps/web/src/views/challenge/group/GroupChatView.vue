@@ -307,6 +307,7 @@ watch(
                         :grouped="item.grouped"
                         :show-time="item.showTime"
                         :avatar-url="store.imageOf(item.data.senderId)"
+                        :sender-name="store.nicknameOf(item.data.senderId)"
                     />
                 </template>
             </div>
