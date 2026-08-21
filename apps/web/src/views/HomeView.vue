@@ -3,14 +3,12 @@
   챌린지 데이터 유무에 따라 참여 유도 카드와 진행 현황 카드를 전환한다.
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { fetchAssetSummary } from '@/api/asset';
 import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
 import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
 import { fetchMissionRankings, fetchTodayMission } from '@/api/personalMission';
-import BaseBadge from '@/components/common/BaseBadge.vue';
-import BaseButton from '@/components/common/BaseButton.vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
@@ -27,9 +25,31 @@ import {
     toHomeMission,
     toHomeReportSummary,
 } from '@/utils/home';
-import { useCountdown } from '@/utils/useCountdown';
 import { resolveDisplayName } from '@/utils/user';
-import challengeImage from '@/assets/images/tang_home.png';
+import homeBenchImage from '@/assets/images/home/home-bench.png';
+import homeBushLeftImage from '@/assets/images/home/home-bush-left.png';
+import homeBushImage from '@/assets/images/home/home-bush.png';
+import homeCloudFarImage from '@/assets/images/home/home-cloud-far.png';
+import homeCloudSmallImage from '@/assets/images/home/home-cloud-small.png';
+import homeCloudImage from '@/assets/images/home/home-cloud.png';
+import districtCourtImage from '@/assets/images/home/home-court-district.png';
+import supremeCourtImage from '@/assets/images/home/home-court-supreme.png';
+import homeFlowerGroundImage from '@/assets/images/home/home-flower-ground.png';
+import homeFlowerImage from '@/assets/images/home/home-flower.png';
+import homeFlowerSmallImage from '@/assets/images/home/home-flower-small.png';
+import homeLeaf1Image from '@/assets/images/home/home-leaf-1.png';
+import homeLeaf2Image from '@/assets/images/home/home-leaf-2.png';
+import homeLeaf3Image from '@/assets/images/home/home-leaf-3.png';
+import homeLeaf4Image from '@/assets/images/home/home-leaf-4.png';
+import homeLeaf5Image from '@/assets/images/home/home-leaf-5.png';
+import homeLeaf6Image from '@/assets/images/home/home-leaf-6.png';
+import homeLeaf7Image from '@/assets/images/home/home-leaf-7.png';
+import homeLeaf8Image from '@/assets/images/home/home-leaf-8.png';
+import homeLeaf9Image from '@/assets/images/home/home-leaf-9.png';
+import homeTangiImage from '@/assets/images/home/home-tangi.png';
+import homeTreeDistantImage from '@/assets/images/home/home-tree-distant.png';
+import homeTreeMainImage from '@/assets/images/home/home-tree-main.png';
+import homeTreeSmallImage from '@/assets/images/home/home-tree-small.png';
 import honorCourtImage from '@/assets/images/emotions/56_with_trophy_ver4.png';
 
 const router = useRouter();
@@ -37,7 +57,6 @@ const auth = useAuthStore();
 
 const isLoading = ref(true);
 const errorMessage = ref('');
-const animatedProgress = ref(0);
 const challenge = ref(null);
 const assetSummary = ref(null);
 const honorCourt = ref(null);
@@ -47,8 +66,6 @@ const groupTrials = ref([]);
 const activeGroupCount = ref(0);
 const isGroupSummaryLoading = ref(true);
 const hasGroupSummaryError = ref(false);
-let progressAnimationFrame = 0;
-let progressAnimationTimer = 0;
 
 const displayName = computed(() => resolveDisplayName(auth.user) || '사용자');
 const currentPeriod = getCurrentYearMonth();
@@ -61,58 +78,9 @@ const groupStatus = computed(() =>
         failed: hasGroupSummaryError.value,
     }),
 );
-const groupTodoItems = computed(() => groupTrials.value);
-const { countdowns: groupCountdowns } = useCountdown(groupTodoItems);
-const groupDeadline = computed(() => {
-    const item = groupStatus.value.item;
-    return item ? groupCountdowns.value[item.id]?.text : null;
-});
-
-const dateLabel = computed(() => {
-    const today = new Date();
-
-    return `${today.getMonth() + 1}월 ${today.getDate()}일`;
-});
-
 const challengeProgress = computed(() => {
     return clampHomeProgress(challenge.value?.progressRate);
 });
-
-function stopProgressAnimation() {
-    window.clearTimeout(progressAnimationTimer);
-    window.cancelAnimationFrame(progressAnimationFrame);
-}
-
-function animateProgress(targetProgress) {
-    stopProgressAnimation();
-    animatedProgress.value = 0;
-
-    if (targetProgress <= 0) {
-        return;
-    }
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const duration = reduceMotion ? 400 : 1400;
-    const delay = reduceMotion ? 100 : 200;
-
-    progressAnimationTimer = window.setTimeout(() => {
-        const startedAt = performance.now();
-
-        function updateProgress(now) {
-            const elapsedRatio = Math.min((now - startedAt) / duration, 1);
-            const easedRatio = 1 - Math.pow(1 - elapsedRatio, 3);
-            animatedProgress.value = Math.round(targetProgress * easedRatio);
-
-            if (elapsedRatio < 1) {
-                progressAnimationFrame = window.requestAnimationFrame(updateProgress);
-            }
-        }
-
-        progressAnimationFrame = window.requestAnimationFrame(updateProgress);
-    }, delay);
-}
-
-watch(challengeProgress, animateProgress, { immediate: true });
 
 async function loadHome() {
     isLoading.value = true;
@@ -218,6 +186,10 @@ function goToGroupChallenge() {
     router.push({ name: 'groupChallengeList' });
 }
 
+function goToAllTrials() {
+    router.push({ name: 'groupChallengeList' });
+}
+
 function goToAsset() {
     router.push({ name: 'asset' });
 }
@@ -237,7 +209,6 @@ onMounted(() => {
     loadHome();
     loadGroupSummary();
 });
-onBeforeUnmount(stopProgressAnimation);
 </script>
 
 <template>
@@ -247,144 +218,160 @@ onBeforeUnmount(stopProgressAnimation);
         <StateError v-else-if="errorMessage" :message="errorMessage" @retry="loadHome" />
 
         <template v-else>
-            <header class="home__header">
-                <div class="home__status-row">
-                    <BaseBadge class="home__date" variant="progress">{{ dateLabel }}</BaseBadge>
-
-                    <TheNotificationBell />
+            <header class="home-hero">
+                <div class="home-hero__copy">
+                    <p>{{ displayName }}님, 안녕하세요 <span aria-hidden="true">👋</span></p>
+                    <h1>오늘도 현명한 한 걸음!</h1>
                 </div>
+                <TheNotificationBell class="home-hero__bell" />
 
-                <h1 class="home__title">{{ displayName }}님, 오늘도 탕탕!</h1>
-
-                <p class="home__description">
-                    오늘의 재판과 자산을<br />
-                    한 번에 확인해요
-                </p>
+                <div class="home-hero__cloud-track home-hero__cloud-track--near">
+                    <img :src="homeCloudImage" alt="" />
+                    <img :src="homeCloudImage" alt="" />
+                </div>
+                <div class="home-hero__cloud-track home-hero__cloud-track--far">
+                    <img :src="homeCloudSmallImage" alt="" />
+                    <img :src="homeCloudFarImage" alt="" />
+                </div>
+                <img class="home-hero__tree-distant" :src="homeTreeDistantImage" alt="" />
+                <img
+                    class="home-hero__tree home-hero__tree--small"
+                    :src="homeTreeSmallImage"
+                    alt=""
+                />
+                <img class="home-hero__bench" :src="homeBenchImage" alt="" />
+                <img class="home-hero__bush-left" :src="homeBushLeftImage" alt="" />
+                <img class="home-hero__bush" :src="homeBushImage" alt="" />
+                <img class="home-hero__flower" :src="homeFlowerImage" alt="" />
+                <img class="home-hero__flower-small" :src="homeFlowerSmallImage" alt="" />
+                <img
+                    class="home-hero__tree home-hero__tree--main"
+                    :src="homeTreeMainImage"
+                    alt=""
+                />
+                <div class="home-hero__tangi-track">
+                    <span aria-hidden="true"></span>
+                    <img class="home-hero__tangi" :src="homeTangiImage" alt="산책하는 탕이" />
+                </div>
+                <img class="home-hero__leaf home-hero__leaf--fall-1" :src="homeLeaf2Image" alt="" />
+                <img class="home-hero__leaf home-hero__leaf--fall-2" :src="homeLeaf3Image" alt="" />
+                <img class="home-hero__leaf home-hero__leaf--fall-3" :src="homeLeaf4Image" alt="" />
+                <img class="home-hero__leaf home-hero__leaf--fall-4" :src="homeLeaf5Image" alt="" />
+                <img class="home-hero__leaf home-hero__leaf--fall-5" :src="homeLeaf6Image" alt="" />
+                <img
+                    class="home-hero__leaf home-hero__leaf--ground-1"
+                    :src="homeLeaf1Image"
+                    alt=""
+                />
+                <img
+                    class="home-hero__leaf home-hero__leaf--ground-2"
+                    :src="homeLeaf7Image"
+                    alt=""
+                />
+                <img
+                    class="home-hero__leaf home-hero__leaf--ground-3"
+                    :src="homeLeaf8Image"
+                    alt=""
+                />
+                <img
+                    class="home-hero__leaf home-hero__leaf--ground-4"
+                    :src="homeLeaf3Image"
+                    alt=""
+                />
+                <img
+                    class="home-hero__leaf home-hero__leaf--ground-5"
+                    :src="homeLeaf9Image"
+                    alt=""
+                />
+                <img class="home-hero__flower-ground" :src="homeFlowerGroundImage" alt="" />
+                <span class="home-hero__ground" aria-hidden="true"></span>
             </header>
 
-            <BaseCard
-                v-if="challenge"
-                class="challenge-card"
-                clickable
-                padding="lg"
-                @click="goToPersonalChallenge"
-            >
-                <BaseBadge class="challenge-card__badge">오늘의 메인 챌린지</BaseBadge>
-
-                <h2 class="challenge-card__title">{{ challenge.title }}</h2>
-
-                <p class="challenge-card__summary">
-                    선고 한도 {{ formatHomeAmount(challenge.limitAmount) }}원 ·
-                    <strong v-if="challenge.isAbsoluteMission">
-                        <template v-if="challenge.spentAmount > 0">
-                            {{ formatHomeAmount(challenge.exceededAmount) }}원 초과
-                        </template>
-                        <template v-else>현재 위반 없음</template>
-                    </strong>
-                    <strong v-else>
-                        {{ formatHomeAmount(challenge.remainingAmount) }}원 남음
-                    </strong>
-                </p>
-
-                <div class="challenge-card__progress-info">
-                    <span>
-                        {{ formatHomeAmount(challenge.spentAmount) }}원 /
-                        {{ formatHomeAmount(challenge.limitAmount) }}원
-                    </span>
-                    <strong>{{ animatedProgress }}%</strong>
+            <section class="trial-summary" aria-labelledby="trial-summary-title">
+                <div class="trial-summary__header">
+                    <h2 id="trial-summary-title">이번 달 재판 현황</h2>
+                    <button type="button" @click="goToAllTrials">전체보기 ›</button>
                 </div>
 
-                <div
-                    class="challenge-card__progress"
-                    role="progressbar"
-                    :aria-label="`${challenge.title} 진행률`"
-                    :aria-valuenow="challengeProgress"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                >
-                    <span
-                        class="challenge-card__progress-value"
-                        :style="{ width: `${challengeProgress}%` }"
-                    ></span>
-                </div>
-            </BaseCard>
-
-            <BaseCard v-else class="challenge-card challenge-card--empty" padding="lg">
-                <img class="challenge-card__image" :src="challengeImage" alt="" />
-
-                <div class="challenge-card__empty-content">
-                    <BaseBadge class="challenge-card__badge">오늘의 메인 챌린지</BaseBadge>
-
-                    <h2 class="challenge-card__empty-title">
-                        챌린지에 참여하고<br />
-                        <strong>당신의 자산을 지켜요!</strong>
-                    </h2>
-
-                    <p class="challenge-card__empty-description">미션에 참여해보세요</p>
-
-                    <BaseButton
-                        class="challenge-card__button"
-                        size="md"
+                <div class="trial-summary__grid">
+                    <button
+                        type="button"
+                        class="trial-card trial-card--personal"
                         @click="goToPersonalChallenge"
                     >
-                        입장하기
-                    </BaseButton>
+                        <span class="trial-card__court">대법원</span>
+                        <span class="trial-card__type">개인챌린지</span>
+                        <img
+                            class="trial-card__illustration trial-card__illustration--supreme"
+                            :src="supremeCourtImage"
+                            alt=""
+                        />
+
+                        <template v-if="challenge">
+                            <small>오늘의 미션</small>
+                            <strong class="trial-card__mission">{{ challenge.title }}</strong>
+                            <strong class="trial-card__amount">
+                                <template v-if="challenge.isAbsoluteMission">
+                                    {{ challenge.spentAmount > 0 ? '한도 초과' : '위반 없음' }}
+                                </template>
+                                <template v-else>
+                                    {{ formatHomeAmount(challenge.remainingAmount) }}원 남음
+                                </template>
+                            </strong>
+                            <span
+                                class="trial-card__progress"
+                                role="progressbar"
+                                :aria-label="`${challenge.title} 진행률`"
+                                :aria-valuenow="challengeProgress"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                            >
+                                <span :style="{ width: `${challengeProgress}%` }"></span>
+                            </span>
+                            <small>
+                                사용 {{ formatHomeAmount(challenge.spentAmount) }}원 · 연속
+                                {{ challenge.streakDays }}일
+                            </small>
+                        </template>
+                        <template v-else>
+                            <strong class="trial-card__empty">오늘의 미션을 시작해보세요</strong>
+                        </template>
+
+                        <span class="trial-card__action">입장하기 ›</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="trial-card trial-card--group"
+                        @click="goToGroupChallenge"
+                    >
+                        <span class="trial-card__court">지방법원</span>
+                        <span class="trial-card__type">그룹챌린지</span>
+                        <img
+                            class="trial-card__illustration trial-card__illustration--district"
+                            :src="districtCourtImage"
+                            alt=""
+                        />
+
+                        <strong v-if="isGroupSummaryLoading" class="trial-card__group-status">
+                            확인 중
+                        </strong>
+                        <strong v-else-if="hasGroupSummaryError" class="trial-card__group-status">
+                            다시 확인
+                        </strong>
+                        <strong v-else class="trial-card__group-count">
+                            {{ activeGroupCount }}<small>건 진행중</small>
+                        </strong>
+
+                        <span class="trial-card__action">입장하기 ›</span>
+                    </button>
                 </div>
-            </BaseCard>
+            </section>
 
             <section class="home-summary" aria-labelledby="home-summary-title">
                 <h2 id="home-summary-title" class="home-summary__title">지금 확인할 것</h2>
 
                 <div class="home-summary__grid">
-                    <BaseCard clickable padding="md" @click="goToGroupChallenge">
-                        <span class="summary-card__label">
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                aria-hidden="true"
-                            >
-                                <path d="m4 16 8-8 4 4-8 8H4z" />
-                                <path d="m13 7 2-2 4 4-2 2" />
-                            </svg>
-                            그룹 재판
-                        </span>
-
-                        <template v-if="isGroupSummaryLoading">
-                            <strong class="summary-card__value">할 일을 확인 중이에요</strong>
-                        </template>
-
-                        <template v-else>
-                            <strong
-                                class="summary-card__value summary-card__value--group"
-                                :class="{
-                                    'summary-card__value--success': groupStatus.kind === 'cruising',
-                                }"
-                            >
-                                {{ groupStatus.title }}
-                            </strong>
-                            <span
-                                class="summary-card__caption"
-                                :class="{
-                                    'summary-card__caption--danger':
-                                        groupStatus.kind === 'accuse' ||
-                                        groupStatus.kind === 'vote' ||
-                                        groupStatus.kind === 'error',
-                                    'summary-card__caption--success':
-                                        groupStatus.kind === 'cruising',
-                                }"
-                            >
-                                <template v-if="groupDeadline"
-                                    >마감 {{ groupDeadline }} ·
-                                </template>
-                                {{ groupStatus.caption }}
-                            </span>
-                        </template>
-                    </BaseCard>
-
                     <BaseCard clickable padding="md" @click="goToAsset">
                         <span class="summary-card__label">
                             <svg

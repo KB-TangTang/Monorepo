@@ -73,6 +73,7 @@ export function toHomeMission(mission) {
         remainingAmount: Math.max(limitAmount - spentAmount, 0),
         exceededAmount: Math.max(spentAmount - limitAmount, 0),
         progressRate: clampHomeProgress(progressRate),
+        streakDays: Math.max(0, Number(mission.streakDays) || 0),
     };
 }
 

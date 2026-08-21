@@ -91,7 +91,19 @@ test('오늘 미션을 홈 진행 카드 모델로 변환한다', () => {
         remainingAmount: 3500,
         exceededAmount: 0,
         progressRate: 56,
+        streakDays: 0,
     });
+});
+
+test('오늘 미션의 연속 성공일을 홈 카드 모델에 포함한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '카페 방어전',
+        targetValue: 8000,
+        currentAmount: 2800,
+        streakDays: 8,
+    });
+
+    assert.equal(mission.streakDays, 8);
 });
 
 test('위반하지 않은 절대형 미션을 공통 진행 카드 모델로 변환한다', () => {
@@ -126,14 +138,11 @@ test('위반한 절대형 미션은 공통 진행 카드에서 100%로 표시한
     assert.equal(mission.progressRate, 100);
 });
 
-test('상대형과 절대형이 현재 사용액과 한도를 같은 형식으로 표시한다', () => {
+test('홈 재판 카드에 현재 사용액과 남은 금액을 표시한다', () => {
     const source = readFileSync(new URL('../src/views/HomeView.vue', import.meta.url), 'utf8');
 
-    assert.match(
-        source,
-        /formatHomeAmount\(challenge\.spentAmount\) \}\}원 \/[\s\S]*formatHomeAmount\(challenge\.limitAmount\) \}\}원/,
-    );
-    assert.doesNotMatch(source, /사용 \{\{ formatHomeAmount\(challenge\.spentAmount\)/);
+    assert.match(source, /formatHomeAmount\(challenge\.remainingAmount\) \}\}원 남음/);
+    assert.match(source, /사용 \{\{ formatHomeAmount\(challenge\.spentAmount\) \}\}원/);
 });
 
 test('현재 월과 다음 리포트 공개까지 남은 날짜를 계산한다', () => {
