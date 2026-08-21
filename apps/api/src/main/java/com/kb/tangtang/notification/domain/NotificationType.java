@@ -55,6 +55,20 @@ public enum NotificationType {
      *   둘이 하루 어긋난다. created_at 을 쓰면 사용자는 쓰지도 않은 날로 기소된 것처럼 본다.
      */
     GROUP_TRIAL_OPENED("재판이 열렸어요", "{groupName} · {period} {amount} 지출로 한도를 넘겼어요"),
+    /*
+     * 채팅 시스템 메시지에서 파생되는 재판 소식 (위반 감지 · 재판 개시).
+     *
+     * ⚠ 바로 위 GROUP_TRIAL_OPENED 를 재사용하면 안 된다. 그쪽 문구 틀은 자리표시자가 셋인데
+     *   채팅 쪽은 완성된 문장 하나({content})만 넘긴다 — render() 가 못 채운 자리표시자에
+     *   예외를 던져 알림이 통째로 DLQ 로 떨어진다. 2026-08-21 배포 점검에서 실제로 그랬다.
+     *   기소 4건 중 피고인 직접 알림만 살고 배심원 알림 4건이 전부 실패해, 배심원은
+     *   피고인이 변론을 낼 때까지 재판이 열린 줄도 몰랐다.
+     *
+     * 문구를 {content} 로 두는 이유는 채팅 카드와 알림이 같은 문장을 쓰기 때문이다
+     * ("OO님의 소비가 한도를 넘었어요." · "OO님이 피고인이에요. 변론이 시작됩니다.").
+     * 제목만 이 파일이 갖는다 — GROUP_DEFENSE_REGISTERED · GROUP_JUDGMENT 와 같은 구조다.
+     */
+    GROUP_TRIAL_NOTICE("재판 소식이 있어요", "{content}"),
     MISSION_ASSIGNED("오늘의 미션이 도착했어요", "{missionTitle}"),
     MISSION_DEADLINE("오늘 미션 마감 임박", "{content}"),
     MISSION_VERDICT("어제 미션 판결이 확정됐어요", "{result}"),

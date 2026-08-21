@@ -16,12 +16,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,23 +44,23 @@ class ChatSystemMessageListenerTest {
     }
 
     @Test
-    @DisplayName("소비 위반 적발은 적발 카드 종류로 남기고 GROUP_TRIAL_OPENED 로 알린다")
+    @DisplayName("소비 위반 적발은 적발 카드 종류로 남기고 GROUP_TRIAL_NOTICE 로 알린다")
     void violationDetectedUsesTrialType() {
         listener.onViolationDetected(new GroupTrialEvents.ViolationDetected(7L, 55L, "절약왕"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
                 "절약왕님의 소비가 한도를 넘었어요.", ChatSystemType.VIOLATION_DETECTED,
-                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_OPENED)));
+                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_NOTICE)));
     }
 
     @Test
-    @DisplayName("재판 개시는 개시 카드 종류로 남기고 GROUP_TRIAL_OPENED 로 알린다")
+    @DisplayName("재판 개시는 개시 카드 종류로 남기고 GROUP_TRIAL_NOTICE 로 알린다")
     void trialOpenedUsesTrialType() {
         listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
 
         verify(chatMessageService).postSystemMessage(eq(7L), eq(new ChatSystemMessageSpec(
                 "절약왕님이 피고인이에요. 변론이 시작됩니다.", ChatSystemType.TRIAL_OPENED,
-                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_OPENED)));
+                TRIAL_DEEP_LINK, "2026-재판-0055", NotificationType.GROUP_TRIAL_NOTICE)));
     }
 
     @Test
@@ -126,6 +128,33 @@ class ChatSystemMessageListenerTest {
         listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
 
         assertNull(captureSpec().verdict());
+    }
+
+    /**
+     * 2026-08-21 배포 회귀. 이 경로가 고르는 알림 종류는 <b>{content} 하나만으로 문구가 완성돼야 한다.</b>
+     *
+     * <p>{@code ChatMessageService#postSystemMessage} 가 {@code Map.of("content", …)} 만 넘기기 때문이다.
+     * 자리표시자가 더 필요한 종류를 고르면 {@code render()} 가 예외를 던져 알림이 통째로 DLQ 로 떨어진다.
+     * 실제로 {@code GROUP_TRIAL_OPENED}(자리표시자 3개)를 쓰다가 배심원 알림 4건이 전부 실패했고,
+     * 피고인이 변론을 낼 때까지 아무도 재판이 열린 줄 몰랐다.
+     */
+    @Test
+    @DisplayName("채팅이 고르는 알림 종류는 {content} 만으로 문구가 완성돼야 한다 — 아니면 통째로 DLQ 로 간다")
+    void everyChatNotificationTypeRendersWithContentAlone() {
+        listener.onViolationDetected(new GroupTrialEvents.ViolationDetected(7L, 55L, "절약왕"));
+        listener.onTrialOpened(new GroupTrialEvents.TrialOpened(7L, 55L, "절약왕"));
+        listener.onDefenseRegistered(new GroupTrialEvents.DefenseRegistered(7L, 55L, "절약왕"));
+        listener.onVerdictConfirmed(GroupTrialEvents.VerdictConfirmed.byVote(
+                7L, 55L, "절약왕님, 유죄예요.", true, 4, 2, 1));
+
+        ArgumentCaptor<ChatSystemMessageSpec> specs = ArgumentCaptor.forClass(ChatSystemMessageSpec.class);
+        verify(chatMessageService, times(4)).postSystemMessage(anyLong(), specs.capture());
+
+        for (ChatSystemMessageSpec spec : specs.getAllValues()) {
+            NotificationType type = spec.notificationType();
+            assertEquals(spec.content(), type.render(Map.of("content", spec.content())),
+                    type + " 는 content 외의 자리표시자를 요구한다 — 이 경로에서 쓸 수 없다");
+        }
     }
 
     private ChatSystemMessageSpec captureSpec() {
