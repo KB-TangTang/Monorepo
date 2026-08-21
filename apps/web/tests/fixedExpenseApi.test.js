@@ -77,7 +77,7 @@ test('후보와 확정 항목 상세는 같은 endpoint 응답을 화면 모델�
     );
 });
 
-test('절약 감정서는 yearMonth를 전달하고 ApiResponse에서 풀린 payload를 그대로 쓴다', async () => {
+test('절감액 조회는 yearMonth를 전달하고 ApiResponse에서 풀린 payload를 그대로 쓴다', async () => {
     stub.reset();
     stub.setGetResponses([{ monthlySavings: 72000, yearlySavings: 864000, items: [] }]);
 
