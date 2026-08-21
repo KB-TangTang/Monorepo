@@ -19,6 +19,12 @@ const props = defineProps({
      * utils/groupChat.js 의 shouldShowTime 이다. 기본값 true 는 단독 사용 시 기존 동작 유지용.
      */
     showTime: { type: Boolean, default: true },
+    /*
+     * 발신자 프로필 이미지. 채팅 메시지에는 이 값이 없다 — 메시지가 Redis 에 저장돼
+     * 발송 시점 값이 굳기 때문에 일부러 싣지 않는다(프로필을 바꿔도 과거 메시지가 안 바뀐다).
+     * 그릴 때마다 멤버 목록에서 찾아 넘긴다. 없으면 UserAvatar 가 이니셜 원으로 그린다.
+     */
+    avatarUrl: { type: String, default: null },
 });
 
 const timeLabel = computed(() => {
@@ -34,7 +40,7 @@ const displayName = computed(() => props.message.senderName || '익명');
 <template>
     <div class="bubble-row" :class="{ 'bubble-row--mine': isMine, 'bubble-row--grouped': grouped }">
         <div v-if="!isMine" class="bubble-row__avatar-slot">
-            <UserAvatar v-if="!grouped" :name="displayName" :size="34" />
+            <UserAvatar v-if="!grouped" :image-url="avatarUrl" :name="displayName" :size="34" />
         </div>
 
         <div class="bubble-row__body">

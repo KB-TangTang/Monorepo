@@ -9,22 +9,29 @@ import { createPinia, setActivePinia } from 'pinia';
  * `@/api/groupChat` 을 이 파일 안에서만 대역으로 갈아끼운다(tests/tutorialGuide.test.js 와 같은 방식).
  */
 const STUB_URL = new URL('./stubs/groupChatApiStub.js', import.meta.url).href;
+/* 채팅방 진입이 멤버 프로필 이미지를 받으러 그룹 상세도 부른다 — 그쪽도 http.js 로 내려간다 */
+const GROUP_STUB_URL = new URL('./stubs/groupChallengeApiStub.js', import.meta.url).href;
 
 registerHooks({
     resolve(specifier, context, nextResolve) {
         if (specifier === '@/api/groupChat') {
             return { url: STUB_URL, shortCircuit: true };
         }
+        if (specifier === '@/api/groupChallenge') {
+            return { url: GROUP_STUB_URL, shortCircuit: true };
+        }
         return nextResolve(specifier, context);
     },
 });
 
 const stub = await import(STUB_URL);
+const groupStub = await import(GROUP_STUB_URL);
 const { useGroupChatStore } = await import('../src/stores/groupChat.js');
 
 function newStore() {
     setActivePinia(createPinia());
     stub.reset();
+    groupStub.reset();
     return useGroupChatStore();
 }
 
@@ -267,11 +274,83 @@ test('isEnded 는 서버 상태 CLOSED 에서만 참이다', async () => {
     await store.enterRoom(7);
     assert.equal(store.isEnded, false);
 
-    stub.setRoomInfoResponse({ groupId: 7, groupName: '절약단', status: 'JUDGING', memberCount: 3 });
+    stub.setRoomInfoResponse({
+        groupId: 7,
+        groupName: '절약단',
+        status: 'JUDGING',
+        memberCount: 3,
+    });
     await store.enterRoom(7);
     assert.equal(store.isEnded, false, 'JUDGING 은 대화가 가장 활발한 구간이라 입력을 막지 않는다');
 
     stub.setRoomInfoResponse({ groupId: 7, groupName: '절약단', status: 'CLOSED', memberCount: 3 });
     await store.enterRoom(7);
     assert.equal(store.isEnded, true);
+});
+
+/*
+ * 채팅 아바타에 프로필 이미지가 붙은 적이 없었다(#407). 프로필을 바꿔도 채팅방만 이니셜 원으로
+ * 남았다. 메시지에 이미지 URL 을 실으면 Redis 에 발송 시점 값이 굳어 같은 증상이 재현되므로,
+ * 메시지는 senderId 만 싣고 이미지는 멤버 목록에서 찾는다. 그 연결을 여기서 고정한다.
+ */
+test('채팅방에 들어가면 멤버 프로필 이미지를 발신자 id 로 찾을 수 있다', async () => {
+    const store = newStore();
+    groupStub.setGroupDetailResponse({
+        members: [
+            { userId: 7, nickname: '탕이', profileImage: 'https://cdn/7.png' },
+            { userId: 9, nickname: '재판장', profileImage: null },
+        ],
+    });
+
+    await store.enterRoom(3);
+
+    assert.deepEqual(groupStub.groupDetailCalls, [3]);
+    assert.equal(store.imageOf(7), 'https://cdn/7.png');
+    // 이미지가 없는 멤버·모르는 발신자·시스템 메시지(senderId 없음)는 전부 null 이어야 한다
+    assert.equal(store.imageOf(9), null);
+    assert.equal(store.imageOf(999), null);
+    assert.equal(store.imageOf(null), null);
+});
+
+test('발신자 id 는 문자열로 와도 같은 이미지를 찾는다', async () => {
+    /* 소켓 경로의 senderId 가 문자열로 오는 일이 있어 화면이 Number() 로 비교하고 있다. */
+    const store = newStore();
+    groupStub.setGroupDetailResponse({
+        members: [{ userId: 7, nickname: '탕이', profileImage: 'https://cdn/7.png' }],
+    });
+
+    await store.enterRoom(3);
+
+    assert.equal(store.imageOf('7'), 'https://cdn/7.png');
+});
+
+test('멤버 조회가 실패해도 채팅은 그대로 뜬다', async () => {
+    /*
+     * 이미지는 없으면 이니셜로 떨어지는 장식이다. 여기서 오류를 올리면 곁가지 때문에
+     * 대화 전체가 안 보이게 된다 — 그 회귀를 막는다.
+     */
+    const store = newStore();
+    stub.setMessagesResponse({ messages: [{ messageId: 1, content: '안녕' }], hasMore: false });
+    groupStub.setGroupDetailError(Object.assign(new Error('boom'), { code: 'GROUP_NOT_FOUND' }));
+
+    await store.enterRoom(3);
+
+    assert.equal(store.error, null);
+    assert.equal(store.closed, false);
+    assert.equal(store.messages.length, 1);
+    assert.equal(store.imageOf(7), null);
+});
+
+test('채팅방을 나가면 멤버 이미지 표를 비운다', async () => {
+    /* 다음 방에 들어갔을 때 이전 방 멤버의 이미지가 남아 엉뚱한 얼굴이 뜨는 것을 막는다. */
+    const store = newStore();
+    groupStub.setGroupDetailResponse({
+        members: [{ userId: 7, nickname: '탕이', profileImage: 'https://cdn/7.png' }],
+    });
+    await store.enterRoom(3);
+    assert.equal(store.imageOf(7), 'https://cdn/7.png');
+
+    store.leaveRoom();
+
+    assert.equal(store.imageOf(7), null);
 });
