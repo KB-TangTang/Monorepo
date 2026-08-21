@@ -34,6 +34,15 @@ export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
     return Math.min(Math.round((currentAmount / targetAmount) * 100), 100);
 }
 
+export function resolveMissionProsecutorState(prosecutors, missionDifficultyId, selectedId) {
+    const selected = prosecutors.find((prosecutor) => prosecutor.id === selectedId) ?? null;
+    const current =
+        prosecutors.find((prosecutor) => prosecutor.id === missionDifficultyId) ?? selected;
+    const upcoming = current?.id !== selected?.id ? selected : null;
+
+    return { current, upcoming };
+}
+
 export function toTodayMissionBriefing(mission) {
     if (!mission) {
         return null;

@@ -4,6 +4,7 @@ import {
     formatWatchlistMissionRound,
     formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    resolveMissionProsecutorState,
     formatMissionWatchQuote,
     getMissionBadge,
     toMissionVerdictModel,
@@ -11,6 +12,21 @@ import {
     toTodayMissionBriefing,
     toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('오늘 미션 탕이는 유지하고 변경한 탕이는 다음 미션 상태로 구분한다', () => {
+    const prosecutors = [
+        { id: 'NORMAL', name: '냉정한 탕이' },
+        { id: 'HARD', name: '깐깐한 탕이' },
+    ];
+
+    const reserved = resolveMissionProsecutorState(prosecutors, 'NORMAL', 'HARD');
+    assert.equal(reserved.current.name, '냉정한 탕이');
+    assert.equal(reserved.upcoming.name, '깐깐한 탕이');
+
+    const applied = resolveMissionProsecutorState(prosecutors, 'HARD', 'HARD');
+    assert.equal(applied.current.name, '깐깐한 탕이');
+    assert.equal(applied.upcoming, null);
+});
 
 test('카테고리명 받침에 따라 목적격 조사를 표시한다', () => {
     assert.equal(formatMissionWatchQuote('패션'), '"오늘은 패션을 지켜보겠습니다"');

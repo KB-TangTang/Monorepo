@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
@@ -23,11 +23,16 @@ import {
     formatMissionWatchQuote,
     formatWon,
     formatMissionAssignmentSummary,
+    resolveMissionProsecutorState,
     toWatchCategoryModel,
     toWeeklyVerdictModel,
 } from '@/services/personalMissionFlow';
 import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
-import { MOCK_VERDICT_SUCCESS, MOCK_VERDICT_FAIL } from '@/fixtures/personalChallenge';
+import {
+    MOCK_PROSECUTORS,
+    MOCK_VERDICT_SUCCESS,
+    MOCK_VERDICT_FAIL,
+} from '@/fixtures/personalChallenge';
 import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
 import courtSupreme from '@/assets/images/court/court_supreme.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
@@ -51,6 +56,8 @@ const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
 const devActionMessage = ref('');
+const toastMessage = ref('');
+let toastTimer = null;
 const isMissionUnlockOpen = ref(false);
 const isMissionUnlockAcknowledging = ref(false);
 const missionUnlockError = ref('');
@@ -65,6 +72,13 @@ const shortDate = computed(() => {
 });
 const missionWatchQuote = computed(() =>
     formatMissionWatchQuote(store.todayBriefing?.categoryName),
+);
+const missionProsecutors = computed(() =>
+    resolveMissionProsecutorState(
+        MOCK_PROSECUTORS,
+        store.todayBriefing?.difficultyName,
+        store.selectedProsecutorId,
+    ),
 );
 
 const cumulativeTransactionCount = computed(() => {
@@ -262,6 +276,16 @@ function openTangiSheet() {
     isTangiSheetOpen.value = true;
 }
 
+function showToast(message) {
+    window.clearTimeout(toastTimer);
+    toastMessage.value = message;
+    toastTimer = window.setTimeout(() => {
+        toastMessage.value = '';
+    }, 3200);
+}
+
+onUnmounted(() => window.clearTimeout(toastTimer));
+
 async function handleProsecutorConfirm(prosecutorId) {
     if (isMissionUnlockDifficultyFlow.value && isMissionUnlockPreview.value) {
         isMissionUnlockDifficultyFlow.value = false;
@@ -278,7 +302,9 @@ async function handleProsecutorConfirm(prosecutorId) {
             hasPendingMissionUnlock.value = false;
             isMissionUnlockDifficultyFlow.value = false;
         }
-        devActionMessage.value = `${store.selectedProsecutor?.name} 난이도로 저장됐어요. 내일 배정분부터 적용됩니다.`;
+        const message = `난이도 변경 완료! 다음 미션부터 ‘${store.selectedProsecutor?.name}’가 적용돼요.`;
+        devActionMessage.value = message;
+        showToast(message);
     } catch (err) {
         devActionMessage.value = err.message ?? '담당 검사 난이도를 저장하지 못했어요.';
     }
@@ -402,8 +428,8 @@ async function reassignTodayMission() {
             "
             :court-image="courtSupreme"
             :date="courtDate"
-            :prosecutor-image="store.selectedProsecutor?.image"
-            :prosecutor-name="store.selectedProsecutor?.name"
+            :prosecutor-image="missionProsecutors.current?.image"
+            :prosecutor-name="missionProsecutors.current?.name"
             :quote="missionWatchQuote"
         />
 
@@ -471,8 +497,10 @@ async function reassignTodayMission() {
                     :alibi-condition="store.todayBriefing.alibiCondition"
                     :current-amount="store.todayBriefing.currentAmount"
                     :limit-amount="store.todayBriefing.limitAmount"
-                    :prosecutor-name="store.selectedProsecutor?.name"
-                    :prosecutor-image="store.selectedProsecutor?.image"
+                    :prosecutor-name="missionProsecutors.current?.name"
+                    :prosecutor-image="missionProsecutors.current?.image"
+                    :upcoming-prosecutor-name="missionProsecutors.upcoming?.name"
+                    :upcoming-prosecutor-image="missionProsecutors.upcoming?.image"
                     @prosecutor-click="openTangiSheet"
                 />
 
@@ -484,7 +512,7 @@ async function reassignTodayMission() {
                 <PersonalScoreCard
                     :week-days="weeklyVerdictModel.days"
                     :streak-days="weeklyVerdictModel.streakDays"
-                    :prosecutor-image="store.selectedProsecutor?.image"
+                    :prosecutor-image="missionProsecutors.current?.image"
                     :score="store.monthlyScore.score"
                     :top-percent="store.monthlyScore.topPercent"
                     @report-click="openPersonalRanking"
@@ -638,6 +666,12 @@ async function reassignTodayMission() {
         </main>
 
         <ChallengeModeTabBar active-mode="personal" />
+
+        <Transition name="personal-toast">
+            <div v-if="toastMessage" class="personal-home__toast" role="status">
+                {{ toastMessage }}
+            </div>
+        </Transition>
 
         <!-- 데모 버튼 -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
