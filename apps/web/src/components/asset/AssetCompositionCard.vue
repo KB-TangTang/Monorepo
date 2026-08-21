@@ -18,7 +18,8 @@ const props = defineProps({
     composition: { type: Array, required: true },
 });
 
-const RADIUS = 54;
+const RADIUS = 50;
+const STROKE_WIDTH = 24;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const total = computed(() => getCompositionTotal(props.composition));
@@ -42,14 +43,13 @@ const segments = computed(() =>
                         :r="RADIUS"
                         fill="none"
                         :stroke="toneColor(segment.tone)"
-                        stroke-width="16"
+                        :stroke-width="STROKE_WIDTH"
                         :stroke-dasharray="`${segment.ratio * CIRCUMFERENCE} ${CIRCUMFERENCE}`"
                         :stroke-dashoffset="-segment.offset * CIRCUMFERENCE"
                         transform="rotate(-90 62 62)"
                     />
                 </svg>
                 <div class="asset-composition__center">
-                    <p class="asset-composition__center-label">총 자산</p>
                     <p class="asset-composition__center-value">{{ formatCompactWon(total) }}</p>
                 </div>
             </div>
@@ -104,13 +104,7 @@ const segments = computed(() =>
     text-align: center;
 }
 
-.asset-composition__center-label {
-    font-size: var(--tt-fs-mono-chip);
-    color: var(--tt-text-muted);
-}
-
 .asset-composition__center-value {
-    margin-top: var(--tt-space-1);
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
