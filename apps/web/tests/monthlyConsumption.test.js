@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
     buildMonthlyTrendSlots,
     canOpenFixedExpenseSavings,
@@ -16,11 +17,75 @@ import {
     resolveReportState,
     splitMonthlyCategories,
 } from '../src/utils/monthlyConsumption.js';
-import { AVAILABLE_MONTHS, REPORTS } from '../src/fixtures/monthlyConsumption.js';
-import {
-    fetchTempMonthlyConsumptionMonths,
-    fetchTempMonthlyConsumptionReport,
-} from '../src/api/tempMonthlyConsumptionMock.js';
+
+const AVAILABLE_MONTHS = [
+    { value: '2026-01', hasReport: false, status: MONTHLY_REPORT_STATUS.CURRENT },
+    { value: '2026-02', hasReport: true, status: MONTHLY_REPORT_STATUS.ONBOARDING },
+    { value: '2026-03', hasReport: true, status: MONTHLY_REPORT_STATUS.FIRST_REPORT },
+    { value: '2026-04', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+    { value: '2026-05', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+    { value: '2026-06', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+    { value: '2026-07', hasReport: true, status: MONTHLY_REPORT_STATUS.READY },
+];
+
+const REPORTS = {
+    '2026-02': { period: '2026-02', status: MONTHLY_REPORT_STATUS.ONBOARDING },
+    '2026-03': {
+        period: '2026-03',
+        status: MONTHLY_REPORT_STATUS.FIRST_REPORT,
+        hasPreviousComparison: false,
+        monthlyTrend: [{ month: 3, amount: 100000 }],
+        categories: [{ amount: 100000 }],
+    },
+    '2026-04': {
+        period: '2026-04',
+        status: MONTHLY_REPORT_STATUS.READY,
+        hasPreviousComparison: true,
+        fixedExpenseCandidates: [],
+        confirmedFixedExpenseCount: 2,
+        monthlyTrend: [
+            { month: 3, amount: 100000 },
+            { month: 4, amount: 120000 },
+        ],
+    },
+    '2026-05': {
+        period: '2026-05',
+        totalSpent: 130000,
+        monthlyTrend: [
+            { month: 3, amount: 100000 },
+            { month: 4, amount: 120000 },
+            { month: 5, amount: 130000 },
+        ],
+        categories: [{ amount: 130000 }],
+    },
+    '2026-06': {
+        period: '2026-06',
+        totalSpent: 140000,
+        monthlyTrend: [
+            { month: 3, amount: 100000 },
+            { month: 4, amount: 120000 },
+            { month: 5, amount: 130000 },
+            { month: 6, amount: 140000 },
+        ],
+        categories: [{ amount: 140000 }],
+    },
+    '2026-07': {
+        period: '2026-07',
+        totalSpent: 150000,
+        monthlyTrend: [
+            { month: 3, amount: 100000 },
+            { month: 4, amount: 120000 },
+            { month: 5, amount: 130000 },
+            { month: 6, amount: 140000 },
+            { month: 7, amount: 150000 },
+        ],
+        categories: [{ amount: 150000 }],
+    },
+};
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('기준일 이전의 리포트 보유 월만 조회 가능 월로 계산한다', () => {
     const referenceDate = new Date(2026, 7, 4);
@@ -272,27 +337,32 @@ test('선고 명세는 상위 5개와 더보기 목록으로 나눈다', () => {
     );
 });
 
-test('임시 목업 소스도 API 화면 모델과 같은 필드를 제공한다', async () => {
-    const months = await fetchTempMonthlyConsumptionMonths();
-    const report = await fetchTempMonthlyConsumptionReport('2026-07');
+test('월간 리포트 화면은 실 API 호출만 사용한다', () => {
+    const view = source('src/views/report/MonthlyConsumptionReportView.vue');
 
-    assert.equal(months.find((month) => month.value === '2026-07').available, true);
-    assert.equal(report.fixedExpenseCandidateCount, 1);
-    assert.equal(report.confirmedFixedExpenseCount, 0);
-    assert.equal(report.parentCategories.length, report.categories.length);
-    assert.equal(report.monthlyTrend.at(-1).yearMonth, '2026-07');
-    assert.equal(report.monthlyTrend.at(-1).hasData, true);
+    assert.match(view, /fetchMonthlyConsumptionMonths\(\)/);
+    assert.match(
+        view,
+        /fetchMonthlyConsumptionState\(\s*selectedMonth,\s*fetchMonthlyConsumptionReport,?\s*\)/,
+    );
+    assert.doesNotMatch(
+        view,
+        /TempMonthlyReportSourceToggle|tempMonthlyConsumptionMock|reportSource/,
+    );
 });
 
-test('4월과 5월 목업 리포트는 AI 활용 미동의 상태를 재현한다', async () => {
-    for (const period of ['2026-04', '2026-05']) {
-        const report = await fetchTempMonthlyConsumptionReport(period);
+test('API의 AI 활용 미동의 상태를 기존 화면 모델에 보존한다', () => {
+    const report = composeMonthlyConsumptionReport(
+        { yearMonth: '2026-05', totalSpent: 120000, hasPreviousComparison: true },
+        { items: [] },
+        { parentCategories: [], categories: [] },
+        { status: 'NOT_CONSENTED', feedbacks: [], savingsAnalogy: null },
+    );
 
-        assert.equal(report.aiAnalysisStatus, 'NOT_CONSENTED');
-        assert.equal(report.hasPreviousComparison, true);
-        assert.deepEqual(report.feedbacks, []);
-        assert.equal(report.savingsAnalogy, null);
-    }
+    assert.equal(report.aiAnalysisStatus, 'NOT_CONSENTED');
+    assert.equal(report.hasPreviousComparison, true);
+    assert.deepEqual(report.feedbacks, []);
+    assert.equal(report.savingsAnalogy, null);
 });
 
 test('3월 첫 리포트와 4월 두 번째 리포트 fixture 계약을 유지한다', () => {
