@@ -61,6 +61,25 @@
 | `--tt-wood` | `#9C7B54` | 판사봉 |
 | `--tt-kraft` | `#EFE7D8` | 인장 · 종이 질감 |
 
+### 재판탭 법원 헤더 (건물 일러스트 풀블리드)
+
+개인챌린지(대법원) · 그룹챌린지(지방법원) 홈 상단 전용. 값은 건물 일러스트의 실제 픽셀 색에서 뽑았다.
+이미지 가장자리와 패널이 이어져 보이게 하는 게 목적이라 **임의로 바꾸면 이음매가 드러난다.**
+
+| 토큰 | 값 | 용도 |
+|---|---|---|
+| `--tt-court-navy` | `#1E2F4D` | 헤더 바탕 · 그라데이션 끝 |
+| `--tt-court-top-supreme` | `#0D1E38` | 대법원 이미지 상단 색 |
+| `--tt-court-top-district` | `#0C233F` | 지방법원 이미지 상단 색 |
+| `--tt-court-fade-supreme` | `#152B47` | 대법원 이미지 하단 색 |
+| `--tt-court-fade-district` | `#172C48` | 지방법원 이미지 하단 색 |
+| `--tt-court-caption` | `#C3CFE4` | 헤더 부제 |
+| `--tt-court-bell-ink` | `#1C2B4A` | 알림 벨 아이콘 |
+| `--tt-court-bell-surface` | `rgba(255,255,255,.95)` | 알림 벨 원 |
+
+> `--tt-court-top-*` 는 `src/utils/themeColor.js` 의 설치형 상태바 색과 **같은 값이어야** 한다.
+> 한쪽만 고치면 상태바만 다른 색 띠로 뜬다 (테스트가 잡는다).
+
 ### 의미 토큰 — **컴포넌트는 이것만 쓴다**
 
 | 토큰 | 참조 | 쓰는 곳 |
@@ -95,6 +114,14 @@
 | `--tt-bg-fill` | `--tt-neutral-fill` | 입력 필드 · 비활성 배경 |
 | `--tt-border` | `--tt-neutral-border` | 기본 선 |
 | `--tt-border-track` | `--tt-neutral-track` | 진행바 트랙 |
+| `--tt-court-header-bg` | `--tt-court-navy` | 법원 헤더 바탕 |
+| `--tt-court-header-top-supreme` | `--tt-court-top-supreme` | 개인챌린지 헤더 세이프에어리어 |
+| `--tt-court-header-top-district` | `--tt-court-top-district` | 그룹챌린지 헤더 세이프에어리어 |
+| `--tt-court-header-fade-supreme` | `--tt-court-fade-supreme` | 개인챌린지 헤더 그라데이션 시작 |
+| `--tt-court-header-fade-district` | `--tt-court-fade-district` | 그룹챌린지 헤더 그라데이션 시작 |
+| `--tt-court-header-caption` | `--tt-court-caption` | 법원 헤더 부제 |
+| `--tt-court-bell-bg` | `--tt-court-bell-surface` | 법원 헤더 알림 벨 원 |
+| `--tt-court-bell-fg` | `--tt-court-bell-ink` | 법원 헤더 알림 벨 아이콘 |
 | `--tt-overlay-dim` | `rgba(35,40,66,.48)` | 모달 · 바텀시트 뒤 딤 |
 | `--tt-notch-bg` | `--tt-bg-subtle` | 카드 노치(영수증 절취선 · 소환장 펀치홀) |
 
@@ -151,6 +178,8 @@
 | `--tt-elevation-3` | `0 12px 28px rgba(35,40,66,.10)` | 겹치는 카드 · 토글 |
 | `--tt-elevation-4` | `0 14px 30px -16px rgba(35,40,66,.55)` | Ink 스탯 카드 |
 | `--tt-elevation-btn` | `0 10px 24px -12px rgba(35,40,66,.6)` | Primary 버튼 |
+| `--tt-elevation-court-bell` | `0 6px 14px rgba(0,0,0,.25)` | 법원 헤더 알림 벨 |
+| `--tt-elevation-court-speech` | `0 12px 14px rgba(0,0,0,.24)` | 법원 헤더 양피지 말풍선 (`filter: drop-shadow()` 전용 — spread 없음) |
 
 ---
 
@@ -212,3 +241,6 @@
 | 2026-08-03 | 고정지출 화면 의미 토큰 추가 |
 | 2026-08-04 | `--tt-surface-inverse` 신설 |
 | 2026-08-05 | **v2 전면 교체** — Ink/Gold 이원 체계, 4색 상태, 타이포 재조정, 7단 라운드, 4단 그림자 |
+| 2026-08-21 | 재판탭 법원 헤더 토큰(`--tt-court-*`) · `--tt-elevation-court-bell` · `--tt-elevation-court-speech` 신설 |
+| 2026-08-21 | 법원 헤더 말풍선을 양피지 PNG 로 되돌리며 `--tt-court-speech-*` 3개 삭제, `--tt-elevation-court-speech` 를 drop-shadow 용으로 교체, `--tt-elevation-court-nameplate` 추가 |
+| 2026-08-21 | 목재 명패를 없애고 화자 이름을 말풍선 머리로 옮기며 `--tt-elevation-court-nameplate` 삭제 (신규 토큰 없음 — 헤더 하단 곡면은 기존 `--tt-radius-2xl` 사용) |

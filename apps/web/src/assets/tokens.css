@@ -42,6 +42,18 @@
     --tt-ink-deep: #1e2338; /* 헤더 그라데이션 시작 (어두운) */
     --tt-ink-glow: #283050; /* 헤더 그라데이션 끝 (밝은) */
 
+    /* ── 재판탭 법원 헤더 (건물 일러스트 풀블리드) ────
+     * 위 Ink 계열과 다른 값이다. 건물 일러스트의 실제 픽셀 색에서 뽑았고,
+     * 이미지 가장자리와 패널이 이어져 보이게 하는 게 목적이라 임의로 못 바꾼다. */
+    --tt-court-navy: #1e2f4d; /* 헤더 바탕 · 그라데이션 끝 */
+    --tt-court-top-supreme: #0d1e38; /* 대법원 이미지 상단 색 */
+    --tt-court-top-district: #0c233f; /* 지방법원 이미지 상단 색 */
+    --tt-court-fade-supreme: #152b47; /* 대법원 이미지 하단 색 */
+    --tt-court-fade-district: #172c48; /* 지방법원 이미지 하단 색 */
+    --tt-court-caption: #c3cfe4; /* 헤더 부제 */
+    --tt-court-bell-ink: #1c2b4a; /* 알림 벨 아이콘 */
+    --tt-court-bell-surface: rgba(255, 255, 255, 0.95); /* 알림 벨 원 */
+
     /* ── 탭바 전용 ────────────────────────────────────── */
     --tt-tab-active: #f5b921; /* 활성 탭 아이콘 + 라벨 */
     --tt-tab-inactive: #aeb0bc; /* 비활성 탭 아이콘 + 라벨 */
@@ -121,6 +133,16 @@
 
     --tt-surface-inverse: var(--tt-ink); /* Ink 스탯 카드 / 역전 배경 */
     --tt-surface-raised: var(--tt-ink-raised); /* Ink 위에 겹치는 블록 */
+
+    /* 재판탭 법원 헤더 — 개인(supreme) / 그룹(district) 두 변형이 같은 높이를 쓴다 */
+    --tt-court-header-bg: var(--tt-court-navy);
+    --tt-court-header-top-supreme: var(--tt-court-top-supreme);
+    --tt-court-header-top-district: var(--tt-court-top-district);
+    --tt-court-header-fade-supreme: var(--tt-court-fade-supreme);
+    --tt-court-header-fade-district: var(--tt-court-fade-district);
+    --tt-court-header-caption: var(--tt-court-caption);
+    --tt-court-bell-bg: var(--tt-court-bell-surface);
+    --tt-court-bell-fg: var(--tt-court-bell-ink);
 
     --tt-bg: var(--tt-neutral-surface); /* 카드 배경 */
     --tt-bg-subtle: var(--tt-neutral-paper); /* 페이지 배경 / 섹션 배경 */
@@ -219,6 +241,9 @@
     --tt-elevation-3: 0 12px 28px rgba(35, 40, 66, 0.1); /* 겹치는 카드 / 토글 */
     --tt-elevation-4: 0 14px 30px -16px rgba(35, 40, 66, 0.55); /* Ink 스탯 카드 */
     --tt-elevation-btn: 0 10px 24px -12px rgba(35, 40, 66, 0.6); /* Primary 버튼 */
+    --tt-elevation-court-bell: 0 6px 14px rgba(0, 0, 0, 0.25); /* 법원 헤더 알림 벨 */
+    /* 말풍선은 PNG 라 box-shadow 가 아니라 filter: drop-shadow() 로 건다 — spread 를 쓰면 안 된다 */
+    --tt-elevation-court-speech: 0 12px 14px rgba(0, 0, 0, 0.24); /* 법원 헤더 양피지 말풍선 */
 
     /* ── z-index ────────────────────────────────────────
      * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다. */
