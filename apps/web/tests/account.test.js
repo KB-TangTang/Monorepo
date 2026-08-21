@@ -15,6 +15,7 @@ import {
     formatSyncTime,
     isLinkFlowRoute,
     isPollExpired,
+    isSoleSelectableAccount,
     linkExitRoute,
     linkStepPosition,
     needsReconnect,
@@ -51,6 +52,48 @@ test('완료 화면에는 선택 계좌와 자동 연동 대출을 함께 표시
         accounts.map((account) => [account.accountId, account.bankCode]),
         [[1, '0004'], [-11, '0004']],
     );
+});
+
+test('고를 수 있는 계좌가 하나뿐인 기관은 그 계좌를 잠근다 (#396)', () => {
+    const group = {
+        bankCode: '0240',
+        accounts: [{ accountId: 1, alreadyLinked: false }],
+    };
+    assert.equal(isSoleSelectableAccount(group, group.accounts[0]), true);
+});
+
+test('고를 수 있는 계좌가 둘 이상이면 잠그지 않는다', () => {
+    const group = {
+        bankCode: '0004',
+        accounts: [
+            { accountId: 1, alreadyLinked: false },
+            { accountId: 2, alreadyLinked: false },
+        ],
+    };
+    assert.equal(isSoleSelectableAccount(group, group.accounts[0]), false);
+    assert.equal(isSoleSelectableAccount(group, group.accounts[1]), false);
+});
+
+test('이미 연결된 계좌를 빼고 나면 하나뿐이어도 그 계좌를 잠근다', () => {
+    const group = {
+        bankCode: '0004',
+        accounts: [
+            { accountId: 1, alreadyLinked: true },
+            { accountId: 2, alreadyLinked: false },
+        ],
+    };
+    assert.equal(isSoleSelectableAccount(group, group.accounts[1]), true);
+    // alreadyLinked 행 자체는 이미 자기 방식으로 잠겨 있다 — 대상이 아니다.
+    assert.equal(isSoleSelectableAccount(group, group.accounts[0]), false);
+});
+
+test('autoIncluded 그룹(대출·페이머니, #334)은 이미 잠겨 있어 대상이 아니다', () => {
+    const group = {
+        bankCode: '0004',
+        autoIncluded: true,
+        accounts: [{ accountId: -11, alreadyLinked: false }],
+    };
+    assert.equal(isSoleSelectableAccount(group, group.accounts[0]), false);
 });
 
 test('연결 플로우 단계를 앞뒤로 이동한다', () => {

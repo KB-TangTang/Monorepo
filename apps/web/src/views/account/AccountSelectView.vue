@@ -17,7 +17,7 @@ import AccountSelectRow from '@/components/account/AccountSelectRow.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import LinkStepHeader from '@/components/account/LinkStepHeader.vue';
 import { useAccountStore } from '@/stores/account';
-import { linkStepPosition } from '@/utils/account';
+import { isSoleSelectableAccount, linkStepPosition } from '@/utils/account';
 
 const store = useAccountStore();
 const {
@@ -109,6 +109,7 @@ async function onSubmit() {
                         :account="account"
                         :selected="store.isAccountSelected(account.accountId)"
                         :auto-included="group.autoIncluded"
+                        :sole-selectable="isSoleSelectableAccount(group, account)"
                         @toggle="store.toggleAccount"
                     />
                 </div>

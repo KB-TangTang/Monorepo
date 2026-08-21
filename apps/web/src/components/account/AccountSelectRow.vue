@@ -17,12 +17,17 @@ const props = defineProps({
      * 라벨은 다르다 — "이미 연결됨"은 사실이 아니다(아직 저장 전이고, 최초 동기화가 실제로 만든다).
      */
     autoIncluded: { type: Boolean, default: false },
+    /**
+     * 이 기관에서 고를 수 있는 계좌가 이것 하나뿐일 때 true(#396). 고르고 말고 할 대상이 없으니
+     * 체크를 풀 수 있게 두면 "선택한 계좌 0개"로 조용히 빠지는 계좌가 생긴다 — 항상 선택 상태로 잠근다.
+     */
+    soleSelectable: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['toggle']);
 
 function onClick() {
-    if (props.account.alreadyLinked || props.autoIncluded) {
+    if (props.account.alreadyLinked || props.autoIncluded || props.soleSelectable) {
         return;
     }
     emit('toggle', props.account.accountId);
@@ -32,15 +37,15 @@ function onClick() {
 <template>
     <button
         class="account-row"
-        :class="{ 'account-row--locked': account.alreadyLinked || autoIncluded }"
+        :class="{ 'account-row--locked': account.alreadyLinked || autoIncluded || soleSelectable }"
         type="button"
-        :disabled="account.alreadyLinked || autoIncluded"
-        :aria-pressed="account.alreadyLinked || autoIncluded ? undefined : selected"
+        :disabled="account.alreadyLinked || autoIncluded || soleSelectable"
+        :aria-pressed="account.alreadyLinked || autoIncluded || soleSelectable ? undefined : selected"
         @click="onClick"
     >
         <span
             class="account-row__check"
-            :class="{ 'account-row__check--on': selected || account.alreadyLinked || autoIncluded }"
+            :class="{ 'account-row__check--on': selected || account.alreadyLinked || autoIncluded || soleSelectable }"
             aria-hidden="true"
         >
             ✓
