@@ -4,6 +4,7 @@ import {
     formatWatchlistMissionRound,
     formatWatchlistRotationStatus,
     formatMissionAssignmentSummary,
+    getPersonalMissionBudgetStatus,
     resolveMissionProsecutorState,
     formatMissionWatchQuote,
     getMissionBadge,
@@ -12,6 +13,19 @@ import {
     toTodayMissionBriefing,
     toWeeklyVerdictModel,
 } from '../src/services/personalMissionFlow.js';
+
+test('개인 미션 한도 이내 금액과 초과 금액을 음수 없이 구분한다', () => {
+    assert.deepEqual(getPersonalMissionBudgetStatus(3200, 6000), {
+        isOverLimit: false,
+        remainingAmount: 2800,
+        exceededAmount: 0,
+    });
+    assert.deepEqual(getPersonalMissionBudgetStatus(12100, 5729), {
+        isOverLimit: true,
+        remainingAmount: 0,
+        exceededAmount: 6371,
+    });
+});
 
 test('오늘 미션 탕이는 유지하고 변경한 탕이는 다음 미션 상태로 구분한다', () => {
     const prosecutors = [
