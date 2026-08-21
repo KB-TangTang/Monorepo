@@ -1,30 +1,35 @@
 <!--
   용도: 자산 홈 화면의 자산 구성 도넛 차트 + 범례. composition 배열의 amount 비율을 시각화한다.
-  언제 쓰는지: AssetHomeView 중단 한 곳. 도넛(파이 조각)은 자산 항목(양수)만으로 100%를 채우고,
-  중앙 "총 자산" 값은 대출 등 부채(음수 항목)까지 합산해 보여준다. 범례에는 부채 항목도 그대로 노출한다.
+  언제 쓰는지: AssetHomeView 중단 한 곳. 도넛(파이 조각)은 자산 항목(양수)만으로 100%를 채운다.
+  순자산 금액은 위쪽 AssetNetWorthCard 에서 이미 보여주므로 도넛 안에는 "총자산" 라벨만 두고 금액은 넣지 않는다.
+  월간보고서 카테고리별 지출 그래프(MonthlyCategoryReport)와 같은 conic-gradient 링 방식을 쓴다.
 -->
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import {
-    formatAssetHomeWon,
-    formatCompactWon,
-    getCompositionTotal,
-    getCompositionRatios,
-    toneColor,
-} from '@/utils/asset';
+import { formatAssetHomeWon, getCompositionRatios, toneColor } from '@/utils/asset';
 
 const props = defineProps({
     composition: { type: Array, required: true },
 });
 
-const RADIUS = 54;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const total = computed(() => getCompositionTotal(props.composition));
 const segments = computed(() =>
     getCompositionRatios(props.composition.filter((item) => item.amount > 0)),
 );
+
+const chartStyle = computed(() => {
+    if (!segments.value.length) {
+        return { background: 'var(--tt-border)' };
+    }
+    let offset = 0;
+    const stops = segments.value.map((segment) => {
+        const start = offset;
+        const end = offset + segment.ratio * 100;
+        offset = end;
+        return `${toneColor(segment.tone)} ${start}% ${end}%`;
+    });
+    return { background: `conic-gradient(${stops.join(', ')})` };
+});
 </script>
 
 <template>
@@ -33,24 +38,13 @@ const segments = computed(() =>
 
         <div class="asset-composition__body">
             <div class="asset-composition__chart">
-                <svg viewBox="0 0 124 124" class="asset-composition__donut" aria-hidden="true">
-                    <circle
-                        v-for="segment in segments"
-                        :key="segment.code"
-                        cx="62"
-                        cy="62"
-                        :r="RADIUS"
-                        fill="none"
-                        :stroke="toneColor(segment.tone)"
-                        stroke-width="16"
-                        :stroke-dasharray="`${segment.ratio * CIRCUMFERENCE} ${CIRCUMFERENCE}`"
-                        :stroke-dashoffset="-segment.offset * CIRCUMFERENCE"
-                        transform="rotate(-90 62 62)"
-                    />
-                </svg>
-                <div class="asset-composition__center">
-                    <p class="asset-composition__center-label">총 자산</p>
-                    <p class="asset-composition__center-value">{{ formatCompactWon(total) }}</p>
+                <div
+                    class="asset-composition__donut"
+                    :style="chartStyle"
+                    aria-label="자산 구성 비율"
+                >
+                    <span></span>
+                    <b>총자산</b>
                 </div>
             </div>
 
@@ -83,38 +77,33 @@ const segments = computed(() =>
 }
 
 .asset-composition__chart {
-    position: relative;
     flex-shrink: 0;
-    width: 120px;
-    height: 120px;
+    width: 132px;
+    height: 132px;
 }
 
 .asset-composition__donut {
+    position: relative;
     width: 100%;
     height: 100%;
+    border-radius: 50%;
 }
 
-.asset-composition__center {
+.asset-composition__donut span {
+    position: absolute;
+    inset: 31px;
+    background: var(--tt-bg);
+    border-radius: 50%;
+}
+
+.asset-composition__donut > b {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-}
-
-.asset-composition__center-label {
-    font-size: var(--tt-fs-mono-chip);
+    display: grid;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
     color: var(--tt-text-muted);
-}
-
-.asset-composition__center-value {
-    margin-top: var(--tt-space-1);
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
+    place-items: center;
 }
 
 .asset-composition__legend {
