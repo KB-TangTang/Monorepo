@@ -286,12 +286,6 @@ const routes = [
         meta: { title: '월간 판결문' },
     },
     {
-        path: '/reports/challenge/savings',
-        name: 'challengeNetSavings',
-        component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
-        meta: { title: '카테고리별 순 절감액' },
-    },
-    {
         path: '/asset/fixed-expenses',
         name: 'fixedExpenseManagement',
         component: () => import('@/views/fixed-expense/FixedExpenseManagementView.vue'),
