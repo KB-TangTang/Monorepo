@@ -155,7 +155,7 @@ const watchingTrials = computed(() => trialCards.value.filter((card) => !card.ac
 /*
  * 내 차례를 다시 **행동별로** 가른다 — 할 일 격자의 두 칸이 이 둘이다.
  * `action` 은 `utils/groupTrial.js` 의 `STANCE.action` 이 정한 값이라 여기서 다시 판정하지 않는다.
- * 내 차례에는 `trial`(지켜보기)이 섞이지 않는다 — 그건 `actionable: false` 쪽이다.
+ * 내 차례에는 `trial`(기다리기)이 섞이지 않는다 — 그건 `actionable: false` 쪽이다.
  */
 const defendTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'defend'));
 const voteTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'vote'));
@@ -176,7 +176,7 @@ const watchingUrgent = computed(() => anyUrgent(watchingTrials.value));
 
 /*
  * ── 재판 목록 바텀시트 ─────────────────
- * 세 묶음(변론·투표·지켜보기)이 **시트 하나**를 돌려 쓴다. 목록 내용만 다르고 줄 모양은 같아서
+ * 세 묶음(변론·투표·기다리기)이 **시트 하나**를 돌려 쓴다. 목록 내용만 다르고 줄 모양은 같아서
  * `showDefendSheet` · `showVoteSheet` … 로 늘리면 셋이 조금씩 어긋나기만 한다.
  * 열려 있는 종류를 문자열 하나로 들고, 제목과 항목은 거기서 파생시킨다.
  */
@@ -585,7 +585,7 @@ function goToChat(challenge) {
 
         <!--
           ===== 재판 목록 바텀시트 (#448) =====
-          변론·투표·지켜보기 **세 목록이 이 하나를 돌려 쓴다.** 격자의 두 칸과 아래 요약 줄이
+          변론·투표·기다리기 **세 목록이 이 하나를 돌려 쓴다.** 격자의 두 칸과 아래 요약 줄이
           모두 여기로 들어온다 — `openSheet` 가 어느 목록인지만 정하고 줄 모양은 전부 같다.
         -->
         <GroupTrialListSheet
