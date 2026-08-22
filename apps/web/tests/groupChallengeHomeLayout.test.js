@@ -184,9 +184,13 @@ test('서류 어휘를 새로 만들지 않고 소환장 토큰을 쓴다', () =
      */
     const code = source(TRIAL_CARD);
     assert.match(code, /\.trial-status__step-name \{[^}]*font-family: var\(--tt-font-serif\)/);
-    /* 미완료 색이 서류 안에서 둘이면 안 된다 — 진행바 트랙(회청)은 아이보리 위에서 뜬다.
-       주석에는 남아 있어도 되므로 선언부만 본다 */
-    assert.doesNotMatch(code, /background: var\(--tt-border-track\)/);
+    /*
+     * 미완료 색이 서류 안에서 둘이면 안 된다 — 진행바 트랙(회청)은 아이보리 위에서 뜬다.
+     * 검사 범위는 **펼친 본문 이후**로 끊는다. 접힌 줄은 흰 바탕이라 회청 트랙이 제자리고,
+     * 실제로 투표 점(#448)이 그 색을 쓴다. 파일 전체를 훑으면 그것까지 잡는다.
+     */
+    const panel = code.slice(code.indexOf('/* ── 펼친 본문'));
+    assert.doesNotMatch(panel, /background: var\(--tt-border-track\)/);
 });
 
 test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {

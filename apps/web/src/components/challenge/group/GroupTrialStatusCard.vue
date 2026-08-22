@@ -1,21 +1,30 @@
 <!--
-  재판 현황 — 지방법원 홈 (이슈 #432)
+  재판 현황 — 지방법원 홈 (이슈 #432 · #443 · #448)
 
-  내가 속한 그룹의 **진행 중인 재판 전부**를 아코디언으로 보여준다.
-  접히면 **한 줄**(아바타 · 뱃지 · 제목 · 셰브론), 펼치면 남은 시간 · 진행 스테퍼 · 투표 현황 · CTA 다.
+  진행 중인 재판을 아코디언으로 보여준다.
+  접히면 **두 줄**(행동 아이콘 · 할 일 라벨 / 누구·어느 그룹 · 투표 점 · 셰브론),
+  펼치면 남은 시간 · 진행 스테퍼 · 투표 현황 · CTA 다.
 
-  접힌 줄에 정보를 더 얹지 않는다(#443). 재판이 6건씩 뜨면 행마다 카테고리·그룹명·초과금액·타이머가
-  같이 붙어 목록 전체가 읽히지 않았다. 한 행이 답하는 질문은 **「누구의 어느 단계 재판이고
-  내가 뭘 해야 하나」** 하나뿐이고, 나머지는 펼치거나 CTA 로 들어가야 나온다:
-  - 카테고리·한도·초과금액 → CTA 가 여는 변론 화면이 **거래내역 원본으로** 다시 보여준다
-  - 남은 시간 → 펼친 본문. 접힌 줄에 두면 6행이 **매초 같이 떨려** 훑기를 방해한다
+  **왜 두 줄인가 (#448 2차).** 예전에는 한 줄에 완결된 문장을 넣었다 —
+  「{닉}님 재판에 투표해주세요」. 한국어는 술어가 뒤에 오는데 말줄임은 뒤를 자른다.
+  360px 에서 제목에 남는 폭이 152px 이라 11자에서 잘렸고, 그 결과
+  「…투표해주세요」와 「…투표했어요」가 **화면에서 완전히 같은 줄**이 됐다.
+  구분점(내가 뭘 하는가)을 첫 줄로 당기고, 잘려도 되는 맥락을 둘째 줄로 내린다.
 
-  판정·뱃지·문구·CTA 는 전부 `utils/groupTrial.js` 의 `toTrialStatusCard` 가 이미 정해서 준다.
+  **왜 아바타가 아니라 아이콘이 왼쪽인가.** 이 목록에서 가장 중요한 건 「내가 뭘 해야 하나」다.
+  게다가 내 재판일 때 아바타에는 **내 얼굴**이 떠서 아무것도 알려주지 않았다.
+  아바타는 둘째 줄로 내리고, 남의 재판일 때만 그린다.
+
+  접힌 줄에 **남은 시간은 두지 않는다**(#443). 6행이 매초 같이 떨려 훑기를 방해한다.
+  카테고리·한도·초과금액도 두지 않는다 — CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여준다.
+
+  판정·문구·아이콘·CTA 는 전부 `utils/groupTrial.js` 의 `toTrialStatusCard` 가 이미 정해서 준다.
   여기서 상태를 다시 보지 않는다 — 그렇게 하면 그룹 상세 캐러셀과 판정이 갈린다.
 -->
 <script setup>
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/outline';
+import { ClockIcon, ScaleIcon } from '@heroicons/vue/24/solid';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { TRIAL_STEPS } from '@/utils/groupTrial';
 
@@ -24,6 +33,12 @@ const props = defineProps({
     items: { type: Array, required: true },
     /** 아이템 id → { text, urgent } 맵 */
     countdowns: { type: Object, required: true },
+    /*
+     * 머리줄 앞말. 비면 머리줄 자체를 안 그린다 — 바텀시트는 시트 헤더가 이미 같은 말을 한다.
+     * 홈에서는 필요하다: 「재판 현황」이 다크 헤더 곡면에 있어 스크롤하면 사라지고,
+     * 흰 카드와 시각적으로 끊겨 있어 이 목록이 무엇인지 카드 안에서는 알 수 없었다.
+     */
+    heading: { type: String, default: '' },
 });
 
 const emit = defineEmits(['open']);
@@ -74,6 +89,15 @@ function onLeave(el) {
 
 <template>
     <section class="trial-status">
+        <!--
+             무슨 목록인지 카드 안에서 말한다. 「재판 현황」은 다크 헤더 곡면에 있어
+             스크롤하면 사라지고, 흰 카드와 시각적으로 끊겨 있어 이어 읽히지 않았다.
+        -->
+        <header v-if="heading" class="trial-status__head">
+            <span class="trial-status__head-title">{{ heading }} {{ items.length }}건</span>
+            <span class="trial-status__head-sort">마감 임박순</span>
+        </header>
+
         <ul class="trial-status__list">
             <li
                 v-for="(item, index) in items"
@@ -88,21 +112,74 @@ function onLeave(el) {
                     :aria-expanded="isOpen(item, index)"
                     @click="toggle(item, index)"
                 >
-                    <UserAvatar
-                        :image-url="item.profileImage"
-                        :name="item.nickname"
-                        :size="34"
-                        class="trial-status__avatar"
-                    />
-                    <span class="trial-status__badge" :class="`trial-status__badge--${item.tone}`">
-                        {{ item.badge }}
+                    <!-- 왼쪽 앵커 = 할 일의 종류. 모양이 달라 색을 못 봐도 갈린다 -->
+                    <span class="trial-status__icon" :class="`trial-status__icon--${item.tone}`">
+                        <svg
+                            v-if="item.icon === 'gavel'"
+                            class="trial-status__glyph"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M1 21h12v2H1zM5.245 8.07l2.83-2.827 14.14 14.14-2.828 2.83zM12.317 1l5.657 5.657-2.83 2.83-5.654-5.66zM3.825 9.485l5.657 5.657-2.828 2.828-5.657-5.657z"
+                            />
+                        </svg>
+                        <svg
+                            v-else-if="item.icon === 'ballot'"
+                            class="trial-status__glyph"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M18 13h-.68l-2 2h1.91L19 17H5l1.78-2h2.05l-2-2H6l-3 3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-4l-3-3zm-1-5.05l-4.95 4.95-3.54-3.54 4.95-4.95 3.54 3.54zm-4.24-5.66L6.39 8.66c-.39.39-.39 1.02 0 1.41l4.95 4.95c.39.39 1.02.39 1.41 0l6.36-6.36c.39-.39.39-1.02 0-1.41L14.16 2.3c-.38-.4-1.01-.4-1.4-.01z"
+                            />
+                        </svg>
+                        <ScaleIcon v-else-if="item.icon === 'scale'" class="trial-status__glyph" />
+                        <ClockIcon v-else class="trial-status__glyph" />
                     </span>
-                    <span
-                        class="trial-status__title"
-                        :class="{ 'trial-status__title--muted': !item.actionable }"
-                    >
-                        {{ item.title }}
+
+                    <span class="trial-status__body">
+                        <!-- 첫째 줄 = 구분점. 라벨이라 4~9자다 — 말줄임에 닿지 않는다 -->
+                        <span
+                            class="trial-status__title"
+                            :class="{ 'trial-status__title--muted': !item.actionable }"
+                        >
+                            {{ item.title }}
+                        </span>
+                        <!-- 둘째 줄 = 맥락. 잘려도 되는 자리라 여기가 말줄임을 맡는다 -->
+                        <span class="trial-status__sub">
+                            <UserAvatar
+                                v-if="!item.isMine"
+                                :image-url="item.profileImage"
+                                :name="item.nickname"
+                                :size="16"
+                                class="trial-status__sub-avatar"
+                            />
+                            <span class="trial-status__sub-text">
+                                {{ item.subject
+                                }}<template v-if="item.groupName"> · {{ item.groupName }}</template>
+                            </span>
+                        </span>
                     </span>
+
+                    <!--
+                         투표 현황을 **모양**으로. 맨 앞 칸이 내 표라 「나는 던졌는데 남들이 아직」과
+                         「나도 아직」이 색 없이도 갈린다. 정원이 많으면 점이 줄을 밀어내므로 숫자로 떨어뜨린다.
+                    -->
+                    <span v-if="item.voteDots" class="trial-status__dots" aria-hidden="true">
+                        <span
+                            v-for="(dot, dotIndex) in item.voteDots"
+                            :key="dotIndex"
+                            class="trial-status__dot"
+                            :class="`trial-status__dot--${dot}`"
+                        />
+                    </span>
+                    <span v-else-if="item.showVote" class="trial-status__votenum">
+                        {{ item.voteCount }}/{{ item.totalVoters }}
+                    </span>
+
                     <ChevronDownIcon class="trial-status__chevron" />
                 </button>
 
@@ -188,6 +265,26 @@ function onLeave(el) {
     box-shadow: var(--tt-elevation-2);
 }
 
+/* ── 머리줄 ─────────────────────────── */
+.trial-status__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 6px 2px 7px;
+}
+.trial-status__head-title {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-black);
+    letter-spacing: 0.02em;
+    color: var(--tt-text-muted);
+}
+/* 정렬 기준을 밝힌다. 「왜 이 순서인가」를 묻지 않게 하는 한 줄이라 앞말보다 더 물러난다 */
+.trial-status__head-sort {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-hint);
+}
+
 /* ── 목록 ───────────────────────────── */
 .trial-status__list {
     list-style: none;
@@ -210,13 +307,48 @@ function onLeave(el) {
     text-align: left;
     cursor: pointer;
 }
-.trial-status__avatar {
+/*
+ * 아이콘 박스. 글자 뱃지를 대신한다 — 낱말 두 개(「변론 중」·「투표 중」)로 6가지 입장을 눌러 담고
+ * 색으로만 갈랐더니, 「내가 변론을 냈다」와 「남이 변론을 쓰는 중」이 회색 「변론 중」 둘로 같아졌다.
+ * 색은 급함만 말하고, 종류는 모양이 말한다.
+ *
+ * 38px 에 --tt-radius-md(14px). pill 로 만들면 원이 돼 아래 아바타(16px 원)와 계열이 섞인다.
+ */
+.trial-status__icon {
     flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--tt-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-/* 한 줄이라 제목이 남는 폭을 전부 먹는다. 넘치면 말줄임 */
-.trial-status__title {
+.trial-status__glyph {
+    width: 19px;
+    height: 19px;
+}
+.trial-status__icon--danger {
+    background: var(--tt-red-soft);
+    color: var(--tt-red-deep);
+}
+.trial-status__icon--primary {
+    background: var(--tt-blue-soft);
+    color: var(--tt-blue-deep);
+}
+.trial-status__icon--muted {
+    background: var(--tt-bg-fill);
+    color: var(--tt-text-muted);
+}
+
+/* 두 줄이 남는 폭을 전부 먹는다. min-width:0 이 없으면 flex 자식이 안 줄어들어 말줄임이 안 걸린다 */
+.trial-status__body {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.trial-status__title {
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
@@ -228,29 +360,61 @@ function onLeave(el) {
 .trial-status__title--muted {
     color: var(--tt-text-muted);
 }
-
-/*
- * pill 이 아니라 모서리만 둥근 사각형이다. 카드가 --tt-radius-xl(22px) 이므로
- * 그 안의 태그는 한 단계가 아니라 세 단계 아래인 --tt-radius-xs(8px) — 토큰이 「태그」용으로 정의돼 있다.
- * 높이 20px 에 8px 이면 pill(999px)처럼 뭉개지지 않으면서 카드와 같은 계열로 읽힌다.
- */
-.trial-status__badge {
+.trial-status__sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+.trial-status__sub-avatar {
     flex: none;
+}
+/*
+ * 말줄임은 요소에만 걸린다 — flex 안의 익명 텍스트 노드에는 안 붙는다.
+ * 그래서 글자를 span 으로 감싸고 여기에 min-width:0 을 준다.
+ */
+.trial-status__sub-text {
+    min-width: 0;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-medium);
+    color: var(--tt-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── 투표 점 ────────────────────────── */
+.trial-status__dots {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.trial-status__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tt-border-track);
+    box-sizing: border-box;
+}
+.trial-status__dot--done {
+    background: var(--tt-blue);
+}
+/* 내 칸은 맨 앞이고 테를 두른다. 색이 아니라 **테**라서 색을 못 보는 사람도 어디가 내 표인지 안다 */
+.trial-status__dot--mine-done {
+    background: var(--tt-blue);
+    box-shadow: 0 0 0 2px var(--tt-blue-soft);
+}
+.trial-status__dot--mine-todo {
+    background: transparent;
+    border: 2px solid var(--tt-blue);
+}
+/* 정원이 많아 점을 못 쓸 때. 화면에서 거의 안 나오지만 나오면 여기로 떨어진다 */
+.trial-status__votenum {
+    flex: none;
+    font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-black);
-    padding: 3px 7px;
-    border-radius: var(--tt-radius-xs);
-}
-.trial-status__badge--danger {
-    background: var(--tt-red-soft);
-    color: var(--tt-red-deep);
-}
-.trial-status__badge--primary {
-    background: var(--tt-blue-soft);
-    color: var(--tt-blue-deep);
-}
-.trial-status__badge--muted {
-    background: var(--tt-bg-fill);
+    font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
 }
 

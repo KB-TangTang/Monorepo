@@ -456,6 +456,7 @@ function goToChat(challenge) {
                 v-if="myTurnTrials.length"
                 :items="myTurnTrials"
                 :countdowns="countdowns"
+                heading="내 차례"
                 @open="onOpenTrial"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
