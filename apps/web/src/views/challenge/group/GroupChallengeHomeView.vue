@@ -135,7 +135,9 @@ const trialCards = computed(() =>
 );
 
 /*
- * 재판을 **「내 차례」와 「지켜보는 중」으로 가른다**(#448).
+ * 재판을 **「내 차례」와 「기다리는 중」으로 가른다**(#448).
+ * 식별자는 `watching` 그대로 둔다 — 화면 문구만 바뀐 것이라 여기까지 옮기면
+ * `openSheet` 값·CSS 클래스·테스트가 같이 흔들린다.
  *
  * 예전에는 진행 중인 재판 전부를 한 아코디언에 쌓았다. 그룹 여섯 개에 들어 있으면 재판도
  * 여섯 줄이 되는데, 그중 내가 지금 손댈 수 있는 건 보통 한둘이다 — 나머지는 「내 변론을
@@ -144,7 +146,7 @@ const trialCards = computed(() =>
  *
  * 기준은 `STANCE.actionable` 하나다. 서버 정렬(`GroupTrialService#findAllMyTrials`)이
  * 같은 기준으로 앞세우므로 여기서 나눠도 각 묶음 안의 마감 임박순은 그대로 남는다.
- * 지켜보는 쪽은 없애지 않는다 — 할 일은 아니어도 「내 재판이 어떻게 되고 있나」는
+ * 기다리는 쪽은 없애지 않는다 — 할 일은 아니어도 「내 재판이 어떻게 되고 있나」는
  * 이 화면에서 가장 궁금한 것이다. 홈에는 한 줄로 접고 목록은 시트가 받는다.
  */
 const myTurnTrials = computed(() => trialCards.value.filter((card) => card.actionable));
@@ -181,7 +183,13 @@ const watchingUrgent = computed(() => anyUrgent(watchingTrials.value));
 const openSheet = ref(null); /* 'defend' | 'vote' | 'watching' | null */
 const sheetRef = ref(null);
 
-const SHEET_TITLE = { defend: '변론할 재판', vote: '투표할 재판', watching: '지켜보는 재판' };
+/*
+ * 시트 제목. 「기다리는 재판」은 한때 「지켜보는 재판」이었다 — 「지켜본다」도 **내 행동**이라
+ * 격자 두 칸(변론·투표)과 결이 겹쳐 「할 일이 아닌 쪽」이라는 게 낱말에서 안 갈렸다.
+ * 「판결 대기중」은 안 쓴다. `DEFENSE_WAITING`·`DEFENSE_SUBMITTED` 는 투표조차 시작 전이라
+ * 판결까지 두 단계 남았고, 넓게 읽으면 격자의 변론·투표 재판도 전부 판결 대기중이라 갈리지 않는다.
+ */
+const SHEET_TITLE = { defend: '변론할 재판', vote: '투표할 재판', watching: '기다리는 재판' };
 const sheetTitle = computed(() => SHEET_TITLE[openSheet.value] ?? '');
 
 const SHEET_SOURCE = {
@@ -438,8 +446,8 @@ function goToChat(challenge) {
             <!--
               내 차례인 재판을 **격자 두 칸으로 접는다**(#448). 목록을 그대로 쌓으면 그룹 수만큼
               홈이 길어져 이 이슈가 없애려던 문제가 그대로 남는다. 격자는 건수와 무관하게 높이가 같다.
-              지켜보는 재판은 아래 요약 줄이 받는다.
-              분기: 내 차례 있음 / 방금 다 처리함 / 지켜보기만 남음 / 애초에 재판이 없음
+              기다리는 재판은 아래 요약 줄이 받는다.
+              분기: 내 차례 있음 / 방금 다 처리함 / 기다리는 것만 남음 / 애초에 재판이 없음
             -->
             <GroupTrialTodoGrid
                 v-if="myTurnTrials.length"
@@ -460,7 +468,7 @@ function goToChat(challenge) {
             </template>
 
             <!--
-              지켜보는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
+              기다리는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
               할 일은 아니어도 이 화면에서 가장 궁금한 것이기 때문이다.
               마감이 6시간 안쪽인 게 섞여 있으면 접힌 채로도 그것만 밖으로 알린다.
             -->
@@ -470,10 +478,10 @@ function goToChat(challenge) {
                 class="gc-watching"
                 @click="openSheet = 'watching'"
             >
-                <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 지켜보기의 대표 상태다 -->
+                <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 기다림의 대표 상태다 -->
                 <img class="gc-watching__art" :src="objIndictImage" alt="" />
                 <span class="gc-watching__label">
-                    지켜보는 재판 {{ watchingTrials.length }}건
+                    기다리는 재판 {{ watchingTrials.length }}건
                 </span>
                 <span v-if="watchingUrgent" class="gc-watching__urgent">마감 임박</span>
                 <span class="gc-watching__arrow" aria-hidden="true">›</span>
@@ -657,11 +665,18 @@ function goToChat(challenge) {
     z-index: 3;
 }
 
-/* ── 지켜보는 재판 요약 줄 ─────────────── */
+/* ── 기다리는 재판 요약 줄 ─────────────── */
 /*
- * 위의 재판 현황 카드와 **일부러 다르게** 생겼다. 그림자도 흰 배경도 없다 —
- * 이건 재판이 아니라 재판 목록으로 가는 문이고, 문이 카드처럼 보이면 「할 일이 하나 더
- * 있다」로 읽힌다. 그래서 카드 아래에 얇게 붙는 줄로 둔다.
+ * **흰 면은 주되 그림자는 주지 않는다.** 한때 배경조차 없었는데(`background: none`),
+ * 위의 격자 두 칸과 아래 「내 챌린지」 카드가 둘 다 흰 면이라 이 줄만 **두 덩어리 사이의
+ * 빈틈**으로 보였다 — 누를 수 있다는 신호가 오른쪽 `›` 하나뿐이었다.
+ *
+ * 그렇다고 `--tt-elevation-*` 을 얹으면 격자의 세 번째 칸이 되어 「할 일이 하나 더 있다」로
+ * 읽힌다. 접어 둔 이유가 그것인데 그러면 도로아미타불이다.
+ *
+ * 페이지 배경이 `--tt-bg-page`(흰색과 13/255 차이)라 **그림자 없이도 흰 면이 선다.**
+ * 그 토큰이 #423 에서 들어온 이유가 정확히 이것이다(`tokens.css` 주석 참고).
+ * 결과적으로 계층이 「그림자 유무」로 갈린다 — 격자는 떠 있고, 이 줄은 바닥에 붙어 있다.
  */
 .gc-watching {
     width: 100%;
@@ -670,7 +685,7 @@ function goToChat(challenge) {
     gap: 6px;
     margin-top: var(--tt-space-2);
     padding: 11px 15px;
-    background: none;
+    background: var(--tt-bg);
     border: none;
     border-radius: 14px;
     font-family: inherit;

@@ -2,14 +2,14 @@
   재판 목록 시트 — 지방법원 홈 (이슈 #448)
 
   홈이 재판을 **세 묶음**으로 접었다 — 변론할 것 / 투표할 것(할 일 격자 두 칸) ·
-  지켜보는 것(격자 아래 한 줄). 어느 쪽을 눌러도 목록은 이 시트 하나가 받는다.
+  기다리는 것(격자 아래 한 줄). 어느 쪽을 눌러도 목록은 이 시트 하나가 받는다.
 
   묶음마다 시트를 따로 만들지 않는다. 세 목록의 차이는 **제목과 담긴 항목뿐**이고
   줄 모양·정렬·CTA 는 전부 같다. 파일을 셋으로 나누면 그 셋이 조금씩 어긋난다.
 
   줄 모양은 `GroupTrialStatusCard` 를 그대로 쓴다. 같은 재판을 두 자리에서 다르게 그리면
   제목·아이콘·CTA 판정이 갈린다 — 그 판정은 `utils/groupTrial.js` 한 곳에만 있어야 한다.
-  지켜보는 입장은 CTA 가 전부 「재판 현황 보기」(`action: 'trial'`)라 이 자리에서도 말이 맞다.
+  기다리는 입장은 CTA 가 전부 「재판 현황 보기」(`action: 'trial'`)라 이 자리에서도 말이 맞다.
 
   **머리줄은 시트가 그린다.** 그래서 카드에는 `heading` 을 넘기지 않는다. 넘기면
   「변론할 재판 2건」이 시트 헤더와 카드 머리줄에 두 번 뜬다.
@@ -21,7 +21,7 @@ import GroupTrialStatusCard from './GroupTrialStatusCard.vue';
 
 defineProps({
     modelValue: { type: Boolean, required: true },
-    /** 시트 헤더 앞말. 「변론할 재판」 · 「투표할 재판」 · 「지켜보는 재판」 */
+    /** 시트 헤더 앞말. 「변론할 재판」 · 「투표할 재판」 · 「기다리는 재판」 */
     title: { type: String, required: true },
     /** `toTrialStatusCard` 를 지난 카드 배열 */
     items: { type: Array, required: true },

@@ -83,7 +83,7 @@ test('두 섹션 사이는 토큰 간격으로 벌린다', () => {
 
 /* ── 「내 차례」 큐 (시안 A) ────────────────────────────── */
 
-test('재판을 「내 차례」와 「지켜보는 중」으로 가른다', () => {
+test('재판을 「내 차례」와 「기다리는 중」으로 가른다', () => {
     /*
      * 기준은 `STANCE.actionable` 하나여야 한다. 여기서 status 를 다시 보면 그룹 상세
      * 캐러셀과 판정이 갈린다 — 같은 재판이 화면마다 다른 뱃지를 달게 된다.
@@ -192,15 +192,48 @@ test('타일은 눌리는 것으로 보인다', () => {
     assert.match(src, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('지켜보는 재판은 지우지 않고 한 줄로 접는다', () => {
+test('기다리는 재판은 지우지 않고 한 줄로 접는다', () => {
     /*
      * 할 일은 아니어도 「내 재판이 심판받는 중」은 이 화면에서 가장 궁금한 것이다.
      * 큐에서 뺀다고 화면에서까지 사라지면 상세 화면까지 들어가야만 알 수 있다.
-     * 격자에 세 번째 칸으로 넣지도 않는다 — 지켜보기는 할 일이 아니다.
+     * 격자에 세 번째 칸으로 넣지도 않는다 — 기다리는 것은 할 일이 아니다.
      */
     const src = source(HOME);
     assert.match(src, /v-if="watchingTrials\.length"[\s\S]*?openSheet = 'watching'/);
-    assert.match(src, /지켜보는 재판 \{\{ watchingTrials\.length \}\}건/);
+    assert.match(src, /기다리는 재판 \{\{ watchingTrials\.length \}\}건/);
+});
+
+test('접힌 줄은 격자와 같은 낱말을 쓰지 않는다', () => {
+    /*
+     * 격자 두 칸은 「변론」·「투표」라는 **내 동사**다. 이 줄이 「지켜보는」이면 그것도 내 행동이라
+     * 「할 일 아님」이 낱말에서 안 갈린다. 「판결 대기중」도 안 된다 — 넓게 읽으면 격자의
+     * 두 칸도 전부 판결 대기중이고, 좁게 읽으면 변론 전인 재판에 거짓말이 된다.
+     */
+    /*
+     * 주석은 「판결 대기중」을 **왜 안 썼는지** 적어 두려고 그 말을 인용한다.
+     * 그래서 파일 전체가 아니라 화면에 실제로 나가는 두 자리(요약 줄 라벨 · 시트 제목)만 본다.
+     */
+    const src = source(HOME);
+    const label = src.match(/<span class="gc-watching__label">[\s\S]*?<\/span>/)[0];
+    const sheetTitle = src.match(/SHEET_TITLE = \{[^}]*\}/)[0];
+    for (const text of [label, sheetTitle]) {
+        assert.doesNotMatch(text, /지켜보는/);
+        assert.doesNotMatch(text, /판결 대기/);
+    }
+});
+
+test('접힌 줄은 면은 갖되 격자처럼 뜨지는 않는다', () => {
+    /*
+     * `background: none` 이던 시절엔 위아래 흰 덩어리 사이의 빈틈으로 보여 누를 수 있다는
+     * 신호가 `›` 하나뿐이었다. 그렇다고 그림자를 얹으면 격자의 세 번째 칸이 되어
+     * 「할 일이 하나 더 있다」로 읽힌다 — 접어 둔 이유가 사라진다.
+     * 페이지 배경이 `--tt-bg-page` 라 그림자 없이도 흰 면이 선다.
+     */
+    const src = source(HOME);
+    const rule = src.match(/\.gc-watching \{[^}]*\}/)[0];
+    assert.match(rule, /background: var\(--tt-bg\)/);
+    assert.doesNotMatch(rule, /box-shadow/);
+    assert.match(src, /\.gc-page \{[^}]*background: var\(--tt-bg-page\)/);
 });
 
 test('접은 자리가 마감을 통째로 감추지 않는다', () => {
@@ -249,7 +282,7 @@ test('세 목록이 시트 하나를 돌려 쓴다', () => {
 
     const src = source(HOME);
     assert.match(src, /const openSheet = ref\(null\)/);
-    assert.match(src, /SHEET_TITLE = \{[^}]*defend: '변론할 재판'[^}]*watching: '지켜보는 재판'/);
+    assert.match(src, /SHEET_TITLE = \{[^}]*defend: '변론할 재판'[^}]*watching: '기다리는 재판'/);
     assert.match(src, /<GroupTrialListSheet[\s\S]{0,300}?:items="sheetItems"/);
 });
 
