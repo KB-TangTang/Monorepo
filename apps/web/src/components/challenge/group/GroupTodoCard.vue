@@ -83,11 +83,10 @@ const mascotLine = computed(() => {
 </template>
 
 <style scoped>
+/* 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다 */
 .todo-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border-light);
     border-radius: 22px;
-    box-shadow: 0 12px 28px rgba(35, 40, 66, 0.1);
     padding: 14px 15px 0;
 }
 

@@ -4,10 +4,12 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
 import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
-import PersonalCourtHeader from '@/components/challenge/personal/PersonalCourtHeader.vue';
+import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vue';
 import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
 import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
+import PersonalWeeklyVerdictCard from '@/components/challenge/personal/PersonalWeeklyVerdictCard.vue';
 import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard.vue';
+import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiSheet.vue';
 import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdictModal.vue';
 import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
@@ -19,7 +21,6 @@ import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 import { useConsentStore } from '@/stores/consent';
 import { useAuthStore } from '@/stores/auth';
 import {
-    formatCourtDate,
     formatMissionWatchQuote,
     formatWon,
     formatMissionAssignmentSummary,
@@ -34,7 +35,8 @@ import {
     MOCK_VERDICT_FAIL,
 } from '@/fixtures/personalChallenge';
 import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
-import courtSupreme from '@/assets/images/court/court_supreme.png';
+import buildingSupreme from '@/assets/images/court/building_supreme_v2.png';
+import defaultProsecutorTangi from '@/assets/images/prosecutor_tangtang/prosecutor_tangtang_A.png';
 import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
 import insufficientTangi from '@/assets/images/emotions/03_gentle_smile.png';
 import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
@@ -56,6 +58,8 @@ const showTutorial = ref(false);
 const isDevelopment = import.meta.env.DEV;
 const isReassigning = ref(false);
 const devActionMessage = ref('');
+/* 데모 버튼 8개를 펼쳐두면 화면 오른쪽 절반을 가려 디자인을 확인할 수 없다. 기본은 접어둔다. */
+const isDevPanelOpen = ref(false);
 const toastMessage = ref('');
 let toastTimer = null;
 const isMissionUnlockOpen = ref(false);
@@ -65,11 +69,6 @@ const hasPendingMissionUnlock = ref(false);
 const isMissionUnlockPreview = ref(false);
 const isMissionUnlockDifficultyFlow = ref(false);
 
-const courtDate = computed(() => formatCourtDate());
-const shortDate = computed(() => {
-    const d = new Date();
-    return `${d.getMonth() + 1}월 ${d.getDate()}일`;
-});
 const missionWatchQuote = computed(() =>
     formatMissionWatchQuote(store.todayBriefing?.categoryName),
 );
@@ -79,6 +78,37 @@ const missionProsecutors = computed(() =>
         store.todayBriefing?.difficultyName,
         store.selectedProsecutorId,
     ),
+);
+
+/*
+ * 헤더는 화면 상태와 무관하게 항상 같은 높이로 그린다(계좌 미연동·철회 포함).
+ * 상태에 따라 바뀌는 건 말풍선 문구뿐이다.
+ */
+const headerQuote = computed(() => {
+    if (store.screenState === 'no-account') {
+        return '수사할 증거가 없습니다.\n먼저 계좌를 연결해 주세요.';
+    }
+    if (store.screenState === 'withdrawn') {
+        return '챌린지 참여가 중지됐어요.\n언제든 다시 오세요.';
+    }
+    return missionWatchQuote.value;
+});
+/*
+ * 헤더 탕이는 **오늘 배정된 미션의 탕이**(missionProsecutors.current)다.
+ * 난이도를 바꿔도 오늘 헤더는 그대로여야 한다 — 바뀐 탕이는 다음 미션부터 나온다(#422).
+ * 여기서 `store.selectedProsecutor` 를 쓰면 저장 즉시 헤더가 바뀌어 그 규칙이 깨진다.
+ */
+const headerTangiImage = computed(
+    () => missionProsecutors.value.current?.image ?? defaultProsecutorTangi,
+);
+const headerTangiName = computed(() => missionProsecutors.value.current?.name ?? '탕이');
+
+/*
+ * 헤더 하단 곡면에 얹는 첫 섹션 제목. 오늘 볼 사건이 없는 상태(계좌 미연동·철회)에서는
+ * 비운다 — 곡면 높이는 제목이 없어도 그대로다.
+ */
+const headerSkirtTitle = computed(() =>
+    ['active', 'verdict', 'insufficient'].includes(store.screenState) ? '오늘의 미션' : '',
 );
 
 const cumulativeTransactionCount = computed(() => {
@@ -365,6 +395,11 @@ function showInsufficientDemo() {
     store.setDemoInsufficient();
 }
 
+function showWeeklyResultsDemo() {
+    store.setDemoWeeklyResults();
+    devActionMessage.value = '이번 주 판정에 인정·기각을 섞었다. 새로고침하면 실제 값으로 돌아간다';
+}
+
 function showMissionUnlockDemo() {
     isMissionUnlockPreview.value = true;
     missionUnlockError.value = '';
@@ -419,34 +454,17 @@ async function reassignTodayMission() {
             @acknowledge="handleVerdictAcknowledge"
         />
 
-        <!-- 오늘 미션이 있는 화면은 법원·담당 탕이 헤더를 동일하게 유지한다. -->
-        <PersonalCourtHeader
-            v-if="
-                store.screenState === 'active' ||
-                store.screenState === 'verdict' ||
-                store.screenState === 'insufficient'
-            "
-            :court-image="courtSupreme"
-            :date="courtDate"
-            :prosecutor-image="missionProsecutors.current?.image"
-            :prosecutor-name="missionProsecutors.current?.name"
-            :quote="missionWatchQuote"
-        />
-
-        <!-- 헤더: 축소 모드 (no-account) -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'no-account'"
-            :court-image="courtSupreme"
-            :date="shortDate"
-            compact
-            compact-title="수사할 증거가<br>없습니다"
-        />
-
-        <!-- 철회 후 오늘 미션 없음: 법원·날짜·알림 헤더는 기본 크기로 유지 -->
-        <PersonalCourtHeader
-            v-else-if="store.screenState === 'withdrawn'"
-            :court-image="courtSupreme"
-            :date="courtDate"
+        <!-- 화면 상태와 무관하게 같은 헤더를 쓴다. 바뀌는 건 말풍선 문구뿐이다. -->
+        <ChallengeCourtHeader
+            variant="supreme"
+            :court-image="buildingSupreme"
+            court-alt="탕탕 대법원"
+            subtitle="스스로의 소비 습관을 심판받는 곳"
+            :tangi-image="headerTangiImage"
+            tangi-role="검사"
+            :tangi-name="headerTangiName"
+            :quote="headerQuote"
+            :skirt-title="headerSkirtTitle"
         />
 
         <!-- 메인 컨텐츠 -->
@@ -504,19 +522,34 @@ async function reassignTodayMission() {
                     @prosecutor-click="openTangiSheet"
                 />
 
-                <PersonalWatchlistCard
-                    :items="watchCategoryModel.items"
-                    :analysis-period="watchCategoryModel.period"
-                />
+                <PersonalWatchlistCard :items="watchCategoryModel.items" />
 
-                <PersonalScoreCard
-                    :week-days="weeklyVerdictModel.days"
-                    :streak-days="weeklyVerdictModel.streakDays"
-                    :prosecutor-image="missionProsecutors.current?.image"
-                    :score="store.monthlyScore.score"
-                    :top-percent="store.monthlyScore.topPercent"
-                    @report-click="openPersonalRanking"
-                />
+                <section class="personal-home__section">
+                    <h2 class="personal-home__section-title">이번 주 판정</h2>
+                    <PersonalWeeklyVerdictCard
+                        :week-days="weeklyVerdictModel.days"
+                        :streak-days="weeklyVerdictModel.streakDays"
+                        :prosecutor-image="missionProsecutors.current?.image"
+                    />
+                </section>
+
+                <!--
+                    월간 이야기는 한 줄에 나란히 세운다 — 이번 달 누적 점수와 그 순위를 보러
+                    가는 입구(명예의 전당)는 같은 「월간」 맥락이라 붙어 있어야 이어 읽힌다.
+                    두 카드 모두 제목을 스스로 품고 있어 위에 섹션 제목을 세우지 않는다.
+                    인증서는 지난달치만 발급되므로 월 선택이 있는 성적표(랭킹)를 거쳐 들어간다.
+                -->
+                <div class="personal-home__month-row">
+                    <PersonalScoreCard
+                        :score="store.monthlyScore.score"
+                        :top-percent="store.monthlyScore.topPercent"
+                    />
+                    <PersonalMissionHonorBanner
+                        compact
+                        title="명예의 전당"
+                        @open="openPersonalRanking"
+                    />
+                </div>
 
                 <div class="personal-home__verdict-info">
                     <svg
@@ -673,38 +706,55 @@ async function reassignTodayMission() {
             </div>
         </Transition>
 
-        <!-- 데모 버튼 -->
+        <!-- 데모 버튼. 펼치기 전에는 손잡이 하나만 떠 있어 화면을 가리지 않는다. -->
         <div v-if="isDevelopment" class="personal-home__dev-controls">
-            <span v-if="devActionMessage" class="personal-home__dev-message">{{
-                devActionMessage
-            }}</span>
+            <template v-if="isDevPanelOpen">
+                <span v-if="devActionMessage" class="personal-home__dev-message">{{
+                    devActionMessage
+                }}</span>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    :disabled="isReassigning"
+                    @click="reassignTodayMission"
+                >
+                    {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="resetDemo">
+                    초기화
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
+                    데이터 부족 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showWeeklyResultsDemo">
+                    이번 주 판정 인정·기각 섞기
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
+                    맞춤 사건 개시 안내
+                </button>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    @click="showWithdrawnWithoutMissionDemo"
+                >
+                    철회·미션 없음 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
+                    미션 성공 팝업
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoFail">
+                    미션 실패 팝업
+                </button>
+            </template>
+
             <button
                 type="button"
-                class="personal-home__dev-btn"
-                :disabled="isReassigning"
-                @click="reassignTodayMission"
+                class="personal-home__dev-toggle"
+                :aria-expanded="isDevPanelOpen"
+                :aria-label="isDevPanelOpen ? '데모 버튼 접기' : '데모 버튼 펼치기'"
+                @click="isDevPanelOpen = !isDevPanelOpen"
             >
-                {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="resetDemo">초기화</button>
-            <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
-                데이터 부족 화면
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
-                맞춤 사건 개시 안내
-            </button>
-            <button
-                type="button"
-                class="personal-home__dev-btn"
-                @click="showWithdrawnWithoutMissionDemo"
-            >
-                철회·미션 없음 화면
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
-                미션 성공 팝업
-            </button>
-            <button type="button" class="personal-home__dev-btn" @click="setDemoFail">
-                미션 실패 팝업
+                {{ isDevPanelOpen ? '✕' : '데모' }}
             </button>
         </div>
     </div>

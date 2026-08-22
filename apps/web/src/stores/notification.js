@@ -9,6 +9,7 @@ import {
 } from '@/api/notification';
 import { parseSseChunk } from '@/utils/sseStream';
 import { useAuthStore } from '@/stores/auth';
+import { useGroupChatStore } from '@/stores/groupChat';
 
 const POLL_INTERVAL_MS = 60_000;
 const STREAM_RETRY_MS = 120_000;
@@ -168,6 +169,8 @@ export const useNotificationStore = defineStore('notification', () => {
                         stopPolling();
                     } else if (event.event === 'notification') {
                         onPushed(event.data);
+                    } else if (event.event === 'chat') {
+                        onChatPushed(event.data);
                     }
                 }
             }
@@ -190,6 +193,25 @@ export const useNotificationStore = defineStore('notification', () => {
             unreadCount.value += 1;
         } catch {
             refreshBadge(); // 본문을 못 읽어도 개수는 맞춘다
+        }
+    }
+
+    /**
+     * 채팅 알림. **이 스토어는 들고 있지 않고 채팅 스토어로 넘긴다.**
+     *
+     * 서버가 같은 스트림으로 `notification` 과 `chat` 두 종류를 쏜다
+     * (ChatMessageService.pushChatAlert). 채팅은 알림함에 저장하지 않기로 했으므로
+     * `items` 에 넣으면 새로고침 한 번에 사라져 목록이 거짓말을 하게 된다 —
+     * 그래서 종 배지가 아니라 그룹 채팅 배지·미리보기로만 보낸다.
+     *
+     * 한때 이 분기 자체가 없어서 서버가 보내는 채팅 알림이 **전부 버려지고 있었다.**
+     * 이벤트 이름을 늘릴 때는 여기에도 분기를 추가해야 한다.
+     */
+    function onChatPushed(raw) {
+        try {
+            useGroupChatStore().receiveChatAlert(JSON.parse(raw));
+        } catch {
+            /* 형식이 깨진 알림 하나 때문에 스트림을 끊지 않는다 */
         }
     }
 

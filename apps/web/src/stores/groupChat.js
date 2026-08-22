@@ -12,7 +12,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { fetchChatRoomInfo, fetchChatMessages, resetUnreadCount } from '@/api/groupChat';
-import { fetchGroupDetail } from '@/api/groupChallenge';
+import { fetchGroupDetail, fetchMyGroupChallenges } from '@/api/groupChallenge';
 import { toChatMessage, toChatMessagePage, toChatRoom } from '@/api/groupChatAdapter';
 
 export const useGroupChatStore = defineStore('groupChat', () => {
@@ -38,6 +38,19 @@ export const useGroupChatStore = defineStore('groupChat', () => {
      */
     const membersById = ref({});
 
+    /* ── 방 밖에서 보는 채팅 요약 (앱 단위) ─────────────── */
+    /*
+     * 위의 상태는 **지금 열어 둔 방 하나**의 것이라 leaveRoom() 이 전부 비운다.
+     * 아래 둘은 반대다 — 홈 목록과 지방법원 토글 점이 **방 밖에서** 읽으므로
+     * 앱이 살아 있는 동안 유지된다. leaveRoom() 이 건드리지 않는 것이 핵심이다.
+     */
+
+    /** groupId → 안 읽은 개수 */
+    const unreadByGroup = ref({});
+
+    /** groupId → 마지막 메시지 한 줄(`'닉네임: 내용'`). 실시간으로 받은 것이 목록 값보다 최신이다. */
+    const lastMessageByGroup = ref({});
+
     /* ── 파생 ──────────────────────────────────────────── */
     const currentUserId = computed(() => {
         const auth = useAuthStore();
@@ -46,6 +59,11 @@ export const useGroupChatStore = defineStore('groupChat', () => {
 
     /* 서버 상태값은 RECRUITING · ACTIVE · JUDGING · CLOSED 다 (목업의 'ENDED' 는 없다) */
     const isEnded = computed(() => roomInfo.value?.isEnded === true);
+
+    /** 어느 방이든 안 읽은 게 있는가. 지방법원 토글의 점이 이 값 하나만 본다. */
+    const hasUnreadChat = computed(() =>
+        Object.values(unreadByGroup.value).some((count) => count > 0),
+    );
 
     /* ── 액션 ──────────────────────────────────────────── */
 
@@ -61,6 +79,8 @@ export const useGroupChatStore = defineStore('groupChat', () => {
             messages.value = page.messages;
             hasMore.value = page.hasMore;
             await resetUnreadCount(id);
+            /* 서버 카운터를 0 으로 만들었으니 화면이 보는 사본도 같이 내린다 */
+            clearUnread(id);
             await loadMembers(id);
         } catch (e) {
             // 종료된 챌린지는 안내 화면을 보여준다. 대화는 챌린지가 CLOSED 되는 즉시 삭제된다
@@ -166,6 +186,86 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         page.messages.forEach((m) => appendMessage(m));
     }
 
+    /* ── 방 밖에서 보는 채팅 요약 ───────────────────────── */
+
+    /**
+     * 그룹 목록 응답으로 요약을 덮어쓴다. **서버 값이 언제나 이긴다.**
+     *
+     * 놓친 SSE(연결이 끊겨 있던 동안 온 것)를 여기서 메우는 것이 이 함수의 본래 일이다.
+     * 목록에 없는 그룹(종료·탈퇴)은 통째로 사라져야 하므로 병합이 아니라 교체다.
+     */
+    function syncChatSummary(challenges = []) {
+        const unread = {};
+        const last = {};
+        for (const ch of challenges) {
+            if (ch?.id == null) continue;
+            unread[ch.id] = ch.unreadChatCount ?? 0;
+            if (ch.lastChatMessage) last[ch.id] = ch.lastChatMessage;
+        }
+        unreadByGroup.value = unread;
+        lastMessageByGroup.value = last;
+    }
+
+    /**
+     * 알림 SSE 의 `chat` 이벤트를 받는다 (서버: ChatMessageService.pushChatAlert).
+     *
+     * **이 알림은 알림함에 저장되지 않는다**(팀 결정 2026-08-15). 여기서 흘리면 영영 사라지므로
+     * 화면이 열려 있든 아니든 스토어가 받아 둔다 — 그래서 채팅방 컴포넌트가 아니라 여기에 있다.
+     *
+     * 서버가 **메시지마다 빠짐없이** 쏘므로 `+1` 이 곧 정확한 수다. 한때 30초 쿨다운이 있어
+     * 연타로 온 열 통이 이벤트 하나로 뭉쳤고 그래서 이 값이 어림값이었다 — 이슈 #423 에서
+     * 서버 쿨다운을 없애며 해소했다(`ChatMessageService#pushChatAlert` 주석 참고).
+     * 그래도 SSE 가 끊겨 있던 동안 온 것은 못 받으므로 목록을 받을 때 syncChatSummary 가 메운다.
+     *
+     * 미리보기 문자열은 **서버의 목록 응답과 같은 모양(`'닉네임: 내용'`)으로 조립한다.**
+     * 서버 쪽 짝은 `ChallengeGroupService#preview` 다. 한쪽만 바꾸면 새로고침 한 번에 형식이 바뀐다.
+     */
+    function receiveChatAlert(payload) {
+        const id = Number(payload?.groupId);
+        if (!Number.isFinite(id)) return;
+        /* 이미 그 방에 들어와 읽고 있다. 서버도 제외하지만 입장 직후 경합을 한 겹 더 막는다 */
+        if (groupId.value === id) return;
+
+        unreadByGroup.value = {
+            ...unreadByGroup.value,
+            [id]: (unreadByGroup.value[id] ?? 0) + 1,
+        };
+        if (payload.content) {
+            const who = payload.senderNickname;
+            lastMessageByGroup.value = {
+                ...lastMessageByGroup.value,
+                [id]: who ? `${who}: ${payload.content}` : payload.content,
+            };
+        }
+    }
+
+    /**
+     * 로그인 직후 씨를 뿌린다. 실패는 삼킨다 — 점 하나 때문에 첫 화면이 막히면 안 된다.
+     *
+     * **시작 전(RECRUITING)까지 묻는 것이 중요하다.** 채팅에는 상태 제한이 없어서
+     * 방을 만든 직후부터 대화가 된다. 게다가 서버가 시작일을 반드시 내일 이후로 막으므로
+     * 만들고 나서 처음 떠드는 구간이 통째로 RECRUITING 이다 — `['ACTIVE']` 만 물으면
+     * 정작 대화가 오가는 방이 배지 계산에서 통째로 빠진다. 홈이 부르는 것과 같은 조합이다.
+     */
+    async function refreshChatSummary() {
+        try {
+            syncChatSummary(await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING']));
+        } catch {
+            /* 무시 */
+        }
+    }
+
+    function clearUnread(id) {
+        if (id == null || unreadByGroup.value[id] == null) return;
+        unreadByGroup.value = { ...unreadByGroup.value, [id]: 0 };
+    }
+
+    /** 로그아웃 등 세션 종료. 다음 사람에게 앞사람의 대화가 보이면 안 된다. */
+    function clearChatSummary() {
+        unreadByGroup.value = {};
+        lastMessageByGroup.value = {};
+    }
+
     /** 채팅방 퇴장: 상태 초기화 */
     function leaveRoom() {
         groupId.value = null;
@@ -196,5 +296,14 @@ export const useGroupChatStore = defineStore('groupChat', () => {
         appendMessage,
         catchUp,
         leaveRoom,
+        /* 방 밖 요약 — leaveRoom() 이 지우지 않는다 */
+        unreadByGroup,
+        lastMessageByGroup,
+        hasUnreadChat,
+        syncChatSummary,
+        receiveChatAlert,
+        refreshChatSummary,
+        clearUnread,
+        clearChatSummary,
     };
 });

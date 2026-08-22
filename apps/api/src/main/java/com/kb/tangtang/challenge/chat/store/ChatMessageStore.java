@@ -65,9 +65,6 @@ public class ChatMessageStore {
      */
     private static final Duration MIN_TTL = Duration.ofDays(1);
 
-    /** 같은 방·같은 사용자에게 이 간격 안에서는 알림을 한 번만 보낸다 */
-    private static final Duration NOTIFY_COOLDOWN = Duration.ofSeconds(30);
-
     /**
      * 번호 발급과 저장을 한 번에 한다. {@code KEYS[1]}=seq · {@code KEYS[2]}=messages,
      * {@code ARGV[1]}=번호 자리를 비워 둔 JSON · {@code ARGV[2]}=그 자리 다음 글자의 위치.
@@ -248,13 +245,6 @@ public class ChatMessageStore {
             return Set.of();
         }
         return raw.stream().map(Long::valueOf).collect(Collectors.toCollection(HashSet::new));
-    }
-
-    /** true 면 알림을 보내도 된다. 30초 안의 후속 메시지는 false 가 되어 배지만 올라간다 */
-    public boolean tryAcquireNotifyCooldown(long groupId, long userId) {
-        Boolean acquired = redis.opsForValue()
-                .setIfAbsent(ChatRedisKeys.notifyCooldown(groupId, userId), "1", NOTIFY_COOLDOWN);
-        return Boolean.TRUE.equals(acquired);
     }
 
     private List<ChatMessage> read(long groupId, long start, long end) {

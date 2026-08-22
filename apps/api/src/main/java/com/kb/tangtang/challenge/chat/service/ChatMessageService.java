@@ -141,11 +141,21 @@ public class ChatMessageService {
         return result;
     }
 
-    /** 저장하지 않는다. 30초 쿨다운에 걸리면 배지만 올라가고 알림은 생략된다 */
+    /**
+     * 저장하지 않고 접속 중인 연결로 밀기만 한다.
+     *
+     * <p><b>메시지마다 빠짐없이 보낸다 — 여기에 쿨다운을 두지 않는다.</b> 한때 같은 방·같은 사람에게
+     * 30초에 한 번만 보냈다. 알림을 "팝업"으로만 보던 시절의 도배 방지였는데, 이 이벤트는 지금
+     * 그룹챌린지 홈의 <b>안 읽은 배지와 마지막 대화 줄을 갱신하는 데이터 채널</b>이다(이슈 #423).
+     * 30초를 막으면 연타로 보낸 메시지가 홈에 안 뜨고, 개수도 실제보다 작게 남는다.
+     *
+     * <p>도배 방어였던 적도 없다 — {@code increaseUnread} 와 STOMP 브로드캐스트는 애초에 쿨다운
+     * 밖이라 이미 무제한이었다. 쿨다운은 알림만 늦췄다.
+     *
+     * <p>나중에 토스트를 붙여 도배가 문제되면 <b>throttle 은 프론트에 둔다.</b> 서버가 UI 리듬을
+     * 정하면 화면 표시와 함께 데이터까지 막힌다 — 그게 정확히 이 쿨다운이 만든 상태였다.
+     */
     private void pushChatAlert(long groupId, long userId, ChatMessageDto message) {
-        if (!store.tryAcquireNotifyCooldown(groupId, userId)) {
-            return;
-        }
         notificationSender.push(userId, "chat", Map.of(
                 "groupId", groupId,
                 "senderNickname", displayNickname(message.getSenderNickname()),

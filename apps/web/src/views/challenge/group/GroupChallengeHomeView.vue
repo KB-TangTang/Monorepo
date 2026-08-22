@@ -16,35 +16,62 @@ import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
-import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
-import courtDistrictImg from '@/assets/images/court/court_district.png';
+import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vue';
+import CategoryIcon from '@/components/common/CategoryIcon.vue';
+import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
+import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
+import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
 import { entryState } from '@/utils/groupChallengeNavigation';
+import { useGroupChatStore } from '@/stores/groupChat';
 
 const router = useRouter();
 
-/* ── 날짜 ──────────────────────────────── */
-const todayLabel = computed(() => {
-    const d = new Date();
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}. ${mm}. ${dd} (${dayNames[d.getDay()]})`;
-});
+/*
+ * 채팅 요약은 화면이 아니라 스토어가 들고 있다. 목록 API 가 주는 값과 실시간으로 도착하는 값을
+ * 한군데서 합쳐야 하고, 지방법원 토글의 점도 같은 값을 봐야 하기 때문이다.
+ */
+const groupChat = useGroupChatStore();
 
-/* ── 진행 중인 챌린지 ──────────────────── */
-const activeChallenges = ref([]);
+/* ── 내 챌린지 (진행 중 + 시작 전) ─────── */
+const myChallenges = ref([]);
 
-async function loadActiveChallenges() {
+async function loadMyChallenges() {
     try {
-        activeChallenges.value = await fetchMyGroupChallenges(['ACTIVE']);
+        /*
+         * **시작 전(RECRUITING)까지 함께 받는다.** 서버가 시작일을 반드시 내일 이후로 막기 때문에
+         * (ChallengeGroupService.validateCreate) 그룹을 만들거나 참여코드로 들어온 직후에는
+         * ACTIVE 가 하나도 없다 — ACTIVE 만 부르던 예전에는 방금 한 행동이 홈에서 흔적도 없이
+         * 사라지고 판사 탕이가 「새로운 챌린지에 참여해보세요」라고 되묻는 상태였다.
+         */
+        myChallenges.value = await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING']);
+        /* 서버 값으로 채팅 배지를 정정한다. 실시간으로 올려 둔 어림값이 여기서 진짜 수로 바뀐다 */
+        groupChat.syncChatSummary(myChallenges.value);
     } catch {
         /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비어 있으면 판사 탕이가
          * "새로운 챌린지에 참여해보세요" 로 안내한다. */
-        activeChallenges.value = [];
+        myChallenges.value = [];
     }
 }
+
+/*
+ * 시작 전인가. **`status` 만으로 가르지 않는다** — 목데이터의 진행 중 항목에는 `status` 가 없다.
+ * `daysUntilStart` 는 서버가 시작 후 NULL 로 내려주므로 실서버·목데이터 양쪽에서 맞는다.
+ */
+function isUpcoming(challenge) {
+    return challenge.status === 'RECRUITING' || challenge.daysUntilStart != null;
+}
+
+/*
+ * 진행 중을 위로 올린다. 서버 정렬은 `start_date DESC` 라 **시작 전이 늘 맨 위로 온다** —
+ * 아직 시작도 안 한 그룹이 오늘 목숨이 걸린 그룹을 밀어내는 셈이었다.
+ * `sort` 는 안정 정렬이라 같은 묶음 안에서는 서버 순서가 그대로 남는다.
+ */
+const sortedChallenges = computed(() =>
+    [...myChallenges.value].sort((a, b) => Number(isUpcoming(a)) - Number(isUpcoming(b))),
+);
+
+const activeCount = computed(() => myChallenges.value.filter((ch) => !isUpcoming(ch)).length);
 
 /* ── TO-DO (내가 변론·투표해야 하는 재판) ── */
 const myTrials = ref([]);
@@ -89,10 +116,12 @@ function flash(msg) {
 /* ── 판사 탕이 말풍선 ─────────────────── */
 const judgeQuote = computed(() => {
     const todoCount = todoItems.value.length;
-    const activeCount = activeChallenges.value.length;
     if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요,\n서두르세요!`;
     if (allDone.value) return '모든 할 일을 처리했군요,\n훌륭해요!';
-    if (activeCount > 0) return `진행 중인 챌린지가\n${activeCount}건 있어요`;
+    if (activeCount.value > 0) return `진행 중인 챌린지가\n${activeCount.value}건 있어요`;
+    /* 시작 전만 있는 상태. 여기서 「참여해보세요」라고 하면 방금 만든 사람에게 거짓말이 된다 */
+    const upcomingCount = myChallenges.value.length - activeCount.value;
+    if (upcomingCount > 0) return `곧 시작할 챌린지가\n${upcomingCount}건 있어요`;
     return '새로운 챌린지에\n참여해보세요!';
 });
 
@@ -104,12 +133,12 @@ onMounted(() => {
     if (!hasSeenGroupTutorial()) {
         showTutorial.value = true;
     }
-    loadActiveChallenges();
+    loadMyChallenges();
     loadMyTrials();
 });
 
 watch(dataSource, () => {
-    loadActiveChallenges();
+    loadMyChallenges();
     loadMyTrials();
 });
 
@@ -195,54 +224,131 @@ function goToDetail(challenge) {
     });
 }
 
-function progressPercent(challenge) {
-    if (!challenge.totalDays) return 0;
-    return Math.round((challenge.currentDay / challenge.totalDays) * 100);
+/* ── 행 표기 ───────────────────────────── */
+
+/*
+ * 한도 문구. 목록의 GroupActiveCard·GroupPreStartCard 와 같은 규칙을 쓴다 —
+ * 같은 챌린지가 화면마다 다르게 읽히면 안 된다.
+ * **0 원은 미입력이 아니라 무지출 챌린지의 정상값이다.**
+ */
+function limitDesc(challenge) {
+    const type = challenge.evalType === 'DAILY' ? '일일결산' : '기간평가';
+    if (challenge.limitAmount > 0) {
+        const prefix = challenge.evalType === 'DAILY' ? '일' : '총';
+        return `${type} · ${prefix} ${challenge.limitAmount.toLocaleString()}원`;
+    }
+    return challenge.limitAmount === 0 ? `${type} · 무지출` : type;
 }
 
-function livesColor(challenge) {
-    const ratio = challenge.livesCount / challenge.maxLives;
-    if (ratio >= 0.8) return 'var(--tt-green)';
-    if (ratio >= 0.4) return 'var(--tt-gold-deep)';
-    return 'var(--tt-red-deep)';
+/*
+ * 카테고리는 서버가 안 줄 수 있다(`categoryId` 가 NULL 인 그룹). 조각을 빼지 않고 「총 소비」로 적는다 —
+ * 빼 버리면 「전체 소비를 합산하는 챌린지」라는 정보가 화면에서 사라져 카테고리 챌린지와 구별이 안 된다.
+ */
+function metaLine(challenge) {
+    const parts = [];
+    parts.push(challenge.categoryName ?? GROUP_CATEGORY_ALL_LABEL);
+    if (isUpcoming(challenge)) {
+        parts.push(`${challenge.memberCount}/${challenge.maxMembers}명 모집 중`);
+    } else {
+        parts.push(`${challenge.memberCount}명`);
+    }
+    parts.push(limitDesc(challenge));
+    if (!isUpcoming(challenge)) parts.push(`${challenge.currentDay}일차`);
+    return parts.join(' · ');
 }
+
+/*
+ * 우측 칩. 시작 전은 시작까지, 진행 중은 종료까지 남은 날이다.
+ * `currentDay` 는 1부터 세므로 마지막 날에는 남은 날이 0 이 된다 — 「D-0」 대신 「마지막 날」로 적는다.
+ */
+function dayChip(challenge) {
+    if (isUpcoming(challenge)) {
+        /*
+         * **`daysUntilStart` 가 NULL 인 시작 전 그룹이 있다.** 서버는 이 값을 status 가 아니라
+         * 시작일만 보고 계산해서(ChallengeGroupService.daysUntilStart) 시작일이 지나면 NULL 을 준다.
+         * 그런데 RECRUITING → ACTIVE 전이는 **하루 한 번 도는 배치**(cron `0 1 0 * * *`)라,
+         * 그 시각에 서버가 꺼져 있었으면 status 는 RECRUITING 인 채로 남는다.
+         * 로컬에서는 밤새 API 를 안 띄우니 사실상 매번 이 상태가 된다.
+         * 그대로 문자열에 끼우면 **「시작 D-null」** 이 찍힌다.
+         */
+        return challenge.daysUntilStart == null
+            ? '시작 대기'
+            : `시작 D-${challenge.daysUntilStart}`;
+    }
+    const remaining = challenge.totalDays - challenge.currentDay;
+    return remaining > 0 ? `D-${remaining}` : '마지막 날';
+}
+
+/*
+ * 카테고리가 없는 그룹은 **「기타」가 아니라 「총 소비」**다 (GroupCategoryPicker 가 지원하는 정상 선택지).
+ * `resolveCategoryIcon` 의 폴백 `EllipsisHorizontalCircle` 은 하필 「기타」 카테고리 아이콘과
+ * 같은 모양이라 그대로 두면 뜻이 정반대로 읽힌다. 지갑으로 「전부 합산」을 나타낸다.
+ */
+function categoryIcon(challenge) {
+    return challenge.categoryName ? resolveCategoryIcon(challenge.categoryName) : 'Wallet';
+}
+
+/*
+ * 메타 줄 대신 보여줄 마지막 대화 한 줄. 없으면 null 이고 그때는 메타 줄이 그대로 남는다.
+ *
+ * 스토어 값이 목록 응답보다 우선이다 — 홈에 머무는 동안 도착한 메시지는 스토어에만 있다.
+ *
+ * ⚠ **시작 전(RECRUITING)이라고 빼면 안 된다.** 한때 「아직 아무 일도 안 일어난 방」이라고
+ * 단정하고 걸러냈는데 틀렸다 — `ChatMessageService` 에는 상태 검사가 아예 없어서 방을 만든
+ * 직후부터 대화가 된다. 오히려 서버가 시작일을 반드시 내일 이후로 막기 때문에(validateCreate)
+ * **만들고 나서 처음 떠드는 구간이 전부 RECRUITING 이다.** 그 구간을 빼면 정작 대화가 가장
+ * 활발할 때 홈에 아무것도 안 뜬다.
+ */
+function chatLine(challenge) {
+    return groupChat.lastMessageByGroup[challenge.id] ?? challenge.lastChatMessage ?? null;
+}
+
+/** 안 읽은 개수. 배지 문자열이며 0 이면 null 이라 배지 자체가 그려지지 않는다. */
+function chatBadge(challenge) {
+    const count = groupChat.unreadByGroup[challenge.id] ?? challenge.unreadChatCount ?? 0;
+    if (count <= 0) return null;
+    /* 세 자리가 되면 배지가 이름을 밀어낸다. 카카오톡과 같은 방식으로 접는다 */
+    return count > 99 ? '99+' : String(count);
+}
+
+/*
+ * 대화 줄만 채팅방으로 보낸다. 행 전체는 그대로 상세로 간다.
+ * `.stop` 이 빠지면 부모의 @click 까지 함께 타서 채팅방을 열자마자 상세로 새어 나간다
+ * (목록 화면 GroupActiveCard 에서 같은 문제를 이미 겪었다).
+ */
+function goToChat(challenge) {
+    router.push({ name: 'groupChallengeChat', params: { id: challenge.id } });
+}
+
+/* 목숨(판사봉)은 여기서 보여주지 않는다 — 챌린지마다 한 줄을 더 먹는데, 홈에서 할 일이 없는 값이다.
+   상세 화면이 그대로 보여준다. */
 </script>
 
 <template>
     <div class="gc-page">
-        <!-- ===== 다크 헤더 (법원 현판) ===== -->
-        <header class="gc-header">
-            <div class="gc-header__bg" />
-            <div class="gc-header__glow" />
-
-            <div class="gc-header__inner">
-                <!-- 상단 바: 알림 아이콘 -->
-                <div class="gc-header__topbar">
-                    <TheNotificationBell />
-                </div>
-
-                <!-- 현판 이미지 + 날짜 칩 -->
-                <div class="gc-header__court">
-                    <img :src="courtDistrictImg" alt="탕탕 지방법원" class="gc-header__court-img" />
-                    <div class="gc-header__date">{{ todayLabel }}</div>
-                </div>
-
-                <!-- 판사 탕이 + 말풍선 -->
-                <div class="gc-header__judge">
-                    <div class="gc-header__judge-wrap">
-                        <img :src="judgeImg" alt="판사 탕이" class="gc-header__judge-img" />
-                        <div class="gc-header__nameplate">판사 탕이</div>
-                    </div>
-                    <div class="gc-header__speech">
-                        <div class="gc-header__speech-arrow" />
-                        <div class="gc-header__speech-text">{{ judgeQuote }}</div>
-                    </div>
-                </div>
-            </div>
-        </header>
+        <!-- ===== 다크 헤더 (지방법원 건물) ===== -->
+        <ChallengeCourtHeader
+            variant="district"
+            :court-image="buildingDistrict"
+            court-alt="탕탕 지방법원"
+            subtitle="함께 모여 소비 습관을 심판하는 곳"
+            :tangi-image="judgeImg"
+            tangi-role="판사"
+            tangi-name="탕이"
+            :quote="judgeQuote"
+        />
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
+            <!-- 처리할 재판. 카드 안에 건수가 또 있지만, 「전체보기」는 여기에만 둘 수 있다 —
+                 카드 안쪽의 「남은 N건 모두 보기」는 3건 이상일 때만 나타나 2건 이하면 시트로 갈 길이 없었다 -->
+            <div v-if="hasTodo" class="gc-section-top gc-section-top--todo">
+                <span class="gc-section-title">처리할 재판</span>
+                <button type="button" class="gc-view-all" @click="showSheet = true">
+                    전체보기 ›
+                </button>
+            </div>
+
             <!-- TO-DO 인박스 / 방금 다 처리함 / 애초에 할 일이 없음 -->
             <GroupTodoCard
                 v-if="hasTodo"
@@ -259,52 +365,87 @@ function livesColor(challenge) {
                 <GroupMascotScene scene="peaceful" />
             </template>
 
-            <!-- 진행 중인 챌린지 -->
+            <!-- 내 챌린지 — 진행 중과 시작 전을 한 카드에 행으로 쌓는다 -->
             <div class="gc-section">
                 <div class="gc-section-top">
-                    <span class="gc-section-title">진행 중인 챌린지</span>
+                    <span class="gc-section-title">내 챌린지</span>
                     <button type="button" class="gc-view-all" @click="goToAllChallenges">
                         전체보기 ›
                     </button>
                 </div>
 
-                <div
-                    v-for="ch in activeChallenges"
-                    :key="ch.id"
-                    class="gc-challenge-card"
-                    @click="goToDetail(ch)"
-                >
-                    <div class="gc-challenge-card__top">
-                        <span class="gc-challenge-card__name">{{ ch.groupName }}</span>
-                        <span class="gc-challenge-card__info">
-                            {{ ch.evalType === 'DAILY' ? '일일결산' : '기간평가' }} ·
-                            {{ ch.currentDay }}일차
+                <div class="gc-groups">
+                    <p v-if="!sortedChallenges.length" class="gc-groups__empty">
+                        아직 참여 중인 챌린지가 없어요
+                    </p>
+
+                    <div
+                        v-for="ch in sortedChallenges"
+                        :key="ch.id"
+                        class="gc-group-row"
+                        @click="goToDetail(ch)"
+                    >
+                        <span
+                            class="gc-group-row__icon"
+                            :class="`gc-group-row__icon--${resolveCategoryTone(ch.categoryName)}`"
+                            aria-hidden="true"
+                        >
+                            <CategoryIcon :icon="categoryIcon(ch)" />
                         </span>
-                    </div>
-                    <div class="gc-challenge-card__progress">
-                        <div class="gc-progress-track">
-                            <div
-                                class="gc-progress-fill"
-                                :style="{ width: progressPercent(ch) + '%' }"
-                            />
+
+                        <div class="gc-group-row__body">
+                            <span class="gc-group-row__name">{{ ch.groupName }}</span>
+                            <!--
+                              대화가 있으면 메타 줄을 마지막 메시지로 바꾼다. 한 줄을 더 쌓지 않는
+                              이유는 행 높이다 — 여기서 한 줄이 늘면 카드가 화면 밖으로 밀린다.
+                              한도·정원은 상세 화면이 그대로 보여주므로 사라지는 게 아니다.
+                            -->
+                            <span
+                                v-if="chatLine(ch)"
+                                class="gc-group-row__chat"
+                                @click.stop="goToChat(ch)"
+                            >
+                                {{ chatLine(ch) }}
+                            </span>
+                            <span v-else class="gc-group-row__meta">{{ metaLine(ch) }}</span>
                         </div>
-                        <span class="gc-challenge-card__lives" :style="{ color: livesColor(ch) }">
-                            {{ ch.livesCount }}/{{ ch.maxLives }}
-                        </span>
+
+                        <!--
+                          D-day 칩과 안 읽은 배지를 오른쪽에 세로로 쌓는다. 배지를 대화 줄 옆에
+                          두면 이름 길이에 따라 자리가 춤추고 칩과도 붙어 보인다.
+                        -->
+                        <div class="gc-group-row__aside">
+                            <span
+                                class="gc-group-row__chip"
+                                :class="{ 'gc-group-row__chip--upcoming': isUpcoming(ch) }"
+                            >
+                                {{ dayChip(ch) }}
+                            </span>
+                            <span
+                                v-if="chatBadge(ch)"
+                                class="gc-group-row__badge"
+                                @click.stop="goToChat(ch)"
+                            >
+                                {{ chatBadge(ch) }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 두 진입로는 챌린지가 아니다. 한 카드에 묶어 행 카드와 섞이지 않게 한다 -->
+                    <div class="gc-groups__actions">
+                        <!-- 생성 진입로. 만들기 화면으로 가는 유일한 버튼이다 -->
+                        <button type="button" class="gc-groups__cta" @click="goToCreate">
+                            <span class="gc-groups__cta-plus">＋</span>
+                            <span>새 그룹챌린지 만들기</span>
+                        </button>
+
+                        <!-- 참여코드 진입로. 목록 「시작 전」 탭까지 들어가지 않아도 코드를 넣을 수 있다 -->
+                        <button type="button" class="gc-groups__cta" @click="showJoinSheet = true">
+                            <span class="gc-groups__cta-plus">＃</span>
+                            <span>참여코드로 들어가기</span>
+                        </button>
                     </div>
                 </div>
-
-                <!-- 생성 진입로. 만들기 화면으로 가는 유일한 버튼이다 -->
-                <button type="button" class="gc-create-cta" @click="goToCreate">
-                    <span class="gc-create-cta__title">새 그룹챌린지 만들기</span>
-                    <span class="gc-create-cta__plus">+</span>
-                </button>
-
-                <!-- 참여코드 진입로. 목록 「시작 전」 탭까지 들어가지 않아도 코드를 넣을 수 있다 -->
-                <button type="button" class="gc-join-cta" @click="showJoinSheet = true">
-                    <span class="gc-join-cta__title">참여코드가 있나요?</span>
-                    <span class="gc-join-cta__arrow">›</span>
-                </button>
             </div>
         </main>
 
@@ -343,15 +484,20 @@ function livesColor(challenge) {
         </button>
 
         <!-- DEV: 시작 상태 전이 배치 즉시 실행 (자정을 기다리지 않기 위한 문) -->
-        <DevBatchTriggerFab :offset="96" @done="loadActiveChallenges" />
+        <DevBatchTriggerFab :offset="96" @done="loadMyChallenges" />
     </div>
 </template>
 
 <style scoped>
 .gc-page {
     min-height: 100vh;
-    background: var(--tt-bg-subtle);
-    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-10));
+    /* 카드에 선도 그림자도 없으므로 배경이 유일한 경계다 — 개인 미션 홈과 같은 값 */
+    background: var(--tt-bg-page);
+    /*
+     * 탭바를 피하는 몫은 base.css 의 .tt-app__content > * 가 잡는다.
+     * 여기서는 이 화면 하단에 떠 있는 ChallengeModeTabBar 를 피할 만큼만 더 준다.
+     */
+    padding-bottom: var(--tt-float-toggle-inset);
 }
 
 .gc-dev-fab {
@@ -380,161 +526,6 @@ function livesColor(challenge) {
     height: 14px;
 }
 
-/* ── 다크 헤더 ─────────────────────────── */
-.gc-header {
-    background: var(--tt-surface-inverse);
-    border-radius: 0 0 var(--tt-radius-2xl) var(--tt-radius-2xl);
-    padding-bottom: var(--tt-space-5);
-    position: relative;
-    overflow: hidden;
-}
-.gc-header__inner {
-    position: relative;
-    z-index: 2;
-    padding: 0 var(--tt-screen-padding);
-}
-
-.gc-header__bg {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: linear-gradient(180deg, #1e2338 0%, #232842 60%, #283050 100%);
-}
-.gc-header__glow {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: radial-gradient(200px 130px at 50% 60px, rgba(245, 185, 33, 0.1), transparent 70%);
-}
-
-/* 상단 바 */
-.gc-header__topbar {
-    height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-top: calc(env(safe-area-inset-top) + var(--tt-space-2));
-}
-
-/* TheNotificationBell 다크 헤더 오버라이드 */
-.gc-header__topbar :deep(.tt-bell) {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: var(--tt-radius-sm);
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--tt-text-inverse);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.gc-header__topbar :deep(.tt-bell svg) {
-    width: 21px;
-    height: 21px;
-}
-.gc-header__topbar :deep(.tt-bell__badge) {
-    top: -4px;
-    right: -4px;
-    min-width: 16px;
-    font-size: 10px;
-    line-height: 16px;
-}
-
-/* 현판 + 날짜 */
-.gc-header__court {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.gc-header__court-img {
-    height: 120px;
-    width: auto;
-    object-fit: contain;
-    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
-}
-.gc-header__date {
-    margin-top: var(--tt-space-2);
-    background: rgba(245, 185, 33, 0.15);
-    border: 1px solid rgba(245, 185, 33, 0.3);
-    border-radius: var(--tt-radius-full);
-    padding: 3px var(--tt-space-3);
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-accent-bright);
-    font-family: var(--tt-font-mono);
-    letter-spacing: 0.06em;
-}
-
-/* 판사 탕이 + 말풍선 */
-.gc-header__judge {
-    margin-top: var(--tt-space-3);
-    display: flex;
-    align-items: center;
-    gap: 3%;
-    padding: 0 var(--tt-space-3);
-}
-.gc-header__judge-wrap {
-    width: 23%;
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.gc-header__judge-img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: contain;
-    animation: gc-float 3.4s ease-in-out infinite;
-}
-.gc-header__nameplate {
-    margin-top: var(--tt-space-1);
-    background: var(--tt-kraft);
-    border: 1.5px solid var(--tt-wood);
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 9px;
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-wood);
-    white-space: nowrap;
-    letter-spacing: 0.03em;
-    box-shadow: 0 2px 6px rgba(156, 123, 84, 0.15);
-}
-@keyframes gc-float {
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-5px);
-    }
-}
-.gc-header__speech {
-    flex: 1;
-    min-width: 0;
-    background: var(--tt-white);
-    border-radius: var(--tt-space-4);
-    padding: 13px 14px;
-    box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.45);
-    position: relative;
-}
-.gc-header__speech-arrow {
-    position: absolute;
-    left: -10px;
-    top: calc(50% - 7px);
-    width: 0;
-    height: 0;
-    border-bottom: 14px solid var(--tt-white);
-    border-left: 11px solid transparent;
-}
-.gc-header__speech-text {
-    font-size: var(--tt-fs-subtitle);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
-    letter-spacing: -0.01em;
-    line-height: 1.45;
-    word-break: keep-all;
-    white-space: pre-line;
-}
 /* ── 본문 ──────────────────────────────── */
 .gc-body {
     padding: 10px 22px 0;
@@ -551,6 +542,11 @@ function livesColor(challenge) {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+/* TO-DO 카드 바로 위에 붙는 머리줄. 카드가 곧바로 이어지므로 아래 여백만 조금 준다 */
+.gc-section-top--todo {
+    padding-bottom: 8px;
 }
 
 .gc-section-title {
@@ -570,124 +566,186 @@ function livesColor(challenge) {
     padding: 0;
 }
 
-/* ── 챌린지 카드 ──────────────────────── */
-.gc-challenge-card {
+/* ── 내 챌린지 목록 ───────────────────── */
+/*
+ * 챌린지 하나 = 카드 하나다. 한 카드 안에 구분선으로 쌓아 두었더니 서로 이어진 한 덩어리로
+ * 읽혔는데, 실제로는 각각 독립된 챌린지다. 목록 화면(GroupChallengeListView)도 카드를 띄워
+ * 나열하므로 두 화면의 시각 언어가 이걸로 같아진다.
+ *
+ * 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
+ */
+.gc-groups {
     margin-top: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-3);
+}
+
+.gc-groups__empty {
+    padding: 22px 0;
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 18px;
-    box-shadow: 0 8px 22px rgba(35, 40, 66, 0.05);
-    padding: 14px 16px;
-    cursor: pointer;
-    transition: box-shadow 0.15s ease;
+    text-align: center;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
 }
 
-/* 누를 수 있다는 신호. 목록의 카드도 같은 방식으로 눌린 느낌을 준다 */
-.gc-challenge-card:active {
-    box-shadow: 0 4px 12px rgba(35, 40, 66, 0.12);
-}
-
-.gc-challenge-card__top {
+/* ── 그룹 카드 ────────────────────────── */
+.gc-group-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 11px;
+    padding: 13px 15px;
+    background: var(--tt-bg);
+    border-radius: 18px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
 }
 
-.gc-challenge-card__name {
+.gc-group-row:active {
+    opacity: 0.6;
+}
+
+.gc-group-row__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 장부 거래 행과 같은 톤 규칙을 쓴다(utils/category.js) — 같은 카테고리가 화면마다 달라 보이면 안 된다 */
+.gc-group-row__icon--primary {
+    color: var(--tt-primary);
+    background: var(--tt-primary-subtle);
+}
+.gc-group-row__icon--accent {
+    color: var(--tt-gold-deep);
+    background: var(--tt-accent-subtle);
+}
+.gc-group-row__icon--success {
+    color: var(--tt-success);
+    background: var(--tt-success-subtle);
+}
+.gc-group-row__icon--muted {
+    color: var(--tt-text-muted);
+    background: var(--tt-bg-fill);
+}
+
+.gc-group-row__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.gc-group-row__name {
+    display: block;
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
-}
-
-.gc-challenge-card__info {
-    font-size: var(--tt-fs-overline);
-    color: var(--tt-text-hint);
-    font-weight: var(--tt-fw-bold);
-}
-
-.gc-challenge-card__progress {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-}
-
-.gc-progress-track {
-    flex: 1;
-    height: 8px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-border-track);
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.gc-progress-fill {
-    height: 100%;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-accent);
+/* 칩과 배지를 세로로 쌓는 오른쪽 열. gap 이 둘 사이 여백을 만든다 */
+.gc-group-row__aside {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 7px;
 }
 
-.gc-challenge-card__lives {
-    font-size: var(--tt-fs-caption);
+.gc-group-row__chip {
+    flex: none;
+    font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-black);
+    padding: 3px 8px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-bg-fill);
+    color: var(--tt-text-hint);
 }
 
-/* ── 생성 진입로 ──────────────────────── */
-.gc-create-cta {
-    width: 100%;
-    margin-top: 11px;
-    padding: 14px 16px;
+/* 시작 전은 아직 아무 일도 안 일어난 상태다. 진행 중 칩과 색으로 구분한다 */
+.gc-group-row__chip--upcoming {
+    background: var(--tt-gold-soft);
+    color: var(--tt-gold-deep);
+}
+
+.gc-group-row__meta,
+.gc-group-row__chat {
+    display: block;
+    margin-top: 3px;
+    font-size: var(--tt-fs-overline);
+    color: var(--tt-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 대화 줄만 채팅방으로 간다 — 글자 위가 아니면 부모의 @click 이 상세로 보낸다 */
+.gc-group-row__chat {
+    width: fit-content;
+    max-width: 100%;
+}
+
+.gc-group-row__chat:active {
+    opacity: 0.6;
+}
+
+/* 목록 화면 GroupActiveCard 의 배지와 같은 규격이다. 두 화면에서 다르게 보이면 안 된다 */
+.gc-group-row__badge {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: var(--tt-primary);
-    border: none;
-    border-radius: 18px;
-    cursor: pointer;
-    font-family: inherit;
-    box-shadow: var(--tt-elevation-btn);
-}
-
-.gc-create-cta:active {
-    background: var(--tt-primary-hover);
-}
-
-.gc-create-cta__title {
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-danger);
     color: var(--tt-text-inverse);
-}
-
-.gc-create-cta__plus {
-    font-size: var(--tt-fs-subtitle);
+    font-size: 10px;
     font-weight: var(--tt-fw-black);
-    color: var(--tt-text-inverse);
     line-height: 1;
 }
 
-/* ── 참여코드 진입로 ──────────────────── */
-.gc-join-cta {
+/* ── 생성 · 참여코드 진입로 ───────────── */
+/* 챌린지 카드와 같은 흰 카드지만 누르는 곳이 둘이라 안에서 점선으로 나눈다 */
+.gc-groups__actions {
+    background: var(--tt-bg);
+    border-radius: 18px;
+    padding: 0 15px;
+}
+
+.gc-groups__cta {
     width: 100%;
-    margin-top: 11px;
-    padding: 14px 16px;
+    padding: 13px 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: var(--tt-bg);
-    border: 1.5px dashed var(--tt-border-strong);
-    border-radius: 18px;
+    gap: 9px;
+    background: none;
+    border: none;
     cursor: pointer;
     font-family: inherit;
-}
-
-.gc-join-cta__title {
-    font-size: var(--tt-fs-body);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
+    color: var(--tt-primary);
+    transition: opacity 0.15s ease;
 }
 
-.gc-join-cta__arrow {
-    font-size: var(--tt-fs-subtitle);
-    color: var(--tt-text-hint);
+/* 카드 맨 위에는 선을 두지 않는다 — 두면 카드가 두 조각으로 보인다 */
+.gc-groups__cta + .gc-groups__cta {
+    border-top: 1px dashed var(--tt-border-divider);
+}
+
+.gc-groups__cta:active {
+    opacity: 0.6;
+}
+
+.gc-groups__cta-plus {
+    font-size: var(--tt-fs-body);
     line-height: 1;
 }
 
@@ -727,15 +785,6 @@ function livesColor(challenge) {
     100% {
         transform: none;
         opacity: 1;
-    }
-}
-
-@media (max-width: 390px) {
-    .gc-header__court-img {
-        height: 100px;
-    }
-    .gc-header__speech-text {
-        font-size: var(--tt-fs-label);
     }
 }
 </style>

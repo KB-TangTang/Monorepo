@@ -7,9 +7,13 @@ import {
     formatWatchlistRotationStatus,
 } from '@/services/personalMissionFlow';
 
+/*
+ * 분석 기간('7/20 ~ 8/16')을 그대로 보여주던 자리다.
+ * 날짜 범위를 읽고 나서야 무엇을 근거로 뽑혔는지 알 수 있어 계산을 강요했다.
+ * 「지난 주」라고 말로 적는다 — 로테이션이 주 단위라 이 말이 곧 그 기간이다.
+ */
 defineProps({
     items: { type: Array, required: true },
-    analysisPeriod: { type: String, default: '' },
 });
 
 const isOpen = ref(false);
@@ -38,9 +42,7 @@ function statusBadgeClass(status) {
             <img :src="tangiFieldVerify" alt="" class="watchlist__tangi" />
             <div class="watchlist__header-text">
                 <div class="watchlist__title">새로 선정된 요주의 대상</div>
-                <div class="watchlist__meta">
-                    {{ analysisPeriod }} · 전체 소비 대비 상위 {{ items.length }}개
-                </div>
+                <div class="watchlist__meta">지난 주 · 소비 상위 {{ items.length }}개</div>
             </div>
             <ChevronDownIcon
                 class="watchlist__chevron"
@@ -90,9 +92,7 @@ function statusBadgeClass(status) {
 <style scoped>
 .watchlist {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-2);
     overflow: hidden;
 }
 
@@ -116,17 +116,22 @@ function statusBadgeClass(status) {
     min-width: 0;
 }
 
+/*
+ * 카드 제목은 앱의 다른 카드 제목과 같은 15px(label)이다.
+ * 여기만 본문 크기(13.5px)여서 접힌 상태에서 무슨 카드인지 읽히지 않았다.
+ */
 .watchlist__title {
-    font-size: var(--tt-fs-body);
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 
+/* 숫자가 사라져 등폭이 필요 없다 — 본문 폰트로 돌린다 */
 .watchlist__meta {
-    font-size: var(--tt-fs-overline);
-    color: var(--tt-text-hint);
+    margin-top: 1px;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
     font-weight: var(--tt-fw-semibold);
-    font-family: var(--tt-font-mono);
 }
 
 .watchlist__chevron {
@@ -159,7 +164,8 @@ function statusBadgeClass(status) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: var(--tt-fs-caption);
+    gap: var(--tt-space-2);
+    font-size: var(--tt-fs-body);
 }
 
 .watchlist__item-name {
@@ -181,9 +187,9 @@ function statusBadgeClass(status) {
 }
 
 .watchlist__status {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
-    padding: 2px var(--tt-space-2);
+    padding: 3px var(--tt-space-2);
     border-radius: var(--tt-radius-full);
     white-space: nowrap;
 }

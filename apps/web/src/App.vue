@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia';
 import TheTabBar from '@/components/common/TheTabBar.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useNotificationStore } from '@/stores/notification';
+import { useGroupChatStore } from '@/stores/groupChat';
 
 const route = useRoute();
 
@@ -12,6 +13,7 @@ const route = useRoute();
 // 앱 단위로 하나만 유지해야 하므로 여기서 관리한다.
 const auth = useAuthStore();
 const notification = useNotificationStore();
+const groupChat = useGroupChatStore();
 const { isLoggedIn } = storeToRefs(auth);
 
 watch(
@@ -20,8 +22,16 @@ watch(
         if (loggedIn) {
             notification.refreshBadge();
             notification.connect();
+            /*
+             * 채팅 배지도 종 배지와 같은 이유로 여기서 한 번 씨를 뿌린다.
+             * 이걸 그룹챌린지 홈에만 두면 **앱을 켜자마자 대법원에 있는 사람은** 안 읽은 채팅이
+             * 쌓여 있어도 지방법원 토글에 점이 안 찍힌다 — 자리를 옮겨야 알게 되는 셈이라
+             * 알림으로서 쓸모가 없다.
+             */
+            groupChat.refreshChatSummary();
         } else {
             notification.clearSession();
+            groupChat.clearChatSummary();
         }
     },
     { immediate: true },
@@ -57,7 +67,8 @@ watch(
 /* 하단 탭바에 가리지 않도록 콘텐츠 아래 여백을 확보한다 */
 .tt-app__content {
     flex: 1;
-    padding-bottom: calc(var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-4));
+    /* 값은 tokens.css 의 --tt-app-bottom-inset. 페이지가 이 여백을 되짚어야 할 때가 있어 토큰으로 뺐다 */
+    padding-bottom: var(--tt-app-bottom-inset);
 }
 
 /* 탭바가 없는 화면(로그인 등)은 여백도 필요 없다 */

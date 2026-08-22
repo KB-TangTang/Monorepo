@@ -104,11 +104,30 @@ export async function fetchMyGroupChallenges(statuses = []) {
     return list.map(toViewModel);
 }
 
+/*
+ * 상태 → 목데이터. **상태마다 이어 붙인다.**
+ *
+ * 예전에는 `includes` 를 순서대로 검사해 **처음 걸린 하나만** 돌려줬다. 실서버는 `status IN (...)`
+ * 이라 여러 상태를 함께 주는데, 목모드만 홈이 `['ACTIVE','RECRUITING']` 를 물으면 시작 전 목록만
+ * 나오고 **진행 중 그룹이 통째로 사라졌다.** 실서버에서는 멀쩡해 DEV 토글을 켤 때만 티가 난다.
+ */
+const MOCK_GROUPS_BY_STATUS = {
+    RECRUITING: MOCK_PRE_START_CHALLENGES,
+    ACTIVE: MOCK_ACTIVE_LIST_CHALLENGES,
+    /* 판정 중은 따로 목데이터가 없다. 「종료됨」 탭이 CLOSED 와 함께 물으므로 빈 배열로 통과시킨다 */
+    JUDGING: [],
+    CLOSED: MOCK_ENDED_CHALLENGES,
+};
+
 function mockGroupsByStatus(statuses) {
-    if (statuses.includes('RECRUITING')) return MOCK_PRE_START_CHALLENGES;
-    if (statuses.includes('ACTIVE')) return MOCK_ACTIVE_LIST_CHALLENGES;
-    if (statuses.includes('CLOSED')) return MOCK_ENDED_CHALLENGES;
-    return [...MOCK_PRE_START_CHALLENGES, ...MOCK_ACTIVE_LIST_CHALLENGES, ...MOCK_ENDED_CHALLENGES];
+    if (!statuses.length) {
+        return [
+            ...MOCK_PRE_START_CHALLENGES,
+            ...MOCK_ACTIVE_LIST_CHALLENGES,
+            ...MOCK_ENDED_CHALLENGES,
+        ];
+    }
+    return statuses.flatMap((status) => MOCK_GROUPS_BY_STATUS[status] ?? []);
 }
 
 /** 그룹 요약 조회. 참여자만 볼 수 있다. */

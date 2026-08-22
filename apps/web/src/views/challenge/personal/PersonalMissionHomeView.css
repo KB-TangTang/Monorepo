@@ -2,21 +2,51 @@
     min-height: calc(100vh - var(--tt-tabbar-height));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
-    background: var(--tt-bg-subtle);
+    /* 카드에 선도 그림자도 없으므로 배경이 유일한 경계다 — --tt-bg-subtle 보다 한 단계 진하다 */
+    background: var(--tt-bg-page);
+    /* 앱 셸 아래 여백까지 이 배경을 이어 칠하는 일은 base.css 의 .tt-app__content > * 가 한다 */
 }
 
+/*
+ * 첫 섹션 제목('오늘의 미션')은 본문이 아니라 헤더 하단 곡면 안에 있다.
+ * 그래서 위 여백은 곡면의 padding-bottom 에 이어 붙는 만큼만 준다.
+ */
 .personal-home__content {
     display: flex;
     flex-direction: column;
     gap: var(--tt-card-gap);
-    padding: var(--tt-space-3) var(--tt-screen-padding)
-        calc(var(--tt-tabbar-height) + var(--tt-space-10) + var(--tt-space-12));
+    /*
+     * 탭바를 피하는 몫은 .personal-home 의 --tt-app-bottom-inset 이 맡으므로
+     * 여기서 탭바 높이를 또 더하면 이중이 돼 빈 화면이 한참 남는다.
+     * 대신 이 화면은 하단에 ChallengeModeTabBar 가 떠 있어 그만큼은 반드시 비워야 한다.
+     */
+    padding: var(--tt-space-2) var(--tt-screen-padding) var(--tt-float-toggle-inset);
+}
+
+/*
+ * 두 번째 섹션부터는 제목을 카드 밖에 세운다.
+ * 카드 안에 제목을 두면 카드가 무엇에 대한 것인지 스크롤 중에 놓친다.
+ */
+.personal-home__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-2);
+}
+
+.personal-home__section-title {
+    margin: 0;
+    font-size: var(--tt-fs-label);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
+    letter-spacing: -0.01em;
 }
 
 .personal-home__content--withdrawn {
     min-height: calc(100vh - 210px - var(--tt-tabbar-height));
     justify-content: center;
-    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-12));
+    /* 위와 같은 이유로 탭바 높이를 다시 더하지 않는다 */
+    padding-bottom: var(--tt-float-toggle-inset);
 }
 
 .personal-home__withdrawn-state {
@@ -49,6 +79,18 @@
     word-break: keep-all;
 }
 
+/*
+ * 이번 달 누적 · 명예의 전당을 반씩 나눠 세운다.
+ * 1fr 1fr 이라야 두 카드의 세로선이 맞는다 — auto 로 두면 글 길이에 따라 폭이 어긋난다.
+ * stretch 라야 짧은 쪽이 긴 쪽 높이를 따라간다(각 카드가 height:100% 로 받는다).
+ */
+.personal-home__month-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: stretch;
+}
+
 /* ── 판정 안내 텍스트 ──────────────────────────────── */
 .personal-home__verdict-info {
     display: flex;
@@ -64,7 +106,7 @@
 }
 
 .personal-home__verdict-info span:last-child {
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -72,7 +114,6 @@
 /* ── 화면 05: 증거 부족 배너 ────────────────────────── */
 .personal-home__insufficient-banner {
     background: var(--tt-accent-subtle);
-    border: 1px solid var(--tt-accent-subtle-border);
     border-radius: var(--tt-radius-lg);
     padding: 13px 15px;
     display: flex;
@@ -95,7 +136,7 @@
 }
 
 .personal-home__insufficient-sub {
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-accent-warn);
     font-weight: var(--tt-fw-semibold);
     margin-top: 5px;
@@ -106,10 +147,8 @@
 /* ── 화면 05: 조건 체크리스트 ───────────────────────── */
 .personal-home__conditions-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 20px;
     padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-3);
 }
 
 .personal-home__conditions-title {
@@ -154,13 +193,13 @@
 
 .personal-home__condition-label {
     flex: 1;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
 
 .personal-home__condition-value {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     font-family: var(--tt-font-mono);
 }
@@ -198,7 +237,7 @@
     background: none;
     border: none;
     padding: 0;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-info);
     cursor: pointer;
@@ -208,10 +247,8 @@
 /* ── 화면 05: 공통 사건 카드 ────────────────────────── */
 .personal-home__common-mission {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
     padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-2);
 }
 
 .personal-home__common-meta {
@@ -220,14 +257,14 @@
     justify-content: space-between;
     gap: var(--tt-space-2);
     color: var(--tt-text-hint);
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
 }
 
 .personal-home__common-badge {
     background: var(--tt-bg-fill);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
     border-radius: var(--tt-radius-full);
@@ -243,7 +280,7 @@
 .personal-home__common-description {
     margin-top: var(--tt-space-1);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-semibold);
     line-height: 1.45;
     word-break: keep-all;
@@ -257,7 +294,7 @@
     display: flex;
     align-items: center;
     gap: var(--tt-space-2);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
@@ -286,7 +323,27 @@
     z-index: var(--tt-z-sticky);
     display: flex;
     flex-direction: column;
+    /* 손잡이가 목록 맨 아래에 붙으므로 오른쪽 끝을 기준으로 세운다 */
+    align-items: flex-end;
     gap: 4px;
+}
+
+/* 접었을 때 화면에 남는 유일한 흔적. 개발 전용이라 눈에 띄되 작게 둔다. */
+.personal-home__dev-toggle {
+    padding: var(--tt-space-1) var(--tt-space-3);
+    font: inherit;
+    font-size: var(--tt-fs-mono-chip);
+    color: var(--tt-text-inverse);
+    background: var(--tt-surface-inverse);
+    border: none;
+    border-radius: var(--tt-radius-full);
+    cursor: pointer;
+    opacity: 0.45;
+}
+
+.personal-home__dev-toggle:hover,
+.personal-home__dev-toggle[aria-expanded='true'] {
+    opacity: 1;
 }
 
 .personal-home__dev-btn {

@@ -47,10 +47,8 @@ const steps = [
 
 .no-account__cta-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 20px;
     padding: var(--tt-space-5);
-    box-shadow: var(--tt-elevation-3);
     text-align: center;
 }
 
@@ -99,10 +97,8 @@ const steps = [
 
 .no-account__steps-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-lg);
     padding: 14px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-2);
 }
 
 .no-account__steps-title {

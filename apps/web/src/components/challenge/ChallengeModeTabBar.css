@@ -19,6 +19,8 @@
 }
 
 .challenge-mode a {
+    /* 안 읽은 채팅 점(.challenge-mode__dot)의 기준 */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -40,6 +42,22 @@
     background: var(--tt-primary-gold);
     color: var(--tt-primary);
     font-weight: var(--tt-fw-black);
+}
+
+/*
+ * 안 읽은 그룹 채팅 점.
+ *
+ * 링크 안에 흐름대로 두지 않고 띄운다 — 흐름에 두면 점이 생겼다 사라질 때마다 링크 폭이
+ * 달라져 두 토글이 좌우로 흔들린다. 자리는 「지방법원」 글자 오른쪽 위 모서리다.
+ */
+.challenge-mode__dot {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-danger);
 }
 
 /*

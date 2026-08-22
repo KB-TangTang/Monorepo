@@ -848,11 +848,26 @@ class ChallengeGroupServiceTest {
 
         ChallengeGroupDto listed = service.findMyGroups(OWNER_ID, null).get(0);
         assertEquals(3, listed.getUnreadChatCount());
-        assertEquals("나 오늘 진짜 참았다", listed.getLastChatMessage());
+        assertEquals("요롱이: 나 오늘 진짜 참았다", listed.getLastChatMessage(),
+                "프론트의 실시간 경로(groupChat.receiveChatAlert)와 같은 모양이어야 한다");
         assertEquals(sentAt, listed.getLastChatTime());
 
         ChallengeGroupDto detail = service.findDetail(OWNER_ID, created.getGroupId());
         assertEquals(3, detail.getUnreadChatCount(), "상세 FAB 배지도 같은 필드를 본다");
+    }
+
+    @Test
+    @DisplayName("보낸 사람이 없는 메시지에는 접두를 붙이지 않는다 — SYSTEM 메시지가 여기 해당한다")
+    void systemMessagePreviewHasNoNicknamePrefix() {
+        ChallengeGroupCreatedDto created = service.create(OWNER_ID, request(r -> { }));
+        when(chatMessageStore.findRecent(created.getGroupId(), 1))
+                .thenReturn(List.of(ChatMessage.of(1L, ChatMessageType.SYSTEM, null, null,
+                        "재판이 열렸어요", LocalDateTime.of(2026, 8, 12, 14, 3))));
+
+        ChallengeGroupDto listed = service.findMyGroups(OWNER_ID, null).get(0);
+
+        assertEquals("재판이 열렸어요", listed.getLastChatMessage(),
+                "\": 재판이 열렸어요\" 처럼 빈 이름이 앞에 붙으면 안 된다");
     }
 
     @Test

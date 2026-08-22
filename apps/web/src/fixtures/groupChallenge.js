@@ -261,6 +261,7 @@ export const MOCK_PRE_START_CHALLENGES = [
         id: 2,
         adminId: 1,
         groupName: '카페비 방어단',
+        categoryName: '카페/간식',
         evalType: 'PERIOD',
         limitAmount: 70000,
         maxMembers: 5,
@@ -305,6 +306,7 @@ export const MOCK_PRE_START_CHALLENGES = [
         id: 9,
         adminId: 2,
         groupName: '야식 참기 챌린지',
+        categoryName: '배달앱',
         evalType: 'DAILY',
         limitAmount: 10000,
         maxMembers: 4,
@@ -326,6 +328,7 @@ export const MOCK_PRE_START_CHALLENGES = [
         id: 10,
         adminId: 3,
         groupName: '쇼핑 절약 챌린지',
+        categoryName: '온라인쇼핑',
         evalType: 'PERIOD',
         limitAmount: 100000,
         maxMembers: 6,
@@ -357,6 +360,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
         /* --- tbl_challenge_group --- */
         id: 1,
         groupName: '배달 소비 줄이기',
+        categoryName: '배달앱',
         evalType: 'DAILY',
         limitAmount: 15000,
         startDate: '2026-08-01',
@@ -387,6 +391,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
     {
         id: 4,
         groupName: '택시 대신 지하철',
+        categoryName: '택시/모빌리티',
         evalType: 'DAILY',
         limitAmount: 8000,
         startDate: '2026-07-30',
@@ -411,6 +416,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
     {
         id: 5,
         groupName: '편의점 간식 줄이기',
+        categoryName: '편의점',
         evalType: 'PERIOD',
         limitAmount: 30000,
         startDate: '2026-08-02',
@@ -437,6 +443,7 @@ export const MOCK_ACTIVE_LIST_CHALLENGES = [
     {
         id: 11,
         groupName: '배달비 절약 도전',
+        categoryName: '배달앱',
         evalType: 'PERIOD',
         limitAmount: 50000,
         startDate: '2026-08-01',
@@ -583,6 +590,8 @@ export const MOCK_TODO_ITEMS = [
         challengeId: 1,
         indictmentId: 102,
         tally: '3/5 투표',
+        voteCount: 3,
+        totalVoters: 5,
         deadlineMinutes: 134,
     },
     {
@@ -593,6 +602,8 @@ export const MOCK_TODO_ITEMS = [
         challengeId: 4,
         indictmentId: 201,
         tally: '1/5 투표',
+        voteCount: 1,
+        totalVoters: 5,
         deadlineMinutes: 21 * 60 + 40,
     },
     {
@@ -613,6 +624,8 @@ export const MOCK_TODO_ITEMS = [
         challengeId: 5,
         indictmentId: 301,
         tally: '2/5 투표',
+        voteCount: 2,
+        totalVoters: 5,
         deadlineMinutes: 52 * 60,
     },
 ];

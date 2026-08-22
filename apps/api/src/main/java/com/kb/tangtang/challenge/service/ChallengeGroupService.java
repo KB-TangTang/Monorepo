@@ -657,11 +657,29 @@ public class ChallengeGroupService {
             }
             ChatMessage last = recent.get(recent.size() - 1);
             return new ChatSummary(chatMessageStore.unreadOf(groupId, userId),
-                    last.getContent(), last.getSentAt());
+                    preview(last), last.getSentAt());
         } catch (RuntimeException e) {
             log.warn("채팅 요약을 읽지 못해 빈 값으로 내린다. groupId={} userId={}", groupId, userId, e);
             return ChatSummary.EMPTY;
         }
+    }
+
+    /**
+     * 목록에 한 줄로 보여줄 미리보기 문자열 — {@code "닉네임: 내용"}.
+     *
+     * <p><b>프론트의 실시간 경로와 글자 그대로 같아야 한다.</b> 채팅 SSE 알림을 받은 화면은
+     * {@code groupChat.receiveChatAlert} 가 같은 모양으로 조립한다. 한쪽만 바꾸면 새로고침 한 번에
+     * 같은 줄의 형식이 바뀐다 — 실제로 여기서 내용만 내려보내던 동안 새로고침하면 닉네임이 사라졌다.
+     *
+     * <p>닉네임이 없으면 접두 없이 내용만 준다. SYSTEM 메시지({@code senderNickname == null})가
+     * 여기 해당하며, "…: 재판이 열렸어요" 처럼 빈 이름을 붙이는 것보다 낫다.
+     */
+    private String preview(ChatMessage message) {
+        String nickname = message.getSenderNickname();
+        if (nickname == null || nickname.isBlank()) {
+            return message.getContent();
+        }
+        return nickname + ": " + message.getContent();
     }
 
     /** {@link #chatSummary} 의 반환 묶음. 세 값이 항상 함께 결정돼서 따로 나르지 않는다. */

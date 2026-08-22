@@ -22,6 +22,19 @@ const subtitle = computed(() => {
 });
 
 const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
+
+/*
+ * 투표 진행률. `tally`(「3/5 투표」)는 글자라 한눈에 안 들어온다 — 몇 명이 남았는지 보이면
+ * 마감 전에 들어갈 이유가 생긴다. 변론 건은 투표 자체가 없으므로 바를 그리지 않는다.
+ *
+ * `totalVoters` 가 0 이면 나누지 않는다. 정원이 다 빠져나간 그룹에서 0 이 올 수 있고,
+ * 그대로 나누면 NaN 이 width 로 들어가 바가 통째로 사라진다.
+ */
+const votePercent = computed(() => {
+    const { voteCount, totalVoters } = props.item;
+    if (isAccuse.value || !totalVoters) return null;
+    return Math.round(((voteCount ?? 0) / totalVoters) * 100);
+});
 </script>
 
 <template>
@@ -35,6 +48,9 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
             <div class="todo-item__title">{{ item.title }}</div>
             <div class="todo-item__sub">
                 {{ subtitle.pre }}<b v-if="subtitle.emph" class="todo-item__emph">{{ subtitle.emph }}</b>{{ subtitle.post }}
+            </div>
+            <div v-if="votePercent !== null" class="todo-item__vote-track">
+                <div class="todo-item__vote-fill" :style="{ width: votePercent + '%' }" />
             </div>
         </div>
 
@@ -105,6 +121,21 @@ const btnLabel = computed(() => isAccuse.value ? '변론' : '투표');
 }
 .todo-item__emph {
     color: var(--tt-red-deep);
+}
+
+/* ── 투표 진행바 ────────────────────── */
+.todo-item__vote-track {
+    height: 4px;
+    margin-top: 6px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-border-track);
+    overflow: hidden;
+}
+.todo-item__vote-fill {
+    height: 100%;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-accent);
+    transition: width 0.3s ease;
 }
 
 /* ── 우측 칩 + 버튼 ─────────────────── */

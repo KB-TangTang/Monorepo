@@ -192,13 +192,6 @@ function homeSource() {
     );
 }
 
-function courtHeaderStyleSource() {
-    return readFileSync(
-        new URL('../src/components/challenge/personal/PersonalCourtHeader.css', import.meta.url),
-        'utf8',
-    );
-}
-
 /*
  * #313 — 데이터 부족 화면이 고정 픽스처를 실사용자에게 보여줬다.
  *
@@ -240,35 +233,22 @@ test('맞춤 사건 조건은 서버의 실제 누적 소비 건수와 기준값
     );
 });
 
-test('축소 헤더를 쓰는 화면에서도 법원 로고는 가운데에 놓인다', () => {
-    const css = courtHeaderStyleSource();
-
-    assert.match(
-        css,
-        /\.court-header__compact-sign\s*\{[\s\S]*?margin:\s*0 auto;/,
-        '축소 헤더의 법원 로고가 중앙 정렬되어야 한다',
-    );
-    assert.match(
-        css,
-        /\.court-header__inner--compact :deep\(\.tt-bell\)\s*\{[\s\S]*?position:\s*absolute;/,
-        '알림 버튼이 로고의 중앙 정렬 폭을 밀어내면 안 된다',
-    );
-});
-
-test('데이터 부족 화면은 기본 법원 헤더를 유지하고 오늘 미션을 본문 첫 카드로 보여준다', () => {
+test('데이터 부족 화면도 같은 법원 헤더를 쓰고 오늘 미션을 본문 첫 카드로 보여준다', () => {
     const src = homeSource();
-    const insufficientHeader = src.match(
-        /<PersonalCourtHeader[\s\S]*?store\.screenState === 'insufficient'[\s\S]*?\/>/,
-    );
     const insufficientBody = src.match(
         /<template v-else-if="store\.screenState === 'insufficient'">([\s\S]*?)<\/template>/,
     );
 
-    assert.ok(insufficientHeader, '데이터 부족 화면이 기본 법원 헤더 분기에 포함되어야 한다');
+    /*
+     * 헤더는 화면 상태로 갈라지지 않는다(2026-08-21 새 디자인). 상태별 분기가 다시 생기면
+     * 계좌 미연동·철회 화면에서만 헤더 높이가 달라져 탭을 오갈 때 화면이 튄다.
+     */
+    const headerTags = src.match(/<ChallengeCourtHeader\b/g) ?? [];
+    assert.equal(headerTags.length, 1, '법원 헤더는 상태와 무관하게 한 번만 렌더한다');
     assert.doesNotMatch(
-        insufficientHeader[0],
-        /\bcompact\b/,
-        '데이터 부족 헤더를 축소하면 안 된다',
+        src,
+        /<ChallengeCourtHeader[^>]*v-(?:if|else-if)=/,
+        '헤더를 화면 상태로 분기하면 안 된다',
     );
     assert.ok(insufficientBody, '데이터 부족 화면 본문이 있어야 한다');
     assert.ok(
@@ -283,7 +263,7 @@ test('데이터 부족 화면은 기본 법원 헤더를 유지하고 오늘 미
     );
     assert.doesNotMatch(
         insufficientBody[1],
-        /<PersonalScoreCard/,
+        /<PersonalScoreCard|<PersonalWeeklyVerdictCard/,
         '데이터 부족 화면에는 이번 주 판정과 이번 달 누적 카드를 표시하지 않는다',
     );
     assert.doesNotMatch(

@@ -27,7 +27,7 @@
     --tt-accent-50: var(--tt-gold-soft);     /* v1 #FFF6E0 → v2 #FFF3D1 */
 
     /* ── Gray → Neutral ────────────────────────────────── */
-    --tt-gray-50: var(--tt-neutral-paper);   /* v1 #F8FAFD → v2 #F7F8FA */
+    --tt-gray-50: var(--tt-neutral-paper);   /* v1 #F8FAFD → v2 #FAFAFB */
     --tt-gray-100: var(--tt-neutral-fill);   /* v1 #F1F4F9 → v2 #EFF1F5 */
     --tt-gray-200: var(--tt-neutral-border); /* v1 #E5EAF2 → v2 #E5E8EF */
     --tt-gray-300: var(--tt-neutral-track);  /* v1 #D3DAE7 → v2 #E9ECF2 */
@@ -71,7 +71,7 @@
 
     /* ── 고정지출 화면 전용 (도메인 특화 — v1 원본값 유지) ── */
     --tt-surface-strong-muted: var(--tt-ink-raised); /* v1 #3A4160 → v2 #2E3556 */
-    --tt-surface-row: var(--tt-neutral-paper);       /* v1 #EEF2F8 → v2 #F7F8FA */
+    --tt-surface-row: var(--tt-neutral-paper);       /* v1 #EEF2F8 → v2 #FAFAFB */
     --tt-surface-candidate: #FFFBF0;                 /* 탐지 후보 배경 */
     --tt-surface-candidate-strong: #F6ECD2;          /* 탐지 후보 강조 배경 */
     --tt-border-candidate: #F6E4B0;                  /* 탐지 후보 테두리 */

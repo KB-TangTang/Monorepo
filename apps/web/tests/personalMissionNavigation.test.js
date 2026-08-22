@@ -23,9 +23,11 @@ test('개발 모드에서 철회 후 오늘 미션이 없는 화면을 재현할
 
     assert.match(viewSource, /철회·미션 없음 화면/);
     assert.match(viewSource, /13_sobbing\.png/);
+    assert.match(viewSource, /:court-image="buildingSupreme"/);
     assert.match(
         viewSource,
-        /screenState === 'withdrawn'[\s\S]{0,180}:court-image="courtSupreme"[\s\S]{0,100}:date="courtDate"/,
+        /screenState === 'withdrawn'[\s\S]{0,200}챌린지 참여가 중지됐어요/,
+        '철회 화면에서도 같은 헤더를 쓰고 말풍선 문구만 바뀐다',
     );
     assert.match(storeSource, /consentState = CHALLENGE_CONSENT_STATE\.WITHDRAWN/);
     assert.match(storeSource, /todayMission = null/);

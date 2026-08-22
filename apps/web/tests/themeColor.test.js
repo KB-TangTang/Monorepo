@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 
 import {
     INK_TOP_ROUTES,
+    THEME_COLOR_COURT_DISTRICT,
+    THEME_COLOR_COURT_SUPREME,
     THEME_COLOR_INK,
     THEME_COLOR_PAPER,
     applyThemeColor,
@@ -24,18 +26,40 @@ function source(path) {
     return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('잉크 헤더 화면은 잉크색, 나머지는 종이색을 쓴다', () => {
-    for (const name of INK_TOP_ROUTES) {
-        assert.equal(resolveThemeColor(name), THEME_COLOR_INK, `${name} 은 잉크색이어야 한다`);
-    }
+test('어두운 헤더 화면은 각자의 상단 색, 나머지는 종이색을 쓴다', () => {
+    assert.equal(resolveThemeColor('login'), THEME_COLOR_INK);
+    assert.equal(resolveThemeColor('personalMissionChallenge'), THEME_COLOR_COURT_SUPREME);
+    assert.equal(resolveThemeColor('groupChallenge'), THEME_COLOR_COURT_DISTRICT);
+
     for (const name of ['home', 'asset', 'ledger', 'myPage', 'assetChecking']) {
         assert.equal(resolveThemeColor(name), THEME_COLOR_PAPER, `${name} 은 종이색이어야 한다`);
+    }
+});
+
+test('INK_TOP_ROUTES 는 어두운 상단 라우트를 빠짐없이 담는다', () => {
+    assert.deepEqual(INK_TOP_ROUTES, ['login', 'personalMissionChallenge', 'groupChallenge']);
+    for (const name of INK_TOP_ROUTES) {
+        assert.notEqual(
+            resolveThemeColor(name),
+            THEME_COLOR_PAPER,
+            `${name} 이 종이색이면 목록에 있을 이유가 없다`,
+        );
     }
 });
 
 test('이름 없는 라우트도 종이색으로 떨어진다 (undefined 로 크래시하지 않는다)', () => {
     assert.equal(resolveThemeColor(undefined), THEME_COLOR_PAPER);
     assert.equal(resolveThemeColor(null), THEME_COLOR_PAPER);
+});
+
+/*
+ * 객체 리터럴로 대응표를 만들면 'constructor' · '__proto__' 같은 이름이
+ * Object.prototype 의 값을 맞아 색이 아닌 것을 돌려준다. Map 이라 그 일이 없다.
+ */
+test('Object.prototype 의 키 이름을 라우트로 넣어도 종이색이다', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+        assert.equal(resolveThemeColor(name), THEME_COLOR_PAPER, `${name} 은 종이색이어야 한다`);
+    }
 });
 
 /** meta 태그 하나만 흉내 내는 최소 문서 스텁. */
@@ -95,6 +119,22 @@ test('라우터가 afterEach 에서 상태바 색을 적용한다', () => {
     const guardBody = src.slice(src.indexOf('router.beforeEach'), src.indexOf('router.afterEach'));
     assert.ok(guardBody, 'beforeEach 와 afterEach 가 이 순서로 있어야 한다');
     assert.doesNotMatch(guardBody, /applyThemeColor\(/, 'beforeEach 안에서 적용하면 안 된다');
+});
+
+/*
+ * 종이색은 tokens.css · themeColor.js · index.html · manifest 네 곳에 흩어져 있다
+ * (CSS 변수를 JS 나 manifest 에서 읽을 방법이 없다). 한쪽만 고치면 조용히 어긋난다.
+ */
+test('tokens.css 의 --tt-neutral-paper 와 종이색 상수가 같다', () => {
+    const match = source('src/assets/tokens.css').match(/--tt-neutral-paper:\s*(#[0-9a-fA-F]{6});/);
+    assert.ok(match, '--tt-neutral-paper 토큰이 tokens.css 에 있어야 한다');
+    assert.equal(match[1].toLowerCase(), THEME_COLOR_PAPER);
+});
+
+test('manifest 의 배경·테마색이 종이색과 같다', () => {
+    const manifest = JSON.parse(source('public/manifest.webmanifest'));
+    assert.equal(manifest.theme_color.toLowerCase(), THEME_COLOR_PAPER);
+    assert.equal(manifest.background_color.toLowerCase(), THEME_COLOR_PAPER);
 });
 
 test('index.html 기본 theme-color 가 종이색과 같다', () => {

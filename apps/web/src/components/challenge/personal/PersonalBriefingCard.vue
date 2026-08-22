@@ -141,10 +141,8 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 <style scoped>
 .briefing-card {
     background: var(--tt-bg);
-    border: 1px solid var(--tt-border);
     border-radius: 20px;
     padding: 15px var(--tt-space-4);
-    box-shadow: var(--tt-elevation-3);
     position: relative;
     overflow: hidden;
 }
@@ -180,18 +178,27 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     margin-top: var(--tt-space-3);
 }
 
+/*
+ * 카드에서 가장 먼저 읽혀야 하는 줄이다. 본문(13.5px)과 같은 크기라 묻혀 있었다.
+ * 인장(우상단 46px)을 피하려고 오른쪽에 여백을 준다.
+ */
 .briefing-card__mission strong {
-    font-size: var(--tt-fs-body);
+    padding-right: 56px;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    letter-spacing: -0.01em;
     color: var(--tt-text);
+    word-break: keep-all;
 }
 
 .briefing-card__mission span {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
 }
 
 .briefing-card__badge {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
     border-radius: var(--tt-radius-full);
@@ -216,13 +223,14 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     align-items: center;
 }
 
+/* 12px 로 올리면서 자간을 줄인다 — 「알리바이 조건」이 76px 를 넘겨 두 줄이 된다 */
 .briefing-card__label {
     flex: none;
-    width: 76px;
-    font-size: var(--tt-fs-overline);
+    width: 84px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text-hint);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.01em;
 }
 
 .briefing-card__value {
@@ -290,7 +298,7 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     justify-content: space-between;
     gap: var(--tt-space-3);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     white-space: nowrap;
 }
 
@@ -310,7 +318,7 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     margin-top: var(--tt-space-3);
     padding: var(--tt-space-3);
     color: var(--tt-text-muted);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     background: var(--tt-bg-fill);
     border-top: 1px dashed var(--tt-border-divider);
     border-radius: var(--tt-radius-sm);
@@ -325,7 +333,7 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
     margin-top: var(--tt-space-3);
     padding-top: var(--tt-space-3);
     border-top: 1px dashed var(--tt-border-divider);
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
 }
 
@@ -390,7 +398,7 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 }
 
 .briefing-card__gauge-remain {
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
 }
 
@@ -408,7 +416,7 @@ const isAbsoluteMission = computed(() => props.missionType === 'ABSOLUTE');
 }
 
 .briefing-card__gauge-limit {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
