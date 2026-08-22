@@ -84,6 +84,21 @@ const sortedChallenges = computed(() =>
 
 const activeCount = computed(() => myChallenges.value.filter((ch) => !isUpcoming(ch)).length);
 
+/*
+ * 홈은 목록 화면이 아니다. 참여 그룹이 늘수록 이 섹션이 세로로 그대로 자라 위의 재판 현황을
+ * 화면 밖으로 밀어냈다 — 지금 할 일(재판)이 지금 할 일이 아닌 것(그룹 명부)에 밀리는 구조다.
+ * 홈은 상위 몇 건까지만 보여주고 나머지는 「전체보기」가 여는 목록 화면이 맡는다.
+ * `sortedChallenges` 가 진행 중을 위로 올려 두었으므로 잘려 나가는 쪽은 늘 시작 전이다.
+ */
+const HOME_CHALLENGE_LIMIT = 3;
+
+const homeChallenges = computed(() => sortedChallenges.value.slice(0, HOME_CHALLENGE_LIMIT));
+
+/* 잘린 게 있을 때만 「전체보기」가 총 개수를 밝힌다 — 3건 이하면 셀 것도 없다 */
+const hiddenChallengeCount = computed(
+    () => sortedChallenges.value.length - homeChallenges.value.length,
+);
+
 /* ── 재판 현황 (내가 속한 그룹의 진행 중인 재판 전부) ── */
 const myTrials = ref([]);
 
@@ -421,8 +436,10 @@ function goToChat(challenge) {
             <div class="gc-section">
                 <div class="gc-section-top">
                     <span class="gc-section-title">내 챌린지</span>
+                    <!-- 잘린 게 있으면 몇 개가 더 있는지 여기서 밝힌다. 안 그러면 홈이
+                         「내 챌린지는 3개뿐」이라고 잘못 말한다 -->
                     <button type="button" class="gc-view-all" @click="goToAllChallenges">
-                        전체보기 ›
+                        {{ hiddenChallengeCount ? `+${hiddenChallengeCount}개 더` : '전체보기' }} ›
                     </button>
                 </div>
 
@@ -432,7 +449,7 @@ function goToChat(challenge) {
                     </p>
 
                     <div
-                        v-for="ch in sortedChallenges"
+                        v-for="ch in homeChallenges"
                         :key="ch.id"
                         class="gc-group-row"
                         @click="goToDetail(ch)"
@@ -594,8 +611,13 @@ function goToChat(challenge) {
 }
 
 /* ── 진행 중인 챌린지 섹션 ─────────────── */
+/*
+ * 재판 현황과 내 챌린지는 성격이 다르다 — 앞은 마감이 걸린 할 일 큐고, 뒤는 내가 속한 그룹의
+ * 명부다. 10px 로는 두 덩어리가 한 스크롤 흐름으로 이어져 「카드가 계속 나온다」로 읽혔다.
+ * 섹션 제목이 자기 앞에 숨 쉴 자리를 갖도록 벌린다.
+ */
 .gc-section {
-    margin-top: 10px;
+    margin-top: var(--tt-space-6);
 }
 
 .gc-section-top {
@@ -628,6 +650,7 @@ function goToChat(challenge) {
  * 나열하므로 두 화면의 시각 언어가 이걸로 같아진다.
  *
  * 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
+ * **그림자가 없는 것이 여기서는 위계다** — 위의 재판 현황만 떠 있고 이 명부는 바닥에 붙는다.
  */
 .gc-groups {
     margin-top: 11px;
@@ -646,13 +669,17 @@ function goToChat(challenge) {
 }
 
 /* ── 그룹 카드 ────────────────────────── */
+/*
+ * 재판 현황 카드보다 한 급 작게 잡는다(패딩·라운드·아이콘). 두 블록이 같은 몸집이면
+ * 「무엇을 먼저 봐야 하나」가 안 정해져 화면 전체가 평평하게 읽힌다.
+ */
 .gc-group-row {
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 13px 15px;
+    padding: 11px 14px;
     background: var(--tt-bg);
-    border-radius: 18px;
+    border-radius: 16px;
     cursor: pointer;
     transition: opacity 0.15s ease;
 }
@@ -662,9 +689,9 @@ function goToChat(challenge) {
 }
 
 .gc-group-row__icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
     flex: none;
     display: flex;
     align-items: center;

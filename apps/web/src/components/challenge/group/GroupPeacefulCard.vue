@@ -20,10 +20,12 @@
 </template>
 
 <style scoped>
+/* 재판 현황 카드와 같은 자리에 서는 상태 카드다. 그림자를 맞춰야 상태가 바뀔 때 층이 흔들리지 않는다 */
 .gc-peaceful {
     background: var(--tt-bg);
     border-radius: var(--tt-radius-xl);
     padding: 16px 17px;
+    box-shadow: var(--tt-elevation-2);
 }
 
 /* ── 상단 상태 행 ───────────────────────── */

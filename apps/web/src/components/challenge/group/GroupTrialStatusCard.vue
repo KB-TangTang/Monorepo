@@ -175,13 +175,17 @@ function onLeave(el) {
 
 <style scoped>
 /*
- * 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
+ * 선은 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
  * 머리줄이 없어 첫 행이 곧바로 온다 — 그 행이 이미 padding: 11px 을 갖고 있어 위는 얇게 준다.
+ *
+ * 그림자만은 예외다(#448). 아래 「내 챌린지」 행들이 같은 흰 카드라 두 블록이 평평하게 읽혔다.
+ * 이 카드는 마감이 걸린 할 일 큐고 아래는 그룹 명부다 — 할 일 쪽만 바닥에서 떼어 놓는다.
  */
 .trial-status {
     background: var(--tt-bg);
     border-radius: var(--tt-radius-xl);
     padding: 6px 15px 4px;
+    box-shadow: var(--tt-elevation-2);
 }
 
 /* ── 목록 ───────────────────────────── */
