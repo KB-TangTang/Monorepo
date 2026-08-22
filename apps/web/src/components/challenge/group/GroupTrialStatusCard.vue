@@ -89,7 +89,9 @@ function countdownOf(item) {
                             >
                                 {{ item.badge }}
                             </span>
-                            {{ item.groupName }} · {{ item.settlementDate }} 결산
+                            <span class="trial-status__sub-text">
+                                {{ item.groupName }} · {{ item.settlementDate }} 결산
+                            </span>
                         </span>
                     </span>
                     <span
@@ -256,6 +258,13 @@ function countdownOf(item) {
     font-size: var(--tt-fs-overline);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
+}
+/*
+ * 그룹명을 span 으로 감싼 이유. 이 줄은 flex 라 부모에 text-overflow 를 걸어도 말줄임이 안 붙는다
+ * — 익명 flex 아이템이 된 텍스트 노드에는 스타일이 닿지 않아 그냥 잘렸다(실측).
+ */
+.trial-status__sub-text {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
