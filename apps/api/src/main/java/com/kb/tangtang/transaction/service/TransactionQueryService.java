@@ -3,6 +3,7 @@ package com.kb.tangtang.transaction.service;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.common.util.PaymentMethodLabels;
 import com.kb.tangtang.transaction.domain.TransactionListRow;
+import com.kb.tangtang.transaction.dto.DailySpendingSummaryDto;
 import com.kb.tangtang.transaction.dto.LedgerSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionListItemDto;
 import com.kb.tangtang.transaction.dto.TransactionListResponseDto;
@@ -141,6 +142,36 @@ public class TransactionQueryService {
                 .build();
     }
 
+    /**
+     * 홈 「오늘 쓴 돈」 카드. 오늘·이번 달 순소비와 어제 대비 증감률을 함께 돌려준다.
+     *
+     * 집계는 장부와 같은 sumNetConsumption 을 그대로 쓴다 — 카드에 「거래내역」 입구가 붙어 있어
+     * 사용자가 한 탭 만에 두 숫자를 대조한다. 미션·그룹챌린지 집계는 여기에 direction='OUT' 을 더 걸어
+     * 페이머니 소비가 빠지므로 값이 다를 수 있다(기존 시스템의 알려진 불일치. 이번 범위 밖).
+     *
+     * 「이번 달」은 month-to-date 가 아니라 월 전체다 — 장부 월 요약(getTransactions)이 그렇게 계산하므로
+     * 미래 날짜 거래가 한 행이라도 생기면 한 탭 거리의 두 숫자가 어긋난다.
+     */
+    @Transactional(readOnly = true)
+    public DailySpendingSummaryDto getDailySpendingSummary(long userId) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate tomorrow = today.plusDays(1);
+        LocalDate yesterday = today.minusDays(1);
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate nextMonthStart = monthStart.plusMonths(1);
+
+        BigDecimal todayAmount = nonNegative(transactionMapper.sumNetConsumption(userId, today, tomorrow));
+        BigDecimal yesterdayAmount = nonNegative(transactionMapper.sumNetConsumption(userId, yesterday, today));
+        BigDecimal monthAmount = nonNegative(transactionMapper.sumNetConsumption(userId, monthStart, nextMonthStart));
+
+        return DailySpendingSummaryDto.builder()
+                .date(today.toString())
+                .todayAmount(todayAmount)
+                .monthAmount(monthAmount)
+                .changeRate(calculateDailyChangeRate(todayAmount, yesterdayAmount))
+                .build();
+    }
+
     private List<TransactionListItemDto> mapRows(List<TransactionListRow> rows) {
         List<TransactionListItemDto> items = new ArrayList<>();
         for (TransactionListRow row : rows) {
@@ -217,5 +248,24 @@ public class TransactionQueryService {
         return current.subtract(previous)
                 .multiply(ONE_HUNDRED)
                 .divide(previous, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 어제 지출이 0 이하면 비율을 낼 수 없어 null. 프론트가 null 을 「문구 생략」으로 읽는다
+     * (utils/home.js getHomeSpendingChange).
+     *
+     * 음수(어제 환불이 소비보다 큰 날)도 null 이다 — 음수 분모는 부호를 뒤집어
+     * 더 썼는데 「적게 쓰는 중」이라고 말하게 된다.
+     *
+     * 장부의 calculateChangeRate 는 같은 상황에서 0 을 돌려준다. 계약이 달라 일부러 분리했다 —
+     * 합치면 어제 0원·오늘 5만원인 사용자에게 「어제와 비슷하게 쓰는 중」이 뜬다.
+     */
+    private BigDecimal calculateDailyChangeRate(BigDecimal today, BigDecimal yesterday) {
+        if (yesterday == null || yesterday.signum() <= 0) {
+            return null;
+        }
+        return today.subtract(yesterday)
+                .multiply(ONE_HUNDRED)
+                .divide(yesterday, 2, RoundingMode.HALF_UP);
     }
 }
