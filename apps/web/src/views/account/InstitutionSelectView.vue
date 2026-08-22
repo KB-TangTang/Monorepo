@@ -22,10 +22,12 @@ import StateLoading from '@/components/common/StateLoading.vue';
 import InstitutionTile from '@/components/account/InstitutionTile.vue';
 import LinkStepHeader from '@/components/account/LinkStepHeader.vue';
 import { useAccountStore } from '@/stores/account';
+import { useAuthStore } from '@/stores/auth';
 import { INSTITUTION_GROUPS, linkStepPosition } from '@/utils/account';
 
 const route = useRoute();
 const store = useAccountStore();
+const auth = useAuthStore();
 const { institutions, loading, error, selectedCount } = storeToRefs(store);
 
 const isAddMode = computed(() => route.query.mode === 'add');
@@ -118,6 +120,20 @@ function onNext() {
     }
     store.goNextStep('institutions');
 }
+
+/**
+ * 온보딩 강제 구간에서는 뒤로가기를 감춘다 (이슈 #439).
+ *
+ * 첫 단계의 "뒤로"는 플로우 밖으로 나가는 동작이다(`goPrevStep` → `linkExitRoute`).
+ * 그런데 온보딩으로 들어오면 진입점을 기록하지 않으므로(`LINK_ENTRY_IGNORED_ROUTES`)
+ * 기본 착지점으로 나가고, **온보딩 게이트가 곧바로 이 화면으로 되돌려보낸다**
+ * (`resolveOnboardingRedirect` — `needsAccountLink` 가 아직 true).
+ * 그래서 눌러도 화면이 그대로라 버튼이 죽은 것처럼 보였다.
+ *
+ * 진입점을 기록하게 바꾸면 동의 화면과 왕복하므로 그쪽은 손대지 않는다.
+ * 나갈 수 없는 구간이면 나가는 버튼을 두지 않는 것이 맞다 — 동의·로그인 게이트와 같은 규칙이다.
+ */
+const canLeaveFlow = computed(() => !auth.needsAccountLink);
 </script>
 
 <template>
@@ -128,6 +144,7 @@ function onNext() {
             :description="description"
             :step="position.current"
             :total-steps="position.total"
+            :show-back="canLeaveFlow"
             @back="store.goPrevStep('institutions')"
         />
 
