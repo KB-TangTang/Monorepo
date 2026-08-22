@@ -215,7 +215,7 @@ test('고정 지출 의심 건은 명시적인 배열 또는 false일 때만 확
     assert.equal(resolveFixedExpenseStatus(undefined), 'unknown');
 });
 
-test('후보가 없어도 확정 고정지출이 있으면 절약 감정서로 이동할 수 있다', () => {
+test('후보가 없어도 확정 고정지출이 있으면 절감액 산출 대상으로 본다', () => {
     assert.equal(canOpenFixedExpenseSavings(1, 0), true);
     assert.equal(canOpenFixedExpenseSavings(0, 2), true);
     assert.equal(canOpenFixedExpenseSavings(0, 0), false);

@@ -17,14 +17,22 @@ test('월간 리포트 고정지출 카드는 관리 화면으로 이동하고 �
     assert.ok(src.includes('MonthlySavingsAnalogyCard'));
 });
 
-test('절약 감정서 화면 소스는 보존하되 폐기 라우트는 등록하지 않는다', () => {
+test('절약 감정서 화면은 소스까지 지워져 어떤 경로로도 살아나지 않는다', () => {
     const routerSource = source('src/router/index.js');
     const savingsView = new URL(
         '../src/views/fixed-expense/FixedExpenseSavingsView.vue',
         import.meta.url,
     );
+    const completeTicket = new URL(
+        '../src/components/report/monthly-consumption/MonthlySavingsCompleteTicket.vue',
+        import.meta.url,
+    );
 
-    assert.ok(existsSync(savingsView));
+    /* 진단을 고정지출 관리 한 곳에서만 본다 - 2026-08-21. 라우트만 빼고 소스를 남겨 뒀던
+       2026-08-14 결정(#228)을 뒤집은 것이라 파일이 없다는 사실 자체를 여기서 못박는다.
+       계산 로직과 API 는 재도입에 대비해 그대로 둔다. */
+    assert.ok(!existsSync(savingsView));
+    assert.ok(!existsSync(completeTicket));
     assert.ok(!routerSource.includes("path: '/asset/fixed-expenses/savings'"));
     assert.ok(!routerSource.includes("name: 'fixedExpenseSavings'"));
 });

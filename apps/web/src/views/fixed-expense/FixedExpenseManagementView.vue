@@ -38,7 +38,7 @@ onMounted(() => store.loadOverview());
     <article class="management-view">
         <FixedExpensePageHeader
             title="고정지출 관리"
-            back-label="절약 감정서로 이동"
+            back-label="이전 화면으로 이동"
             @back="goBack"
         />
 
