@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { linkExitRoute } from '../src/utils/account.js';
+import { resolveOnboardingRedirect } from '../src/utils/user.js';
 
 /*
  * 뒤로가기 회귀 방지 (이슈 #77).
@@ -29,6 +31,22 @@ const MUST_NOT_HAVE_BACK = [
     ['금융정보 동의', 'src/views/consent/FinancialConsentView.vue'],
     ['계좌 조회 진행', 'src/views/account/LinkProgressView.vue'],
     ['계좌 연결 완료', 'src/views/account/LinkDoneView.vue'],
+    ['닉네임 설정', 'src/views/onboarding/NicknameSetupView.vue'],
+];
+
+/**
+ * 뒤로가기로 볼 수 있는 것 전부 (이슈 #439).
+ *
+ * 예전에는 `BaseBackButton` 문자열만 봤다. 그래서 금융동의 화면이 **손으로 만든 뒤로가기**를
+ * 들고 있어도 통과했다 — 정책 위반이 테스트를 그대로 지나갔다.
+ * 공용 컴포넌트든 직접 만든 버튼이든 걸리게 한다.
+ */
+const BACK_AFFORDANCES = [
+    ['공용 뒤로가기 버튼', /BaseBackButton/],
+    ['공용 뒤로가기 헤더', /BaseBackHeader/],
+    ['히스토리 되돌리기 호출', /router\.back\(\)/],
+    ['뒤로 가기 레이블', /aria-label="뒤로/],
+    ['이전 단계 레이블', /aria-label="이전/],
 ];
 
 function source(path) {
@@ -48,10 +66,12 @@ for (const [label, path] of NEEDS_BACK) {
 for (const [label, path] of MUST_NOT_HAVE_BACK) {
     test(`${label} 화면에는 뒤로가기를 두지 않는다`, () => {
         const src = source(path);
-        assert.ok(
-            !src.includes('BaseBackButton'),
-            `${path} 에 뒤로가기가 생겼다 — 게이트·플로우 화면은 되돌아가면 안 된다`,
-        );
+        for (const [kind, pattern] of BACK_AFFORDANCES) {
+            assert.ok(
+                !pattern.test(src),
+                `${path} 에 ${kind} 가 생겼다 — 게이트·플로우 화면은 되돌아가면 안 된다`,
+            );
+        }
     });
 }
 
@@ -178,4 +198,54 @@ test('월간 소비 리포트와 챌린지 리포트에는 좌상단 뒤로가�
     assert.ok(!monthlyReport.includes('@click="router.back()"'));
     assert.ok(challengeReport.includes('<h1>재판 보고서</h1>'));
     assert.ok(!challengeReport.includes('@click="router.back()"'));
+});
+
+/*
+ * ── 온보딩 구간 뒤로가기 (이슈 #439) ─────────────────────────────────
+ *
+ * 증상: 탈퇴 후 재로그인 → 동의 → 계좌 연동 화면에서 뒤로가기를 눌러도 아무 일이 없었다.
+ * 원인은 화면이 아니라 **두 규칙이 서로를 되돌려보내는 것**이라, 소스 검사가 아니라
+ * 순수 함수로 왕복 자체를 못박는다.
+ */
+
+test('온보딩 중에는 계좌 연동 플로우를 빠져나갈 수 없다 — 게이트가 되돌려보낸다', () => {
+    /* 온보딩으로 들어오면 진입점을 기록하지 않는다(LINK_ENTRY_IGNORED_ROUTES). */
+    const exitRoute = linkExitRoute('');
+    assert.equal(exitRoute, 'connectedAccounts', '진입점이 없으면 기본 착지점으로 나간다');
+
+    /* 그런데 그 착지점에서 온보딩 게이트가 곧바로 기관 선택으로 되돌려보낸다. */
+    const session = { user: { nickname: null }, needsAccountLink: true };
+    assert.equal(
+        resolveOnboardingRedirect(session, { name: exitRoute }),
+        'accountLinkInstitutions',
+        '계좌 연동이 남아 있으면 나가려던 화면에서 다시 기관 선택으로 돌아온다',
+    );
+});
+
+test('온보딩이 끝난 사용자는 같은 경로로 플로우를 빠져나갈 수 있다', () => {
+    /* 위 왕복이 온보딩 구간에서만 생기는 일임을 못박는다 — 추가 연결은 정상적으로 나가야 한다. */
+    const session = { user: { nickname: '탕탕이' }, needsAccountLink: false };
+    assert.equal(resolveOnboardingRedirect(session, { name: linkExitRoute('') }), null);
+});
+
+test('기관 선택 화면은 온보딩 강제 구간에서 뒤로가기를 감춘다', () => {
+    const src = source('src/views/account/InstitutionSelectView.vue');
+
+    assert.ok(
+        /:show-back="canLeaveFlow"/.test(src),
+        'LinkStepHeader 에 show-back 을 넘기지 않으면 기본값(true)이라 죽은 버튼이 다시 생긴다',
+    );
+    assert.ok(
+        /canLeaveFlow\s*=\s*computed\(\(\)\s*=>\s*!auth\.needsAccountLink\)/.test(src),
+        '표시 여부는 온보딩 게이트와 같은 플래그(needsAccountLink)를 봐야 판정이 갈리지 않는다',
+    );
+});
+
+test('금융동의 화면은 진행 방향으로만 이동한다', () => {
+    /* replace 로 다음 단계를 밀어 넣는 것 자체는 유지한다 — 동의는 되돌릴 수 없는 게이트다. */
+    const src = source('src/views/consent/FinancialConsentView.vue');
+    assert.ok(
+        /router\.replace\(\s*\{\s*name:\s*'accountLinkInstitutions'/.test(src),
+        '동의 직후 기관 선택으로 이어가는 흐름이 사라졌다',
+    );
 });
