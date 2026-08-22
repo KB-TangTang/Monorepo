@@ -106,12 +106,13 @@ function setFilter(key) {
     justify-content: space-between;
 }
 .todo-sheet__title {
-    font-size: 17px;
+    /* 팀 바텀시트 제목은 전부 section 이다 (BaseBottomSheet · DisconnectConfirmSheet · LedgerCategorySheet) */
+    font-size: var(--tt-fs-section);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 .todo-sheet__sort {
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     font-weight: var(--tt-fw-bold);
 }
@@ -124,7 +125,7 @@ function setFilter(key) {
     flex: none;
 }
 .todo-sheet__chip {
-    font-size: 12px;
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     font-family: inherit;
     padding: 7px 13px;
@@ -150,7 +151,7 @@ function setFilter(key) {
 .todo-sheet__empty {
     padding: 34px 0;
     text-align: center;
-    font-size: 12.5px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -159,7 +160,7 @@ function setFilter(key) {
 .todo-sheet__close {
     width: 100%;
     text-align: center;
-    font-size: 13px;
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     font-family: inherit;
     color: var(--tt-text-muted);

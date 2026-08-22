@@ -8,7 +8,7 @@
   여기서 상태를 다시 보지 않는다 — 그렇게 하면 그룹 상세 캐러셀과 판정이 갈린다.
 -->
 <script setup>
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/outline';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
@@ -23,8 +23,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['open']);
-
-const actionableCount = computed(() => props.items.filter((item) => item.actionable).length);
 
 /*
  * 한 번에 하나만 펼친다. 여러 개가 열려 있으면 목록이 화면 몇 개 분량으로 늘어나
@@ -52,14 +50,6 @@ function countdownOf(item) {
 
 <template>
     <section class="trial-status">
-        <div class="trial-status__header">
-            <div class="trial-status__heading">
-                <span v-if="actionableCount" class="trial-status__dot" />
-                <span class="trial-status__label">재판 현황 · {{ items.length }}건</span>
-            </div>
-            <span class="trial-status__sort">마감 임박순</span>
-        </div>
-
         <ul class="trial-status__list">
             <li
                 v-for="(item, index) in items"
@@ -170,46 +160,14 @@ function countdownOf(item) {
 </template>
 
 <style scoped>
-/* 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다 */
+/*
+ * 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
+ * 머리줄이 없어 첫 행이 곧바로 온다 — 그 행이 이미 padding: 11px 을 갖고 있어 위는 얇게 준다.
+ */
 .trial-status {
     background: var(--tt-bg);
     border-radius: var(--tt-radius-xl);
-    padding: 14px 15px 4px;
-}
-
-/* ── 헤더 ───────────────────────────── */
-.trial-status__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 2px 8px;
-}
-.trial-status__heading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.trial-status__dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--tt-red);
-    flex: none;
-    animation: tt-tick 1.6s ease-in-out infinite;
-}
-.trial-status__label {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    letter-spacing: 0.08em;
-    color: var(--tt-red-deep);
-}
-.trial-status__sort {
-    background: var(--tt-bg-fill);
-    color: var(--tt-text-hint);
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    padding: 4px 9px;
-    border-radius: var(--tt-radius-full);
+    padding: 6px 15px 4px;
 }
 
 /* ── 목록 ───────────────────────────── */
@@ -255,7 +213,7 @@ function countdownOf(item) {
     align-items: center;
     gap: 5px;
     margin-top: 3px;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -272,7 +230,7 @@ function countdownOf(item) {
 
 .trial-status__badge {
     flex: none;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 2px 7px;
     border-radius: var(--tt-radius-full);
@@ -290,6 +248,8 @@ function countdownOf(item) {
     color: var(--tt-text-muted);
 }
 
+/* 이 줄만 caption 에 남긴다 — mono 는 같은 크기에서도 폭이 넓어, 한 단계 올리면
+   접힌 줄(아바타 + 제목 + 카운트다운 + chevron)이 좁은 화면에서 넘친다 */
 .trial-status__countdown {
     flex: none;
     font-family: var(--tt-font-mono);
@@ -337,13 +297,13 @@ function countdownOf(item) {
 .trial-status__meta-text {
     flex: 1;
     min-width: 0;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
 }
 .trial-status__exceeded {
     flex: none;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-red-deep);
 }
@@ -391,8 +351,9 @@ function countdownOf(item) {
     background: var(--tt-red);
     box-shadow: 0 0 0 4px var(--tt-red-soft);
 }
+/* 4칸을 가로로 나눠 쓰므로 caption 까지 올리면 좁은 화면에서 줄바꿈된다 */
 .trial-status__step-name {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -425,13 +386,13 @@ function countdownOf(item) {
 }
 .trial-status__vote-count {
     flex: none;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-blue-deep);
 }
 
 .trial-status__deadline {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-hint);
 }
@@ -458,15 +419,5 @@ function countdownOf(item) {
     background: transparent;
     border: 1.5px solid var(--tt-border);
     color: var(--tt-text-body);
-}
-
-@keyframes tt-tick {
-    0%,
-    100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.45;
-    }
 }
 </style>
