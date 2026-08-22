@@ -345,7 +345,6 @@ export function toTrialStatusCard(trial) {
         voteDots: buildVoteDots(trial, voting),
         voteCount,
         totalVoters,
-        votePercent: totalVoters > 0 ? Math.round((voteCount / totalVoters) * 100) : 0,
         /* 스테퍼에서 지금 칸. 앞 칸은 지난 것, 뒤 칸은 아직 오지 않은 것으로 그린다. */
         stepIndex: voting ? 2 : 1,
         deadlineLabel: formatDeadlineLabel(trial.deadline),

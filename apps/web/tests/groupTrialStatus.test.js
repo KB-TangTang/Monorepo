@@ -158,15 +158,15 @@ test('스테퍼의 현재 칸은 상태를 따라간다', () => {
     assert.equal(toTrialStatusCard(trial({ status: 'VOTING' })).stepIndex, 2);
 });
 
-test('배심원이 없어도 투표 진행바가 사라지지 않는다', () => {
-    /* 0 으로 나누면 NaN 이 width 로 들어가 바가 통째로 없어진다 */
+test('배심원이 없으면 점을 그리지 않는다', () => {
+    /*
+     * 예전에는 `votePercent` 로 진행바 폭을 잡아서 0 으로 나누면 NaN 이 width 에 들어가
+     * 바가 통째로 없어졌다. 막대를 점으로 바꾸면서(#448 9차) 그 값 자체를 지웠다 —
+     * `buildVoteDots` 가 `total <= 0` 을 `null` 로 떨어뜨려 나눗셈이 아예 없다.
+     */
     const card = toTrialStatusCard(trial({ status: 'VOTING', voteCount: 0, totalVoters: 0 }));
-    assert.equal(card.votePercent, 0);
-
-    assert.equal(
-        toTrialStatusCard(trial({ status: 'VOTING', voteCount: 3, totalVoters: 5 })).votePercent,
-        60,
-    );
+    assert.equal(card.voteDots, null);
+    assert.equal(card.votePercent, undefined);
 });
 
 test('피고 닉네임은 제목이 아니라 둘째 줄에 들어간다', () => {
@@ -353,16 +353,19 @@ test('왼쪽 앵커는 아바타가 아니라 재판 단계 그림이다', () =>
     assert.doesNotMatch(code, /item\.badge/);
 });
 
-test('접힌 줄에 투표 점을 두지 않는다', () => {
+test('투표 점은 접힌 줄이 아니라 펼친 본문에 있다', () => {
     /*
-     * 몇 명이 던졌는지는 펼친 본문의 투표 바가 이미 말한다. 접힌 줄에서는 파란 점 무리가
-     * 셰브론 바로 옆에 붙어 「눌러야 할 것」처럼 읽혔다.
+     * 접힌 줄에서는 파란 점 무리가 셰브론 바로 옆에 붙어 「눌러야 할 것」처럼 읽혔다 —
+     * 라벨이 없고 자기도 누를 수 있는 버튼 안이라 그렇다(#448 7차).
+     * 점 자체를 버린 건 아니고 펼친 본문으로 옮겼다(#448 9차). 거기서는 「3 / 5명 투표」
+     * 라벨을 달고 있고 누를 수 없는 블록이라 같은 오해가 안 생긴다.
      */
     const code = source(CARD);
-    assert.doesNotMatch(code, /item\.voteDots/);
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
+    assert.doesNotMatch(summary, /item\.voteDots/);
+    /* 정원 초과 폴백이던 접힌 줄의 숫자 조각은 되살리지 않는다 — 본문이 숫자를 항상 말한다 */
     assert.doesNotMatch(code, /trial-status__votenum/);
-    /* 펼친 본문의 투표 바는 살아 있어야 한다 */
-    assert.match(code, /trial-status__vote-fill/);
+    assert.match(code, /v-for="\(dot, dotIndex\) in item\.voteDots"/);
 });
 
 test('타일과 목록 줄이 같은 사물을 가리킨다', () => {

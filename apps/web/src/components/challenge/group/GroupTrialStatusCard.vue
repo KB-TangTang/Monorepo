@@ -3,7 +3,7 @@
 
   진행 중인 재판을 아코디언으로 보여준다.
   접히면 **두 줄**(오브젝트 그림 · 할 일 라벨 / 그룹명 · 셰브론),
-  펼치면 진행 스테퍼 · 계기판(투표 수 · 남은 시간 · 투표 바) · CTA 다.
+  펼치면 진행 스테퍼 · 계기판(투표 점 · 남은 시간) · CTA 다.
 
   **이제 홈이 아니라 시트가 이 카드를 쓴다**(#448 3차). 홈은 할 일을 격자 두 칸으로 접고
   (`GroupTrialTodoGrid`), 목록은 `GroupTrialListSheet` 가 받는다. 머리줄은 시트 헤더가
@@ -23,8 +23,10 @@
 
   접힌 줄에 **남은 시간은 두지 않는다**(#443). 6행이 매초 같이 떨려 훑기를 방해한다.
   카테고리·한도·초과금액도 두지 않는다 — CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여준다.
-  **투표 점도 두지 않는다**(#448 7차). 몇 명이 던졌는지는 펼친 본문의 투표 바가 이미 말하고,
-  접힌 줄에서는 파란 점 무리가 셰브론 옆에서 「눌러야 할 것」처럼 읽혔다.
+  **투표 점도 두지 않는다**(#448 7차). 접힌 줄에서는 파란 점 무리가 셰브론 바로 옆에 붙어
+  「눌러야 할 것」처럼 읽혔다 — 라벨이 없고 자기도 누를 수 있는 버튼 안이라 그렇다.
+  점 자체를 버린 건 아니고 **펼친 본문으로 옮겼다**(#448 9차). 거기서는 「3 / 5명 투표」라는
+  라벨을 달고 있고 누를 수 없는 블록이라 같은 오해가 생기지 않는다.
 
   판정·문구·아이콘·CTA 는 전부 `utils/groupTrial.js` 의 `toTrialStatusCard` 가 이미 정해서 준다.
   여기서 상태를 다시 보지 않는다 — 그렇게 하면 그룹 상세 캐러셀과 판정이 갈린다.
@@ -181,33 +183,38 @@ function onLeave(el) {
                                  계기판 — 「지금 눌러야 하나」를 판단하는 두 값을 CTA 바로 위에 붙인다.
                                  남은 시간은 한때 패널 맨 위 왼쪽의 회색 캡션이었다. 이 패널에서
                                  **유일하게 급한 값인데 가장 약하게** 그려져 있었다.
-                                 투표 수(왼쪽) ↔ 남은 시간(오른쪽)으로 양끝에 건다. 변론 단계라
+                                 투표 현황(왼쪽) ↔ 남은 시간(오른쪽)으로 양끝에 건다. 변론 단계라
                                  투표가 없으면 남은 시간만 남는데, `margin-left: auto` 덕에
                                  자리가 그대로 오른쪽이다 — 행마다 시계가 움직이면 안 된다.
                             -->
                             <div class="trial-status__meter">
-                                <div class="trial-status__meter-head">
-                                    <span v-if="item.showVote" class="trial-status__vote-count">
+                                <span v-if="item.showVote" class="trial-status__vote">
+                                    <!-- 점은 숫자를 그림으로 옮긴 것뿐이라 읽어 줄 내용이 없다 -->
+                                    <span
+                                        v-if="item.voteDots"
+                                        class="trial-status__dots"
+                                        aria-hidden="true"
+                                    >
+                                        <span
+                                            v-for="(dot, dotIndex) in item.voteDots"
+                                            :key="dotIndex"
+                                            class="trial-status__dot"
+                                            :class="`trial-status__dot--${dot}`"
+                                        />
+                                    </span>
+                                    <span class="trial-status__vote-count">
                                         {{ item.voteCount }} / {{ item.totalVoters }}명 투표
                                     </span>
-                                    <span
-                                        class="trial-status__countdown"
-                                        :class="{
-                                            'trial-status__countdown--urgent':
-                                                countdownOf(item).urgent,
-                                        }"
-                                    >
-                                        남은 시간 {{ countdownOf(item).text }}
-                                    </span>
-                                </div>
+                                </span>
 
-                                <!-- 투표 바 — 변론이 끝나야 열린다 -->
-                                <div v-if="item.showVote" class="trial-status__vote-track">
-                                    <div
-                                        class="trial-status__vote-fill"
-                                        :style="{ width: `${item.votePercent}%` }"
-                                    />
-                                </div>
+                                <span
+                                    class="trial-status__countdown"
+                                    :class="{
+                                        'trial-status__countdown--urgent': countdownOf(item).urgent,
+                                    }"
+                                >
+                                    남은 시간 {{ countdownOf(item).text }}
+                                </span>
                             </div>
 
                             <button
@@ -430,34 +437,70 @@ function onLeave(el) {
     font-weight: var(--tt-fw-black);
 }
 
-/* ── 계기판 (투표 수 · 남은 시간 · 투표 바) ─── */
-.trial-status__meter {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-}
+/* ── 계기판 (투표 현황 · 남은 시간) ────── */
 /*
- * 두 값을 양끝에 건다. `baseline` 이라 sans(투표 수)와 mono(시계)의 밑선이 맞는다 —
+ * `baseline` 이라 sans(투표 수)와 mono(시계)의 밑선이 맞는다 —
  * `center` 로 두면 두 글꼴의 x-height 차이만큼 어긋나 보인다.
  */
-.trial-status__meter-head {
+.trial-status__meter {
     display: flex;
     align-items: baseline;
     gap: var(--tt-space-2);
 }
-/* 투표 수와 같은 급으로 맞춘다. 한 줄에 둘이 서니 크기가 다르면 한쪽이 부속처럼 읽힌다 */
+.trial-status__vote {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+/*
+ * **막대가 아니라 점이다** (#448 9차). 한때 폭을 꽉 채운 진행바였는데,
+ * `groupInvite.js:52` 가 `maxMembers ?? 6` 이라 그룹은 최대 6명이고 피고를 빼면
+ * 배심원은 **최대 5명**이다. 막대는 연속량 인코딩이라 표현할 수 있는 상태가 6개뿐인데
+ * 300px 를 쓰고 한 칸이 20% 씩 뛰어서, 「3명이 던졌다」가 아니라 「60% 로딩됨」으로 읽혔다.
+ *
+ * 점은 이산량이라 인코딩이 맞고, 세로 두 줄이던 계기판이 한 줄로 접혀 패널도 짧아진다.
+ * 정원이 6을 넘으면 `buildVoteDots` 가 `null` 을 주고 옆의 숫자만 남는다.
+ */
+.trial-status__dots {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.trial-status__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tt-border-track);
+    box-sizing: border-box;
+}
+.trial-status__dot--done {
+    background: var(--tt-blue);
+}
+/* 내 칸은 맨 앞이고 테를 두른다. 색이 아니라 **테**라서 색을 못 보는 사람도 어디가 내 표인지 안다 */
+.trial-status__dot--mine-done {
+    background: var(--tt-blue);
+    box-shadow: 0 0 0 2px var(--tt-blue-soft);
+}
+.trial-status__dot--mine-todo {
+    background: transparent;
+    border: 2px solid var(--tt-blue);
+}
+/* 점은 `aria-hidden` 이라 읽어 주는 건 이 숫자다. 점만 남기면 스크린리더에 아무것도 안 간다 */
 .trial-status__vote-count {
+    flex: none;
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
     color: var(--tt-blue-deep);
 }
 /*
  * mono 는 같은 크기에서도 폭이 넓어 한 단계 올리면 좁은 화면에서 넘친다 — caption 에 남긴다.
- * `margin-left: auto` 라 왼쪽에 투표 수가 없어도(변론 단계) 자리가 오른쪽 그대로다.
+ * `margin-left: auto` 라 왼쪽에 투표 현황이 없어도(변론 단계) 자리가 오른쪽 그대로다.
  * 색은 예전의 `--tt-text-muted` 보다 한 단계 올렸다. 이 패널에서 유일하게 급한 값이다.
  */
 .trial-status__countdown {
     margin-left: auto;
+    flex: none;
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
@@ -466,18 +509,6 @@ function onLeave(el) {
 .trial-status__countdown--urgent {
     font-weight: var(--tt-fw-black);
     color: var(--tt-red-deep);
-}
-.trial-status__vote-track {
-    height: 6px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-border-track);
-    overflow: hidden;
-}
-.trial-status__vote-fill {
-    height: 100%;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-blue);
-    transition: width 0.25s ease;
 }
 
 /* ── CTA ────────────────────────────── */

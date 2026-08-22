@@ -323,7 +323,21 @@ test('서류 어휘는 스테퍼의 명조 한 줄만 남긴다', () => {
     assert.match(code, /\.trial-status__step-name \{[^}]*font-family: var\(--tt-font-serif\)/);
     /* 상자가 없으니 미완료 색은 종이 괘선이 아니라 진행바 트랙(회청)으로 돌아온다 */
     assert.match(code, /\.trial-status__step-dot \{[^}]*background: var\(--tt-border-track\)/);
-    assert.match(code, /\.trial-status__vote-track \{[^}]*background: var\(--tt-border-track\)/);
+    assert.match(code, /\.trial-status__dot \{[^}]*background: var\(--tt-border-track\)/);
+});
+
+test('투표 현황은 막대가 아니라 점이다', () => {
+    /*
+     * `groupInvite.js:52` 가 `maxMembers ?? 6` 이라 그룹은 최대 6명, 피고를 빼면 배심원은 5명이다.
+     * 막대는 연속량 인코딩이라 표현할 상태가 6개뿐인데 폭을 꽉 채워서 「3명이 던졌다」가 아니라
+     * 「60% 로딩됨」으로 읽혔다. 점은 이산량이라 인코딩이 맞고 계기판이 한 줄로 접힌다.
+     */
+    const code = source(TRIAL_CARD);
+    assert.doesNotMatch(code, /vote-track|vote-fill|votePercent/);
+    assert.match(code, /\.trial-status__dot--mine-todo/);
+    /* 점은 aria-hidden 이라, 읽어 줄 숫자가 같이 없으면 스크린리더에 아무것도 안 간다 */
+    assert.match(code, /aria-hidden="true"/);
+    assert.match(code, /\{\{ item\.voteCount \}\} \/ \{\{ item\.totalVoters \}\}명 투표/);
 });
 
 test('남은 시간은 CTA 쪽에 붙는다', () => {
@@ -338,10 +352,10 @@ test('남은 시간은 CTA 쪽에 붙는다', () => {
     const cta = code.indexOf('trial-status__cta');
     assert.ok(steps < meter && meter < cta, '스테퍼 → 계기판 → CTA 순서여야 한다');
 
-    /* 변론 단계라 투표 수가 없어도 시계 자리가 오른쪽 그대로여야 한다 — 행마다 움직이면 안 된다 */
+    /* 변론 단계라 투표 현황이 없어도 시계 자리가 오른쪽 그대로여야 한다 — 행마다 움직이면 안 된다 */
     assert.match(code, /\.trial-status__countdown \{[^}]*margin-left: auto/);
-    /* 투표 수는 `v-if`, 남은 시간은 항상 나온다 */
-    assert.match(code, /v-if="item\.showVote" class="trial-status__vote-count"/);
+    /* 투표 현황은 `v-if`, 남은 시간은 항상 나온다 */
+    assert.match(code, /v-if="item\.showVote" class="trial-status__vote"/);
 });
 
 test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {
