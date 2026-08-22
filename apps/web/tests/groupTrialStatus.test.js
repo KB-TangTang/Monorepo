@@ -354,15 +354,21 @@ test('왼쪽 앵커는 아바타가 아니라 할 일 아이콘이다', () => {
     assert.doesNotMatch(code, /item\.badge/);
 });
 
-test('타일과 목록 줄이 같은 글리프를 쓴다', () => {
+test('타일과 목록 줄이 같은 사물을 가리킨다', () => {
     /*
-     * 타일에서 본 망치와 목록에서 본 망치가 다르면 「이 타일이 저 목록을 연다」가 안 읽힌다.
-     * path 를 각자 들고 있으면 한쪽만 고쳐진다 — 조각 하나를 둘이 나눠 쓴다.
+     * 타일에서 본 망치와 목록에서 본 망치가 다른 사물이면 「이 타일이 저 목록을 연다」가 안 읽힌다.
+     * 그림체는 다르다 — 목록 줄은 16~20px 라 단색 SVG, 타일은 44px 라 컬러 오브젝트다.
+     * **키를 `STANCE.icon` 이름으로 맞춰** 한쪽만 엉뚱한 사물로 갈아 끼우지 못하게 한다.
      */
     assert.match(source(CARD), /import TrialActionIcon from '\.\/TrialActionIcon\.vue'/);
-    assert.match(source(TODO_GRID), /import TrialActionIcon from '\.\/TrialActionIcon\.vue'/);
-    /* 같은 이름 네 가지(`STANCE.icon`)를 둘 다 그대로 넘긴다 */
     assert.match(source(ICON), /\['gavel', 'ballot', 'clock', 'scale'\]/);
+
+    const grid = source(TODO_GRID);
+    assert.match(grid, /const ART = \{ gavel: objDefenseImage, ballot: objVoteImage \}/);
+    assert.match(grid, /const WATERMARK = \{ gavel: wmDefenseImage, ballot: wmVoteImage \}/);
+    /* 타일이 그 키를 실제로 들고 있어야 매핑이 산다 */
+    assert.match(grid, /icon: 'gavel'/);
+    assert.match(grid, /icon: 'ballot'/);
 });
 
 test('아코디언은 고정 높이가 아니라 실제 높이로 여닫는다', () => {

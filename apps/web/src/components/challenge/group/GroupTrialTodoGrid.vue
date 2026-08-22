@@ -19,7 +19,18 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import TrialActionIcon from './TrialActionIcon.vue';
+import objDefenseImage from '@/assets/images/judgment/obj_defense.png';
+import objVoteImage from '@/assets/images/judgment/obj_vote.png';
+import wmDefenseImage from '@/assets/images/judgment/wm_sil_defense.png';
+import wmVoteImage from '@/assets/images/judgment/wm_sil_vote.png';
+
+/*
+ * 그림은 `STANCE.icon` 이름으로 찾는다. 목록 줄(`GroupTrialStatusCard`)은 작아서 단색 SVG
+ * (`TrialActionIcon`)를, 타일은 커서 컬러 오브젝트를 쓴다 — **그림체는 달라도 사물은 같아야**
+ * 「이 타일이 저 목록을 연다」가 읽힌다. 같은 키를 쓰면 한쪽만 엉뚱한 사물로 갈아 끼울 수 없다.
+ */
+const ART = { gavel: objDefenseImage, ballot: objVoteImage };
+const WATERMARK = { gavel: wmDefenseImage, ballot: wmVoteImage };
 
 const props = defineProps({
     defendCount: { type: Number, required: true },
@@ -31,10 +42,6 @@ const props = defineProps({
 
 const emit = defineEmits(['open']);
 
-/*
- * 아이콘은 `STANCE.icon` 과 같은 이름을 쓴다 — 타일의 망치와 목록 줄의 망치가 같은 그림이라야
- * 「이 타일이 저 목록을 연다」가 읽힌다.
- */
 const tiles = computed(() => [
     {
         kind: 'defend',
@@ -71,15 +78,13 @@ const tiles = computed(() => [
                 @click="emit('open', tile.kind)"
             >
                 <!--
-                  같은 글리프를 크게 깔아 빈 면을 채운다. 글자를 늘리지 않고 두 칸을
-                  실루엣으로 가르는 게 목적이다 (`TrialActionIcon` 은 이미 `aria-hidden`).
+                  같은 사물의 실루엣을 크게 깔아 빈 면을 채운다. 글자를 늘리지 않고 두 칸을
+                  모양으로 가르는 게 목적이라 `alt` 는 빈 문자열이다 — 읽어 줄 내용이 없다.
                   DOM 맨 앞에 둬야 뒤 형제들이 위에 그려진다.
                 -->
-                <TrialActionIcon :name="tile.icon" class="todo-grid__watermark" />
+                <img class="todo-grid__watermark" :src="WATERMARK[tile.icon]" alt="" />
 
-                <span class="todo-grid__icon">
-                    <TrialActionIcon :name="tile.icon" class="todo-grid__glyph" />
-                </span>
+                <img class="todo-grid__art" :src="ART[tile.icon]" alt="" />
 
                 <span class="todo-grid__count">
                     {{ tile.count }}<span class="todo-grid__unit">건</span>
@@ -142,37 +147,38 @@ const tiles = computed(() => [
     transform: none;
 }
 
-/* 아이콘 박스는 재판 현황 카드의 접힌 줄과 같은 규격(38px · --tt-radius-md) */
-.todo-grid__icon {
-    width: 38px;
-    height: 38px;
-    border-radius: var(--tt-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/*
+ * 오브젝트는 틴트 상자에 담지 않는다. 그림 자체가 컬러(판사봉 노랑·남색 / 투표함 남색·크림)이고
+ * 아래에 자기 그림자를 갖고 있어, 빨강·파랑 틴트 위에 얹으면 색이 부딪히고 그림자가 얼룩이 된다.
+ * 상자를 걷은 만큼 그림을 크게 쓴다 — 톤 구분은 건수 숫자 색이 맡는다.
+ */
+.todo-grid__art {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
     flex: none;
-}
-.todo-grid__glyph {
-    width: 20px;
-    height: 20px;
+    /* 그림 아래 그림자 여백만큼 왼쪽/위 여백이 남는다. 광학적으로 글자 줄과 맞춘다 */
+    margin: -4px 0 0 -4px;
 }
 
 /*
- * 정사각형은 내용보다 넓어서 오른쪽 위가 통째로 빈다. 글자를 더 넣으면 말줄임이 되살아나므로
- * 같은 글리프를 크게 깔아 면만 채운다. 두 모서리에서 잘려 나가게 밖으로 밀어 둔다.
- * 색은 아이콘 배경과 같은 `*-subtle` 이라 위에 얹힌 글자 대비를 깎지 않는다.
+ * 정사각형은 내용보다 넓어서 오른쪽 아래가 통째로 빈다. 글자를 더 넣으면 말줄임이 되살아나므로
+ * 같은 사물의 실루엣을 크게 깔아 면만 채운다.
+ *
+ * **음수 오프셋이 큰 이유** — PNG 는 480px 캔버스인데 그림이 왼쪽 위 약 80% 에 몰려 있다.
+ * 나머지는 투명 여백이라, 이만큼 밀어야 그림이 실제로 모서리에 닿는다.
  */
 .todo-grid__watermark {
     position: absolute;
-    right: -14px;
-    bottom: -12px;
-    width: 84px;
-    height: 84px;
+    right: -20px;
+    bottom: -22px;
+    width: 116px;
+    height: 116px;
     z-index: 0;
     pointer-events: none;
 }
 /* 워터마크는 z-index 0 이라, 내용은 명시적으로 그 위로 올린다 */
-.todo-grid__icon,
+.todo-grid__art,
 .todo-grid__count,
 .todo-grid__label,
 .todo-grid__sub {
@@ -180,22 +186,7 @@ const tiles = computed(() => [
     z-index: 1;
 }
 
-.todo-grid__tile--danger .todo-grid__icon {
-    background: var(--tt-danger-subtle);
-    color: var(--tt-danger-deep);
-}
-.todo-grid__tile--primary .todo-grid__icon {
-    background: var(--tt-info-subtle);
-    color: var(--tt-info-deep);
-}
-.todo-grid__tile--danger .todo-grid__watermark {
-    color: var(--tt-danger-subtle);
-}
-.todo-grid__tile--primary .todo-grid__watermark {
-    color: var(--tt-info-subtle);
-}
-
-/* 건수를 아래로 밀어 붙인다 — 아이콘은 위, 글자 묶음은 아래. 두 칸의 기준선이 같아진다 */
+/* 건수를 아래로 밀어 붙인다 — 그림은 위, 글자 묶음은 아래. 두 칸의 기준선이 같아진다 */
 .todo-grid__count {
     margin-top: auto;
     font-size: var(--tt-fs-display);
@@ -203,8 +194,8 @@ const tiles = computed(() => [
     line-height: 1.1;
 }
 /*
- * 타일에서 가장 큰 글자다. 무채색으로 두면 두 칸이 숫자만 다른 같은 그림이 된다 —
- * 아이콘 상자 안에만 있던 톤을 여기까지 끌어와 색으로도 갈리게 한다.
+ * 틴트 상자를 걷은 뒤로 **톤(급함 = 빨강 / 남의 일 = 파랑)을 말하는 곳은 여기 하나뿐이다.**
+ * 오브젝트 그림의 색(노랑·남색)은 사물 고유색이지 급함을 뜻하지 않는다.
  */
 .todo-grid__tile--danger .todo-grid__count {
     color: var(--tt-danger-deep);
@@ -230,23 +221,24 @@ const tiles = computed(() => [
 }
 
 /*
- * 0건은 지우지 않고 물러나게 한다. `opacity` 로 한 번에 내리면 아이콘 배경까지 흐려져
- * 「고장 난 칸」처럼 보이므로, 색을 각각 무채색으로 바꾼다.
+ * 0건은 지우지 않고 물러나게 한다. 글자는 색을 각각 무채색으로 바꾸지만, 그림은 래스터라
+ * 색을 못 바꾼다 — `grayscale` 로 톤만 빼고 옅게 내린다. 타일 전체에 `opacity` 를 걸면
+ * 그림자까지 흐려져 「고장 난 칸」이 된다.
  */
 .todo-grid__tile--empty {
     box-shadow: none;
     background: var(--tt-bg-subtle);
 }
-.todo-grid__tile--empty .todo-grid__icon {
-    background: var(--tt-bg-fill);
-    color: var(--tt-text-hint);
+.todo-grid__tile--empty .todo-grid__art {
+    filter: grayscale(1);
+    opacity: 0.4;
+}
+.todo-grid__tile--empty .todo-grid__watermark {
+    opacity: 0.5;
 }
 .todo-grid__tile--empty .todo-grid__count,
 .todo-grid__tile--empty .todo-grid__label {
     color: var(--tt-text-hint);
-}
-.todo-grid__tile--empty .todo-grid__watermark {
-    color: var(--tt-bg-fill);
 }
 
 /* 접힌 칸이 마감을 감추지 않게. 오른쪽 위는 카드에서 비어 있는 유일한 자리다 */

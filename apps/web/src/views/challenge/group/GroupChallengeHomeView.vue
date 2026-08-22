@@ -20,6 +20,7 @@ import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vu
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
+import objIndictImage from '@/assets/images/judgment/obj_indict.png';
 import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
 import { toTrialStatusCard } from '@/utils/groupTrial';
 import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
@@ -469,6 +470,8 @@ function goToChat(challenge) {
                 class="gc-watching"
                 @click="openSheet = 'watching'"
             >
+                <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 지켜보기의 대표 상태다 -->
+                <img class="gc-watching__art" :src="objIndictImage" alt="" />
                 <span class="gc-watching__label">
                     지켜보는 재판 {{ watchingTrials.length }}건
                 </span>
@@ -677,6 +680,18 @@ function goToChat(challenge) {
 
 .gc-watching:active {
     background: var(--tt-bg-fill);
+}
+
+/*
+ * 격자 두 칸이 판사봉·투표함을 들고 있어서, 이 줄만 그림이 없으면 「같은 묶음의 세 번째」로
+ * 안 읽힌다. 다만 **할 일이 아니므로** 타일보다 확실히 작게(26px) 둔다.
+ */
+.gc-watching__art {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    flex: none;
+    margin-left: -3px;
 }
 
 .gc-watching__label {

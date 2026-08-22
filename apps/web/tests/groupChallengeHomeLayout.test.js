@@ -144,7 +144,7 @@ test('두 칸은 건수와 무관하게 정사각형이다', () => {
 test('두 칸은 숫자만 다른 같은 그림이 아니다', () => {
     /*
      * 톤이 38px 아이콘 상자 안에만 있으면 색이 닿는 면적이 정사각형의 4% 뿐이라 두 칸이
-     * 같아 보인다. 가장 큰 글자(건수)와 워터마크까지 톤을 끌어와 색과 실루엣으로 가른다.
+     * 같아 보인다. 가장 큰 글자(건수)와 워터마크로 색과 실루엣을 둘 다 가른다.
      */
     const src = source(TODO_GRID);
     for (const tone of ['danger', 'info']) {
@@ -156,6 +156,27 @@ test('두 칸은 숫자만 다른 같은 그림이 아니다', () => {
     /* 워터마크는 글자를 늘리지 않고 면을 채우는 수단이다 — 늘리면 말줄임이 되살아난다 */
     assert.match(src, /class="todo-grid__watermark"/);
     assert.match(src, /\.todo-grid__tile \{[^}]*overflow: hidden/);
+});
+
+test('오브젝트 그림을 톤 틴트 상자에 담지 않는다', () => {
+    /*
+     * obj_*.png 는 자기 색(판사봉 노랑·남색)과 자기 그림자를 갖고 있다. 빨강·파랑 틴트 위에
+     * 얹으면 색이 부딪히고 그림자 타원이 얼룩이 된다. 상자를 되살리면 같은 문제가 돌아온다.
+     */
+    const src = source(TODO_GRID);
+    assert.doesNotMatch(src, /todo-grid__icon/);
+    assert.doesNotMatch(src, /\.todo-grid__tile--\w+ \.todo-grid__art \{[^}]*background:/);
+});
+
+test('0건인 칸은 그림까지 물러난다', () => {
+    /*
+     * 글자는 `--tt-text-hint` 로 내리면 되지만 그림은 래스터라 색을 못 바꾼다.
+     * 컬러 판사봉만 그대로 남으면 「못 누르는데 제일 눈에 띄는 칸」이 된다.
+     */
+    assert.match(
+        source(TODO_GRID),
+        /\.todo-grid__tile--empty \.todo-grid__art \{[^}]*filter: grayscale\(1\)/,
+    );
 });
 
 test('격자는 원시 팔레트가 아니라 의미 토큰을 참조한다', () => {
