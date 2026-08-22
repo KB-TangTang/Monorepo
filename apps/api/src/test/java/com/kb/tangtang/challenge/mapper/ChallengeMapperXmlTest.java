@@ -294,6 +294,7 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findDefenseTodos"));
         assertTrue(configuration.hasStatement(namespace + ".findVoteTodos"));
         assertTrue(configuration.hasStatement(namespace + ".findOpenByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".findOpenByUserId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
         assertTrue(configuration.hasStatement(namespace + ".findClosedTrialStats"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialDetail"));
@@ -302,6 +303,34 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".moveExpiredDefensesToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".findVotingToTally"));
         assertTrue(configuration.hasStatement(namespace + ".confirmVerdict"));
+    }
+
+    /**
+     * 지방법원 홈 「재판 현황」(이슈 #432)의 조회 범위를 SQL 모양으로 못박는다.
+     *
+     * <p>참여자 조인이 「내가 그 그룹 사람인가」를 겸한다. 빠지면 <b>남의 그룹 재판이 홈에 뜨고</b>
+     * 카드를 누르면 재판 상세까지 열린다 — 화면만 보면 정상으로 보여 눈치채기 어렵다.
+     *
+     * <p>피고 제외 조건({@code i.user_id <> #{userId}})이 <b>없어야 한다</b>는 것도 같이 본다.
+     * 내가 피고인 재판(변론 필요 · 변론 제출 · 심판받는 중)이 이 목록의 절반이라,
+     * findVoteTodos 를 베끼다 그 줄을 같이 가져오면 6가지 중 3가지가 통째로 사라진다.
+     */
+    @Test
+    @DisplayName("내 재판 현황 조회는 참여자 조인으로 범위를 좁히고 피고를 빼지 않는다")
+    void findOpenByUserIdScopesToMyGroupsAndKeepsMyOwnTrials() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        String sql = sqlOf(configuration,
+                IndictmentMapper.class.getName() + ".findOpenByUserId");
+
+        assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
+                "참여자 조인이 없으면 남의 그룹 재판이 홈에 섞인다");
+        assertFalse(sql.contains("i.user_id <> ?"),
+                "피고를 빼면 내가 심판받는 중인 재판이 사라진다 — 가장 궁금한 상태다");
+        assertTrue(sql.contains("i.status IN ('DEFENSE_WAIT', 'VOTING')"),
+                "확정된 재판은 카드가 아니라 전적으로 간다");
+        assertTrue(sql.contains("g.group_name"),
+                "여러 그룹이 섞이므로 카드마다 그룹 이름이 필요하다");
     }
 
     @Test

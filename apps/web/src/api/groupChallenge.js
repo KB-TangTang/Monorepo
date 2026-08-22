@@ -15,6 +15,7 @@ import {
     MOCK_ACTIVE_LIST_CHALLENGES,
     MOCK_ENDED_CHALLENGES,
     MOCK_TODO_ITEMS,
+    MOCK_TRIAL_STATUS,
 } from '@/fixtures/groupChallenge';
 import { MOCK_CHALLENGE_DETAILS, MOCK_CHALLENGE_RANKINGS } from '@/fixtures/groupChallengeDetail';
 import {
@@ -250,6 +251,34 @@ function toTrialViewModel(dto) {
 }
 
 /**
+ * 지방법원 홈 「재판 현황」 — 내가 속한 그룹의 **진행 중인 재판 전부** (이슈 #432).
+ *
+ * `fetchMyTrials` 와 다르다. 저쪽은 내가 지금 행동할 수 있는 2가지(변론 필요 · 투표 필요)만
+ * 주지만 이쪽은 내 입장 6가지를 전부 준다 — 내가 심판받는 중인 재판처럼 **할 일은 없지만
+ * 가장 궁금한** 것이 저쪽에는 아예 없었다.
+ *
+ * 마감 지난 건은 서버가 걸러 주고, 할 일 있는 것부터 마감 임박순으로 정렬해 준다.
+ * 여기서 다시 정렬하면 아코디언을 펼칠 때마다 카드가 튄다.
+ */
+export async function fetchAllMyTrials() {
+    if (isMockMode.value) {
+        return MOCK_TRIAL_STATUS.map((item) => toIndictmentViewModel(withMockTrialDeadlines(item)));
+    }
+    const list = await http.get('/group-challenges/trials');
+    return list.map(toIndictmentViewModel);
+}
+
+/** 목데이터의 상대 마감(분)을 실서버와 같은 절대시각 두 개로 바꾼다. */
+function withMockTrialDeadlines(item) {
+    const at = afterNow(item.deadlineMinutes * 60000);
+    return {
+        ...item,
+        defenseDeadline: at,
+        voteDeadline: at,
+    };
+}
+
+/**
  * 그룹 챌린지 상세 (재판 카드 · 참여자 소비 상태 포함).
  *
  * 그룹 정보는 한 겹 없이 평평하게 내려온다(`@JsonUnwrapped`). 그래서 목록과 같은
@@ -276,15 +305,7 @@ export async function fetchGroupChallengeDetail(groupId) {
 function toDetailViewModel(dto) {
     return {
         ...toViewModel(dto),
-        indictments: (dto.indictments ?? []).map((item) => ({
-            ...item,
-            profileImage: item.profileImageUrl,
-            isMine: item.mine,
-            hasDefended: item.defended,
-            settlementDate: formatMonthDay(item.settlementDate),
-            /* 서버는 마감 두 개를 다 주지만 카드는 하나만 그린다. 고르는 일을 여기서 끝낸다. */
-            deadline: item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline,
-        })),
+        indictments: (dto.indictments ?? []).map(toIndictmentViewModel),
         dailyMembers: (dto.dailyMembers ?? []).map((member) => ({
             ...member,
             profileImage: member.profileImageUrl,
@@ -298,6 +319,25 @@ function toDetailViewModel(dto) {
         finalMembers: dto.finalMembers
             ? dto.finalMembers.map((m) => ({ ...m, profileImage: m.profileImageUrl }))
             : null,
+    };
+}
+
+/**
+ * 서버 `GroupIndictmentDto` → 재판 카드가 쓰는 모양.
+ *
+ * 그룹 상세의 `indictments[]` 와 지방법원 홈의 `/trials` 가 **같은 DTO** 를 내려준다.
+ * 변환을 두 곳에 두면 한쪽만 `hasDefended` 를 안 붙이는 식으로 조용히 갈라진다 —
+ * 그 위에서 도는 `trialStance` 가 같은 재판을 다르게 판정하게 된다.
+ */
+function toIndictmentViewModel(item) {
+    return {
+        ...item,
+        profileImage: item.profileImageUrl,
+        isMine: item.mine,
+        hasDefended: item.defended,
+        settlementDate: formatMonthDay(item.settlementDate),
+        /* 서버는 마감 두 개를 다 주지만 카드는 하나만 그린다. 고르는 일을 여기서 끝낸다. */
+        deadline: item.status === 'DEFENSE_WAIT' ? item.defenseDeadline : item.voteDeadline,
     };
 }
 

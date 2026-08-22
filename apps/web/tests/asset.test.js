@@ -109,6 +109,21 @@ test('getSparklinePoints 는 빈 배열에 안전하다', () => {
     assert.equal(lastPoint, null);
 });
 
+// 이슈 #444: 최고/최저치 달의 좌표가 viewBox 가장자리(0 또는 width/height)에 그대로
+// 닿으면 SVG 기본 overflow:hidden 에 끝점 마커(원)가 잘려 보인다. padding 만큼
+// 안쪽으로 들어와야 한다.
+test('getSparklinePoints 는 padding 만큼 좌표를 안쪽으로 들여 그린다', () => {
+    const { pointsAttr, lastPoint } = getSparklinePoints([0, 5, 10], 20, 10, 3);
+    assert.equal(pointsAttr, '3,7 10,5 17,3');
+    assert.deepEqual(lastPoint, { x: 17, y: 3 });
+});
+
+test('getSparklinePoints 는 마지막 달이 최고치여도 padding 이 있으면 y·x 모두 가장자리에 닿지 않는다', () => {
+    const { lastPoint } = getSparklinePoints([1, 2, 3], 20, 10, 3);
+    assert.ok(lastPoint.x <= 20 - 3 && lastPoint.x >= 3);
+    assert.ok(lastPoint.y <= 10 - 3 && lastPoint.y >= 3);
+});
+
 test('getBarHeights 는 총자산이 가장 큰 달을 기준으로 높이를 정규화한다', () => {
     const result = getBarHeights([100, 200], [50, 0], 160);
     assert.deepEqual(result, [

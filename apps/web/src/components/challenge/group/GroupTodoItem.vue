@@ -112,7 +112,7 @@ const votePercent = computed(() => {
     text-overflow: ellipsis;
 }
 .todo-item__sub {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     margin-top: 3px;
     white-space: nowrap;
@@ -151,11 +151,11 @@ const votePercent = computed(() => {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 3px 8px;
     border-radius: var(--tt-radius-full);
-    font-family: ui-monospace, Menlo, monospace;
+    font-family: var(--tt-font-mono);
     background: var(--tt-bg-fill);
     color: var(--tt-text-hint);
 }
@@ -170,7 +170,7 @@ const votePercent = computed(() => {
 }
 
 .todo-item__btn {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     font-family: inherit;
     padding: 7px 14px;

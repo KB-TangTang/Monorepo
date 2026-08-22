@@ -5,6 +5,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -76,6 +77,19 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
     @GetMapping("/my-trials")
     public ApiResponse<List<MyTrialDto>> findMyTrials(@LoginUser Long userId) {
         return ApiResponse.ok(groupTrialService.findMyTrials(userId));
+    }
+
+    /**
+     * 내가 속한 그룹의 진행 중인 재판 전부 (이슈 #432). 지방법원 홈 「재판 현황」.
+     *
+     * <p>위 {@code /my-trials} 를 넓힌 것이다. 그쪽은 「내가 지금 행동할 수 있는 것」 2가지만
+     * 주는데 여기는 6가지를 전부 준다 — 내가 심판받는 중인 재판이 화면에서 사라지지 않도록.
+     *
+     * <p>{@code /my-trials} 를 지우지 않는다. 전체 보기 바텀시트가 아직 그 얇은 모양을 쓴다.
+     */
+    @GetMapping("/trials")
+    public ApiResponse<List<GroupIndictmentDto>> findAllMyTrials(@LoginUser Long userId) {
+        return ApiResponse.ok(groupTrialService.findAllMyTrials(userId));
     }
 
     /** 상세 (GC_01_09). 참여자만 볼 수 있다. */

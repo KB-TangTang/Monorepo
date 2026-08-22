@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -47,8 +48,29 @@ public interface ChallengeGroupControllerDocs {
                     + "`type` 에 따라 비는 필드가 있다 — `accuse` 는 `amount`, "
                     + "`vote` 는 `defendantNickname`·`voteCount`·`totalVoters` 만 채워진다.\n\n"
                     + "`deadline` 은 저장된 값이 아니라 `created_at + challenge.trial.*` 계산값이다. "
-                    + "**마감이 지난 건도 그대로 내려간다** — 목록에서 지우는 일은 상태 전이 배치가 한다.")
+                    + "**마감이 지난 건은 내려가지 않는다** — 지금 처리할 수 있는 일만 담는다.\n\n"
+                    + "재판을 **구경까지** 하려면 아래 `/trials` 를 쓴다. 이쪽은 「할 일」 전용이다.")
     ApiResponse<List<MyTrialDto>> findMyTrials(@ApiIgnore Long userId);
+
+    @ApiOperation(value = "내가 속한 그룹의 진행 중인 재판 전부",
+            notes = "지방법원 홈 「재판 현황」. 위 `/my-trials` 를 넓힌 것이다 — "
+                    + "그쪽이 **내가 지금 행동할 수 있는 2가지**만 준다면 여기는 재판 한 건에서 "
+                    + "나올 수 있는 내 입장 **6가지를 전부** 준다.\n\n"
+                    + "| 피고 | status | 조건 | 내 입장 |\n"
+                    + "|---|---|---|---|\n"
+                    + "| 나 | `DEFENSE_WAIT` | `defended=false` | 변론 필요 ← 할 일 |\n"
+                    + "| 나 | `DEFENSE_WAIT` | `defended=true` | 변론 제출 |\n"
+                    + "| 나 | `VOTING` | — | 심판받는 중 |\n"
+                    + "| 남 | `DEFENSE_WAIT` | — | 변론 대기 |\n"
+                    + "| 남 | `VOTING` | `myVote=null` | 투표 필요 ← 할 일 |\n"
+                    + "| 남 | `VOTING` | `myVote` 있음 | 투표 완료 |\n\n"
+                    + "**뱃지·문구·CTA 는 서버가 정하지 않는다.** 위 네 값으로 프론트가 만든다.\n\n"
+                    + "정렬은 **할 일이 있는 것 먼저, 그 안에서 마감 임박순**이다. "
+                    + "마감(`defenseDeadline`·`voteDeadline`)은 둘 다 내려가고 화면이 `status` 로 골라 쓴다. "
+                    + "**마감이 지난 건은 내려가지 않는다.**\n\n"
+                    + "카드 제목에 쓸 카테고리·한도는 여기 없다. 화면이 이미 들고 있는 참여 그룹 목록을 "
+                    + "`groupId` 로 조인해 채운다.")
+    ApiResponse<List<GroupIndictmentDto>> findAllMyTrials(@ApiIgnore Long userId);
 
     @ApiOperation(value = "그룹 챌린지 상세", notes = "**참여자만 볼 수 있다.** 참여자가 아니면 실패한다.\n\n"
             + "그룹 정보만 준다. 상세 화면을 그리려면 아래 `/detail` 을 쓴다.")

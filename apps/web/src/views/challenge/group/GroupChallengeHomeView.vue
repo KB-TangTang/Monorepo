@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
-import GroupTodoCard from '@/components/challenge/group/GroupTodoCard.vue';
+import GroupTrialStatusCard from '@/components/challenge/group/GroupTrialStatusCard.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
 import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
 import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
@@ -12,7 +12,7 @@ import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
-import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
+import { fetchMyGroupChallenges, fetchAllMyTrials } from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
@@ -21,6 +21,7 @@ import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
 import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
+import { toTrialStatusCard } from '@/utils/groupTrial';
 import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
 import { entryState } from '@/utils/groupChallengeNavigation';
 import { useGroupChatStore } from '@/stores/groupChat';
@@ -83,7 +84,7 @@ const sortedChallenges = computed(() =>
 
 const activeCount = computed(() => myChallenges.value.filter((ch) => !isUpcoming(ch)).length);
 
-/* ── TO-DO (내가 변론·투표해야 하는 재판) ── */
+/* ── 재판 현황 (내가 속한 그룹의 진행 중인 재판 전부) ── */
 const myTrials = ref([]);
 
 /* 처리한 건을 화면에서만 지운다. DEV 토글이 「전부 완료」를 흉내낼 때도 쓴다. */
@@ -91,21 +92,62 @@ const doneIds = ref([]);
 
 async function loadMyTrials() {
     try {
-        /* 서버가 마감 임박순으로 정렬해 준다. 여기서 다시 정렬하면 기준이 갈린다. */
-        myTrials.value = await fetchMyTrials();
+        /* 서버가 할 일 있는 것부터 마감 임박순으로 정렬해 준다. 여기서 다시 정렬하면 기준이 갈린다. */
+        myTrials.value = await fetchAllMyTrials();
     } catch {
         /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비면 판사 탕이가 다른 말을 한다. */
         myTrials.value = [];
     }
 }
 
-const todoItems = computed(() => myTrials.value.filter((item) => !doneIds.value.includes(item.id)));
+/*
+ * 카드 한 장이 쓸 모양. 카테고리·한도는 **서버에 다시 묻지 않고** 이미 받아 둔 참여 그룹 목록에서
+ * `groupId` 로 이어 붙인다 — 재판마다 그룹 정보를 또 내려보내면 같은 값이 여섯 번 실려 온다.
+ * 목록이 아직 안 왔거나 방금 나간 그룹이면 조각이 비고, 카드는 그 줄만 지운다.
+ */
+const trialCards = computed(() =>
+    myTrials.value
+        .filter((item) => !doneIds.value.includes(item.id))
+        .map((item) => {
+            const group = myChallenges.value.find((ch) => ch.id === item.groupId);
+            return toTrialStatusCard({
+                ...item,
+                categoryName: group?.categoryName ?? null,
+                limitAmount: group?.limitAmount ?? null,
+            });
+        }),
+);
 
-const hasTodo = computed(() => todoItems.value.length > 0);
-const allDone = computed(() => todoItems.value.length === 0 && doneIds.value.length > 0);
+/*
+ * 바텀시트가 쓰는 얇은 행. 「할 일」만 담는다 — 시트는 훑어보고 바로 처리하는 자리라
+ * 심판받는 중처럼 누를 것이 없는 재판이 섞이면 목록만 길어진다.
+ *
+ * 같은 `trialCards` 에서 뽑는다. 예전 `/my-trials` 를 따로 한 번 더 부르면 두 목록의
+ * 건수가 어긋나는 순간이 생긴다(마감 필터를 서버가 각각 계산한다).
+ */
+const todoItems = computed(() =>
+    trialCards.value
+        .filter((card) => card.actionable)
+        .map((card) => ({
+            id: card.id,
+            type: card.action === 'defend' ? 'accuse' : 'vote',
+            title: card.title,
+            amount: card.exceededAmount,
+            challengeName: card.groupName,
+            challengeId: card.groupId,
+            indictmentId: card.id,
+            tally: `${card.voteCount}/${card.totalVoters} 투표`,
+            voteCount: card.voteCount,
+            totalVoters: card.totalVoters,
+            deadline: card.deadline,
+        })),
+);
+
+const hasTodo = computed(() => trialCards.value.length > 0);
+const allDone = computed(() => trialCards.value.length === 0 && doneIds.value.length > 0);
 
 /* ── 카운트다운 ────────────────────────── */
-const { countdowns } = useCountdown(todoItems);
+const { countdowns } = useCountdown(trialCards);
 
 /* ── 바텀시트 ──────────────────────────── */
 const showSheet = ref(false);
@@ -177,33 +219,36 @@ function cycleDevState() {
 }
 
 /* ── 이벤트 핸들러 ─────────────────────── */
+
+/** CTA 가 여는 화면. 어느 화면인지는 `utils/groupTrial.js` 가 이미 정해서 준다. */
+const TRIAL_ROUTE = {
+    defend: 'defenseViolation',
+    vote: 'voteVerdict',
+    trial: 'trialProgress',
+};
+
+function goToTrial(action, groupId, indictmentId) {
+    /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
+     * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
+     * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
+    if (showSheet.value) {
+        todoSheetRef.value?.releaseHistory?.();
+        showSheet.value = false;
+    }
+    router.replace({
+        name: TRIAL_ROUTE[action],
+        params: { id: groupId, indictmentId },
+    });
+}
+
+/** 「재판 현황」 카드의 CTA. 어떤 입장이냐에 따라 변론·투표·현황 셋 중 하나로 간다. */
+function onOpenTrial({ item, action }) {
+    goToTrial(action, item.groupId, item.id);
+}
+
+/** 바텀시트의 얇은 행. 여기는 할 일만 담기므로 변론·투표 둘뿐이다. */
 function onOpenTodo(item) {
-    if (item.type === 'accuse') {
-        /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
-         * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
-         * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
-        if (showSheet.value) {
-            todoSheetRef.value?.releaseHistory?.();
-            showSheet.value = false;
-        }
-        router.replace({
-            name: 'defenseViolation',
-            params: { id: item.challengeId, indictmentId: item.indictmentId },
-        });
-        return;
-    }
-    /* vote — 투표 플로우 */
-    if (item.type === 'vote') {
-        if (showSheet.value) {
-            todoSheetRef.value?.releaseHistory?.();
-            showSheet.value = false;
-        }
-        router.replace({
-            name: 'voteVerdict',
-            params: { id: item.challengeId, indictmentId: item.indictmentId },
-        });
-        return;
-    }
+    goToTrial(item.type === 'accuse' ? 'defend' : 'vote', item.challengeId, item.indictmentId);
 }
 
 function goToAllChallenges() {
@@ -336,7 +381,13 @@ function goToChat(challenge) {
 
 <template>
     <div class="gc-page">
-        <!-- ===== 다크 헤더 (지방법원 건물) ===== -->
+        <!--
+          ===== 다크 헤더 (지방법원 건물) =====
+          첫 섹션 제목 「재판 현황」은 헤더 하단 곡면에 얹는다 — 개인 미션 홈(「오늘의 미션」)과
+          같은 구조라야 두 화면의 본문 시작점이 같게 읽힌다.
+          개인 미션 홈처럼 상태에 따라 비우지는 않는다. 평온 상태에서도 「재판 현황」 아래에
+          「기소도 투표도 없어요」가 오는 편이 자연스럽고, 곡면 높이는 어차피 고정이다.
+        -->
         <ChallengeCourtHeader
             variant="district"
             :court-image="buildingDistrict"
@@ -346,26 +397,17 @@ function goToChat(challenge) {
             tangi-role="판사"
             tangi-name="탕이"
             :quote="judgeQuote"
+            skirt-title="재판 현황"
         />
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- 처리할 재판. 카드 안에 건수가 또 있지만, 「전체보기」는 여기에만 둘 수 있다 —
-                 카드 안쪽의 「남은 N건 모두 보기」는 3건 이상일 때만 나타나 2건 이하면 시트로 갈 길이 없었다 -->
-            <div v-if="hasTodo" class="gc-section-top gc-section-top--todo">
-                <span class="gc-section-title">처리할 재판</span>
-                <button type="button" class="gc-view-all" @click="showSheet = true">
-                    전체보기 ›
-                </button>
-            </div>
-
-            <!-- TO-DO 인박스 / 방금 다 처리함 / 애초에 할 일이 없음 -->
-            <GroupTodoCard
+            <!-- 재판 현황 / 방금 다 처리함 / 애초에 진행 중인 재판이 없음 -->
+            <GroupTrialStatusCard
                 v-if="hasTodo"
-                :items="todoItems"
+                :items="trialCards"
                 :countdowns="countdowns"
-                @open="onOpenTodo"
-                @open-sheet="showSheet = true"
+                @open="onOpenTrial"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
             <!-- 기소·투표가 아예 없는 평온 상태. 이 분기가 없으면 자리 전체가 빈 화면이 된다.
@@ -469,7 +511,13 @@ function goToChat(challenge) {
         <!-- ===== 개인/그룹 세그먼트 (팀 공용) ===== -->
         <ChallengeModeTabBar active-mode="group" />
 
-        <!-- ===== TO-DO 바텀시트 ===== -->
+        <!--
+          ===== TO-DO 바텀시트 =====
+          **여는 버튼이 지금은 없다.** #432 에서 재판 현황 카드가 아코디언이 되면서 진행 스테퍼부터
+          CTA 까지 그 자리에서 전부 보여주게 돼 「할 일 N건 ›」 시트와 역할이 겹쳤다. 버튼만 뺐고
+          배선은 그대로 둔다 — `todoItems` 는 판사 탕이 말풍선(`judgeQuote`)이 계속 쓰고,
+          시트를 되살릴지 지울지는 아직 정하지 않았다.
+        -->
         <GroupTodoSheet
             ref="todoSheetRef"
             v-model="showSheet"
@@ -538,7 +586,9 @@ function goToChat(challenge) {
 
 /* ── 본문 ──────────────────────────────── */
 .gc-body {
-    padding: 10px 22px 0;
+    /* 헤더 곡면(court-header__skirt)과 좌우가 같아야 한다 — 곡면에 얹힌 섹션 제목과
+       아래 카드의 왼쪽 끝이 어긋나 보인다. 개인 미션 홈 .personal-home__content 와 같은 값 */
+    padding: var(--tt-space-2) var(--tt-screen-padding) 0;
     position: relative;
     z-index: 3;
 }
@@ -554,11 +604,6 @@ function goToChat(challenge) {
     justify-content: space-between;
 }
 
-/* TO-DO 카드 바로 위에 붙는 머리줄. 카드가 곧바로 이어지므로 아래 여백만 조금 준다 */
-.gc-section-top--todo {
-    padding-bottom: 8px;
-}
-
 .gc-section-title {
     font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
@@ -566,7 +611,7 @@ function goToChat(challenge) {
 }
 
 .gc-view-all {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     background: none;
@@ -596,7 +641,7 @@ function goToChat(challenge) {
     background: var(--tt-bg);
     border-radius: 18px;
     text-align: center;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
 }
 
@@ -670,7 +715,7 @@ function goToChat(challenge) {
 
 .gc-group-row__chip {
     flex: none;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 3px 8px;
     border-radius: var(--tt-radius-full);
@@ -688,7 +733,7 @@ function goToChat(challenge) {
 .gc-group-row__chat {
     display: block;
     margin-top: 3px;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -739,7 +784,7 @@ function goToChat(challenge) {
     border: none;
     cursor: pointer;
     font-family: inherit;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-primary);
     transition: opacity 0.15s ease;
@@ -762,8 +807,8 @@ function goToChat(challenge) {
 /* ── 토스트 ────────────────────────────── */
 .gc-toast {
     position: fixed;
-    left: 22px;
-    right: 22px;
+    left: var(--tt-screen-padding);
+    right: var(--tt-screen-padding);
     bottom: calc(var(--tt-tabbar-height) + 80px);
     z-index: var(--tt-z-toast, 50);
     display: flex;

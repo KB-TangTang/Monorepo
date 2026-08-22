@@ -1,12 +1,14 @@
 <!--
   재판 캐러셀 — 일일결산 ACTIVE 상세화면에서
   진행 중인 기소(변론 대기·투표 중) 건을 가로 스와이프 카드로 보여준다.
-  카드 4종: 변론 필요 / 변론 제출됨 / 투표 필요 / 투표 완료
+  카드 5종: 변론 필요 / 변론 제출됨 / 변론 대기 / 투표 필요 / 투표 완료
+  유형 판별은 `utils/groupTrial.js` 의 `trialStance` 하나가 한다 (지방법원 홈과 같은 함수).
 -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { useCountdown } from '@/utils/useCountdown';
+import { trialStance } from '@/utils/groupTrial';
 
 const props = defineProps({
     indictments: { type: Array, required: true },
@@ -28,22 +30,35 @@ function onScroll() {
 }
 
 /*
- * 카드 유형 판별
- * defense-needed: 내가 피기소자 + 변론 미제출
- * defense-done:   내가 피기소자 + 변론 제출 (투표 진행 중)
- * vote-needed:    타인 재판 + 내가 미투표
- * vote-done:      타인 재판 + 내가 투표 완료
+ * 카드 유형 = 내 입장 6가지(`trialStance`)를 카드 5종으로 접은 것.
+ *
+ * **판별을 여기서 다시 쓰지 않는다.** 예전에는 조건을 직접 나열했는데 두 곳이 틀렸다:
+ *  - 변론을 냈는지(`hasDefended`)를 안 봐서, 변론 제출 뒤에도 「내 변론이 필요해요」가 떴다
+ *  - `!isMine && !myVote` 가 변론 대기 중인 남의 재판까지 잡아, 아직 열리지도 않은
+ *    투표의 버튼을 그렸다 — 눌러 들어가면 서버가 거절한다
+ * 그래서 「변론 대기」 카드가 새로 생겼다. 남이 변론을 쓰는 동안은 내가 할 일이 없다.
  */
+const CARD_TYPE = {
+    DEFENSE_NEEDED: 'defense-needed',
+    DEFENSE_SUBMITTED: 'defense-done',
+    ON_TRIAL: 'defense-done',
+    DEFENSE_WAITING: 'defense-waiting',
+    VOTE_NEEDED: 'vote-needed',
+    VOTE_DONE: 'vote-done',
+};
+
 function cardType(item) {
-    if (item.isMine && item.status === 'DEFENSE_WAIT') return 'defense-needed';
-    if (item.isMine && item.status === 'VOTING') return 'defense-done';
-    if (!item.isMine && !item.myVote) return 'vote-needed';
-    return 'vote-done';
+    return CARD_TYPE[trialStance(item)];
 }
 
 function isUrgent(item) {
     const t = cardType(item);
     return t === 'defense-needed' || t === 'vote-needed';
+}
+
+/** 투표가 열렸는가. 변론 대기 중에 0/5 를 그리면 아무도 안 던진 것처럼 보인다. */
+function hasVoting(item) {
+    return item.status === 'VOTING';
 }
 
 function cardTitle(item) {
@@ -67,7 +82,8 @@ function stampLabel(item) {
     const t = cardType(item);
     if (t === 'defense-done') return '변론\n제출';
     if (t === 'vote-done') return '투표\n완료';
-    return '';
+    /* 변론 대기 — 내가 한 일은 없지만 도장 자리를 비우면 빈 원만 남는다 */
+    return '변론\n대기';
 }
 
 function deadline(item) {
@@ -145,7 +161,8 @@ function deadline(item) {
                             <div
                                 class="trial-carousel__stamp"
                                 :class="{
-                                    'trial-carousel__stamp--blue': cardType(item) === 'vote-done',
+                                    'trial-carousel__stamp--blue':
+                                        cardType(item) !== 'defense-done',
                                 }"
                             >
                                 <span
@@ -251,7 +268,7 @@ function deadline(item) {
 
                 <!-- 본문: done 카드 — 투표 현황 + CTA -->
                 <template v-else>
-                    <div class="trial-carousel__vote-status">
+                    <div v-if="hasVoting(item)" class="trial-carousel__vote-status">
                         <span class="trial-carousel__vote-label">투표 현황</span>
                         <span class="trial-carousel__vote-dots">
                             <span

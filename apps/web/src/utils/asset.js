@@ -103,17 +103,25 @@ function getCompositionRatios(composition) {
     });
 }
 
-function getSparklinePoints(trend, width, height) {
+/*
+ * padding 은 선 끝의 마커(원)나 stroke-width 가 viewBox 가장자리에서 잘리지 않게
+ * 그려지는 영역을 안쪽으로 줄인다(이슈 #444). 값이 최고/최저치인 달은 y 가 정확히
+ * 0 또는 height 에 닿고, 마지막 달은 x 가 항상 정확히 width 에 닿는다 — SVG 는
+ * 기본적으로 viewBox 밖을 잘라내므로(overflow: hidden) 그 지점의 마커가 매번 잘려 보였다.
+ */
+function getSparklinePoints(trend, width, height, padding = 0) {
     if (trend.length === 0) {
         return { pointsAttr: '', lastPoint: null };
     }
     const min = Math.min(...trend);
     const max = Math.max(...trend);
     const range = max - min || 1;
-    const stepX = trend.length > 1 ? width / (trend.length - 1) : 0;
+    const drawWidth = width - padding * 2;
+    const drawHeight = height - padding * 2;
+    const stepX = trend.length > 1 ? drawWidth / (trend.length - 1) : 0;
     const coords = trend.map((value, index) => {
-        const x = stepX * index;
-        const y = height - ((value - min) / range) * height;
+        const x = padding + stepX * index;
+        const y = padding + drawHeight - ((value - min) / range) * drawHeight;
         return { x, y };
     });
     const pointsAttr = coords.map(({ x, y }) => `${x},${y}`).join(' ');
