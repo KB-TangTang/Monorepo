@@ -44,7 +44,6 @@ const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 const CARD = 'src/components/challenge/group/GroupTrialStatusCard.vue';
 const CAROUSEL = 'src/components/challenge/group/GroupDetailTrialCarousel.vue';
 const TODO_GRID = 'src/components/challenge/group/GroupTrialTodoGrid.vue';
-const ICON = 'src/components/challenge/group/TrialActionIcon.vue';
 
 /** `toIndictmentViewModel` 을 지난 뒤의 모양. 화면 이름(`isMine`·`hasDefended`)을 쓴다. */
 function trial(overrides = {}) {
@@ -341,27 +340,44 @@ test('접힌 줄은 두 줄이고 타이머는 여전히 없다', () => {
     assert.match(code, /countdownOf\(item\)\.text/);
 });
 
-test('왼쪽 앵커는 아바타가 아니라 할 일 아이콘이다', () => {
+test('왼쪽 앵커는 아바타가 아니라 재판 단계 그림이다', () => {
     const code = source(CARD);
     const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
 
     /* 내 재판일 때 아바타에는 내 얼굴이 떠서 아무것도 알려주지 않았다 */
-    assert.match(summary, /trial-status__icon/);
-    assert.match(summary, /v-if="!item\.isMine"/);
-    /* 아바타는 둘째 줄로 내렸다 — 34px 짜리가 왼쪽에 남아 있으면 앵커가 둘이 된다 */
-    assert.doesNotMatch(summary, /:size="34"/);
-    /* 뱃지 글자는 아이콘이 대신한다 */
+    assert.match(summary, /class="trial-status__art" :src="ART\[item\.icon\]"/);
+    /* 아바타는 둘째 줄에도 남기지 않았다 — 셋이 들어가면 좁은 화면에서 그룹명이 먼저 잘린다 */
+    assert.doesNotMatch(code, /UserAvatar/);
+    assert.doesNotMatch(summary, /item\.subject/);
+    /* 뱃지 글자는 그림이 대신한다 */
     assert.doesNotMatch(code, /item\.badge/);
+});
+
+test('접힌 줄에 투표 점을 두지 않는다', () => {
+    /*
+     * 몇 명이 던졌는지는 펼친 본문의 투표 바가 이미 말한다. 접힌 줄에서는 파란 점 무리가
+     * 셰브론 바로 옆에 붙어 「눌러야 할 것」처럼 읽혔다.
+     */
+    const code = source(CARD);
+    assert.doesNotMatch(code, /item\.voteDots/);
+    assert.doesNotMatch(code, /trial-status__votenum/);
+    /* 펼친 본문의 투표 바는 살아 있어야 한다 */
+    assert.match(code, /trial-status__vote-fill/);
 });
 
 test('타일과 목록 줄이 같은 사물을 가리킨다', () => {
     /*
-     * 타일에서 본 망치와 목록에서 본 망치가 다른 사물이면 「이 타일이 저 목록을 연다」가 안 읽힌다.
-     * 그림체는 다르다 — 목록 줄은 16~20px 라 단색 SVG, 타일은 44px 라 컬러 오브젝트다.
+     * 타일에서 본 판사봉과 시트에서 본 판사봉이 다른 사물이면 「이 타일이 저 목록을 연다」가 안 읽힌다.
      * **키를 `STANCE.icon` 이름으로 맞춰** 한쪽만 엉뚱한 사물로 갈아 끼우지 못하게 한다.
+     *
+     * `STANCE.icon` 은 이름이 넷인데 그림은 셋이라 둘을 합쳤다. 합치는 축은 **재판 단계**다 —
+     * `clock`(변론 대기) → 기소장, `scale`(심판받는 중) → `ballot` 과 같은 투표함.
      */
-    assert.match(source(CARD), /import TrialActionIcon from '\.\/TrialActionIcon\.vue'/);
-    assert.match(source(ICON), /\['gavel', 'ballot', 'clock', 'scale'\]/);
+    const card = source(CARD);
+    assert.match(card, /gavel: objDefenseImage/);
+    assert.match(card, /ballot: objVoteImage/);
+    assert.match(card, /clock: objIndictImage/);
+    assert.match(card, /scale: objVoteImage/);
 
     const grid = source(TODO_GRID);
     assert.match(grid, /const ART = \{ gavel: objDefenseImage, ballot: objVoteImage \}/);

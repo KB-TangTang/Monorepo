@@ -2,7 +2,7 @@
   재판 현황 — 지방법원 홈 (이슈 #432 · #443 · #448)
 
   진행 중인 재판을 아코디언으로 보여준다.
-  접히면 **두 줄**(행동 아이콘 · 할 일 라벨 / 누구·어느 그룹 · 투표 점 · 셰브론),
+  접히면 **두 줄**(오브젝트 그림 · 할 일 라벨 / 그룹명 · 셰브론),
   펼치면 남은 시간 · 진행 스테퍼 · 투표 현황 · CTA 다.
 
   **이제 홈이 아니라 시트가 이 카드를 쓴다**(#448 3차). 홈은 할 일을 격자 두 칸으로 접고
@@ -15,12 +15,16 @@
   「…투표해주세요」와 「…투표했어요」가 **화면에서 완전히 같은 줄**이 됐다.
   구분점(내가 뭘 하는가)을 첫 줄로 당기고, 잘려도 되는 맥락을 둘째 줄로 내린다.
 
-  **왜 아바타가 아니라 아이콘이 왼쪽인가.** 이 목록에서 가장 중요한 건 「내가 뭘 해야 하나」다.
+  **왜 아바타가 아니라 그림이 왼쪽인가.** 이 목록에서 가장 중요한 건 「내가 뭘 해야 하나」다.
   게다가 내 재판일 때 아바타에는 **내 얼굴**이 떠서 아무것도 알려주지 않았다.
-  아바타는 둘째 줄로 내리고, 남의 재판일 때만 그린다.
+  아바타는 한때 둘째 줄에 남의 재판일 때만 그렸는데, 그것도 걷었다(#448 7차) —
+  둘째 줄에 아바타·「지판님 재판」·그룹명 셋이 들어가 좁은 화면에서 **그룹명이 먼저 잘렸다.**
+  여러 그룹에 겹쳐 있을 때 행을 가르는 건 그룹명이다. 누구의 재판인지는 CTA 가 여는 화면이 말한다.
 
   접힌 줄에 **남은 시간은 두지 않는다**(#443). 6행이 매초 같이 떨려 훑기를 방해한다.
   카테고리·한도·초과금액도 두지 않는다 — CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여준다.
+  **투표 점도 두지 않는다**(#448 7차). 몇 명이 던졌는지는 펼친 본문의 투표 바가 이미 말하고,
+  접힌 줄에서는 파란 점 무리가 셰브론 옆에서 「눌러야 할 것」처럼 읽혔다.
 
   판정·문구·아이콘·CTA 는 전부 `utils/groupTrial.js` 의 `toTrialStatusCard` 가 이미 정해서 준다.
   여기서 상태를 다시 보지 않는다 — 그렇게 하면 그룹 상세 캐러셀과 판정이 갈린다.
@@ -28,9 +32,28 @@
 <script setup>
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/outline';
-import UserAvatar from '@/components/common/UserAvatar.vue';
-import TrialActionIcon from './TrialActionIcon.vue';
+import objDefenseImage from '@/assets/images/judgment/obj_defense.png';
+import objVoteImage from '@/assets/images/judgment/obj_vote.png';
+import objIndictImage from '@/assets/images/judgment/obj_indict.png';
 import { TRIAL_STEPS } from '@/utils/groupTrial';
+
+/*
+ * 왼쪽 앵커 그림. 할 일 격자(`GroupTrialTodoGrid`)와 **같은 오브젝트를 같은 키로** 쓴다 —
+ * 타일에서 본 판사봉과 시트에서 본 판사봉이 다른 사물이면 「이 타일이 저 목록을 연다」가 안 읽힌다.
+ *
+ * `STANCE.icon` 은 이름이 넷인데 그림은 셋이라 둘을 합쳤다. 합치는 축은 **재판 단계**다.
+ * - `clock`(변론 제출함 / 남의 변론 기다리는 중) → 기소장. 서류만 나오고 변론이 아직 안 끝난 단계다.
+ * - `scale`(내 재판이 심판받는 중) → 투표함. `ballot` 과 같은 **투표가 도는 단계**라 같은 사물이 맞다.
+ *
+ * 합친 만큼 모양이 말하는 구분은 3단계(변론 / 서류 / 투표)로 줄었다. 「내가 하는가 남이 하는가」는
+ * 첫 줄 제목이 여전히 6가지로 가른다(`STANCE_LABEL`).
+ */
+const ART = {
+    gavel: objDefenseImage,
+    clock: objIndictImage,
+    ballot: objVoteImage,
+    scale: objVoteImage,
+};
 
 const props = defineProps({
     /** `toTrialStatusCard` 를 지난 카드 배열. 정렬은 서버가 끝내 놓았다 */
@@ -101,10 +124,8 @@ function onLeave(el) {
                     :aria-expanded="isOpen(item, index)"
                     @click="toggle(item, index)"
                 >
-                    <!-- 왼쪽 앵커 = 할 일의 종류. 모양이 달라 색을 못 봐도 갈린다 -->
-                    <span class="trial-status__icon" :class="`trial-status__icon--${item.tone}`">
-                        <TrialActionIcon :name="item.icon" class="trial-status__glyph" />
-                    </span>
+                    <!-- 왼쪽 앵커 = 재판이 어느 단계인가. 격자 타일과 같은 사물이라 목록이 이어져 읽힌다 -->
+                    <img class="trial-status__art" :src="ART[item.icon]" alt="" />
 
                     <span class="trial-status__body">
                         <!-- 첫째 줄 = 구분점. 라벨이라 4~9자다 — 말줄임에 닿지 않는다 -->
@@ -114,36 +135,15 @@ function onLeave(el) {
                         >
                             {{ item.title }}
                         </span>
-                        <!-- 둘째 줄 = 맥락. 잘려도 되는 자리라 여기가 말줄임을 맡는다 -->
-                        <span class="trial-status__sub">
-                            <UserAvatar
-                                v-if="!item.isMine"
-                                :image-url="item.profileImage"
-                                :name="item.nickname"
-                                :size="16"
-                                class="trial-status__sub-avatar"
-                            />
-                            <span class="trial-status__sub-text">
-                                {{ item.subject
-                                }}<template v-if="item.groupName"> · {{ item.groupName }}</template>
-                            </span>
+                        <!--
+                             둘째 줄 = 어느 그룹인가. 아바타·닉네임(「지판님 재판」)은 뺐다 —
+                             한 줄에 세 조각이 들어가 좁은 화면에서 그룹명이 먼저 잘렸는데,
+                             **여러 그룹에 겹쳐 있을 때 행을 가르는 건 그룹명**이다.
+                             누구의 재판인지는 CTA 가 여는 화면이 원본으로 보여준다.
+                        -->
+                        <span v-if="item.groupName" class="trial-status__sub-text">
+                            {{ item.groupName }}
                         </span>
-                    </span>
-
-                    <!--
-                         투표 현황을 **모양**으로. 맨 앞 칸이 내 표라 「나는 던졌는데 남들이 아직」과
-                         「나도 아직」이 색 없이도 갈린다. 정원이 많으면 점이 줄을 밀어내므로 숫자로 떨어뜨린다.
-                    -->
-                    <span v-if="item.voteDots" class="trial-status__dots" aria-hidden="true">
-                        <span
-                            v-for="(dot, dotIndex) in item.voteDots"
-                            :key="dotIndex"
-                            class="trial-status__dot"
-                            :class="`trial-status__dot--${dot}`"
-                        />
-                    </span>
-                    <span v-else-if="item.showVote" class="trial-status__votenum">
-                        {{ item.voteCount }}/{{ item.totalVoters }}
                     </span>
 
                     <ChevronDownIcon class="trial-status__chevron" />
@@ -254,36 +254,22 @@ function onLeave(el) {
     cursor: pointer;
 }
 /*
- * 아이콘 박스. 글자 뱃지를 대신한다 — 낱말 두 개(「변론 중」·「투표 중」)로 6가지 입장을 눌러 담고
- * 색으로만 갈랐더니, 「내가 변론을 냈다」와 「남이 변론을 쓰는 중」이 회색 「변론 중」 둘로 같아졌다.
- * 색은 급함만 말하고, 종류는 모양이 말한다.
+ * 왼쪽 앵커. 예전에는 38px 톤 틴트 상자 안에 단색 SVG 를 담았는데, 컬러 오브젝트로 바꾸면서
+ * 상자를 걷었다 — 그림이 자기 색(판사봉 **노랑·남색**)과 자기 그림자를 갖고 있어
+ * 빨강·파랑 틴트 위에 얹으면 색이 부딪히고 그림자가 얼룩이 된다. 격자 타일과 같은 판단이다.
  *
- * 38px 에 --tt-radius-md(14px). pill 로 만들면 원이 돼 아래 아바타(16px 원)와 계열이 섞인다.
+ * 상자를 걷은 만큼 그림을 키운다(19px 글리프 → 34px). 격자 타일(44px)보다는 작다 —
+ * 시트는 목록이라 그림이 제목보다 커지면 안 된다.
+ *
+ * 톤(급함)은 이제 첫 줄 제목의 `--muted` 와 펼친 본문 CTA 색이 맡는다.
  */
-.trial-status__icon {
+.trial-status__art {
     flex: none;
-    width: 38px;
-    height: 38px;
-    border-radius: var(--tt-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.trial-status__glyph {
-    width: 19px;
-    height: 19px;
-}
-.trial-status__icon--danger {
-    background: var(--tt-red-soft);
-    color: var(--tt-red-deep);
-}
-.trial-status__icon--primary {
-    background: var(--tt-blue-soft);
-    color: var(--tt-blue-deep);
-}
-.trial-status__icon--muted {
-    background: var(--tt-bg-fill);
-    color: var(--tt-text-muted);
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    /* 그림 아래 그림자 여백만큼 왼쪽에 빈 공간이 남는다. 광학적으로 글자 줄과 맞춘다 */
+    margin-left: -3px;
 }
 
 /* 두 줄이 남는 폭을 전부 먹는다. min-width:0 이 없으면 flex 자식이 안 줄어들어 말줄임이 안 걸린다 */
@@ -306,19 +292,7 @@ function onLeave(el) {
 .trial-status__title--muted {
     color: var(--tt-text-muted);
 }
-.trial-status__sub {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-}
-.trial-status__sub-avatar {
-    flex: none;
-}
-/*
- * 말줄임은 요소에만 걸린다 — flex 안의 익명 텍스트 노드에는 안 붙는다.
- * 그래서 글자를 span 으로 감싸고 여기에 min-width:0 을 준다.
- */
+/* 이 줄이 말줄임을 맡는다 — 첫 줄 제목은 라벨이라 4~9자로 짧다 */
 .trial-status__sub-text {
     min-width: 0;
     font-size: var(--tt-fs-caption);
@@ -327,41 +301,6 @@ function onLeave(el) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-/* ── 투표 점 ────────────────────────── */
-.trial-status__dots {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-.trial-status__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--tt-border-track);
-    box-sizing: border-box;
-}
-.trial-status__dot--done {
-    background: var(--tt-blue);
-}
-/* 내 칸은 맨 앞이고 테를 두른다. 색이 아니라 **테**라서 색을 못 보는 사람도 어디가 내 표인지 안다 */
-.trial-status__dot--mine-done {
-    background: var(--tt-blue);
-    box-shadow: 0 0 0 2px var(--tt-blue-soft);
-}
-.trial-status__dot--mine-todo {
-    background: transparent;
-    border: 2px solid var(--tt-blue);
-}
-/* 정원이 많아 점을 못 쓸 때. 화면에서 거의 안 나오지만 나오면 여기로 떨어진다 */
-.trial-status__votenum {
-    flex: none;
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-muted);
 }
 
 .trial-status__chevron {

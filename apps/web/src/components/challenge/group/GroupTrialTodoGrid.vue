@@ -25,9 +25,9 @@ import wmDefenseImage from '@/assets/images/judgment/wm_sil_defense.png';
 import wmVoteImage from '@/assets/images/judgment/wm_sil_vote.png';
 
 /*
- * 그림은 `STANCE.icon` 이름으로 찾는다. 목록 줄(`GroupTrialStatusCard`)은 작아서 단색 SVG
- * (`TrialActionIcon`)를, 타일은 커서 컬러 오브젝트를 쓴다 — **그림체는 달라도 사물은 같아야**
- * 「이 타일이 저 목록을 연다」가 읽힌다. 같은 키를 쓰면 한쪽만 엉뚱한 사물로 갈아 끼울 수 없다.
+ * 그림은 `STANCE.icon` 이름으로 찾는다. 시트의 목록 줄(`GroupTrialStatusCard`)도 **같은 키로
+ * 같은 오브젝트**를 쓴다 — 타일에서 본 판사봉과 목록에서 본 판사봉이 다른 사물이면
+ * 「이 타일이 저 목록을 연다」가 안 읽힌다. 크기만 다르다(타일 44px · 목록 줄 34px).
  */
 const ART = { gavel: objDefenseImage, ballot: objVoteImage };
 const WATERMARK = { gavel: wmDefenseImage, ballot: wmVoteImage };
