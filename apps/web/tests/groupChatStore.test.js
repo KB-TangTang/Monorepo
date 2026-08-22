@@ -470,19 +470,22 @@ test('로그아웃은 요약을 비운다 — 다음 사람에게 앞사람 대�
     assert.equal(store.hasUnreadChat, false);
 });
 
-test('씨 뿌리기는 시작 전 그룹까지 물어본다', async () => {
+test('씨 뿌리기는 채팅이 열려 있는 세 상태를 모두 물어본다', async () => {
     /*
-     * `['ACTIVE']` 만 물으면 정작 대화가 가장 활발한 방이 빠진다. 채팅에는 상태 제한이 없고
-     * (ChatMessageService 에 status 검사가 없다) 서버가 시작일을 반드시 내일 이후로 막아서
+     * `['ACTIVE']` 만 물으면 정작 대화가 가장 활발한 방이 빠진다. 채팅은 CLOSED 만 막히고
+     * (ChatRoomAccessService) 서버가 시작일을 반드시 내일 이후로 막아서
      * **만들고 나서 처음 떠드는 구간이 통째로 RECRUITING** 이기 때문이다.
      * 실제로 이 한 줄 때문에 배지도 점도 안 뜨는 상태였다.
+     *
+     * JUDGING 이 빠지면 더 나쁘다 — `syncChatSummary` 는 병합이 아니라 교체라서, 재판 중인 방에서
+     * 실시간으로 켜 둔 점이 다음 목록 조회 때 **지워진다**. 빠뜨림이 아니라 삭제가 된다.
      */
     const store = newStore();
     groupStub.setMyChallengesResponse([{ id: 2, unreadChatCount: 5, lastChatMessage: '민지: 야' }]);
 
     await store.refreshChatSummary();
 
-    assert.deepEqual(groupStub.myChallengeCalls, [['ACTIVE', 'RECRUITING']]);
+    assert.deepEqual(groupStub.myChallengeCalls, [['ACTIVE', 'RECRUITING', 'JUDGING']]);
     assert.equal(store.unreadByGroup[2], 5);
 });
 

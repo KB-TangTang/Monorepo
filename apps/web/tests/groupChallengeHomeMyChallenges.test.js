@@ -52,12 +52,16 @@ async function withMockMode(fn) {
 
 const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 
-test('홈은 진행 중과 시작 전을 함께 부른다', () => {
+test('홈은 세 상태를 부르고 재판 중만 카드에서 뺀다', () => {
     /*
      * 여기가 `['ACTIVE']` 로 되돌아가면 만들기·참여 직후 홈이 다시 빈 화면이 된다.
      * 화면에서는 「그냥 아무것도 안 생겼네」로 보여 원인을 찾기 어렵다.
+     *
+     * 조회는 셋, 표시는 둘이라 **두 줄을 함께 고정해야** 위 보장이 유지된다. 조회 리터럴만
+     * 검사하면 필터가 `=== 'ACTIVE'` 로 잘못 바뀌어 RECRUITING 이 사라져도 초록으로 지나간다.
      */
-    assert.match(source(HOME), /fetchMyGroupChallenges\(\['ACTIVE', 'RECRUITING'\]\)/);
+    assert.match(source(HOME), /fetchMyGroupChallenges\(\['ACTIVE', 'RECRUITING', 'JUDGING'\]\)/);
+    assert.match(source(HOME), /\.filter\(\(ch\) => ch\.status !== 'JUDGING'\)/);
 });
 
 test('목모드에서도 두 상태가 모두 나온다 — 앞의 하나만 돌려주지 않는다', async () => {
@@ -223,13 +227,20 @@ test('로그인하면 채팅 배지에도 씨를 뿌린다', () => {
     assert.match(src, /groupChat\.clearChatSummary\(\)/);
 });
 
-test('홈은 목록을 받을 때마다 채팅 요약을 서버 값으로 정정한다', () => {
+test('홈은 목록을 받을 때마다 채팅 요약을 걸러내기 전 값으로 정정한다', () => {
     /*
      * 서버는 메시지마다 SSE 를 쏘지만 **연결이 끊겨 있던 동안 온 것은 못 받는다.**
      * 이 한 줄이 빠지면 그 구간의 누락이 영영 정정되지 않아 배지가 계속 작게 뜬다.
      * (예전에는 서버 30초 쿨다운 때문에 상시로 어림값이었다 — 이슈 #423 에서 제거)
+     *
+     * **넘기는 값과 순서가 계약이다.** 카드에서 JUDGING 을 빼느라 `myChallenges.value` 를
+     * 넘기면 배지가 다시 두 상태만 세게 되고, 그래도 조회 리터럴 테스트는 초록으로 지나간다.
+     * 세 줄을 통째로 고정해 그 조합을 막는다.
      */
-    assert.match(source(HOME), /groupChat\.syncChatSummary\(myChallenges\.value\)/);
+    assert.match(
+        source(HOME),
+        /const raw = await fetchMyGroupChallenges\([\s\S]*?\);[\s\S]*?groupChat\.syncChatSummary\(raw\);[\s\S]*?myChallenges\.value = raw\.filter\(/,
+    );
 });
 
 test('대화가 있으면 메타 줄 대신 마지막 메시지를 그린다', () => {
@@ -274,7 +285,7 @@ test('채팅 배지 씨 뿌리기는 홈 목록과 같은 상태 조합을 쓴�
     /* 한쪽만 고치면 지방법원 점과 홈 배지가 서로 다른 방을 세게 된다 */
     assert.match(
         source('src/stores/groupChat.js'),
-        /fetchMyGroupChallenges\(\['ACTIVE', 'RECRUITING'\]\)/,
+        /fetchMyGroupChallenges\(\['ACTIVE', 'RECRUITING', 'JUDGING'\]\)/,
     );
 });
 
