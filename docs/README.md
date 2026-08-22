@@ -5,6 +5,7 @@
 | 문서 | 내용 |
 |---|---|
 | `DOMAIN_GLOSSARY.md` | 한글 도메인 용어 ↔ 영문 코드명 ↔ 테이블명 매핑 |
+| `FIXED_EXPENSE_STATE.md` | 고정지출 후보·확정·결제 검증 상태 계약 |
 | `AI_TOOLING_GUIDE.md` | AI 도구용 규칙 파일이 각각 무엇이고 어떻게 쓰는지 |
 | `API_SPEC.md` | 엔드포인트 목록·요청/응답 형식 (작성 예정) |
 

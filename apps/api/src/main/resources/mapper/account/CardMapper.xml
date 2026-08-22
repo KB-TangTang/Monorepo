@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.account.mapper.CardMapper">
+
+    <sql id="columns">
+        id, user_id, institution_code, institution_name, card_no_masked, product_name,
+        card_product_code, card_type_code, card_status_code, currency, issued_at, last_sync_at
+    </sql>
+
+    <select id="findByUser" resultType="com.kb.tangtang.account.domain.Card">
+        SELECT <include refid="columns"/>
+        FROM tbl_card
+        WHERE user_id = #{userId}
+        ORDER BY id
+    </select>
+
+    <update id="update" parameterType="com.kb.tangtang.account.domain.Card">
+        UPDATE tbl_card
+        SET institution_code  = #{institutionCode},
+            institution_name  = #{institutionName},
+            product_name      = #{productName},
+            card_product_code = #{cardProductCode},
+            card_type_code    = #{cardTypeCode},
+            card_status_code  = #{cardStatusCode},
+            currency          = #{currency},
+            issued_at         = #{issuedAt},
+            last_sync_at      = #{lastSyncAt}
+        WHERE user_id = #{userId}
+          AND card_no_masked = #{cardNoMasked}
+    </update>
+
+    <insert id="insert" parameterType="com.kb.tangtang.account.domain.Card"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_card
+            (user_id, institution_code, institution_name, card_no_masked, product_name,
+             card_product_code, card_type_code, card_status_code, currency, issued_at, last_sync_at)
+        VALUES
+            (#{userId}, #{institutionCode}, #{institutionName}, #{cardNoMasked}, #{productName},
+             #{cardProductCode}, #{cardTypeCode}, #{cardStatusCode}, #{currency}, #{issuedAt}, #{lastSyncAt})
+    </insert>
+
+</mapper>

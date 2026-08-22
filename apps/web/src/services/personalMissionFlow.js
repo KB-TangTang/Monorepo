@@ -1,0 +1,301 @@
+/*
+ * 개인 미션 챌린지의 판단 규칙을 모은 파일
+ *
+ * 화면 컴포넌트가 직접 계산하지 않도록 분리
+ * 나중에 배정 규칙이 변경돼도 이 파일 위주로 수정 가능
+ */
+
+/*
+ * 서버 분석 응답이 없을 때 사용하는 레거시 프로필 판정.
+ *
+ * 요구사항:
+ * 실제 영구 자격은 서버가 누적 유효 소비 50건으로 판정한다.
+ */
+export function hasEnoughPersonalMissionData(profile) {
+    return (
+        profile.availableTransactionDays >= profile.requiredTransactionDays &&
+        profile.transactionCount >= profile.requiredTransactionCount
+    );
+}
+
+/*
+ * shouldShowPersonalMissionUnlock 은 2026-08-19 에 지웠다(이슈 #315 (3)).
+ * 실제 게이트는 서버가 쥐고 있다 - tbl_user.personal_mission_unlock_status 가 PENDING 일 때만
+ * showUnlock=true 가 내려온다. 여기 남아 있던 규칙은 어디서도 호출되지 않아
+ * 테스트만 그것을 붙들고 있었고, 정작 서버 상태 전이에는 테스트가 없었다.
+ * 노출 판단은 stores/personalMission.js 의 syncMissionUnlock() 한 곳에서만 한다.
+ */
+
+export function calculatePersonalMissionProgress(currentAmount, targetAmount) {
+    if (targetAmount <= 0) {
+        return currentAmount === 0 ? 100 : 0;
+    }
+
+    return Math.min(Math.round((currentAmount / targetAmount) * 100), 100);
+}
+
+export function getPersonalMissionBudgetStatus(currentAmount, limitAmount) {
+    const current = Number(currentAmount ?? 0);
+    const limit = Number(limitAmount ?? 0);
+    const difference = limit - current;
+
+    return {
+        isOverLimit: difference < 0,
+        remainingAmount: Math.max(difference, 0),
+        exceededAmount: Math.max(-difference, 0),
+    };
+}
+
+export function resolveMissionProsecutorState(prosecutors, missionDifficultyId, selectedId) {
+    const selected = prosecutors.find((prosecutor) => prosecutor.id === selectedId) ?? null;
+    const current =
+        prosecutors.find((prosecutor) => prosecutor.id === missionDifficultyId) ?? selected;
+    const upcoming = current?.id !== selected?.id ? selected : null;
+
+    return { current, upcoming };
+}
+
+export function toTodayMissionBriefing(mission) {
+    if (!mission) {
+        return null;
+    }
+
+    const targetAmount = Number(mission.targetValue ?? 0);
+    const currentAmount = Number(mission.currentAmount ?? 0);
+    const isRelativeMission = mission.missionType === 'RELATIVE';
+
+    return {
+        missionTitle: mission.missionTitle ?? '',
+        missionContent: mission.missionContent ?? '',
+        missionType: mission.missionType ?? '',
+        categoryName: mission.categoryName ?? mission.parentCategoryName ?? '',
+        alibiCondition: isRelativeMission
+            ? `오늘 ${formatWon(targetAmount)} 이하`
+            : (mission.guideMessage ?? mission.missionContent ?? mission.missionTitle ?? ''),
+        currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
+        limitAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
+        streakDays: Number.isFinite(Number(mission.streakDays)) ? Number(mission.streakDays) : 0,
+        difficultyName: mission.difficultyName ?? '',
+        assignDate: mission.assignDate ?? '',
+        assignmentReason: mission.assignmentReason ?? '',
+        missionBadge: getMissionBadge(mission.missionType, mission.assignmentReason),
+    };
+}
+
+export function getMissionBadge(missionType, assignmentReason) {
+    if (missionType !== 'ABSOLUTE') {
+        return '수사 브리핑';
+    }
+    return assignmentReason === 'MONTHLY_RANDOM' ? '전체 단속 · 절대형' : '공통 사건 · 절대형';
+}
+
+export function formatWon(amount) {
+    const numericAmount = Number(amount);
+    const roundedAmount = Number.isFinite(numericAmount) ? Math.round(numericAmount) : 0;
+    return `${roundedAmount.toLocaleString('ko-KR')}원`;
+}
+
+export function formatMissionWatchQuote(categoryName) {
+    const name = String(categoryName ?? '').trim();
+    if (!name) {
+        return '"오늘의 소비를 지켜보겠습니다"';
+    }
+
+    const lastCharacterCode = name.charCodeAt(name.length - 1);
+    const isKoreanSyllable = lastCharacterCode >= 0xac00 && lastCharacterCode <= 0xd7a3;
+    const hasFinalConsonant = isKoreanSyllable && (lastCharacterCode - 0xac00) % 28 !== 0;
+    const objectParticle = hasFinalConsonant ? '을' : '를';
+
+    return `"오늘은 ${name}${objectParticle} 지켜보겠습니다"`;
+}
+
+export function toMissionVerdictModel(verdict, images = {}) {
+    if (!verdict) {
+        return null;
+    }
+
+    const isSuccess = verdict.result === 'SUCCESS';
+    return {
+        assignmentId: verdict.assignmentId,
+        type: verdict.result,
+        date: formatKoreanDate(verdict.assignDate),
+        categoryName: verdict.categoryName ?? '',
+        tangiQuote: isSuccess
+            ? '"알리바이, 인정하겠습니다"'
+            : '"이번 알리바이는 인정하기 어렵겠군요"',
+        tangiImage: isSuccess ? images.success : images.fail,
+        currentAmount: Number(verdict.currentAmount) || 0,
+        limitAmount: Number(verdict.targetValue) || 0,
+        remainAmount: Number(verdict.remainAmount) || 0,
+        overAmount: Number(verdict.overAmount) || 0,
+        points: Number(verdict.points) || 0,
+        bonusPoints: Number(verdict.bonusPoints) || 0,
+        streakDays: Number(verdict.streakDays) || 0,
+        pendingCount: Number(verdict.pendingCount) || 0,
+        transactions: (verdict.transactions ?? []).map((transaction) => ({
+            id: transaction.transactionId,
+            name: transaction.merchantName,
+            amount: Number(transaction.amount) || 0,
+        })),
+    };
+}
+
+export function formatMissionAssignmentSummary(mission) {
+    if (!mission) {
+        return '배정 없음';
+    }
+
+    const difficultyName = mission.difficultyName ?? '난이도 없음';
+    const targetRate = Number(mission.targetRate);
+    const rateLabel = Number.isFinite(targetRate) ? `${targetRate}%` : '절감률 없음';
+
+    return `${difficultyName} · ${rateLabel} · 목표 ${formatWon(mission.targetValue)}`;
+}
+
+export function toWatchCategoryModel(analysis) {
+    const topCategories = analysis?.topCategories ?? [];
+
+    return {
+        period: formatAnalysisPeriod(analysis?.analysisStartDate, analysis?.analysisEndDate),
+        items: topCategories.map((category) => ({
+            categoryId: category.categoryId,
+            name: category.categoryName ?? category.parentCategoryName ?? '',
+            ratio: Math.round(Number(category.spendingRatio) || 0),
+            missionRound: Number(category.missionRound) || 1,
+            rotationAssignDate: formatShortDate(category.rotationAssignDate),
+            rotationResult: category.rotationResult ?? 'WAITING',
+        })),
+    };
+}
+
+export function formatWatchlistRotationStatus(item) {
+    if (item?.rotationResult === 'PENDING') {
+        return '오늘 수사 중';
+    }
+
+    if (item?.rotationResult === 'SUCCESS' || item?.rotationResult === 'FAIL') {
+        const resultLabel = item.rotationResult === 'SUCCESS' ? '인정' : '기각';
+        return item.rotationAssignDate ? `${item.rotationAssignDate} ${resultLabel}` : resultLabel;
+    }
+
+    return '대기';
+}
+
+export function formatWatchlistMissionRound(item) {
+    const missionRound = Math.max(Number(item?.missionRound) || 1, 1);
+    if (missionRound === 1 && item?.rotationResult === 'PENDING') {
+        return '첫 수사';
+    }
+    if (missionRound === 1 && item?.rotationResult === 'WAITING') {
+        return '첫 수사 예정';
+    }
+    if (item?.rotationResult === 'WAITING') {
+        return `수사 ${missionRound}회차 예정`;
+    }
+    return `수사 ${missionRound}회차`;
+}
+
+export function toWeeklyVerdictModel(streak, today = new Date()) {
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    const resultsByDate = new Map(
+        (streak?.weeklyResults ?? []).map((item) => [item.date, item.result]),
+    );
+    const todayKey = formatLocalDateKey(today);
+    const weekStart = streak?.weekStartDate
+        ? new Date(`${streak.weekStartDate}T00:00:00`)
+        : startOfCurrentWeek(today);
+
+    return {
+        streakDays: Number(streak?.streakCount) || 0,
+        longestStreakDays: Number(streak?.longestStreakCount) || 0,
+        days: dayNames.map((dow, index) => {
+            const date = new Date(weekStart);
+            date.setDate(weekStart.getDate() + index);
+            const dateKey = formatLocalDateKey(date);
+            const result = resultsByDate.get(dateKey);
+
+            let status = 'pending';
+            if (dateKey === todayKey && result === 'PENDING') status = 'today';
+            else if (result === 'SUCCESS') status = 'success';
+            else if (result === 'FAIL') status = 'failed';
+
+            return { dow, date: dateKey, status };
+        }),
+    };
+}
+
+function startOfCurrentWeek(date) {
+    const monday = new Date(date);
+    const daysFromMonday = (monday.getDay() + 6) % 7;
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - daysFromMonday);
+    return monday;
+}
+
+function formatLocalDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatAnalysisPeriod(startDate, endDate) {
+    if (!startDate || !endDate) return '';
+    return `${formatShortDate(startDate)} ~ ${formatShortDate(endDate)}`;
+}
+
+function formatShortDate(dateValue) {
+    if (!dateValue) return '';
+    const [, month, day] = dateValue.split('-');
+    return `${Number(month)}/${Number(day)}`;
+}
+
+function formatKoreanDate(dateValue) {
+    if (!dateValue) return '';
+    const [, month, day] = dateValue.split('-');
+    return `${Number(month)}월 ${Number(day)}일`;
+}
+
+/* ── v4 추가 함수 ──────────────────────────────────── */
+
+/**
+ * 오늘 날짜를 "2026. 07. 30 (목)" 형식으로 포맷
+ */
+export function formatCourtDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayName = dayNames[date.getDay()];
+
+    return `${year}. ${month}. ${day} (${dayName})`;
+}
+
+/**
+ * 데이터 수집 진행률 계산 (증거 부족 화면)
+ */
+export function calculateDataProgress(requirements) {
+    const dayProgress = Math.min(requirements.availableDays / requirements.requiredDays, 1);
+    const txProgress = Math.min(
+        requirements.transactionCount / requirements.requiredTransactionCount,
+        1,
+    );
+
+    return Math.round(((dayProgress + txProgress) / 2) * 100);
+}
+
+/**
+ * 요주의 대상 상태 라벨 반환
+ */
+export function getWatchlistStatusLabel(status, clearedDate) {
+    switch (status) {
+        case 'CLEARED':
+            return `${clearedDate} 인정`;
+        case 'TODAY':
+            return '오늘 수사 중';
+        case 'PENDING':
+            return '대기';
+        default:
+            return '';
+    }
+}

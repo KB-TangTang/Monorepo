@@ -1,0 +1,114 @@
+.verdict-result {
+    min-height: 100dvh;
+    background: var(--tt-bg-subtle);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── 헤더 ── */
+.verdict-result__header {
+    flex: none;
+    position: relative;
+    overflow: hidden;
+    padding-bottom: 10px;
+}
+
+.verdict-result__deco {
+    position: absolute;
+    top: -34px;
+    right: -26px;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+}
+
+.verdict-result__deco--innocent {
+    background: var(--tt-success-subtle);
+}
+
+.verdict-result__deco--guilty {
+    background: var(--tt-danger-subtle);
+}
+
+.verdict-result__badges {
+    display: flex;
+    gap: 6px;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
+    position: relative;
+    z-index: 2;
+}
+
+.verdict-result__badge {
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    padding: 4px 10px;
+    border-radius: var(--tt-radius-full);
+}
+
+.badge--eval {
+    background: var(--tt-info-subtle);
+    color: var(--tt-info);
+}
+
+.badge--innocent {
+    background: var(--tt-success-subtle);
+    color: var(--tt-success);
+}
+
+.badge--guilty {
+    background: var(--tt-danger-subtle);
+    color: var(--tt-danger-deep);
+}
+
+/* ── 본문 ── */
+.verdict-result__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--tt-space-3);
+}
+
+/* ── 하단 버튼 ── */
+.verdict-result__footer {
+    flex: none;
+    padding: var(--tt-space-3) var(--tt-screen-padding) 18px;
+    background: var(--tt-bg-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.verdict-result__btn {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.verdict-result__btn--outline {
+    background: var(--tt-bg);
+    border: 1.5px solid var(--tt-border-divider);
+    color: var(--tt-text);
+    font-weight: var(--tt-fw-black);
+    font-size: var(--tt-fs-button);
+    padding: 13px;
+    border-radius: var(--tt-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-2);
+}
+
+.verdict-result__btn--primary {
+    background: var(--tt-surface-inverse);
+    color: var(--tt-text-inverse);
+    font-weight: var(--tt-fw-black);
+    font-size: var(--tt-fs-label);
+    padding: 15px;
+    border-radius: var(--tt-radius-md);
+    text-align: center;
+    box-shadow: var(--tt-elevation-btn);
+}

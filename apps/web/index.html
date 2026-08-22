@@ -1,10 +1,50 @@
 <!doctype html>
-<html lang="">
+<html lang="ko">
     <head>
         <meta charset="UTF-8" />
         <link rel="icon" href="/favicon.ico" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+          viewport-fit=cover 가 없으면 env(safe-area-inset-*) 가 전부 0 으로 계산된다.
+          탭바·바텀시트 등 16곳이 이 값에 기대고 있어, 빼면 설치형(standalone)에서
+          하단 5탭이 아이폰 홈 인디케이터에 깔린다.
+        -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>탕탕 · 지갑재판소</title>
+
+        <!-- ── 설치형 웹앱(PWA) ── 이슈 #185. Web Push 는 범위 밖이다(2026-08-13 결정) -->
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <!--
+          설치형에서 상태바(시계·배터리 줄)의 배경색이다. 그 자리는 시스템 영역이라
+          웹 화면이 위에 못 그리고, 이 값만 색을 정한다.
+
+          여기 적힌 건 「첫 화면이 뜨기 전까지의 기본값」일 뿐이다. 라우트마다 화면
+          맨 위 색이 달라서(로그인·재판·그룹챌린지는 잉크 패널) 실제 값은
+          router 가 utils/themeColor.js 로 갈아 끼운다. 기본값은 화면 63개 중 57개가
+          쓰는 밝은 배경(--tt-neutral-paper)에 맞춰 둔다.
+        -->
+        <meta name="theme-color" content="#fafafb" />
+        <meta name="description" content="새는 돈을 법정에 세우는 자산관리 서비스" />
+        <!--
+          iOS 는 manifest 의 아이콘을 쓰지 않는다. 이 링크가 홈 화면 아이콘이 된다.
+
+          ⚠ 파일명에 -v4 가 붙어 있다. 아이콘을 바꿀 때 **같은 파일명을 재사용하지 말 것.**
+            iOS 홈 화면 아이콘은 「홈 화면에 추가」 시점에 캡처돼 그 뒤로 갱신되지 않고,
+            안드로이드·CDN 도 같은 이름이면 옛 파일을 계속 줄 수 있다.
+            내용이 바뀌면 -v5 로 올리고 manifest 도 같이 고친다.
+
+          ⚠ PNG 를 손으로 만들지 말 것. 원본은 src/assets/images/logo-tangtang.png 이고
+            apps/web/scripts/build-icons.py 가 4종을 만든다.
+        -->
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180-v4.png" />
+        <!-- 홈 화면 아이콘 아래 표시될 이름. 없으면 <title> 전체가 들어가 잘린다 -->
+        <meta name="apple-mobile-web-app-title" content="탕탕" />
+        <!--
+          status-bar-style 은 default 로 둔다. black-translucent 는 콘텐츠가 상태바 밑까지
+          올라와 전 화면의 상단 여백을 다시 잡아야 한다 — 마감 앞두고 감당할 범위가 아니다.
+        -->
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
 
         <!-- 본문 폰트 Pretendard — tokens.css 의 --tt-font-sans 가 참조한다 -->
         <link
@@ -19,6 +59,14 @@
         <link
             rel="stylesheet"
             href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap"
+        />
+        <!--
+          법원 서류(소환장) 폰트 Nanum Myeongjo — tokens.css 의 --tt-font-serif 가 참조한다.
+          한글은 Google Fonts 가 unicode-range 로 잘게 나눠 두어, 실제 글리프는 쓰는 화면에서만 받는다.
+        -->
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap"
         />
     </head>
     <body>

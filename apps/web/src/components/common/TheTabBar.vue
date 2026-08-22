@@ -9,9 +9,9 @@ import { useRoute } from 'vue-router';
 /* 탭 정의는 이 배열 하나뿐이다. 라우트를 바꾸면 router/index.js 와 함께 고친다. */
 const TABS = [
     {
-        name: 'trial',
+        name: 'personalMissionChallenge',
         label: '재판',
-        to: '/trial',
+        to: '/mission/personal',
         paths: ['M12 4v16', 'M7.5 20h9', 'M4.5 8h15', 'M4.5 8 2 14h5z', 'M19.5 8 17 14h5z'],
     },
     {
@@ -33,7 +33,7 @@ const TABS = [
     {
         name: 'ledger',
         label: '자료실',
-        to: '/ledger',
+        to: '/reports/monthly',
         paths: [
             'M6 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z',
             'M8 8.5h6',
@@ -51,9 +51,19 @@ const TABS = [
 
 const route = useRoute();
 
-/* 홈(/)만 정확 매칭. 나머지는 하위 경로(/trial/3 …)에서도 활성으로 본다. */
+/*
+ * 홈(/)만 정확 매칭. 나머지는 하위 경로에서도 활성으로 본다.
+ * /ledger 는 자산 홈의 토글로만 들어가는 화면이라 "자산" 탭을 활성으로 유지한다.
+ */
 function isActive(tab) {
+    /* 고정지출처럼 URL 소속과 화면 맥락이 다른 경우 라우트가 지정한 탭을 우선한다. */
+    if (route.meta.tabBar) {
+        return route.meta.tabBar === tab.name;
+    }
     if (tab.name === 'ledger' && route.path.startsWith('/reports')) {
+        return true;
+    }
+    if (tab.name === 'asset' && route.path.startsWith('/ledger')) {
         return true;
     }
     return tab.to === '/' ? route.path === '/' : route.path.startsWith(tab.to);
@@ -110,11 +120,16 @@ function isActive(tab) {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    height: var(--tt-tabbar-height);
+    /*
+     * 아이폰에서는 아래 padding 이 홈 인디케이터 자리를 차지하므로 항목 높이를 그만큼 깎아
+     * 전체 바 높이를 안드로이드와 비슷하게 맞춘다 (64+34=98 → 52+34=86).
+     * 안드로이드는 --tt-tabbar-trim 이 0 이라 그대로 64px.
+     */
+    height: calc(var(--tt-tabbar-height) - var(--tt-tabbar-trim));
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-mono-chip);
     font-weight: var(--tt-fw-medium);
-    color: var(--tt-text-muted);
+    color: var(--tt-tab-inactive);
     text-decoration: none;
     transition: color 0.15s ease;
 }
@@ -126,7 +141,7 @@ function isActive(tab) {
 
 /* 활성 탭 — 활성 판정은 스크립트의 isActive() 한 곳에서만 한다 */
 .tt-tabbar__item--active {
-    color: var(--tt-primary);
+    color: var(--tt-tab-active);
 }
 
 .tt-tabbar__item--active .tt-tabbar__icon {

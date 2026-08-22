@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.fixedexpense.mapper.FixedExpenseCandidateActionMapper">
+
+    <!-- UPDATE가 0건일 때 재전송·상충 상태를 최신 행 기준으로 구분한다. -->
+    <select id="findOwnedCandidateForUpdate"
+            resultType="com.kb.tangtang.fixedexpense.domain.FixedExpenseCandidate">
+        SELECT id,
+               user_id,
+               is_excluded,
+               status,
+               confirmed_at
+        FROM tbl_fixed_expense_candidate
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <update id="confirmCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET confirmed_at = #{confirmedAt}
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NULL
+    </update>
+
+    <update id="excludeCandidate">
+        UPDATE tbl_fixed_expense_candidate
+        SET is_excluded = 1
+        WHERE id = #{candidateId}
+          AND user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NULL
+    </update>
+
+</mapper>

@@ -1,0 +1,301 @@
+package com.kb.tangtang.user.service;
+
+import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.common.storage.ImageProcessor;
+import com.kb.tangtang.common.storage.ImageStorage;
+import com.kb.tangtang.user.domain.TutorialType;
+import com.kb.tangtang.user.dto.UserDto;
+import com.kb.tangtang.user.dto.UserMeDto;
+import com.kb.tangtang.user.dto.PersonalMissionUnlockDto;
+import com.kb.tangtang.user.mapper.UserMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+import java.util.regex.Pattern;
+
+/**
+ * 로그인한 사용자 본인 정보 조회·수정.
+ *
+ * 컨트롤러가 매퍼를 직접 쓰던 것을 이 서비스로 옮겼다 — 쓰기(실명 갱신)가 생겨
+ * 트랜잭션 경계가 필요해졌기 때문이다. (apps/api/AGENTS.md: 트랜잭션 경계는 Service)
+ *
+ * 실명(name)은 간편인증 화면이 채운다. 표시명(nickname)과 다른 값이다.
+ * (DECISIONS.md 2026-08-11 (4))
+ */
+@Service
+public class UserService {
+
+    /** tbl_user.name 이 VARCHAR(50) 이다. 넘치면 DB 가 자르기 전에 여기서 막는다. */
+    private static final int NAME_MAX_LENGTH = 50;
+
+    /** 실명이 한 글자인 경우는 없다. 오타·실수 입력을 걸러내는 하한이다. */
+    private static final int NAME_MIN_LENGTH = 2;
+
+    /**
+     * 한글·영문·공백만 허용한다.
+     * 자모(ㄱ, ㅏ)는 '가-힣' 범위 밖이라 자동으로 걸러진다 — 조합이 덜 된 입력을 막는다.
+     */
+    private static final Pattern NAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z ]+$");
+
+    /** tbl_user.nickname 도 VARCHAR(50) 이다. 하한은 두지 않는다 — 표시명은 한 글자여도 된다. */
+    private static final int NICKNAME_MAX_LENGTH = 50;
+
+    private final UserMapper userMapper;
+    private final ProfileImageUrlResolver profileImageUrlResolver;
+    private final ImageStorage imageStorage;
+    private final ImageProcessor imageProcessor;
+    private final ProfileImageWriter profileImageWriter;
+    private final ConsentService consentService;
+    private final RefreshTokenService refreshTokenService;
+
+    public UserService(UserMapper userMapper, ProfileImageUrlResolver profileImageUrlResolver,
+                       ImageStorage imageStorage, ImageProcessor imageProcessor,
+                       ProfileImageWriter profileImageWriter,
+                       ConsentService consentService, RefreshTokenService refreshTokenService) {
+        this.userMapper = userMapper;
+        this.profileImageUrlResolver = profileImageUrlResolver;
+        this.imageStorage = imageStorage;
+        this.imageProcessor = imageProcessor;
+        this.profileImageWriter = profileImageWriter;
+        this.consentService = consentService;
+        this.refreshTokenService = refreshTokenService;
+    }
+
+    @Transactional(readOnly = true)
+    public UserMeDto me(long userId) {
+        return meOf(userId);
+    }
+
+    /**
+     * 실명 갱신 (간편인증 화면).
+     *
+     * ⚠ 여기서 저장하는 값은 **이름 하나뿐이다.** 같은 화면에서 받는 생년월일·통신사·휴대폰은
+     *   공급자에 전달만 하고 저장하지 않는다 — 그쪽은 account 모듈이 다루며 DB 에 남기지 않는다.
+     *   (DECISIONS.md 2026-08-05 계좌 연동 · 2026-08-11 (4))
+     *
+     * @return 갱신된 사용자 정보. 프론트가 스토어를 바로 갱신할 수 있게 돌려준다.
+     */
+    @Transactional
+    public UserMeDto updateName(long userId, String rawName) {
+        String name = normalizeName(rawName);
+        if (userMapper.updateName(userId, name) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 닉네임(표시명) 설정·수정 — 온보딩(AU_03_01)과 마이페이지(MY_01_03)가 함께 쓴다.
+     *
+     * ⚠ **중복 검사를 하지 않는다.** 닉네임 중복 허용이 팀 결정이라 UNIQUE 제약도 없다.
+     *   유니크를 걸면 흔한 이름이 전부 선점돼 가입 직후가 이탈 지점이 된다.
+     *   그룹챌린지는 초대 기반 소규모라 중복이 실제 문제가 되지 않는다.
+     *   (DECISIONS.md 2026-08-11 닉네임 온보딩)
+     *
+     * 빈 값 저장은 허용하지 않는다 — 온보딩에서 강제로 받은 값이라
+     * 미설정(null) 상태로 되돌릴 경로를 두지 않는다.
+     */
+    @Transactional
+    public UserMeDto updateNickname(long userId, String rawNickname) {
+        String nickname = normalizeNickname(rawNickname);
+        if (userMapper.updateNickname(userId, nickname) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    @Transactional
+    public UserMeDto updateDifficulty(long userId, String rawDifficultyName) {
+        String difficultyName = rawDifficultyName == null ? "" : rawDifficultyName.trim().toUpperCase();
+        Long difficultyId = userMapper.findDifficultyIdByName(difficultyName);
+        if (difficultyId == null) {
+            throw new BusinessException("INVALID_MISSION_DIFFICULTY", "선택할 수 없는 미션 난이도입니다.");
+        }
+        if (userMapper.updateDifficulty(userId, difficultyId) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 업로드 (온보딩 AU_03_01 · 마이페이지 MY_01_03 공용).
+     *
+     * ⚠ **새로 저장한 뒤에 옛 파일을 지운다.** 순서를 뒤집으면 저장이 실패했을 때
+     *   기존 사진까지 잃는다. 키에 UUID 를 넣어 매번 새 파일이 되게 한다 —
+     *   같은 이름을 덮어쓰면 브라우저·CDN 캐시가 옛 사진을 계속 보여준다.
+     * ⚠ **옛 파일 삭제는 커밋 뒤로 미룬다** ({@code ProfileImageWriter#deleteAfterCommit}).
+     *
+     * <p><b>이 메서드에는 {@code @Transactional} 이 없다</b> (이슈 #318). 업로드는 S3 왕복이고,
+     * 트랜잭션 안에 두면 HikariCP 커넥션(풀 크기 10, {@code RootConfig#dataSource})을 쥔 채
+     * 네트워크를 기다리게 되어 같은 풀을 쓰는 API 전체가 대기한다. DB 쓰기는
+     * {@link ProfileImageWriter#apply} 의 짧은 트랜잭션이 맡는다.
+     */
+    public UserMeDto updateProfileImage(long userId, byte[] content) {
+        UserDto user = findActive(userId);
+        String oldKey = user.getProfileImageKey();
+
+        byte[] jpeg = imageProcessor.toSquareJpeg(content);
+        String newKey = "profile/" + userId + "/" + UUID.randomUUID() + ".jpg";
+        imageStorage.store(jpeg, newKey);
+
+        try {
+            profileImageWriter.apply(userId, newKey, oldKey);
+        } catch (RuntimeException e) {
+            /*
+             * 탈퇴·차단 계정이 유효한 JWT 로 여기까지 들어오면 매번 이 경로를 탄다
+             * (findActive 는 status 를 보지 않고, updateProfileImageKey 는
+             *  WHERE status = 'ACTIVE' 라 0행이 되어 NOT_FOUND 가 된다). 방금 저장한 파일을
+             * 그대로 두면 참조 없는 고아 파일이 호출마다 하나씩 쌓인다 — 정리하고 다시 던진다.
+             *
+             * 트랜잭션이 이 밖으로 나왔으므로 0행뿐 아니라 DB 예외로 롤백된 경우까지 같이
+             * 정리된다(범위가 넓어진 쪽으로 안전하다). delete 는 멱등이다.
+             */
+            imageStorage.delete(newKey);
+            throw e;
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 프로필 이미지 삭제 — 기본(이니셜) 아바타로 되돌린다.
+     * 이미 미설정이어도 성공으로 처리한다. 없는 것을 지우는 것은 오류가 아니다.
+     *
+     * <p>업로드 경로와 달리 <b>{@code @Transactional} 을 그대로 둔다</b> (이슈 #318).
+     * 올릴 파일이 없어 트랜잭션 안에 네트워크 I/O 가 들어오지 않는다 —
+     * {@link ProfileImageWriter#clear} 는 {@code REQUIRED} 라 이 트랜잭션에 합류한다.
+     */
+    @Transactional
+    public UserMeDto deleteProfileImage(long userId) {
+        UserDto user = findActive(userId);
+
+        profileImageWriter.clear(userId, user.getProfileImageKey());
+        return meOf(userId);
+    }
+
+    /**
+     * 회원 탈퇴 (MY_01_05).
+     *
+     * 물리 삭제하지 않는다 — tbl_user(id) 를 참조하는 FK 가 22개이고 그 중
+     * tbl_group_member·tbl_vote 등은 **다른 사용자의** 그룹챌린지 이력이다.
+     * 식별정보만 즉시 지우고 행은 남긴다. (DECISIONS.md 2026-08-13)
+     *
+     * ⚠ 순서가 중요하다. ③이 식별정보를 지우므로 ①·②보다 뒤여야 한다.
+     *   ① 동의 전건 철회 — ConsentWithdrawnListener 가 같은 트랜잭션에서 계좌 연동을 끊는다
+     *   ② 리프레시 토큰 전건 폐기
+     *   ③ 상태 변경 + 익명화 + provider_user_id 접미사(→ 재가입 가능)
+     *
+     * 0행이어도 예외를 던지지 않는다 — 이미 탈퇴한 계정의 재요청은 오류가 아니다(멱등).
+     *
+     * 액세스 토큰은 서명만 검증하므로 만료(jwt.access-token-validity=900, 최대 15분)까지는
+     * 살아 있다. 리프레시 토큰이 폐기돼 그 뒤로 세션이 이어지지 않는 것으로 갈음한다 —
+     * 매 요청 DB 조회를 추가하는 비용이 15분의 잔여 창보다 크다.
+     */
+    @Transactional
+    public void withdraw(long userId) {
+        consentService.withdrawAll(userId);
+        refreshTokenService.revokeAll(userId);
+        userMapper.withdraw(userId, LocalDateTime.now());
+    }
+
+    /**
+     * 닉네임 형식 검증.
+     *
+     * 실명(name)보다 규칙이 느슨하다 — 표시명이라 한 글자도, 이모지·기호도 막을 이유가 없다.
+     * 막는 건 **빈 값과 길이 초과** 둘뿐이다. (API 연동규격 No.87)
+     */
+    private static String normalizeNickname(String rawNickname) {
+        String nickname = rawNickname == null ? "" : rawNickname.trim();
+        if (nickname.isEmpty()) {
+            throw new BusinessException("INVALID_REQUEST", "닉네임을 입력해 주세요.");
+        }
+        if (nickname.length() > NICKNAME_MAX_LENGTH) {
+            throw new BusinessException("INVALID_REQUEST",
+                    "닉네임은 " + NICKNAME_MAX_LENGTH + "자 이하로 입력해 주세요.");
+        }
+        return nickname;
+    }
+
+    /**
+     * 실명 형식 검증. 프론트도 같은 규칙으로 검사하지만
+     * (utils/account.js validateSimpleAuthForm) 화면을 거치지 않는 요청이 들어올 수 있어
+     * 서버에서 다시 본다.
+     */
+    private static String normalizeName(String rawName) {
+        String name = rawName == null ? "" : rawName.trim();
+        if (name.isEmpty()) {
+            throw new BusinessException("INVALID_NAME", "이름을 입력해 주세요.");
+        }
+        if (name.length() < NAME_MIN_LENGTH || name.length() > NAME_MAX_LENGTH) {
+            throw new BusinessException("INVALID_NAME",
+                    "이름을 " + NAME_MIN_LENGTH + "~" + NAME_MAX_LENGTH + "자로 입력해 주세요.");
+        }
+        if (!NAME_PATTERN.matcher(name).matches()) {
+            throw new BusinessException("INVALID_NAME", "이름은 한글 또는 영문으로 입력해 주세요.");
+        }
+        return name;
+    }
+
+    /**
+     * 튜토리얼을 봤다고 표시한다 (이슈 #128).
+     *
+     * 시각을 서버에서 찍는다 — 클라이언트 시계를 믿으면 기기 시간만 바꿔도 값이 어긋난다.
+     * 이 프로젝트에는 Clock 빈이 없어 LocalDateTime.now() 를 그대로 쓴다.
+     */
+    @Transactional
+    public UserMeDto markTutorialSeen(long userId, TutorialType type) {
+        return writeTutorialSeenAt(userId, type, LocalDateTime.now());
+    }
+
+    /**
+     * 「튜토리얼 다시 보기」 (마이페이지).
+     * 완료 시각을 지우면 다음 진입 때 다시 뜬다 — 별도 플래그를 두지 않는다.
+     */
+    @Transactional
+    public UserMeDto clearTutorialSeen(long userId, TutorialType type) {
+        return writeTutorialSeenAt(userId, type, null);
+    }
+
+    private UserMeDto writeTutorialSeenAt(long userId, TutorialType type, LocalDateTime seenAt) {
+        if (userMapper.updateTutorialSeenAt(userId, type.name(), seenAt) == 0) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return meOf(userId);
+    }
+
+    /**
+     * 데이터 부족을 거친 사용자에게만 맞춤 미션 개시 안내를 예약한다.
+     *
+     * 자격 판정은 매퍼가 DB 안에서 한다 - 호출자가 충족 여부를 넘기지 않는다(이슈 #315 (1)).
+     */
+    @Transactional
+    public PersonalMissionUnlockDto syncPersonalMissionUnlock(long userId) {
+        userMapper.syncPersonalMissionUnlockStatus(userId);
+        UserDto user = findActive(userId);
+        return PersonalMissionUnlockDto.from(user.getPersonalMissionUnlockStatus());
+    }
+
+    /** 맞춤 미션 개시 안내를 확인 처리한다. 이미 확인한 요청도 성공하는 멱등 연산이다. */
+    @Transactional
+    public PersonalMissionUnlockDto acknowledgePersonalMissionUnlock(long userId) {
+        userMapper.acknowledgePersonalMissionUnlock(userId);
+        UserDto user = findActive(userId);
+        return PersonalMissionUnlockDto.from(user.getPersonalMissionUnlockStatus());
+    }
+
+    /** 조회 → URL 조립 → DTO. 네 곳이 같은 일을 하므로 여기 모은다. */
+    private UserMeDto meOf(long userId) {
+        UserDto user = findActive(userId);
+        return UserMeDto.from(user, profileImageUrlResolver.resolve(user));
+    }
+
+    private UserDto findActive(long userId) {
+        UserDto user = userMapper.findById(userId);
+        if (user == null) {
+            throw new BusinessException("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        return user;
+    }
+
+}

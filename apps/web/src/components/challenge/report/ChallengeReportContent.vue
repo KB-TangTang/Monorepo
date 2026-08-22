@@ -1,68 +1,92 @@
 <script setup>
+import { ref } from 'vue';
 import {
+    formatInteger,
     formatPercentage,
     formatPercentagePoint,
     formatPeriod,
-    formatWon,
 } from '@/utils/challengeReport';
+import ChallengeConsumptionHabitDropdown from '@/components/challenge/report/ChallengeConsumptionHabitDropdown.vue';
+import ChallengeGroupRecordCard from '@/components/challenge/report/ChallengeGroupRecordCard.vue';
+import ChallengeRankingSummaryCard from '@/components/challenge/report/ChallengeRankingSummaryCard.vue';
 
-defineProps({ report: { type: Object, required: true } });
-defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
+defineProps({
+    report: { type: Object, required: true },
+    showComparison: { type: Boolean, default: true },
+});
+defineEmits(['change-difficulty', 'open-group-history']);
+
+const isWeeklyResultsOpen = ref(false);
 </script>
 
 <template>
     <div class="report-content">
         <div class="report-context">
             <span>{{ formatPeriod(report.period) }}</span>
-            <strong>{{ report.challengeName }}</strong>
+            <strong>개인 챌린지</strong>
         </div>
 
         <section class="mission-card" aria-labelledby="mission-success-title">
-            <header>{{ report.challengeName }} 월간 판결문</header>
+            <header>탕탕 대법원 월간 판결문</header>
             <div class="mission-card__body">
                 <p id="mission-success-title">미션 성공률</p>
                 <strong class="mission-card__score">
-                    {{ report.missionSuccessRate }}<small>%</small>
+                    {{ formatPercentage(report.missionSuccessRate) }}
                 </strong>
-                <p class="mission-card__comparison">
-                    {{ report.successfulDays }}일 성공 · 전월 대비
+                <p v-if="showComparison" class="mission-card__comparison">
+                    {{ formatInteger(report.successfulDays) }}일 성공 · 전월 대비
                     <b>{{ formatPercentagePoint(report.monthOverMonthPercentagePoint) }}</b>
                 </p>
                 <div class="mission-card__track" aria-hidden="true">
                     <span :style="{ width: formatPercentage(report.missionSuccessRate) }"></span>
                 </div>
+                <button
+                    type="button"
+                    class="mission-card__weekly-toggle"
+                    :aria-expanded="isWeeklyResultsOpen"
+                    aria-controls="weekly-results"
+                    @click="isWeeklyResultsOpen = !isWeeklyResultsOpen"
+                >
+                    <span>주차별 성공률</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m7 10 5 5 5-5" />
+                    </svg>
+                </button>
             </div>
+            <Transition name="receipt-slide">
+                <section
+                    v-if="isWeeklyResultsOpen"
+                    id="weekly-results"
+                    class="weekly-card"
+                    aria-labelledby="weekly-title"
+                >
+                    <h2 id="weekly-title">주차별 성공률</h2>
+                    <ul>
+                        <li v-for="week in report.weeklyResults" :key="week.week">
+                            <i aria-hidden="true"></i>
+                            <strong>{{ week.week }}주차</strong>
+                            <div class="weekly-card__track" aria-hidden="true">
+                                <span :style="{ width: formatPercentage(week.successRate) }"></span>
+                            </div>
+                            <b
+                                >{{ formatInteger(week.successDays) }}/{{
+                                    formatInteger(week.totalDays)
+                                }}</b
+                            >
+                        </li>
+                    </ul>
+                </section>
+            </Transition>
         </section>
 
-        <section class="weekly-card" aria-labelledby="weekly-title">
-            <h2 id="weekly-title">주차별 성공률</h2>
-            <ul>
-                <li v-for="week in report.weeklyResults" :key="week.week">
-                    <i aria-hidden="true"></i>
-                    <strong>{{ week.week }}주차</strong>
-                    <div class="weekly-card__track" aria-hidden="true">
-                        <span :style="{ width: formatPercentage(week.successRate) }"></span>
-                    </div>
-                    <b>{{ week.successDays }}/{{ week.totalDays }}</b>
-                </li>
-            </ul>
-        </section>
+        <ChallengeRankingSummaryCard
+            :ranking="report.ranking"
+            :challenge-days="report.challengeDays"
+            :best-streak-days="report.bestStreakDays"
+            :best-weekday="report.bestWeekday"
+        />
 
-        <section class="streak-card" aria-label="최고 연속 성공 일수">
-            <div>
-                <span>최고 연속 성공 일수</span><strong>{{ report.bestStreakDays }}일</strong>
-            </div>
-            <b>가장 잘 지킨 요일 · {{ report.bestWeekday }}</b>
-        </section>
-
-        <section class="summary-cards" aria-label="챌린지 요약">
-            <div>
-                <span>도전 일수</span><strong>{{ report.challengeDays }}일</strong>
-            </div>
-            <div>
-                <span>획득 점수</span><strong>{{ report.earnedPoints }}점</strong>
-            </div>
-        </section>
+        <ChallengeConsumptionHabitDropdown v-if="report.netSavings != null" :report="report" />
 
         <section class="performance-section" aria-labelledby="performance-title">
             <h2 id="performance-title">난이도별 성과</h2>
@@ -76,13 +100,15 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
                         >
                             {{ difficulty.level }}
                         </span>
-                        <span class="difficulty-card__attempts">{{ difficulty.attempts }}회</span>
+                        <span class="difficulty-card__attempts"
+                            >{{ formatInteger(difficulty.attempts) }}회</span
+                        >
                         <div class="difficulty-card__track" aria-hidden="true">
                             <span
                                 :style="{ width: formatPercentage(difficulty.successRate) }"
                             ></span>
                         </div>
-                        <strong>{{ difficulty.successRate }}%</strong>
+                        <strong>{{ formatPercentage(difficulty.successRate) }}</strong>
                     </li>
                 </ul>
                 <footer>
@@ -95,48 +121,12 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
         </section>
 
         <section class="group-section" aria-labelledby="group-title">
-            <h2 id="group-title">그룹 전적</h2>
-            <div class="group-card">
-                <div class="group-card__stats">
-                    <div>
-                        <strong>{{ report.groupRecord.participatingGroups }}개</strong
-                        ><span>참여 그룹</span>
-                    </div>
-                    <div>
-                        <strong>{{ report.groupRecord.wins }}승</strong><span>생존</span>
-                    </div>
-                    <div>
-                        <strong>{{ report.groupRecord.losses }}패</strong><span>탈락</span>
-                    </div>
-                </div>
-                <footer>
-                    <div>
-                        <span class="group-card__stamp group-card__stamp--success"
-                            >무죄 {{ report.groupRecord.acquittals }}</span
-                        >
-                        <span class="group-card__stamp group-card__stamp--danger"
-                            >유죄 {{ report.groupRecord.convictions }}</span
-                        >
-                        <span>· 피기소 {{ report.groupRecord.dismissals }}회</span>
-                    </div>
-                    <button type="button" @click="$emit('open-group-history')">이력 ›</button>
-                </footer>
-            </div>
-        </section>
-
-        <section class="savings-card" aria-labelledby="savings-title">
-            <div>
-                <p>이번 달 순 절감액</p>
-                <h2 id="savings-title">{{ formatWon(report.netSavings) }}</h2>
-                <strong>챌린지로 바뀐 내 소비습관 확인하기</strong>
-            </div>
-            <button
-                type="button"
-                aria-label="카테고리별 순 절감액 보기"
-                @click="$emit('open-net-savings')"
-            >
-                ›
-            </button>
+            <h2 id="group-title">지방법원 법정 기록</h2>
+            <ChallengeGroupRecordCard
+                :state="report.groupRecordState"
+                :group-record="report.groupRecord"
+                @open-group-history="$emit('open-group-history')"
+            />
         </section>
     </div>
 </template>
@@ -155,8 +145,9 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 }
 
 .report-context span {
-    padding: var(--tt-space-1) var(--tt-space-3);
-    font-weight: var(--tt-fw-bold);
+    padding: var(--tt-space-2) var(--tt-space-4);
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
     color: var(--tt-primary);
     background: var(--tt-primary-subtle);
     border-radius: var(--tt-radius-full);
@@ -168,10 +159,11 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 
 .mission-card {
     overflow: hidden;
-    color: var(--tt-text-inverse);
-    background: color-mix(in srgb, var(--tt-text) 92%, var(--tt-bg));
+    color: var(--tt-text);
+    background: var(--tt-bg);
+    border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-xl);
-    box-shadow: var(--tt-elevation-3);
+    box-shadow: var(--tt-elevation-1);
 }
 
 .mission-card header {
@@ -191,7 +183,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 }
 
 .mission-card__body > p:first-child {
-    color: var(--tt-border-strong);
+    color: var(--tt-text-muted);
 }
 
 .mission-card__score {
@@ -209,7 +201,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 }
 
 .mission-card__comparison {
-    color: var(--tt-border-strong);
+    color: var(--tt-text-muted);
 }
 
 .mission-card__comparison b {
@@ -226,7 +218,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 .mission-card__track {
     height: var(--tt-space-2);
     margin-top: var(--tt-space-4);
-    background: color-mix(in srgb, var(--tt-text) 72%, var(--tt-bg));
+    background: var(--tt-border);
 }
 
 .mission-card__track span,
@@ -236,14 +228,55 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     height: 100%;
     background: var(--tt-success);
     border-radius: inherit;
+    transform-origin: left center;
+    animation: report-progress-fill 720ms ease-out both;
+}
+
+.mission-card__weekly-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: var(--tt-space-5);
+    padding: var(--tt-space-3) 0 0;
+    font: inherit;
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--tt-border);
+}
+
+.mission-card__weekly-toggle svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
 }
 
 .weekly-card {
     overflow: hidden;
     padding: var(--tt-space-4);
-    background: color-mix(in srgb, var(--tt-bg-subtle) 45%, var(--tt-border));
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
+    background: var(--tt-bg-subtle);
+    border-top: 1px solid var(--tt-border);
+}
+
+.receipt-slide-enter-active,
+.receipt-slide-leave-active {
+    max-height: 4000px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.receipt-slide-enter-from,
+.receipt-slide-leave-to {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
 }
 
 .weekly-card h2 {
@@ -268,7 +301,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
 .weekly-card li > i {
     width: 10px;
     height: 10px;
-    background: var(--tt-bg-subtle);
+    background: var(--tt-bg);
     border: 1px solid var(--tt-border);
     border-radius: var(--tt-radius-full);
 }
@@ -278,76 +311,46 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     font-family: var(--tt-font-mono);
 }
 
+.weekly-card li > strong {
+    color: var(--tt-text);
+}
+
+.weekly-card li > b {
+    color: var(--tt-text);
+}
+
 .weekly-card li > b {
     text-align: right;
 }
 
-.weekly-card__track,
+.weekly-card__track {
+    height: var(--tt-space-2);
+    background: var(--tt-border);
+}
+
 .difficulty-card__track {
     height: var(--tt-space-2);
     background: var(--tt-border);
 }
 
-.streak-card,
-.summary-cards > div {
-    border: 1px solid var(--tt-border);
-    border-radius: var(--tt-radius-lg);
+@keyframes report-progress-fill {
+    from {
+        transform: scaleX(0);
+    }
+
+    to {
+        transform: scaleX(1);
+    }
 }
 
-.streak-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-4);
-    padding: var(--tt-space-5);
-    background: var(--tt-accent-subtle);
-    border-color: color-mix(in srgb, var(--tt-accent) 45%, var(--tt-bg));
-}
-
-.streak-card span,
-.streak-card strong,
-.summary-cards span,
-.summary-cards strong {
-    display: block;
-}
-
-.streak-card span {
-    color: color-mix(in srgb, var(--tt-text) 70%, var(--tt-accent));
-}
-
-.streak-card strong {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
-}
-
-.streak-card > b {
-    font-size: var(--tt-fs-caption);
-    color: color-mix(in srgb, var(--tt-text) 70%, var(--tt-accent));
-}
-
-.summary-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--tt-space-3);
-}
-
-.summary-cards > div {
-    padding: var(--tt-space-5);
-    background: var(--tt-bg);
-}
-
-.summary-cards span {
-    color: var(--tt-text-muted);
-}
-
-.summary-cards strong {
-    margin-top: var(--tt-space-1);
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
-}
-
-.summary-cards > div:last-child strong {
-    color: var(--tt-primary);
+@media (prefers-reduced-motion: reduce) {
+    .receipt-slide-enter-active,
+    .receipt-slide-leave-active,
+    .mission-card__track span,
+    .weekly-card__track span,
+    .difficulty-card__track span {
+        animation: none;
+    }
 }
 
 .performance-section {
@@ -409,8 +412,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     text-align: right;
 }
 
-.difficulty-card footer,
-.group-card footer {
+.difficulty-card footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -420,8 +422,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     border-top: 1px solid var(--tt-border);
 }
 
-.difficulty-card footer button,
-.group-card footer button {
+.difficulty-card footer button {
     flex-shrink: 0;
     font-weight: var(--tt-fw-bold);
     color: var(--tt-primary);
@@ -436,116 +437,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
     font-size: var(--tt-fs-section);
 }
 
-.group-card {
-    padding: var(--tt-space-5);
-    background: var(--tt-primary-subtle);
-    border-radius: var(--tt-radius-lg);
-}
-
-.group-card__stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    text-align: center;
-}
-
-.group-card__stats > div + div {
-    border-left: 1px solid color-mix(in srgb, var(--tt-primary) 20%, var(--tt-primary-subtle));
-}
-
-.group-card__stats strong,
-.group-card__stats span {
-    display: block;
-}
-
-.group-card__stats strong {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-title);
-}
-
-.group-card__stats > div:nth-child(2) strong {
-    color: var(--tt-success);
-}
-
-.group-card__stats > div:nth-child(3) strong {
-    color: var(--tt-danger);
-}
-
-.group-card__stats span,
-.group-card footer span {
-    font-size: var(--tt-fs-caption);
-    color: var(--tt-text-muted);
-}
-
-.group-card footer > div {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tt-space-2);
-}
-
-.group-card__stamp {
-    padding: var(--tt-space-1) var(--tt-space-2);
-    font-weight: var(--tt-fw-bold);
-    background: var(--tt-bg-subtle);
-    border: 1px solid currentColor;
-    border-radius: var(--tt-radius-sm);
-    transform: rotate(-3deg);
-}
-
-.group-card__stamp--success {
-    color: var(--tt-success) !important;
-}
-
-.group-card__stamp--danger {
-    color: var(--tt-danger) !important;
-    transform: rotate(3deg);
-}
-
-.savings-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-4);
-    padding: var(--tt-space-5);
-    background: color-mix(in srgb, var(--tt-bg-subtle) 35%, var(--tt-border));
-    border-radius: var(--tt-radius-lg);
-    box-shadow: var(--tt-elevation-2);
-}
-
-.savings-card p {
-    color: var(--tt-text-muted);
-}
-
-.savings-card h2 {
-    margin: var(--tt-space-1) 0;
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-numeric);
-}
-
-.savings-card > div > strong {
-    color: var(--tt-accent);
-}
-
-.savings-card > button {
-    display: grid;
-    flex: 0 0 48px;
-    width: 48px;
-    height: 48px;
-    font-size: var(--tt-fs-title);
-    color: var(--tt-accent);
-    background: var(--tt-text);
-    border: 0;
-    border-radius: var(--tt-radius-full);
-    cursor: pointer;
-    place-items: center;
-}
-
 @media (max-width: 360px) {
-    .streak-card {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
     .difficulty-card {
         padding: var(--tt-space-4);
     }
@@ -555,8 +447,7 @@ defineEmits(['change-difficulty', 'open-group-history', 'open-net-savings']);
         gap: var(--tt-space-1);
     }
 
-    .difficulty-card footer,
-    .group-card footer {
+    .difficulty-card footer {
         align-items: flex-start;
         flex-direction: column;
     }

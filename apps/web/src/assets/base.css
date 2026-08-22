@@ -1,6 +1,6 @@
 /*
- * 전역 리셋 + 기본 타이포. 값은 전부 tokens.css 의 변수를 참조한다.
- * 색상·간격을 여기에 HEX 로 적지 말 것.
+ * 전역 리셋 + 기본 타이포 (v2).
+ * 값은 전부 tokens.css 의 변수를 참조한다. 색상/간격을 여기에 HEX 로 적지 말 것.
  */
 *,
 *::before,
@@ -12,13 +12,25 @@
 
 html {
     -webkit-text-size-adjust: 100%;
+    /*
+     * 화면마다 세로 스크롤 필요 여부가 달라(자산 홈은 페이지 스크롤, 장부는 내부
+     * 고정 높이) 스크롤바가 생겼다 사라졌다 하면, 가운데 정렬된 .tt-app 이
+     * 스크롤바 너비만큼 좌우로 밀려 보인다. 항상 자리를 예약해 그 흔들림을 없앤다.
+     */
+    scrollbar-gutter: stable;
 }
 
 body {
+    /*
+     * 100vh 는 주소창이 있는 모바일 브라우저에서 실제 보이는 높이보다 크다.
+     * 내용이 한 화면에 들어가도 주소창 높이만큼 항상 스크롤이 생긴다(안드·iOS 공통).
+     * 100dvh 를 모르는 브라우저를 위해 100vh 를 먼저 둔다.
+     */
     min-height: 100vh;
+    min-height: 100dvh;
     font-family: var(--tt-font-sans);
     font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-regular);
+    font-weight: var(--tt-fw-medium);
     line-height: var(--tt-lh-normal);
     color: var(--tt-text);
     background: var(--tt-bg-subtle);
@@ -27,18 +39,50 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+ * ── 페이지가 앱 셸의 아래 여백까지 자기 배경으로 이어 칠하게 한다 ──────────────
+ *
+ * App.vue 의 <main class="tt-app__content"> 은 고정 탭바에 가리지 않도록 아래 여백을
+ * 잡아둔다. 그 자리는 페이지 요소 **밖**이라 페이지가 칠한 배경이 닿지 않고
+ * .tt-app 의 흰 배경이 띠로 드러난다. 배경이 흰색과 다른 화면일수록 눈에 띈다.
+ *
+ * padding 이 아니라 **투명 border** 를 쓴다. 이미 루트에 padding-bottom 을 직접 선언한
+ * 화면이 4곳 있는데(연결계좌·계좌갱신·개인 성적표·그룹챌린지 목록) padding 으로 하면
+ * 그 값과 부딪혀 화면마다 여백이 달라진다. border 는 아무 화면과도 겹치지 않고,
+ * 배경은 기본값(background-clip: border-box)대로 border 밑까지 칠해진다.
+ *
+ * 같은 크기의 음수 마진으로 되돌리므로 부모 높이는 (h + X) + (−X) = h — 즉
+ * **어느 화면도 간격과 스크롤 길이가 변하지 않고 배경만 이어진다.**
+ */
+.tt-app__content > * {
+    border-bottom: var(--tt-app-bottom-inset) solid transparent;
+    margin-bottom: calc(var(--tt-app-bottom-inset) * -1);
+}
+
+/* 탭바가 없는 화면은 셸도 여백을 잡지 않으므로 되짚을 것이 없다 */
+.tt-app__content--bare > * {
+    border-bottom-width: 0;
+    margin-bottom: 0;
+}
+
 h1,
 h2,
 h3,
 h4 {
     font-size: inherit;
-    font-weight: var(--tt-fw-bold);
+    font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-snug);
+    letter-spacing: -0.01em;
 }
 
 a {
-    color: var(--tt-primary);
+    color: var(--tt-info);
     text-decoration: none;
+    font-weight: var(--tt-fw-bold);
+}
+
+a:hover {
+    color: var(--tt-info-deep);
 }
 
 button,
@@ -47,6 +91,22 @@ textarea,
 select {
     font: inherit;
     color: inherit;
+}
+
+/*
+ * iOS 는 글자 16px 미만인 입력창에 포커스가 가면 화면을 자동으로 확대한다.
+ * (닉네임 수정 바텀시트가 커져 보이던 원인. 확대된 뒤에는 되돌아오지도 않는다.)
+ * @supports (-webkit-touch-callout: none) 은 iOS WebKit 에서만 참이라
+ * 안드로이드·데스크톱 타이포는 건드리지 않는다.
+ * 각 컴포넌트가 scoped 클래스로 font-size 를 지정하고 있어 !important 가 필요하다 —
+ * 플랫폼 회피용 예외이므로 이 규칙 밖에서 !important 를 늘리지 말 것.
+ */
+@supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
 }
 
 img,
@@ -61,6 +121,41 @@ ol {
 }
 
 :focus-visible {
-    outline: 2px solid var(--tt-primary);
+    outline: 2px solid var(--tt-info);
     outline-offset: 2px;
+}
+
+/* 마스코트 플로팅 애니메이션 */
+@keyframes tt-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+/* 튜토리얼 요소 등장 */
+@keyframes tt-pop {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* 튜토리얼 도장 찍히는 효과 */
+@keyframes tt-stamp {
+    from {
+        opacity: 0;
+        transform: rotate(-8deg) scale(1.6);
+    }
+    to {
+        opacity: 1;
+        transform: rotate(-8deg) scale(1);
+    }
 }

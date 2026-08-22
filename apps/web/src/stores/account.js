@@ -1,0 +1,479 @@
+import { computed, ref } from 'vue';
+import { defineStore } from 'pinia';
+import router from '@/router';
+import {
+    createConnection,
+    disconnectAccount,
+    fetchAuthMethods,
+    fetchAuthStatus,
+    fetchConnectedAccounts,
+    fetchInstitutions,
+    fetchLinkProgress,
+    fetchLinkableAccounts,
+    linkAccounts,
+    refreshAccounts,
+    requestSimpleAuth,
+    submitExtraAuth,
+} from '@/api/account';
+import {
+    LINK_STEP_ROUTES,
+    calcLinkProgress,
+    linkExitRoute,
+    nextLinkStep,
+    prevLinkDestination,
+    resolveAuthView,
+} from '@/utils/account';
+import { useAuthStore } from '@/stores/auth';
+import { syncFinancialAssets } from '@/api/financialSync';
+
+/**
+ * 계좌 도메인 스토어 (이슈 #12). 도메인당 1개 규칙이라 연결 플로우와 연결 계좌 목록을 함께 둔다.
+ *
+ * 단계 이동은 여기 goNextStep()/goPrevStep() 으로만 한다. **뷰가 서로를 router.push 로 직접 부르지 않는다.**
+ * 그래야 인증 단계가 빠지거나 순서가 바뀔 때 utils/account.js 의 LINK_STEPS 한 줄 수정으로 끝난다.
+ *
+ * ⚠ 기관 로그인 자격증명(아이디·비밀번호)은 **이 스토어에 절대 저장하지 않는다.**
+ * connect() 의 인자로만 흐르고 호출이 끝나면 사라진다.
+ */
+export const useAccountStore = defineStore('account', () => {
+    /* --- 연결 플로우 --- */
+    const institutions = ref(null);
+    const selectedInstitutions = ref([]);
+    const connectionId = ref('');
+    const needsExtraAuth = ref(false);
+    const extraAuthType = ref(null);
+    const linkableGroups = ref([]);
+    const selectedAccountIds = ref([]);
+    const linkedCount = ref(0);
+    /** 은행 계좌 없이 대출·페이머니만 골랐을 때 true(#334) — canEnterLinkStep('done') 이 함께 본다. */
+    const directAssetsPending = ref(false);
+
+    /* --- 인증 (수단 무관) --- */
+    const authMethods = ref([]);
+    const authStatus = ref('IDLE');
+
+    /* --- 조회 진행 --- */
+    const progressInstitutions = ref([]);
+    const progressDone = ref(false);
+
+    /* --- 연결 계좌 관리 --- */
+    const connectedAccounts = ref([]);
+    const nextAutoSyncAt = ref(null);
+
+    /* --- 즉시 조회 --- */
+    const refreshResult = ref(null);
+
+    /* --- 공통 --- */
+    const loading = ref(false);
+    const error = ref('');
+
+    /**
+     * 플로우에 들어온 화면. 라우터 가드가 첫 단계 진입 때 기록한다(router/index.js).
+     *
+     * ⚠ **resetFlow() 에서 비우지 않는다.** 기관 선택 화면이 마운트하면서 resetFlow() 를 부르는데,
+     * 기록은 그보다 먼저(가드에서) 일어나므로 같이 비우면 방금 적은 진입점이 곧바로 지워진다.
+     * 연결이 끝난 뒤 완료 화면이 나갈 곳을 정할 때도 이 값이 필요하다.
+     * 비우는 시점은 **플로우 밖으로 실제로 나갈 때** 한 곳뿐이다 — goPrevStep() 의 이탈 분기와
+     * 완료 화면의 leaveFlow(). 남겨두면 다음에 다른 곳에서 들어온 플로우가 옛 진입점으로 나간다.
+     */
+    const entryRoute = ref('');
+
+    const selectedCount = computed(() => selectedInstitutions.value.length);
+    const selectedAccountCount = computed(() => selectedAccountIds.value.length);
+    const hasConnection = computed(() => connectionId.value !== '');
+    const linkableAccountCount = computed(() =>
+        linkableGroups.value.reduce((sum, group) => sum + group.accounts.length, 0),
+    );
+    /**
+     * 아직 연결하지 않아 **실제로 고를 수 있는** 계좌 수.
+     * 조회된 계좌가 있어도 전부 이미 연결돼 있으면 사용자가 할 수 있는 일이 없다 —
+     * 화면이 그 사실을 말하고 다음 행동을 줘야 한다.
+     */
+    const selectableAccountCount = computed(() =>
+        linkableGroups.value.reduce(
+            (sum, group) => sum + (group.autoIncluded
+                ? 0
+                : group.accounts.filter((item) => !item.alreadyLinked).length),
+            0,
+        ),
+    );
+    /** 어떤 인증 화면을 그릴지. 서버가 내려준 목록만 보고 정한다. */
+    const authView = computed(() => resolveAuthView(authMethods.value));
+    const progressPercent = computed(() => calcLinkProgress(progressInstitutions.value));
+    /** 플로우 밖으로 나갈 때 갈 화면. 기록이 없으면 기본 착지점(LINK_EXIT_ROUTE). */
+    const exitRoute = computed(() => linkExitRoute(entryRoute.value));
+
+    /** 진입점 기록. 판정은 utils 의 resolveLinkEntryRoute() 가 하고 여기서는 받아 적기만 한다. */
+    function setEntryRoute(name) {
+        entryRoute.value = name;
+    }
+
+    /** 플로우 밖으로 나갈 때 기록을 지운다. 다음 진입은 자기 진입점을 다시 적는다. */
+    function clearEntryRoute() {
+        entryRoute.value = '';
+    }
+
+    /**
+     * 단계 이동. 라우트 이름은 utils 의 매핑에서만 나온다.
+     *
+     * ⚠ **push 가 아니라 replace 다.** 단계를 히스토리에 쌓으면 플로우를 끝낸 뒤 뒤로가기를
+     *   누를 때마다 이미 끝난 중간 단계로 돌아간다. 그 화면들은 `resetFlow()` 로 상태가 비어 있어
+     *   `canEnterLinkStep` 가드가 곧바로 기관 선택으로 되돌리고, 사용자는 **"완료했는데 왜 계좌
+     *   연동이 다시 뜨지"** 로 읽는다(2026-08-11 배포본에서 실제로 지적됐다).
+     *
+     *   replace 로 두면 플로우 전체가 히스토리 **한 칸**만 차지한다. 완료 후 어디로 나가든
+     *   뒤로가기는 플로우 **이전** 화면으로 간다.
+     *
+     *   대신 플로우 중간에서 브라우저 뒤로를 누르면 이전 단계가 아니라 플로우 밖으로 나간다.
+     *   각 화면에 자체 「뒤로」 버튼(goPrevStep)이 있어 기능 손실은 없고, 마법사형 화면에서
+     *   흔한 동작이다. 무엇보다 **가드에 튕겨 엉뚱한 화면에 착지하는 것보다 예측 가능하다.**
+     */
+    function goStep(step) {
+        const name = LINK_STEP_ROUTES[step];
+        if (name) {
+            router.replace({ name });
+        }
+    }
+
+    function goNextStep(current) {
+        const step = nextLinkStep(current);
+        if (step) {
+            goStep(step);
+        }
+    }
+
+    /**
+     * 플로우를 처음부터 다시 시작한다.
+     *
+     * ⚠ 계좌 선택에서 "뒤로"는 이전 단계(progress)로 갈 수 없다 —
+     * 진행 화면은 진입하자마자 "이미 완료"를 확인하고 계좌 선택으로 되돌려보내
+     * 왕복만 하고 제자리가 된다. 인증·조회를 다시 해야 하므로 1단계로 보내는 게 맞다.
+     */
+    function restartFlow() {
+        resetFlow();
+        goStep('institutions');
+    }
+
+    function goPrevStep(current) {
+        /*
+         * 온보딩 강제 구간 판정은 온보딩 게이트와 같은 플래그(needsAccountLink)를 본다 (이슈 #439).
+         * 다른 근거로 판정하면 "뒤로가 보내는 곳"과 "게이트가 허락하는 곳"이 어긋나 다시 죽은 버튼이 된다.
+         */
+        const target = prevLinkDestination(current, entryRoute.value, {
+            onboarding: useAuthStore().needsAccountLink,
+        });
+        if (target.type === 'step') {
+            goStep(target.step);
+            return;
+        }
+        /*
+         * 첫 단계에서는 플로우 밖으로 나간다 — 온보딩 중이면 앞 단계(금융동의)로, 아니면 들어온
+         * 화면(entryRoute)이 있으면 그곳으로, 없으면 기본 착지점으로. router.back() 은 쓰지 않는다 —
+         * 이유는 utils/account.js 의 prevLinkDestination 주석 참고.
+         * replace 로 나가야 나간 뒤 다시 뒤로가기를 눌렀을 때 이 화면으로 되돌아오지 않는다.
+         */
+        clearEntryRoute();
+        router.replace({ name: target.name });
+    }
+
+    async function run(task) {
+        loading.value = true;
+        error.value = '';
+        try {
+            return await task();
+        } catch (err) {
+            error.value = err.message;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    /* --- 1단계: 기관 선택 --- */
+
+    async function loadInstitutions() {
+        return run(async () => {
+            institutions.value = await fetchInstitutions();
+            return institutions.value;
+        });
+    }
+
+    function toggleInstitution(code) {
+        const index = selectedInstitutions.value.indexOf(code);
+        if (index === -1) {
+            selectedInstitutions.value.push(code);
+        } else {
+            selectedInstitutions.value.splice(index, 1);
+        }
+    }
+
+    function isInstitutionSelected(code) {
+        return selectedInstitutions.value.includes(code);
+    }
+
+    /* --- 2단계: 인증 (간편인증 / 기관 로그인) --- */
+
+    async function loadAuthMethods() {
+        return run(async () => {
+            const result = await fetchAuthMethods();
+            authMethods.value = result.methods;
+            return authMethods.value;
+        });
+    }
+
+    /**
+     * 간편인증 요청.
+     *
+     * ⚠ **개인정보는 서버가 필요하다고 할 때만 보낸다.**
+     * `auth-methods` 응답의 `requiresIdentity` 가 그 판단을 한다 —
+     * 목 모드에는 전달할 인증기관이 없어 false 이고, 그때 개인정보는 화면 밖으로 나가지 않는다.
+     * 프론트가 목/실을 판단하지 않는다는 원칙은 여기서도 같다. (DECISIONS.md 2026-08-05)
+     *
+     * @param {string} provider 인증 수단 코드
+     * @param {{userName, birthDate, carrier, phoneNo}} [identity] 화면이 들고 있는 본인 정보
+     */
+    async function requestAuth(provider, identity) {
+        return run(async () => {
+            const method = authMethods.value.find((item) => item.type === 'SIMPLE_AUTH');
+            const result = await requestSimpleAuth({
+                provider,
+                organizations: selectedInstitutions.value,
+                ...(method?.requiresIdentity && identity ? identity : {}),
+            });
+            connectionId.value = result.connectionId;
+            authStatus.value = result.status;
+            return result;
+        });
+    }
+
+    /**
+     * 폴링 1회.
+     * ⚠ 타이머는 **뷰가 소유한다.** 스토어에 setInterval 핸들을 두면 화면을 떠나도 살아남아 누수가 된다.
+     * loading 을 건드리지 않는 것도 의도적이다 — 1초마다 스피너가 깜빡이면 화면이 떨린다.
+     */
+    async function checkAuthStatus() {
+        const result = await fetchAuthStatus(connectionId.value);
+        authStatus.value = result.status;
+        return result.status;
+    }
+
+    async function checkProgress() {
+        const result = await fetchLinkProgress(connectionId.value);
+        progressInstitutions.value = result.institutions;
+        progressDone.value = result.done;
+        return result;
+    }
+
+    /**
+     * @param {Array<{organization, loginType, id, password}>} credentials
+     * 자격증명은 여기서 인자로만 쓰이고 스토어에 남지 않는다.
+     */
+    async function connect(credentials) {
+        return run(async () => {
+            const result = await createConnection(credentials);
+            connectionId.value = result.connectionId;
+            needsExtraAuth.value = result.needsExtraAuth;
+            extraAuthType.value = result.extraAuthType;
+            return result;
+        });
+    }
+
+    async function verifyExtraAuth(payload) {
+        return run(async () => {
+            const result = await submitExtraAuth(connectionId.value, payload);
+            needsExtraAuth.value = result.needsExtraAuth;
+            extraAuthType.value = result.extraAuthType;
+            return result;
+        });
+    }
+
+    /* --- 3단계: 계좌 선택 --- */
+
+    async function loadLinkableAccounts() {
+        return run(async () => {
+            linkableGroups.value = await fetchLinkableAccounts(connectionId.value);
+            /*
+             * 이미 연결된 계좌는 기본 선택에서 뺀다 — 중복 등록을 막는다(AC_01_03).
+             * autoIncluded 그룹(대출·페이머니, #334)도 뺀다 — 고를 대상이 아니라 항상 자동으로
+             * 연동되는 항목이라, 여기 섞이면 "선택한 계좌 N개"에 사용자가 고르지 않은 것까지 잡힌다.
+             */
+            selectedAccountIds.value = linkableGroups.value
+                .filter((group) => !group.autoIncluded)
+                .flatMap((group) => group.accounts)
+                .filter((account) => !account.alreadyLinked)
+                .map((account) => account.accountId);
+            return linkableGroups.value;
+        });
+    }
+
+    function toggleAccount(accountId) {
+        const index = selectedAccountIds.value.indexOf(accountId);
+        if (index === -1) {
+            selectedAccountIds.value.push(accountId);
+        } else {
+            selectedAccountIds.value.splice(index, 1);
+        }
+    }
+
+    function isAccountSelected(accountId) {
+        return selectedAccountIds.value.includes(accountId);
+    }
+
+    /**
+     * 고른 계좌를 실제로 연결한다.
+     *
+     * ⚠ 성공하면 **온보딩 계좌 연동 게이트를 반드시 내린다.**
+     * 서버 기준으로는 이 순간 활성 연결 계좌가 생겨 needsAccountLink 가 false 인데,
+     * 프론트 플래그는 다음 재발급(refresh) 때까지 true 로 남는다.
+     * 그대로 두면 연동을 끝낸 사용자를 라우터 가드가 계속 기관 선택으로 돌려보내 무한 루프가 난다.
+     */
+    async function submitLink() {
+        return run(async () => {
+            const result = await linkAccounts(connectionId.value, selectedAccountIds.value);
+            linkedCount.value = result.linkedCount;
+            directAssetsPending.value = result.directAssetsPending ?? false;
+            useAuthStore().applyOnboardingFlags({ needsAccountLink: false });
+            return result;
+        });
+    }
+
+    /* --- 연결 계좌 관리 --- */
+
+    async function loadConnectedAccounts() {
+        return run(async () => {
+            const result = await fetchConnectedAccounts();
+            connectedAccounts.value = result.accounts;
+            nextAutoSyncAt.value = result.nextAutoSyncAt;
+            return result;
+        });
+    }
+
+    async function disconnect(accountId) {
+        return run(async () => {
+            await disconnectAccount(accountId);
+            connectedAccounts.value = connectedAccounts.value.filter(
+                (account) => account.accountId !== accountId,
+            );
+        });
+    }
+
+    /**
+     * 계좌 하나의 "지금 동기화" 액션이지만, 실제 거래 동기화(FinancialSyncService.sync())는
+     * 계좌 단위로 나뉘어 있지 않고 항상 연결된 기관 전체를 훑는다 — 그래서 여기서도 전체
+     * 동기화를 부르고, 끝나면 목록을 다시 읽어 모든 계좌의 lastSyncAt·syncStatus 를 새로 반영한다.
+     * accountId 는 지금은 API 호출에 쓰이지 않지만, 나중에 계좌 단위 동기화가 생기면 시그니처를
+     * 바꾸지 않아도 되게 남겨 둔다.
+     *
+     * ⚠ 예전에는 resyncAccount()(잔액만 갱신, 거래는 안 가져옴)를 불렀다 — 버튼 문구
+     * ("이 계좌의 거래를 다시 가져와요")와 실제 동작이 달랐다. 그 호출은 거래를 한 건도
+     * 안 가져오면서 lastSyncAt 만 갱신해서, FinancialSyncServiceImpl 의 월별 증분 커서가
+     * "이미 동기화된 계좌"로 오판하게 만들었다 — 실제로 #389 버그를 재현시키는 경로였다.
+     */
+    async function resync(_accountId) {
+        return run(async () => {
+            await syncFinancialAssets();
+            const result = await fetchConnectedAccounts();
+            connectedAccounts.value = result.accounts;
+            nextAutoSyncAt.value = result.nextAutoSyncAt;
+            return result;
+        });
+    }
+
+    /* --- 즉시 조회 --- */
+
+    async function refresh() {
+        return run(async () => {
+            refreshResult.value = await refreshAccounts();
+            return refreshResult.value;
+        });
+    }
+
+    /**
+     * ⚠ selectedInstitutions 를 넘긴다 — resetFlow() 가 비우기 전, 완료 화면의 최초 동기화에서만
+     * 부르는 걸 전제로 한다(LinkDoneView.runInitialSync). 이유는 api/financialSync.js 참고(#334).
+     */
+    async function syncAssets() {
+        return run(async () => syncFinancialAssets(selectedInstitutions.value));
+    }
+
+    /** 즉시 조회 화면을 다시 열 때. 직전 결과가 새 결과인 것처럼 보이지 않게 한다. */
+    function clearRefreshResult() {
+        refreshResult.value = null;
+    }
+
+    /**
+     * 플로우를 처음부터 다시 시작할 때. 완료 화면을 벗어나거나 중간 진입을 막을 때 쓴다.
+     * ⚠ entryRoute 는 여기서 비우지 않는다 — 이유는 그 선언부 주석 참고.
+     */
+    function resetFlow() {
+        selectedInstitutions.value = [];
+        connectionId.value = '';
+        needsExtraAuth.value = false;
+        extraAuthType.value = null;
+        linkableGroups.value = [];
+        selectedAccountIds.value = [];
+        linkedCount.value = 0;
+        directAssetsPending.value = false;
+        authMethods.value = [];
+        authStatus.value = 'IDLE';
+        progressInstitutions.value = [];
+        progressDone.value = false;
+        error.value = '';
+    }
+
+    return {
+        institutions,
+        selectedInstitutions,
+        connectionId,
+        needsExtraAuth,
+        extraAuthType,
+        linkableGroups,
+        selectedAccountIds,
+        linkedCount,
+        directAssetsPending,
+        authMethods,
+        authStatus,
+        progressInstitutions,
+        progressDone,
+        connectedAccounts,
+        nextAutoSyncAt,
+        refreshResult,
+        loading,
+        error,
+        entryRoute,
+        exitRoute,
+        selectedCount,
+        selectedAccountCount,
+        hasConnection,
+        linkableAccountCount,
+        selectableAccountCount,
+        authView,
+        progressPercent,
+        goStep,
+        goNextStep,
+        goPrevStep,
+        restartFlow,
+        setEntryRoute,
+        clearEntryRoute,
+        loadInstitutions,
+        toggleInstitution,
+        isInstitutionSelected,
+        loadAuthMethods,
+        requestAuth,
+        checkAuthStatus,
+        checkProgress,
+        connect,
+        verifyExtraAuth,
+        loadLinkableAccounts,
+        toggleAccount,
+        isAccountSelected,
+        submitLink,
+        loadConnectedAccounts,
+        disconnect,
+        resync,
+        refresh,
+        syncAssets,
+        clearRefreshResult,
+        resetFlow,
+    };
+});

@@ -20,14 +20,44 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          # 중간 명령이 실패하면 즉시 중단한다. 기본값(false)이면 빌드가 깨져도
+          # 다음 줄로 넘어가 마지막 헬스체크에서야 드러난다.
+          script_stop: true
           script: |
             cd ~/Monorepo
             BRANCH=${{ github.event.inputs.branch || github.ref_name }}
             git fetch origin
             git checkout $BRANCH
             git pull origin $BRANCH
+
+            # ── 도커 정리는 빌드 "앞"에서 한다 (이슈 #376) ──
+            # 뒤에 두면 디스크가 찬 순간 `up --build` 가 먼저 실패해 정리 명령까지
+            # 도달하지 못한다. 정리하려면 정리할 공간이 필요한 교착이 생긴다.
+            #
+            # ⚠ `docker image prune` 과 `docker builder prune` 은 지우는 대상이 다르다.
+            #    BuildKit 중간 레이어는 전자로 회수되지 않아 배포마다 무한 누적된다.
+            #    실제로 424개 · 16.28GB 까지 쌓여 루트 볼륨이 100% 에 도달했다.
+            #
+            # --keep-storage 를 쓰는 이유: -af 로 전량 삭제하면 매 배포가 콜드 빌드가 된다.
+            # 시간 기준(--filter until=)은 배포가 몰리는 날 상한을 못 잡아 용량 기준으로 묶는다.
+            # Gradle 의존성 레이어는 4GB 안에 들어간다.
+            docker builder prune -f --keep-storage=4GB
+            # ⚠ -a 를 붙이지 말 것. mysql:8.0 · redis:7-alpine · eclipse-temurin:17-jdk 가
+            #    매 배포마다 재다운로드된다. dangling 만 지우는 지금이 맞다.
+            docker image prune -f
+
+            # ── 여유 공간 가드 ──
+            # 빌드에는 수 GB 가 필요하다. 모자라면 반쯤 실패한 상태를 만들지 말고 먼저 멈춘다.
+            AVAIL=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+            if [ "$AVAIL" -lt 5 ]; then
+              echo "::error::디스크 여유 ${AVAIL}GB (5GB 미만) — 배포를 중단한다"
+              df -h /
+              docker system df
+              exit 1
+            fi
+            echo "디스크 여유 ${AVAIL}GB — 배포를 진행한다"
+
             docker compose down
             docker compose up --build -d
-            docker image prune -f
             sleep 15
             curl -f http://localhost:8080/api/health || (docker compose logs && exit 1)

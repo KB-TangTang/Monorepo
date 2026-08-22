@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionCategoryAnalysisMapper">
+
+    <sql id="summaryConsumptionCondition">
+        t.user_id = #{userId}
+        AND t.tr_date >= #{startDate}
+        AND t.tr_date &lt; #{endDate}
+        AND t.classification = 'CONSUMPTION'
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <select id="countConsumptionTransactions" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_transaction t
+        WHERE <include refid="summaryConsumptionCondition"/>
+          AND t.is_refund = 0
+    </select>
+
+    <select id="countAllConsumptionTransactions" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_transaction
+        WHERE user_id = #{userId}
+          AND classification = 'CONSUMPTION'
+          AND is_excluded_from_summary = 0
+          AND is_refund = 0
+    </select>
+
+    <!-- 소비 비중의 분모는 미션 대상 15개가 아니라 최근 28일 전체 분류 소비다. -->
+    <select id="sumCategorizedConsumption" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(
+            CASE WHEN t.is_refund = 1
+                 THEN -COALESCE(t.refunded_amount, t.amount)
+                 ELSE t.amount END
+        ), 0)
+        FROM tbl_transaction t
+        WHERE <include refid="summaryConsumptionCondition"/>
+          AND t.category_id IS NOT NULL
+    </select>
+
+    <select id="findTopCategorySpending"
+            resultType="com.kb.tangtang.mission.domain.CategorySpending">
+        SELECT c.id AS category_id,
+               p.category_name AS parent_category_name,
+               c.category_name,
+               SUM(CASE WHEN t.is_refund = 1
+                        THEN -COALESCE(t.refunded_amount, t.amount)
+                        ELSE t.amount END) AS total_amount,
+               SUM(CASE WHEN t.is_refund = 0 THEN 1 ELSE 0 END) AS transaction_count
+        FROM tbl_transaction t
+        JOIN tbl_category c ON c.id = t.category_id
+        JOIN tbl_category p ON p.id = c.parent_id
+        WHERE <include refid="summaryConsumptionCondition"/>
+          AND EXISTS (
+              SELECT 1
+              FROM tbl_mission_pool mp
+              WHERE mp.category_id = c.id
+                AND mp.mission_type = 'RELATIVE'
+          )
+        GROUP BY c.id, p.category_name, c.category_name
+        HAVING SUM(CASE WHEN t.is_refund = 0 THEN 1 ELSE 0 END) >= 3
+           AND COUNT(DISTINCT CASE WHEN t.is_refund = 0 THEN t.tr_date END) >= 2
+           AND total_amount > 0
+        ORDER BY total_amount DESC, transaction_count DESC, c.id ASC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

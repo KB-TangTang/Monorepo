@@ -1,0 +1,170 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+    clampHomeProgress,
+    formatHomeAmount,
+    formatHomeRate,
+    getCurrentYearMonth,
+    getDaysUntilNextMonth,
+    getHomeAssetChange,
+    getHomeGroupStatus,
+    getHomeReportEmptyCopy,
+    toHomeMission,
+    toHomeReportSummary,
+} from '../src/utils/home.js';
+
+test('홈 금액을 천 단위 구분자로 표시한다', () => {
+    assert.equal(formatHomeAmount(12840000), '12,840,000');
+    assert.equal(formatHomeAmount(43487.7), '43,488');
+    assert.equal(formatHomeAmount(43487.4), '43,487');
+    assert.equal(formatHomeAmount(null), '0');
+});
+
+test('홈 증감률에 방향 부호를 붙인다', () => {
+    assert.equal(formatHomeRate(8.4), '+8.4%');
+    assert.equal(formatHomeRate(-3.2), '-3.2%');
+});
+
+test('순자산 전월 대비 증감 방향에 맞는 문구와 색상 상태를 만든다', () => {
+    assert.deepEqual(getHomeAssetChange(3.51), {
+        text: '전월 대비 3.51% 증가',
+        tone: 'success',
+    });
+    assert.deepEqual(getHomeAssetChange(-2.1), {
+        text: '전월 대비 2.1% 감소',
+        tone: 'danger',
+    });
+    assert.deepEqual(getHomeAssetChange(0), { text: '전월과 동일', tone: 'muted' });
+    assert.equal(getHomeAssetChange(null), null);
+});
+
+test('챌린지 진행률을 0에서 100 사이로 제한한다', () => {
+    assert.equal(clampHomeProgress(-10), 0);
+    assert.equal(clampHomeProgress(56), 56);
+    assert.equal(clampHomeProgress(120), 100);
+});
+
+test('그룹 재판 할 일이 있으면 마감이 가장 임박한 첫 항목을 보여준다', () => {
+    const first = {
+        id: 10,
+        type: 'accuse',
+        title: '변론이 필요해요',
+        challengeName: '카페 방어전',
+    };
+    const second = { id: 11, type: 'vote', title: '투표해 주세요' };
+
+    const status = getHomeGroupStatus({ trials: [first, second], activeGroupCount: 1 });
+
+    assert.equal(status.kind, 'accuse');
+    assert.equal(status.item, first);
+    assert.equal(status.caption, '그 외 할 일 1건');
+});
+
+test('진행 중인 그룹에서 할 일이 없으면 순항 상태를 보여준다', () => {
+    const status = getHomeGroupStatus({ trials: [], activeGroupCount: 2 });
+
+    assert.equal(status.kind, 'cruising');
+    assert.equal(status.title, '그룹 챌린지가 순항 중이에요');
+});
+
+test('그룹 조회 실패를 할 일 없음으로 표시하지 않는다', () => {
+    const status = getHomeGroupStatus({ trials: [], activeGroupCount: 1, failed: true });
+
+    assert.equal(status.kind, 'error');
+    assert.match(status.title, /확인하지 못했어요/);
+});
+
+test('오늘 미션을 홈 진행 카드 모델로 변환한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '카페 방어전',
+        targetValue: 8000,
+        currentAmount: 4500,
+    });
+
+    assert.deepEqual(mission, {
+        title: '카페 방어전',
+        isAbsoluteMission: false,
+        categoryName: '',
+        limitAmount: 8000,
+        spentAmount: 4500,
+        remainingAmount: 3500,
+        exceededAmount: 0,
+        progressRate: 56,
+    });
+});
+
+test('위반하지 않은 절대형 미션을 공통 진행 카드 모델로 변환한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '무지출 명령 · 배달',
+        missionType: 'ABSOLUTE',
+        categoryName: '배달앱',
+        targetValue: 0,
+        currentAmount: 0,
+    });
+
+    assert.equal(mission.isAbsoluteMission, true);
+    assert.equal(mission.spentAmount, 0);
+    assert.equal(mission.exceededAmount, 0);
+    assert.equal(mission.progressRate, 0);
+});
+
+test('위반한 절대형 미션은 공통 진행 카드에서 100%로 표시한다', () => {
+    const mission = toHomeMission({
+        missionTitle: '무지출 명령 · 배달',
+        missionType: 'ABSOLUTE',
+        categoryName: '배달앱',
+        targetValue: 0,
+        currentAmount: 3200,
+    });
+
+    assert.equal(mission.isAbsoluteMission, true);
+    assert.equal(mission.categoryName, '배달앱');
+    assert.equal(mission.spentAmount, 3200);
+    assert.equal(mission.limitAmount, 0);
+    assert.equal(mission.exceededAmount, 3200);
+    assert.equal(mission.progressRate, 100);
+});
+
+test('상대형과 절대형이 현재 사용액과 한도를 같은 형식으로 표시한다', () => {
+    const source = readFileSync(new URL('../src/views/HomeView.vue', import.meta.url), 'utf8');
+
+    assert.match(
+        source,
+        /formatHomeAmount\(challenge\.spentAmount\) \}\}원 \/[\s\S]*formatHomeAmount\(challenge\.limitAmount\) \}\}원/,
+    );
+    assert.doesNotMatch(source, /사용 \{\{ formatHomeAmount\(challenge\.spentAmount\)/);
+});
+
+test('현재 월과 다음 리포트 공개까지 남은 날짜를 계산한다', () => {
+    const today = new Date(2026, 7, 18, 12);
+
+    assert.equal(getCurrentYearMonth(today), '2026-08');
+    assert.equal(getDaysUntilNextMonth(today), 14);
+});
+
+test('가장 절감액이 큰 카테고리로 홈 리포트 요약을 만든다', () => {
+    const summary = toHomeReportSummary({
+        period: '2026-07',
+        hasChallengeHistory: true,
+        savedAmount: 128000,
+        categoryEffects: [
+            { categoryName: '배달', savedAmount: 20000 },
+            { categoryName: '카페·간식', savedAmount: 72000 },
+        ],
+    });
+
+    assert.deepEqual(summary, {
+        period: '2026-07',
+        month: 7,
+        savedAmount: 128000,
+        topCategoryName: '카페·간식',
+    });
+});
+
+test('확정 리포트가 없어도 홈 리포트 카드의 상태 안내를 제공한다', () => {
+    assert.match(getHomeReportEmptyCopy('preparing').title, /준비 중/);
+    assert.match(getHomeReportEmptyCopy('not-agreed').title, /시작/);
+    assert.match(getHomeReportEmptyCopy('error').title, /불러오지 못했어요/);
+    assert.match(getHomeReportEmptyCopy('empty').title, /확정된 절감 결과가 없어요/);
+});

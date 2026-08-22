@@ -1,115 +1,237 @@
 /*
- * 탕탕(지갑재판소) 디자인 토큰 — 팀 디자인시스템(Figma) 기준.
+ * 탕탕(지갑재판소) 디자인 토큰 v2 — Claude Design 디자인시스템 v2 기준.
+ *
+ * v1 대비 변경점:
+ *  - 브랜드 팔레트: Trust Blue → Ink/Gold 이원 체계
+ *  - 중립색: Cool Gray(블루틴트) → Warm Neutral(따뜻한 회색)
+ *  - 상태색: 4색 체계(Green/Gold/Red/Blue), 각각 진한값+옅은값+deep 3단
+ *  - 타이포: 스케일 재조정 (38/30/23/19/15/13.5/12/11)
+ *  - 라운드: 7단계로 세분화 (8/12/14/18/22/30/999)
+ *  - 그림자: 4단계로 확장, Navy 톤 유지
+ *  - 버튼: Ink Primary + Gold Primary 이원화
  *
  * 규칙
- *  1. 색상·폰트·간격은 반드시 이 변수를 통해 쓴다. 컴포넌트에 HEX 하드코딩 금지.
- *  2. 컴포넌트는 「의미 토큰」(--tt-primary, --tt-text, --tt-bg …)만 참조한다.
- *     원시 팔레트(--tt-brand-700 등)는 이 파일의 의미 토큰 정의에서만 쓴다.
+ *  1. 색상/폰트/간격은 반드시 이 변수를 통해 쓴다. 컴포넌트에 HEX 하드코딩 금지.
+ *  2. 컴포넌트는 "의미 토큰"(--tt-primary, --tt-text, --tt-bg ...)만 참조한다.
+ *     원시 팔레트(--tt-ink, --tt-gold 등)는 이 파일의 의미 토큰 정의에서만 쓴다.
  *  3. 값을 바꿔야 하면 docs/DESIGN_SYSTEM.md 도 같이 고친다.
  */
 :root {
-    /* ── Brand (Trust Blue) ─────────────────────────────── */
-    --tt-brand-900: #1e3e9c; /* hover · pressed */
-    --tt-brand-700: #2f5ad0; /* Primary — 메인 액션 */
-    --tt-brand-500: #5b7bc4;
-    --tt-brand-200: #bfd2f6; /* border */
-    --tt-brand-100: #dae7fb; /* Secondary — 선택 상태 */
-    --tt-brand-50: #eaf0fb; /* bg */
+    /* ── Brand (Ink + Gold 이원 체계) ─────────────────── */
+    --tt-ink: #232842; /* 헤더 / 본문 텍스트 / 스탯 카드 */
+    --tt-ink-raised: #2e3556; /* Ink 위에 겹치는 블록 */
+    --tt-gold: #f5b921; /* 주요 CTA / 진행바 / 목숨 */
+    --tt-gold-soft: #fff3d1; /* 뱃지 배경 / 후광 */
+    --tt-gold-deep: #b67d06; /* Gold soft 위 텍스트 */
 
-    /* ── Accent (Gold · 배지 · 판사봉) ──────────────────── */
-    --tt-accent-700: #8a6410; /* 텍스트용 진한 골드 */
-    --tt-accent-500: #ffc338; /* Accent */
-    --tt-accent-50: #fff6e0; /* bg */
-
-    /* ── Cool Gray 10단계 ───────────────────────────────── */
-    --tt-gray-50: #f8fafd;
-    --tt-gray-100: #f1f4f9;
-    --tt-gray-200: #e5eaf2;
-    --tt-gray-300: #d3dae7;
-    --tt-gray-400: #b8c2d3;
-    --tt-gray-500: #9da8bd;
-    --tt-gray-600: #8792ae;
-    --tt-gray-700: #68728f;
-    --tt-gray-800: #444c68;
-    --tt-gray-900: #252b42; /* Navy — 수치카드 · CTA */
-    --tt-ink: #1b2138; /* 최고 대비 텍스트 */
+    /* ── 중립 / 종이 (따뜻한 값) ──────────────────────── */
+    --tt-neutral-text: #232842; /* 최고 대비 텍스트 */
+    --tt-neutral-body: #5a6076; /* 본문 */
+    --tt-neutral-muted: #8a8fa3; /* 보조 설명 */
+    --tt-neutral-hint: #a6a9b6; /* 힌트 / placeholder */
+    --tt-neutral-surface: #ffffff; /* 카드 배경 */
+    --tt-neutral-paper: #fafafb; /* 섹션 배경 */
+    --tt-neutral-page: #f2f4f6; /* 페이지 배경 — 테두리·그림자 없는 카드가 뜨는 바탕 */
+    --tt-neutral-fill: #eff1f5; /* 입력 필드 배경 / 비활성 */
+    --tt-neutral-border: #e5e8ef; /* 구분선 / 카드 테두리 */
+    --tt-neutral-track: #e9ecf2; /* 진행바 트랙 */
+    --tt-neutral-divider: #d4d9e2; /* 점선 구분선 / 비활성 라디오 / 진행바 마커 */
+    --tt-neutral-desk: #d9d7d2; /* 디자인 문서 캔버스 전용 */
     --tt-white: #ffffff;
 
-    /* ── 시맨틱 · 판정 ──────────────────────────────────── */
-    --tt-guilty-700: #c7515a; /* 유죄 · 초과 · 위험 */
-    --tt-guilty-300: #f0d4d7;
-    --tt-guilty-50: #fbedee;
-    --tt-innocent-800: #2f7a62;
-    --tt-innocent-700: #3e9b7e; /* 무죄 · 절약 · 성공 */
-    --tt-innocent-300: #cde5d9;
-    --tt-innocent-50: #e7f2ed;
+    /* ── Ink 그라데이션 (헤더 전용) ───────────────────── */
+    --tt-ink-deep: #1e2338; /* 헤더 그라데이션 시작 (어두운) */
+    --tt-ink-glow: #283050; /* 헤더 그라데이션 끝 (밝은) */
 
-    /* ── 종이 · 목재 (절제 사용) ────────────────────────── */
-    /* 판사봉 · 인장 · 종이 질감에만 쓴다. 일반 UI 배경·텍스트에 쓰지 말 것. */
+    /* ── 재판탭 법원 헤더 (건물 일러스트 풀블리드) ────
+     * 위 Ink 계열과 다른 값이다. 건물 일러스트의 실제 픽셀 색에서 뽑았고,
+     * 이미지 가장자리와 패널이 이어져 보이게 하는 게 목적이라 임의로 못 바꾼다. */
+    --tt-court-navy: #1e2f4d; /* 헤더 바탕 · 그라데이션 끝 */
+    --tt-court-top-supreme: #0d1e38; /* 대법원 이미지 상단 색 */
+    --tt-court-top-district: #0c233f; /* 지방법원 이미지 상단 색 */
+    --tt-court-fade-supreme: #152b47; /* 대법원 이미지 하단 색 */
+    --tt-court-fade-district: #172c48; /* 지방법원 이미지 하단 색 */
+    --tt-court-caption: #c3cfe4; /* 헤더 부제 */
+    --tt-court-bell-ink: #1c2b4a; /* 알림 벨 아이콘 */
+    --tt-court-bell-surface: rgba(255, 255, 255, 0.95); /* 알림 벨 원 */
+
+    /* ── 탭바 전용 ────────────────────────────────────── */
+    --tt-tab-active: #f5b921; /* 활성 탭 아이콘 + 라벨 */
+    --tt-tab-inactive: #aeb0bc; /* 비활성 탭 아이콘 + 라벨 */
+
+    /* ── 상태 — 4색 체계 (진한값 / 옅은값 / deep) ─────── */
+    /* Green: 성공 / 안전 / 무죄 */
+    --tt-green: #2e9e6b;
+    --tt-green-soft: #e4f4ec;
+    --tt-green-deep: #1f6b48;
+
+    --tt-green-soft-border: #c9e6d6; /* 무죄 카드 테두리 */
+
+    /* Gold: 주의 / 진행 중 (= 브랜드 Gold 공유) */
+    /* --tt-gold, --tt-gold-soft, --tt-gold-deep 은 위에서 정의 */
+    --tt-gold-bright: #f7c948; /* 다크 배경 위 골드 텍스트 */
+    --tt-gold-warn: #8a6a24; /* 골드소프트 배경 위 경고 텍스트 */
+    --tt-gold-soft-border: #f0e0b8; /* 골드소프트 카드 테두리 */
+
+    /* Red: 초과 / 탈락 / 유죄 */
+    --tt-red: #e0664b;
+    --tt-red-soft: #fbe9e4;
+    --tt-red-deep: #c24b31;
+    --tt-red-soft-border: #f3d3c9; /* 유죄 카드 테두리 */
+
+    /* Blue: 정보 / 링크 / 기간 */
+    --tt-blue: #3e63d6;
+    --tt-blue-soft: #eaf0ff;
+    --tt-blue-deep: #3e5299;
+    --tt-blue-soft-border: #c9d6f5; /* 블루소프트 카드/뱃지 테두리 */
+
+    /* ── 종이 / 목재 (절제 사용) ────────────────────────── */
+    /* 판사봉 / 인장 / 종이 질감에만 쓴다. 일반 UI 배경/텍스트에 쓰지 말 것. */
     --tt-wood: #9c7b54;
     --tt-kraft: #efe7d8;
 
-    /* ── 의미 토큰 (컴포넌트는 이쪽만 참조한다) ─────────── */
-    --tt-primary: var(--tt-brand-700);
-    --tt-primary-hover: var(--tt-brand-900);
-    --tt-primary-subtle: var(--tt-brand-100);
-    --tt-danger: var(--tt-guilty-700);
-    --tt-danger-subtle: var(--tt-guilty-50);
-    --tt-success: var(--tt-innocent-700);
-    --tt-success-subtle: var(--tt-innocent-50);
-    --tt-accent: var(--tt-accent-500);
-    --tt-accent-subtle: var(--tt-accent-50);
+    /* 소환장 같은 「법원 서류」 질감. 위 규칙의 종이 계열이다. */
+    --tt-paper: #fdfbf3; /* 서류 바탕 */
+    --tt-paper-inset: #fbf7ea; /* 서류 안의 강조 박스 */
+    --tt-paper-rule: #d8d3c4; /* 가로 괘선 */
+    --tt-paper-dashed: #c5bfa9; /* 점선 테두리 */
+    --tt-paper-frame: #9aa0b8; /* 서류 내부 얇은 액자선 */
+    --tt-paper-label: #8a8265; /* 강조 박스 안의 작은 라벨 */
 
-    --tt-text: var(--tt-ink);
-    --tt-text-muted: var(--tt-gray-700);
+    /* ── 의미 토큰 (컴포넌트는 이쪽만 참조한다) ─────────── */
+    --tt-primary: var(--tt-ink); /* 주 CTA (Ink 버튼) */
+    --tt-primary-hover: var(--tt-ink-raised);
+    --tt-primary-gold: var(--tt-gold); /* 게임 시작 / 다음 라운드 CTA */
+    --tt-primary-subtle: var(--tt-neutral-fill);
+
+    --tt-danger: var(--tt-red);
+    --tt-danger-deep: var(--tt-red-deep);
+    --tt-danger-subtle: var(--tt-red-soft);
+
+    --tt-success: var(--tt-green);
+    --tt-success-deep: var(--tt-green-deep);
+    --tt-success-subtle: var(--tt-green-soft);
+
+    --tt-info: var(--tt-blue);
+    --tt-info-deep: var(--tt-blue-deep);
+    --tt-info-subtle: var(--tt-blue-soft);
+
+    --tt-accent: var(--tt-gold);
+    --tt-accent-deep: var(--tt-gold-deep);
+    --tt-accent-subtle: var(--tt-gold-soft);
+    --tt-accent-bright: var(--tt-gold-bright); /* 다크 배경 위 골드 텍스트 */
+    --tt-accent-warn: var(--tt-gold-warn); /* 골드소프트 배경 위 경고 텍스트 */
+    --tt-accent-subtle-border: var(--tt-gold-soft-border);
+    --tt-info-subtle-border: var(--tt-blue-soft-border);
+    --tt-success-subtle-border: var(--tt-green-soft-border);
+    --tt-danger-subtle-border: var(--tt-red-soft-border);
+
+    --tt-text: var(--tt-neutral-text);
+    --tt-text-body: var(--tt-neutral-body);
+    --tt-text-muted: var(--tt-neutral-muted);
+    --tt-text-hint: var(--tt-neutral-hint);
     --tt-text-inverse: var(--tt-white);
 
-    --tt-bg: var(--tt-white);
-    --tt-bg-subtle: var(--tt-gray-50);
-    --tt-border: var(--tt-gray-200);
-    --tt-border-strong: var(--tt-gray-400);
+    --tt-surface-inverse: var(--tt-ink); /* Ink 스탯 카드 / 역전 배경 */
+    --tt-surface-raised: var(--tt-ink-raised); /* Ink 위에 겹치는 블록 */
 
-    /* 모달·바텀시트 뒤에 까는 딤. --tt-ink 의 rgb 값에 투명도를 준 것 —
-     * CSS 변수는 색상 채널만 따로 꺼내 쓸 수 없어 값을 직접 적는다. */
-    --tt-overlay-dim: rgba(27, 33, 56, 0.48);
-    /* 카드 가장자리를 파낸 노치(영수증 절취선·소환장 펀치홀)를 칠하는 색.
-     * "카드 뒤에 보이는 배경"이어야 한다. 흰 배경 화면에서는 화면 쪽에서
-     * --tt-notch-bg: var(--tt-bg) 로 덮어쓴다. */
+    /* 재판탭 법원 헤더 — 개인(supreme) / 그룹(district) 두 변형이 같은 높이를 쓴다 */
+    --tt-court-header-bg: var(--tt-court-navy);
+    --tt-court-header-top-supreme: var(--tt-court-top-supreme);
+    --tt-court-header-top-district: var(--tt-court-top-district);
+    --tt-court-header-fade-supreme: var(--tt-court-fade-supreme);
+    --tt-court-header-fade-district: var(--tt-court-fade-district);
+    --tt-court-header-caption: var(--tt-court-caption);
+    --tt-court-bell-bg: var(--tt-court-bell-surface);
+    --tt-court-bell-fg: var(--tt-court-bell-ink);
+
+    --tt-bg: var(--tt-neutral-surface); /* 카드 배경 */
+    --tt-bg-subtle: var(--tt-neutral-paper); /* 페이지 배경 / 섹션 배경 */
+    --tt-bg-fill: var(--tt-neutral-fill); /* 입력 필드 / 비활성 배경 */
+    /*
+     * 페이지 배경 전용. --tt-bg-subtle 보다 한 단계 진하다.
+     * 테두리·그림자 없이 흰 카드만 세우려면 --tt-bg-subtle(흰색과 5/255 차이)로는
+     * 카드가 배경에 녹는다. 이 값은 13/255 차이로 토스·iOS 그룹 배경과 같은 티어다.
+     *
+     * --tt-bg-subtle 을 그냥 어둡게 하지 않은 이유: 그 토큰은 페이지 배경 말고도
+     * 흰 카드 안의 연한 칩(BaseButton ghost hover · BaseInput 비활성 · 순위표 내 행 …)
+     * 35곳에서 쓰여 같이 진해진다.
+     *
+     * 지금은 재판탭 챌린지 홈 두 화면에서만 시범 적용한다(#423).
+     * 괜찮다고 판단되면 다른 화면의 페이지 배경도 이 토큰으로 옮긴다.
+     */
+    --tt-bg-page: var(--tt-neutral-page);
+
+    --tt-border: var(--tt-neutral-border);
+    --tt-border-light: var(--tt-neutral-fill); /* 카드 내부 구분선 (border 보다 연함) */
+    --tt-border-track: var(--tt-neutral-track); /* 진행바 트랙 */
+    --tt-border-divider: var(--tt-neutral-divider); /* 점선 구분선 */
+
+    /* 고정지출 화면 — 하위 호환 (필요 시 제거 예정) */
+    --tt-surface-strong: var(--tt-ink);
+    --tt-surface-strong-deep: var(--tt-ink-raised);
+
+    /* 모달/바텀시트 뒤에 까는 딤 */
+    --tt-overlay-dim: rgba(35, 40, 66, 0.58);
+
+    /* 카드 노치(영수증 절취선/소환장 펀치홀) */
     --tt-notch-bg: var(--tt-bg-subtle);
+
+    /* 법원 서류(소환장) — 종이 질감. 일반 카드에는 쓰지 않는다 */
+    --tt-doc-bg: var(--tt-paper);
+    --tt-doc-inset-bg: var(--tt-paper-inset);
+    --tt-doc-inset-border: var(--tt-paper-dashed);
+    --tt-doc-rule: var(--tt-paper-rule);
+    --tt-doc-frame: var(--tt-paper-frame);
+    --tt-doc-label: var(--tt-paper-label);
+    --tt-doc-seal: var(--tt-red-deep); /* 인장 붉은색 */
 
     /* ── 타이포 ─────────────────────────────────────────── */
     --tt-font-sans:
         'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
         'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-    --tt-font-mono: 'Roboto Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    --tt-font-mono: ui-monospace, Menlo, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    /* 법원 서류(소환장) 전용 명조. 본문에는 쓰지 않는다 */
+    --tt-font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', 'Batang', serif;
 
-    /* 스케일 — display / title / section / body / caption / numeric / mono-chip */
-    --tt-fs-display: 44px;
-    --tt-fs-title: 26px;
-    --tt-fs-numeric: 34px;
-    --tt-fs-section: 18px;
-    --tt-fs-body: 15px;
-    --tt-fs-caption: 13px;
-    --tt-fs-mono-chip: 12px;
+    /* 스케일 — v2 기준 (결과수치 / 스탯 / H1 / H2 / 라벨 / 본문 / 보조 / 오버라인 / 모노) */
+    --tt-fs-hero: 38px; /* 결과 수치 / 순위 */
+    --tt-fs-stat: 30px; /* 스탯 카드 숫자 */
+    --tt-fs-title: 23px; /* 화면 제목 (H1) */
+    --tt-fs-subtitle: 19px; /* 카드 제목 (H2) */
+    --tt-fs-label: 15px; /* 섹션 라벨 / 리스트 이름 */
+    --tt-fs-body: 13.5px; /* 본문 설명 */
+    --tt-fs-caption: 12px; /* 보조 설명 / 뱃지 */
+    --tt-fs-overline: 11px; /* 오버라인 / 사건번호 */
+    --tt-fs-badge: 11.5px; /* 뱃지 텍스트 */
+    --tt-fs-button: 14.5px; /* 버튼 라벨 */
+
+    /* 하위 호환 매핑 */
+    --tt-fs-display: var(--tt-fs-hero);
+    --tt-fs-numeric: var(--tt-fs-stat);
+    --tt-fs-section: var(--tt-fs-subtitle);
+    --tt-fs-mono-chip: var(--tt-fs-overline);
 
     --tt-fw-regular: 400;
     --tt-fw-medium: 500;
+    --tt-fw-semibold: 600; /* v2 추가 */
     --tt-fw-bold: 700;
     --tt-fw-black: 800;
 
-    --tt-lh-tight: 1.2; /* display · title · numeric */
-    --tt-lh-snug: 1.4; /* section */
-    --tt-lh-normal: 1.6; /* body · caption */
+    --tt-lh-tight: 1.1; /* hero / stat 수치 */
+    --tt-lh-snug: 1.25; /* 제목 (H1, H2) */
+    --tt-lh-normal: 1.6; /* 본문 / caption */
 
-    /* ── Radius ─────────────────────────────────────────── */
-    --tt-radius-xs: 4px;
-    --tt-radius-sm: 6px;
-    --tt-radius-md: 12px;
-    --tt-radius-lg: 20px;
-    --tt-radius-xl: 28px;
-    --tt-radius-full: 999px;
+    /* ── Radius (7단계) ────────────────────────────────── */
+    --tt-radius-xs: 8px; /* 태그 */
+    --tt-radius-sm: 12px; /* 내부 요소 */
+    --tt-radius-md: 14px; /* 버튼 */
+    --tt-radius-lg: 18px; /* 리스트 행 / 배너 */
+    --tt-radius-xl: 22px; /* 카드 */
+    --tt-radius-2xl: 30px; /* 헤더 하단 곡률 */
+    --tt-radius-full: 999px; /* pill / 뱃지 */
 
-    /* ── Spacing (4px 그리드) ───────────────────────────── */
+    /* ── Spacing (모바일 328px 기준) ───────────────────── */
     --tt-space-1: 4px;
     --tt-space-2: 8px;
     --tt-space-3: 12px;
@@ -120,23 +242,61 @@
     --tt-space-10: 40px;
     --tt-space-12: 48px;
 
-    /* ── Elevation (Navy 계열 그림자) ───────────────────── */
+    --tt-screen-padding: 20px; /* 화면 좌우 패딩 */
+    --tt-card-padding: 16px; /* 카드 내부 패딩 */
+    --tt-card-gap: 10px; /* 카드 사이 간격 */
+    --tt-list-gap: 8px; /* 리스트 행 간격 */
+    --tt-touch-min: 44px; /* 최소 터치 영역 */
+
+    /* ── Elevation (Navy 계열 그림자, 4단) ───────────── */
     --tt-elevation-0: none;
-    --tt-elevation-1: 0 1px 2px rgba(37, 43, 66, 0.06);
-    --tt-elevation-2: 0 2px 8px rgba(37, 43, 66, 0.08);
-    --tt-elevation-3: 0 8px 24px rgba(37, 43, 66, 0.12);
+    --tt-elevation-1: 0 6px 16px rgba(35, 40, 66, 0.04); /* 리스트 행 */
+    --tt-elevation-2: 0 8px 22px rgba(35, 40, 66, 0.05); /* 일반 카드 */
+    --tt-elevation-3: 0 12px 28px rgba(35, 40, 66, 0.1); /* 겹치는 카드 / 토글 */
+    --tt-elevation-4: 0 14px 30px -16px rgba(35, 40, 66, 0.55); /* Ink 스탯 카드 */
+    --tt-elevation-btn: 0 10px 24px -12px rgba(35, 40, 66, 0.6); /* Primary 버튼 */
+    --tt-elevation-court-bell: 0 6px 14px rgba(0, 0, 0, 0.25); /* 법원 헤더 알림 벨 */
+    /* 말풍선은 PNG 라 box-shadow 가 아니라 filter: drop-shadow() 로 건다 — spread 를 쓰면 안 된다 */
+    --tt-elevation-court-speech: 0 12px 14px rgba(0, 0, 0, 0.24); /* 법원 헤더 양피지 말풍선 */
 
     /* ── z-index ────────────────────────────────────────
-     * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다.
-     * 각자 숫자를 쓰면 화면마다 겹침 순서가 달라진다. */
+     * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다. */
     --tt-z-base: 0;
-    --tt-z-sticky: 100; /* 화면 상단 고정 헤더 */
-    --tt-z-tabbar: 200; /* 하단 탭바 */
-    --tt-z-overlay: 900; /* 모달 · 바텀시트 뒤 딤 */
-    --tt-z-modal: 1000; /* 모달 · 바텀시트 패널 */
-    --tt-z-toast: 1100; /* 토스트 · 스낵바 */
+    --tt-z-sticky: 100;
+    --tt-z-tabbar: 200;
+    --tt-z-overlay: 900;
+    --tt-z-modal: 1000;
+    --tt-z-toast: 1100;
 
     /* ── 레이아웃 ───────────────────────────────────────── */
-    --tt-tabbar-height: 60px;
-    --tt-content-max: 480px; /* 모바일 웹 우선 — 본문 최대 폭 */
+    --tt-tabbar-height: 64px; /* v2: 60 → 64 */
+    /*
+     * 홈 인디케이터가 있는 기기(아이폰 설치형)에서 탭 항목 높이를 이만큼 깎는다.
+     * 탭바는 인디케이터 자리를 padding-bottom 으로 비워두는데, 그대로 두면
+     * 64 + 34 = 98px 이 되어 안드로이드(64px)보다 눈에 띄게 두꺼워진다.
+     * inset 이 0 인 안드로이드에서는 이 값도 0 이라 아무 변화가 없다.
+     * 하단 고정 요소의 bottom 계산은 지금처럼 --tt-tabbar-height 를 그대로 써도 된다
+     * (아이폰에서 12px 만큼 여유가 더 생길 뿐 가려지지 않는다).
+     */
+    --tt-tabbar-trim: min(env(safe-area-inset-bottom), 12px);
+    /*
+     * App.vue 의 <main> 이 고정 탭바에 가리지 않으려고 잡아두는 아래 여백.
+     * 이 자리는 페이지 요소 **밖**이라 페이지가 칠한 배경이 닿지 않고 앱 셸 배경이 드러난다.
+     * 배경이 흰색과 뚜렷이 다른 화면(재판탭 홈)은 이 값만큼 음수 마진으로 끌어내려
+     * 자기 배경을 이어 칠해야 한다. 그래서 값을 App.vue 안에 두지 않고 토큰으로 뺐다.
+     */
+    --tt-app-bottom-inset: calc(
+        var(--tt-tabbar-height) + env(safe-area-inset-bottom) + var(--tt-space-4)
+    );
+    /*
+     * 하단에 떠 있는 토글(ChallengeModeTabBar · AssetLedgerToggle · ChallengeReportToggle)이
+     * 본문을 가리지 않게 확보할 여백. **--tt-app-bottom-inset 위에 더해 쓴다.**
+     * 토글은 탭바 위 8px 자리에 「터치 최소 44px + 위아래 padding 4px」 높이로 뜬다.
+     * 마지막 16px 은 토글과 본문이 붙어 보이지 않게 두는 숨 쉴 틈이다.
+     * 이 값을 view 마다 손으로 적으면 토글 규격이 바뀔 때 조용히 어긋난다.
+     */
+    --tt-float-toggle-inset: calc(
+        var(--tt-touch-min) + var(--tt-space-2) + var(--tt-space-2) + var(--tt-space-4)
+    );
+    --tt-content-max: 480px;
 }

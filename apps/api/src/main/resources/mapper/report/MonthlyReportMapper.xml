@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.report.mapper.MonthlyReportMapper">
+
+    <sql id="reportConsumptionCondition">
+        t.user_id = #{userId}
+        AND t.tr_date &gt;= #{startDate}
+        AND t.tr_date &lt; #{endDate}
+        AND t.classification = 'CONSUMPTION'
+        AND t.is_excluded_from_summary = 0
+    </sql>
+
+    <sql id="netSpendingAmount">
+        CASE WHEN t.is_refund = 1
+             THEN -COALESCE(t.refunded_amount, t.amount)
+             ELSE t.amount END
+    </sql>
+
+    <select id="findUserCreatedDate" resultType="java.time.LocalDate">
+        SELECT DATE(created_at)
+        FROM tbl_user
+        WHERE id = #{userId}
+          AND status = 'ACTIVE'
+    </select>
+
+    <select id="sumNetSpending" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(<include refid="netSpendingAmount"/>), 0)
+        FROM tbl_transaction t
+        WHERE <include refid="reportConsumptionCondition"/>
+    </select>
+
+    <select id="findMonthlySpending"
+            resultType="com.kb.tangtang.report.domain.MonthlySpendingRow">
+        SELECT DATE_FORMAT(t.tr_date, '%Y-%m') AS `year_month`,
+               COALESCE(SUM(<include refid="netSpendingAmount"/>), 0) AS amount
+        FROM tbl_transaction t
+        WHERE <include refid="reportConsumptionCondition"/>
+        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m')
+        ORDER BY `year_month`
+    </select>
+
+    <select id="findMonthlyCategorySpending"
+            resultType="com.kb.tangtang.report.domain.MonthlyCategorySpendingRow">
+        SELECT DATE_FORMAT(t.tr_date, '%Y-%m') AS `year_month`,
+               COALESCE(c.parent_id, c.id) AS parent_category_id,
+               COALESCE(p.category_name, c.category_name, '미분류') AS parent_category_name,
+               t.category_id,
+               COALESCE(c.category_name, '미분류') AS category_name,
+               COALESCE(SUM(<include refid="netSpendingAmount"/>), 0) AS amount
+        FROM tbl_transaction t
+        LEFT JOIN tbl_category c ON c.id = t.category_id
+        LEFT JOIN tbl_category p ON p.id = c.parent_id
+        WHERE <include refid="reportConsumptionCondition"/>
+        GROUP BY DATE_FORMAT(t.tr_date, '%Y-%m'),
+                 COALESCE(c.parent_id, c.id),
+                 COALESCE(p.category_name, c.category_name, '미분류'),
+                 t.category_id,
+                 c.category_name
+        ORDER BY `year_month`, amount DESC, t.category_id
+    </select>
+
+    <select id="countActiveFixedExpenseCandidates" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NULL
+    </select>
+
+    <select id="countActiveConfirmedFixedExpenses" resultType="int">
+        SELECT COUNT(*)
+        FROM tbl_fixed_expense_candidate
+        WHERE user_id = #{userId}
+          AND status = 'ACTIVE'
+          AND is_excluded = 0
+          AND confirmed_at IS NOT NULL
+    </select>
+
+    <select id="sumActiveTotalAssets" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN account_type = 'SECURITIES' THEN COALESCE(
+                    (SELECT SUM(ih.market_value)
+                     FROM tbl_investment_holding ih
+                     WHERE ih.account_id = tbl_connected_account.id),
+                    balance
+                )
+                ELSE balance
+            END
+        ), 0)
+        FROM tbl_connected_account
+        WHERE user_id = #{userId}
+          AND is_active = 1
+    </select>
+
+    <select id="sumLoanBalances" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(balance), 0)
+        FROM tbl_loan
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="upsertPendingAiAnalysisSnapshot">
+        INSERT INTO tbl_asset_snapshot (
+            user_id,
+            `year_month`,
+            net_worth,
+            total_asset,
+            total_debt,
+            category_summary_json,
+            ai_comment,
+            compare_comment,
+            ai_analysis_status
+        ) VALUES (
+            #{userId},
+            #{yearMonth},
+            #{netWorth},
+            #{totalAsset},
+            #{totalDebt},
+            CAST(#{categorySummaryJson} AS JSON),
+            NULL,
+            NULL,
+            #{aiAnalysisStatus}
+        )
+        ON DUPLICATE KEY UPDATE
+            net_worth = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(net_worth)
+                ELSE net_worth
+            END,
+            total_asset = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_asset)
+                ELSE total_asset
+            END,
+            total_debt = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_debt)
+                ELSE total_debt
+            END,
+            category_summary_json = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(category_summary_json)
+                ELSE category_summary_json
+            END,
+            ai_analysis_status = CASE
+                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN #{aiAnalysisStatus}
+                ELSE ai_analysis_status
+            END
+    </insert>
+
+    <select id="findAiAnalysisSnapshot"
+            resultType="com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot">
+        SELECT id,
+               ai_comment,
+               compare_comment,
+               ai_analysis_status
+        FROM tbl_asset_snapshot
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+    </select>
+
+    <update id="claimAiAnalysisGeneration">
+        UPDATE tbl_asset_snapshot
+        SET ai_analysis_status = 'IN_PROGRESS',
+            ai_analysis_provider = #{provider},
+            ai_analysis_model = #{model},
+            ai_analysis_prompt_version = #{promptVersion},
+            ai_analysis_input_hash = #{inputHash},
+            ai_analysis_attempt_count = ai_analysis_attempt_count + 1,
+            ai_analysis_requested_at = CURRENT_TIMESTAMP,
+            ai_analysis_completed_at = NULL,
+            ai_analysis_failed_at = NULL,
+            ai_analysis_failure_code = NULL
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status IN ('NOT_REQUESTED', 'FAILED')
+    </update>
+
+    <update id="completeAiAnalysis">
+        UPDATE tbl_asset_snapshot
+        SET ai_comment = CAST(#{feedbacksJson} AS JSON),
+            compare_comment = #{savingsAnalogy},
+            ai_analysis_status = 'COMPLETED',
+            ai_analysis_completed_at = CURRENT_TIMESTAMP,
+            ai_analysis_failed_at = NULL,
+            ai_analysis_failure_code = NULL
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status = 'IN_PROGRESS'
+    </update>
+
+    <update id="failAiAnalysis">
+        UPDATE tbl_asset_snapshot
+        SET ai_analysis_status = 'FAILED',
+            ai_analysis_failed_at = CURRENT_TIMESTAMP,
+            ai_analysis_completed_at = NULL,
+            ai_analysis_failure_code = #{failureCode}
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+          AND ai_analysis_status = 'IN_PROGRESS'
+    </update>
+
+</mapper>

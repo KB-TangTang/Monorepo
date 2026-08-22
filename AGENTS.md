@@ -27,6 +27,7 @@ KB IT's Your Life 7기 종합실무 프로젝트. 6인 팀이 동시에 개발�
 - **모듈 간 비동기**: Spring Event (`ApplicationEventPublisher` + `@EventListener`/`@Async`) — 메시지 브로커 없음
 - **실시간 알림**: SSE (`SseEmitter`). `WebConfig` 에 `setAsyncSupported(true)` 적용됨
 - **알림 실패 대비**: `tbl_notification_dlq` + 스케줄 재시도 배치
+- **API 문서**: Springfox 2.9.2 → `/swagger-ui.html`. **springdoc 은 금지 대상인 Boot 모듈을 끌고 와 사용 불가**
 - 빌드에 **JDK 17 필수** (toolchain 강제. JDK 21만 설치된 환경은 빌드 실패)
 - 프론트는 **Node 24.12 이상 필수**. 팀 표준은 **24.14.1** — 버전이 다르면 빌드 산출물이 미묘하게 달라진다
 
@@ -54,10 +55,62 @@ cd apps/web && npm run dev     # 프론트 개발 서버 :5173, /api 는 :8080 �
 
 최초 세팅 (신규 합류자):
 ```bash
-mysql -u root -p < db/00_init_local_db.sql     # tangtang DB + 전용 계정 생성
+# 1) DB 비밀번호를 정하고 db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 2곳을 그 값으로 바꾼다
+mysql -u root -p < db/00_init_local_db.sql            # tangtang DB + 전용 계정
+
+# 2) 테이블 33개 + 초기 데이터
+mysql -u tangtang -p tangtang < db/schema.sql
+mysql -u tangtang -p tangtang < db/seed.sql
+
+# 3) 스키마 변경분 — db/migration/ 을 파일명(날짜)순으로 적용한다. 빼먹으면 컬럼이 모자란 DB 가 된다
+#    schema.sql 은 팀에 공유된 뒤로 갱신하지 않는다(아래 「스키마 변경」 참고)
+for f in db/migration/*.sql; do
+  mysql -u tangtang -p tangtang < "$f"      # 파일마다 비밀번호를 묻는다
+done
+
+# 4) 백엔드 설정 — jdbc.password 에 1)에서 정한 같은 값을 넣는다
 cp apps/api/src/main/resources/application-local.properties.example \
    apps/api/src/main/resources/application-local.properties
+
+# 5) Docker 로 띄울 때만 — MYSQL_PASSWORD 에도 같은 값을 넣는다
+cp .env.example .env
 ```
+
+> 그룹 채팅(이슈 #174)이 들어간 뒤로는 **redis 컨테이너가 필요하다.**
+> `docker compose up` 을 다시 돌리면 따라 올라온다. 로컬에서 도커 밖 API 를 띄운다면
+> `application-local.properties` 의 `redis.host=localhost` 를 확인한다.
+
+> ⚠ **`20260805_add_account_name_to_connected_account.sql` 은 건너뛴다.** 이 변경만 `schema.sql` 에도
+> 반영돼 있어 신규 설치에서 실행하면 `Duplicate column name` 으로 죽는다.
+> **각 마이그레이션 머리말에 신규 설치 시 실행 여부가 적혀 있으니 그것을 따른다.**
+> 이후 추가되는 마이그레이션은 전부 실행 대상이다.
+
+**PowerShell 은 `<` 리다이렉션을 지원하지 않는다.** Windows 에서는 mysql 의 `source` 를 쓴다
+(경로는 슬래시, 한글 주석이 깨지지 않게 `--default-character-set=utf8mb4` 를 붙인다):
+```powershell
+mysql -u root -p -e "source D:/.../db/00_init_local_db.sql"
+mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/schema.sql"
+mysql -u tangtang -p tangtang --default-character-set=utf8mb4 -e "source D:/.../db/seed.sql"
+
+# 3) 마이그레이션 — 날짜순. 위 ⚠ 에 적힌 건너뛸 파일은 제외한다
+Get-ChildItem db/migration/*.sql | Sort-Object Name | ForEach-Object {
+    mysql -u tangtang -p tangtang --default-character-set=utf8mb4 `
+      -e "source $($_.FullName -replace '\\','/')"
+}
+```
+`Get-Content | mysql` 은 PowerShell 5.1 의 기본 인코딩이 UTF-8 이 아니라 한글 주석이 깨진다.
+
+> 비밀번호는 **위 3곳이 모두 같아야** 한다. 바꾼 `00_init_local_db.sql` 은 커밋하지 않는다.
+> 이미 계정이 있는데 비밀번호를 바꾸고 싶다면 파일을 고쳐 재실행하거나 아래 한 줄이면 된다.
+> ```
+> mysql -u root -p -e "ALTER USER 'tangtang'@'localhost' IDENTIFIED BY '새비밀번호'; FLUSH PRIVILEGES;"
+> ```
+
+확인: `mysql -u tangtang -p tangtang -e "SHOW TABLES"` → **2)까지만 했으면 33개, 3) 마이그레이션까지 적용하면 42개**
+(마이그레이션이 테이블 9개를 더 만든다: `tbl_card` · `tbl_card_bill` · `tbl_financial_sync_history` ·
+`tbl_fixed_expense_payment_reminder` · `tbl_llm_categorization_job` · `tbl_llm_categorization_job_item` ·
+`tbl_merchant_keyword_rule` · `tbl_mission_certificate_title` · `tbl_user_mission_analysis`)
+마이그레이션까지 들어갔는지 확인: `mysql -u tangtang -p tangtang -e "DESC tbl_user"` → `social_name` · `tutorial_seen_at` 이 보여야 한다
 연결 확인: `GET http://localhost:8080/api/health` → `{"success":true,"data":{"status":"UP",...}}`
 
 ## 작업 프로토콜

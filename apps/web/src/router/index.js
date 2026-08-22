@@ -1,41 +1,278 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useAccountStore } from '@/stores/account';
+import { LINK_STEP_ROUTES, canEnterLinkStep, resolveLinkEntryRoute } from '@/utils/account';
+import { resolveOnboardingRedirect } from '@/utils/user';
+import { applyThemeColor, resolveThemeColor } from '@/utils/themeColor';
+import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
  * 하단 5탭 구조: 재판 · 자산 · 홈 · 자료실 · 마이 (TheTabBar.vue 의 TABS 와 짝을 이룬다).
- * 각 화면 담당자는 아래 component 한 줄을 자기 뷰로 바꾸면 된다.
- *   component: () => import('@/views/trial/TrialHomeView.vue')
+ * meta.public   — 로그인 없이 접근 가능
+ * meta.hideTabBar — 하단 탭바를 숨긴다 (App.vue 가 읽는다)
+ * meta.tabBar — URL 경로와 다르게 활성 표시할 하단 탭 이름
  */
 const routes = [
+    {
+        path: '/login',
+        name: 'login',
+        component: () => import('@/views/auth/LoginView.vue'),
+        meta: { title: '로그인', public: true, hideTabBar: true },
+    },
+    {
+        path: '/auth/callback',
+        name: 'authCallback',
+        component: () => import('@/views/auth/AuthCallbackView.vue'),
+        meta: { title: '로그인 처리 중', public: true, hideTabBar: true },
+    },
+    {
+        path: '/consent',
+        name: 'consent',
+        component: () => import('@/views/consent/ServiceConsentView.vue'),
+        meta: { title: '서비스 동의', hideTabBar: true },
+    },
+    {
+        path: '/consent/financial',
+        name: 'financialConsent',
+        component: () => import('@/views/consent/FinancialConsentView.vue'),
+        meta: { title: '금융데이터 수집 동의', hideTabBar: true },
+    },
+    /*
+     * 온보딩 마지막 단계 (DECISIONS.md 2026-08-11).
+     * 동선은 로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈.
+     * 강제 입력이라 탭바를 숨긴다 — 여기서 빠져나갈 길은 저장뿐이다.
+     */
+    {
+        path: '/onboarding/nickname',
+        name: 'nicknameSetup',
+        component: () => import('@/views/onboarding/NicknameSetupView.vue'),
+        meta: { title: '닉네임 설정', hideTabBar: true },
+    },
     {
         path: '/',
         name: 'home',
         component: () => import('@/views/HomeView.vue'),
         meta: { title: '홈' },
     },
-    {
-        path: '/trial',
-        name: 'trial',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '재판' },
-    },
+    ...personalMissionChallengeRoutes,
     {
         path: '/asset',
         name: 'asset',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/AssetHomeView.vue'),
         meta: { title: '자산' },
+    },
+    {
+        path: '/asset/checking',
+        name: 'assetChecking',
+        component: () => import('@/views/AssetCheckingView.vue'),
+        meta: { title: '입출금 계좌' },
+    },
+    {
+        path: '/asset/savings',
+        name: 'assetSavings',
+        component: () => import('@/views/AssetSavingsView.vue'),
+        meta: { title: '예적금' },
+    },
+    {
+        path: '/asset/investment',
+        name: 'assetInvestment',
+        component: () => import('@/views/AssetInvestmentView.vue'),
+        meta: { title: '투자증권' },
+    },
+    {
+        path: '/asset/loan',
+        name: 'assetLoan',
+        component: () => import('@/views/AssetLoanView.vue'),
+        meta: { title: '대출' },
+    },
+    {
+        path: '/asset/paymoney',
+        name: 'assetPaymoney',
+        component: () => import('@/views/AssetPaymoneyView.vue'),
+        meta: { title: '페이머니' },
+    },
+    {
+        path: '/asset/trend',
+        name: 'assetNetWorthTrend',
+        component: () => import('@/views/NetWorthTrendView.vue'),
+        meta: { title: '순자산 추이' },
     },
     {
         path: '/ledger',
         name: 'ledger',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '장부' },
+        component: () => import('@/views/LedgerView.vue'),
+        meta: { title: '전체 거래내역' },
+    },
+    {
+        path: '/ledger/transactions',
+        name: 'ledgerMonthTransactions',
+        component: () => import('@/views/LedgerMonthTransactionsView.vue'),
+        meta: { title: '해당월 거래내역' },
+    },
+    {
+        path: '/ledger/search',
+        name: 'ledgerSearch',
+        component: () => import('@/views/LedgerSearchView.vue'),
+        meta: { title: '거래내역 검색' },
     },
     {
         path: '/my',
         name: 'my',
-        component: () => import('@/views/PlaceholderView.vue'),
+        component: () => import('@/views/MyPageView.vue'),
         meta: { title: '마이' },
     },
+    {
+        path: '/my/consents',
+        name: 'myConsents',
+        component: () => import('@/views/my/ConsentManageView.vue'),
+        meta: { title: '동의 관리' },
+    },
+    {
+        path: '/my/withdraw',
+        name: 'myWithdraw',
+        component: () => import('@/views/my/WithdrawView.vue'),
+        meta: { title: '회원 탈퇴' },
+    },
+    // ↓ 그룹 챌린지 (#36). personalMissionChallengeRoutes 의 목업을 대체한다. 지우지 말 것.
+    {
+        path: '/group-challenges',
+        name: 'groupChallenge',
+        component: () => import('@/views/challenge/group/GroupChallengeHomeView.vue'),
+        meta: { title: '그룹 챌린지' },
+    },
+    {
+        path: '/group-challenges/create',
+        name: 'groupChallengeCreate',
+        component: () => import('@/views/challenge/group/GroupCreateView.vue'),
+        meta: { title: '그룹 만들기', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/invite/:groupId',
+        name: 'groupChallengeInvite',
+        component: () => import('@/views/challenge/group/GroupInviteView.vue'),
+        meta: { title: '친구 초대', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/join/:code?',
+        name: 'groupChallengeJoin',
+        component: () => import('@/views/challenge/group/GroupJoinView.vue'),
+        meta: { title: '그룹 참여', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/list',
+        name: 'groupChallengeList',
+        component: () => import('@/views/challenge/group/GroupChallengeListView.vue'),
+        meta: { title: '재판 전체보기' },
+    },
+    {
+        path: '/group-challenges/:id',
+        name: 'groupChallengeDetail',
+        component: () => import('@/views/challenge/group/GroupChallengeDetailView.vue'),
+        meta: { title: '그룹 챌린지 상세', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/ranking',
+        name: 'groupChallengeRanking',
+        component: () => import('@/views/challenge/group/GroupHonorCourtView.vue'),
+        meta: { title: '명예 법정', hideTabBar: true },
+    },
+    // ↓ 그룹 채팅 (#GC_08). 챌린지별 실시간 채팅방.
+    {
+        path: '/group-challenges/:id/chat',
+        name: 'groupChallengeChat',
+        component: () => import('@/views/challenge/group/GroupChatView.vue'),
+        meta: { title: '그룹 채팅', hideTabBar: true },
+    },
+    // ↓ 변론 플로우 (#GC_07). 기소 상세 → 실제 부담금 → 변론 작성 → 완료 / 혐의 인정.
+    {
+        path: '/group-challenges/:id/defense/:indictmentId',
+        name: 'defenseViolation',
+        component: () => import('@/views/challenge/group/DefenseViolationView.vue'),
+        meta: { title: '소비 기준 위반', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/cost',
+        name: 'defenseActualCost',
+        component: () => import('@/views/challenge/group/DefenseActualCostView.vue'),
+        meta: { title: '실제 부담금 입력', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/write',
+        name: 'defenseWrite',
+        component: () => import('@/views/challenge/group/DefenseWriteView.vue'),
+        meta: { title: '변론 작성', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/done',
+        name: 'defenseDone',
+        component: () => import('@/views/challenge/group/DefenseDoneView.vue'),
+        meta: { title: '변론 완료', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/defense/:indictmentId/admit',
+        name: 'defenseAdmitDone',
+        component: () => import('@/views/challenge/group/DefenseAdmitDoneView.vue'),
+        meta: { title: '혐의 인정', hideTabBar: true },
+    },
+    // ↓ 투표 플로우 (#GC_07_04). 변론 확인 → 유·무죄 투표 → 완료.
+    {
+        path: '/group-challenges/:id/vote/:indictmentId',
+        name: 'voteVerdict',
+        component: () => import('@/views/challenge/group/VoteVerdictView.vue'),
+        meta: { title: '판결 참여', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/done',
+        name: 'voteDone',
+        component: () => import('@/views/challenge/group/VoteDoneView.vue'),
+        meta: { title: '투표 완료', hideTabBar: true },
+    },
+    // ↓ 재판 진행 현황 · 최종 판결 · 판결 상세 (#GC_08). 기소 후 판결까지 타임라인과 결과 화면.
+    {
+        path: '/group-challenges/:id/trial/:indictmentId',
+        name: 'trialProgress',
+        component: () => import('@/views/challenge/group/judgment/TrialProgressView.vue'),
+        meta: { title: '재판 진행 현황', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict',
+        name: 'verdictResult',
+        component: () => import('@/views/challenge/group/judgment/VerdictResultView.vue'),
+        meta: { title: '최종 판결', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/trial/:indictmentId/verdict/detail',
+        name: 'verdictDetail',
+        component: () => import('@/views/challenge/group/judgment/VerdictDetailView.vue'),
+        meta: { title: '판결 상세', hideTabBar: true },
+    },
+    // ↓ 동점 AI 판결 플로우 (#105 · #172). verdictMethod 가 AI_JUDGMENT 인 재판만 들어온다.
+    //   진입로는 진행 현황의 「판결 보기」와 투표 화면 가드 두 곳. 각 화면이 스스로 조건을 다시 본다.
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/tie',
+        name: 'groupVoteTie',
+        component: () => import('@/views/challenge/group/judgment/GroupVoteTieView.vue'),
+        meta: { title: '동점 안내', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict',
+        name: 'groupAiVerdict',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictView.vue'),
+        meta: { title: 'AI 판결', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict/result',
+        name: 'groupAiVerdictResult',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictResultView.vue'),
+        meta: { title: 'AI 판결 결과', hideTabBar: true },
+    },
+    {
+        path: '/group-challenges/:id/vote/:indictmentId/ai-verdict/detail',
+        name: 'groupAiVerdictDetail',
+        component: () => import('@/views/challenge/group/judgment/GroupAiVerdictDetailView.vue'),
+        meta: { title: '재판 세부 정보 안내', hideTabBar: true },
+    },
+    // ↓ 팀원(#10 챌린지 리포트) 라우트. 지우지 말 것.
     {
         path: '/reports/challenge',
         name: 'challengeReport',
@@ -43,27 +280,191 @@ const routes = [
         meta: { title: '챌린지 리포트' },
     },
     {
-        path: '/reports/challenge/savings',
-        name: 'challengeNetSavings',
-        component: () => import('@/views/challenge/report/ChallengeNetSavingsView.vue'),
-        meta: { title: '카테고리별 순 절감액' },
+        path: '/reports/monthly',
+        name: 'monthlyConsumptionReport',
+        component: () => import('@/views/report/MonthlyConsumptionReportView.vue'),
+        meta: { title: '월간 판결문' },
+    },
+    {
+        path: '/asset/fixed-expenses',
+        name: 'fixedExpenseManagement',
+        component: () => import('@/views/fixed-expense/FixedExpenseManagementView.vue'),
+        meta: { title: '고정지출 관리', tabBar: 'ledger' },
+    },
+    {
+        path: '/asset/fixed-expenses/candidates/:candidateId',
+        name: 'fixedExpenseCandidate',
+        component: () => import('@/views/fixed-expense/FixedExpenseCandidateView.vue'),
+        meta: { title: '탐지 후보 확인', tabBar: 'ledger' },
+    },
+    {
+        path: '/asset/fixed-expenses/:expenseId',
+        name: 'fixedExpenseDetail',
+        component: () => import('@/views/fixed-expense/FixedExpenseDetailView.vue'),
+        meta: { title: '고정지출 상세', tabBar: 'ledger' },
+    },
+    // ↓ 계좌 연동(이슈 #12). 단계 순서는 stores/account.js 가 utils/account.js 의 LINK_STEPS 로 결정한다.
+    {
+        path: '/accounts/link/institutions',
+        name: 'accountLinkInstitutions',
+        component: () => import('@/views/account/InstitutionSelectView.vue'),
+        meta: { title: '금융기관 연결', hideTabBar: true },
+    },
+    {
+        path: '/accounts/link/auth',
+        name: 'accountLinkAuth',
+        component: () => import('@/views/account/AuthStepView.vue'),
+        meta: { title: '본인 인증', hideTabBar: true, linkStep: 'auth' },
+    },
+    {
+        path: '/accounts/link/progress',
+        name: 'accountLinkProgress',
+        component: () => import('@/views/account/LinkProgressView.vue'),
+        meta: { title: '자산 연결 중', hideTabBar: true, linkStep: 'progress' },
+    },
+    {
+        path: '/accounts/link/select',
+        name: 'accountLinkSelect',
+        component: () => import('@/views/account/AccountSelectView.vue'),
+        meta: { title: '연결할 계좌 선택', hideTabBar: true, linkStep: 'select' },
+    },
+    {
+        path: '/accounts/link/done',
+        name: 'accountLinkDone',
+        component: () => import('@/views/account/LinkDoneView.vue'),
+        meta: { title: '계좌 연결 완료', hideTabBar: true, linkStep: 'done' },
+    },
+    {
+        path: '/asset/accounts',
+        name: 'connectedAccounts',
+        component: () => import('@/views/account/ConnectedAccountView.vue'),
+        meta: { title: '연결 계좌 관리' },
+    },
+    {
+        path: '/asset/accounts/:accountId/reconnect',
+        name: 'accountReconnect',
+        component: () => import('@/views/account/AccountReconnectView.vue'),
+        meta: { title: '계좌 재연동', hideTabBar: true },
+    },
+    {
+        path: '/asset/accounts/refresh',
+        name: 'accountRefresh',
+        component: () => import('@/views/account/AccountRefreshView.vue'),
+        meta: { title: '계좌 즉시 조회' },
+    },
+    // ↓ 알림 목록(이슈 #58). 탭바는 숨기지 않는다 — 화면에 뒤로가기 버튼이 없다.
+    {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationListView.vue'),
+        meta: { title: '알림' },
     },
 ];
 
 /* 개발용 컴포넌트 카탈로그. import.meta.env.DEV 가 false 인 프로덕션 빌드에서는
- * 이 블록째로 제거돼 라우트도 청크도 생기지 않는다. */
+ * 이 블록째로 제거돼 라우트도 청크도 생기지 않는다.
+ * 사용자 데이터를 다루지 않으므로 로그인 없이 연다. */
 if (import.meta.env.DEV) {
     routes.push({
         path: '/dev/ui',
         name: 'devUi',
         component: () => import('@/views/dev/UiCatalogView.vue'),
-        meta: { title: '컴포넌트 카탈로그' },
+        meta: { title: '컴포넌트 카탈로그', public: true, hideTabBar: true },
     });
 }
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes,
+    /*
+     * 화면마다 스크롤 가능 여부·높이가 달라(고정 높이+내부 스크롤 vs 페이지 스크롤),
+     * 리셋 없이 이동하면 이전 화면의 스크롤 위치가 그대로 남아 새 화면이 밀려 보인다.
+     * 뒤로/앞으로 가기(popstate)는 원래 위치를 복원한다.
+     */
+    scrollBehavior(to, from, savedPosition) {
+        return savedPosition ?? { top: 0 };
+    },
+});
+
+/*
+ * 로그인 가드. meta.public 이 아닌 모든 화면은 로그인이 필요하다.
+ * 5탭은 전부 개인 금융 데이터라 예외를 두지 않는다.
+ * 개발용 인증 우회 플래그는 만들지 않는다 — 인증 버그를 가리고 운영 설정에 새어나간다.
+ */
+router.beforeEach((to, from) => {
+    const auth = useAuthStore();
+
+    if (to.meta.public) {
+        // 이미 로그인한 사용자가 로그인 화면으로 오면 홈으로 보낸다
+        if (auth.isLoggedIn && to.name === 'login') {
+            return { name: 'home' };
+        }
+        return true;
+    }
+
+    if (!auth.isLoggedIn) {
+        return { name: 'login', query: { redirect: to.fullPath } };
+    }
+
+    /*
+     * 온보딩을 끝내지 않은 사용자는 남은 단계에 묶어둔다 (DECISIONS.md 2026-08-11 (7)).
+     * 동선은 `로그인 → 서비스동의 → 금융동의 → 계좌연동 → 닉네임 설정 → 홈` 이고 계좌 연동까지 강제한다.
+     *
+     * 단계 순서·면제 대상(자기 화면과 앞 단계 화면)·"사용자 정보가 아직 없으면 통과"는
+     * 전부 resolveOnboardingRedirect() 안에 이유와 함께 적혀 있다.
+     * ⚠ 여기서 조건을 다시 쓰지 말 것 — 판정이 두 곳으로 갈리면 무한 리다이렉트가 난다.
+     */
+    const onboardingRoute = resolveOnboardingRedirect(auth, to);
+    if (onboardingRoute) {
+        return { name: onboardingRoute };
+    }
+
+    /*
+     * 계좌 연동 플로우 진입점 기록.
+     *
+     * 플로우 **밖**에서 첫 단계로 들어오는 순간의 `from` 이 곧 "나갈 때 돌아갈 곳"이다.
+     * 진입 화면(연결 계좌 관리·재연동·개인챌린지 CTA·온보딩)이 각자 기억하게 하면 새 진입점이
+     * 생길 때마다 빠뜨린다. 여기서 한 번 잡으면 자동으로 따라온다.
+     * ⚠ 기록/무시 판정은 전부 resolveLinkEntryRoute() 안에 이유와 함께 있다 — 여기 조건을 늘리지 말 것.
+     */
+    if (to.name === LINK_STEP_ROUTES.institutions) {
+        const entry = resolveLinkEntryRoute(from.name, { redirected: Boolean(to.redirectedFrom) });
+        if (entry) {
+            useAccountStore().setEntryRoute(entry);
+        }
+    }
+
+    /*
+     * 계좌 연결 플로우 중간 단계 직접 진입 차단 (이슈 #12).
+     * 북마크·새로고침으로 /accounts/link/select 에 바로 들어오면 이전 단계 결과가 없어 빈 화면이 된다.
+     * meta.linkStep 이 붙은 라우트만 검사하므로 다른 화면에는 영향이 없다.
+     */
+    if (to.meta.linkStep) {
+        const account = useAccountStore();
+        const canEnter = canEnterLinkStep(to.meta.linkStep, {
+            selectedCount: account.selectedCount,
+            hasConnection: account.hasConnection,
+            linkedCount: account.linkedCount,
+            progressDone: account.progressDone,
+            directAssetsPending: account.directAssetsPending,
+        });
+        if (!canEnter) {
+            return { name: 'accountLinkInstitutions' };
+        }
+    }
+
+    return true;
+});
+
+/*
+ * 설치형(PWA) 상태바 색을 화면에 맞춘다.
+ *
+ * beforeEach 가 아니라 afterEach 인 이유 — beforeEach 에서 바꾸면 가드가 리다이렉트한
+ * 경우(로그인 안 된 채 홈 진입 등) 실제로 뜨지 않는 화면의 색이 남는다.
+ * 어떤 라우트가 어두운지와 그 판단 기준은 utils/themeColor.js 에 적어 뒀다.
+ */
+router.afterEach((to) => {
+    applyThemeColor(resolveThemeColor(to.name));
 });
 
 export default router;

@@ -1,0 +1,384 @@
+.personal-ranking {
+    min-height: calc(100vh - var(--tt-tabbar-height));
+    padding: var(--tt-space-4) var(--tt-screen-padding);
+    padding-bottom: calc(var(--tt-tabbar-height) + var(--tt-space-8));
+    font-family: var(--tt-font-sans);
+    color: var(--tt-text);
+    background: var(--tt-bg-subtle);
+}
+
+.personal-ranking__period-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tt-space-5);
+    margin-top: var(--tt-space-5);
+}
+
+.personal-ranking__period-navigation button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tt-touch-min);
+    min-height: var(--tt-touch-min);
+    padding: 0;
+    font: inherit;
+    font-size: var(--tt-fs-stat);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+.personal-ranking__period-navigation button:nth-child(2) {
+    min-width: 128px;
+    font-size: var(--tt-fs-stat);
+}
+
+.personal-ranking__period-navigation button:disabled {
+    color: var(--tt-text-hint);
+    cursor: default;
+}
+
+.personal-ranking__podium-section {
+    margin-top: var(--tt-space-6);
+}
+
+.personal-ranking__empty-mascot {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+}
+
+.personal-ranking__status {
+    display: grid;
+    min-height: 240px;
+    place-items: center;
+    margin: 0;
+    color: var(--tt-text-muted);
+}
+
+.personal-ranking__podium-header,
+.personal-ranking__list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tt-space-2);
+}
+
+.personal-ranking__podium-header {
+    margin-bottom: var(--tt-space-2);
+}
+
+.personal-ranking__podium-header h2,
+.personal-ranking__list-header h2 {
+    margin: 0;
+    font-size: var(--tt-fs-subtitle);
+}
+
+.personal-ranking__podium-header button {
+    min-height: var(--tt-touch-min);
+    padding: 0 var(--tt-space-4);
+    font: inherit;
+    font-size: var(--tt-fs-button);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-info-deep);
+    background: var(--tt-accent);
+    border: 0;
+    border-radius: var(--tt-radius-full);
+    cursor: pointer;
+}
+
+.personal-ranking__podium {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    min-height: 272px;
+}
+
+.personal-ranking__podium-item {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: var(--tt-space-3) var(--tt-space-1) var(--tt-space-5);
+    overflow: visible;
+    background: var(--tt-bg);
+    border: 2px solid var(--tt-bg-subtle);
+    border-radius: var(--tt-radius-lg) var(--tt-radius-lg) 0 0;
+    animation: personal-ranking-podium-rise 0.55s ease-out both;
+}
+
+.personal-ranking__podium-item--1 {
+    order: 2;
+    min-height: 270px;
+    background: var(--tt-accent-subtle);
+    animation-delay: 0.15s;
+}
+
+.personal-ranking__podium-item--2 {
+    order: 1;
+    min-height: 250px;
+    background: var(--tt-info-subtle);
+    animation-delay: 0.05s;
+}
+
+.personal-ranking__podium-item--3 {
+    order: 3;
+    min-height: 210px;
+    background: var(--tt-danger-subtle);
+    animation-delay: 0.1s;
+}
+
+.personal-ranking__podium-crown {
+    position: absolute;
+    top: -27px;
+    display: grid;
+    width: 48px;
+    height: 39px;
+    place-items: center;
+    clip-path: polygon(0 18%, 24% 44%, 50% 0, 76% 44%, 100% 18%, 87% 100%, 13% 100%);
+    color: var(--tt-text-inverse);
+    background: var(--tt-accent);
+}
+
+.personal-ranking__podium-crown small {
+    padding-top: var(--tt-space-2);
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+}
+
+.personal-ranking__podium-item--2 .personal-ranking__podium-crown {
+    color: var(--tt-text-body);
+    background: var(--tt-border-divider);
+}
+
+.personal-ranking__podium-item--3 .personal-ranking__podium-crown {
+    background: var(--tt-wood);
+}
+
+.personal-ranking__podium-avatar {
+    display: flex;
+    width: 100%;
+    height: 126px;
+    align-items: flex-end;
+    justify-content: center;
+    margin-top: var(--tt-space-2);
+    overflow: hidden;
+}
+
+.personal-ranking__podium-avatar img {
+    width: 126px;
+    max-width: 132%;
+    height: 126px;
+    object-fit: contain;
+    object-position: center bottom;
+}
+
+.personal-ranking__podium-name {
+    width: 100%;
+    margin-top: var(--tt-space-2);
+    overflow: hidden;
+    font-size: var(--tt-fs-label);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.personal-ranking__podium-score {
+    margin-top: var(--tt-space-1);
+    font-size: var(--tt-fs-label);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-info-deep);
+}
+
+.personal-ranking__podium-item--1 .personal-ranking__podium-score {
+    color: var(--tt-accent-deep);
+}
+
+.personal-ranking__podium-item--3 .personal-ranking__podium-score {
+    color: var(--tt-danger-deep);
+}
+
+.personal-ranking__list {
+    margin-top: var(--tt-space-3);
+    padding: var(--tt-space-4);
+    background: var(--tt-bg);
+    border-radius: var(--tt-radius-xl);
+    box-shadow: var(--tt-elevation-1);
+}
+
+.personal-ranking__list-header {
+    min-height: var(--tt-touch-min);
+    border-bottom: 1px solid var(--tt-border);
+}
+
+.personal-ranking__list-header p {
+    margin: 0;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-accent-deep);
+}
+
+.personal-ranking__list ol {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.personal-ranking__list li {
+    display: grid;
+    grid-template-columns: 52px 40px minmax(0, 1fr) auto;
+    gap: var(--tt-space-3);
+    align-items: center;
+    min-height: 64px;
+    border-bottom: 1px solid var(--tt-border);
+}
+
+.personal-ranking__list li:last-child {
+    border-bottom: 0;
+}
+
+.personal-ranking__list li > strong,
+.personal-ranking__list li > span {
+    font-size: var(--tt-fs-label);
+}
+
+.personal-ranking__list li > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.personal-ranking__list li > b {
+    font-size: var(--tt-fs-label);
+    color: var(--tt-text-body);
+}
+
+.personal-ranking__mine-dock {
+    position: sticky;
+    z-index: var(--tt-z-sticky);
+    /* safe-area 를 빼면 아이폰에서 탭바가 그만큼 높아져 이 독이 탭바 밑에 깔린다 */
+    bottom: calc(var(--tt-tabbar-height) + env(safe-area-inset-bottom));
+    margin-top: var(--tt-space-4);
+    padding-bottom: var(--tt-space-2);
+    background: var(--tt-bg-subtle);
+}
+
+.personal-ranking__mine {
+    display: grid;
+    grid-template-columns: 112px 48px minmax(0, 1fr) auto auto;
+    gap: var(--tt-space-3);
+    align-items: center;
+    min-height: 84px;
+    padding-right: var(--tt-space-4);
+    overflow: hidden;
+    background: var(--tt-info-subtle);
+    border-radius: var(--tt-radius-lg);
+    box-shadow: var(--tt-elevation-2);
+}
+
+.personal-ranking__mine > b {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--tt-fs-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.personal-ranking__mine-rank {
+    display: flex;
+    align-self: stretch;
+    justify-content: center;
+    flex-direction: column;
+    padding-left: var(--tt-space-4);
+    margin: 0;
+    color: var(--tt-text-inverse);
+    background: var(--tt-info);
+}
+
+.personal-ranking__mine-rank span {
+    font-size: var(--tt-fs-caption);
+}
+
+.personal-ranking__mine-rank strong {
+    font-size: var(--tt-fs-subtitle);
+}
+
+.personal-ranking__mine-percentile {
+    justify-self: start;
+    padding: var(--tt-space-1) var(--tt-space-2);
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-info);
+    background: var(--tt-bg);
+    border-radius: var(--tt-radius-full);
+}
+
+.personal-ranking__mine-score {
+    font-size: var(--tt-fs-subtitle);
+    color: var(--tt-info-deep);
+}
+
+@keyframes personal-ranking-podium-rise {
+    from {
+        opacity: 0;
+        transform: translateY(var(--tt-space-5));
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .personal-ranking__podium-item {
+        animation: none;
+    }
+}
+
+@media (max-width: 430px) {
+    .personal-ranking {
+        padding-right: var(--tt-space-3);
+        padding-left: var(--tt-space-3);
+    }
+
+    .personal-ranking__podium-header {
+        align-items: flex-start;
+    }
+
+    .personal-ranking__podium-header button {
+        padding: 0 var(--tt-space-3);
+        font-size: var(--tt-fs-caption);
+    }
+
+    .personal-ranking__podium-avatar img {
+        width: 112px;
+        height: 112px;
+    }
+
+    .personal-ranking__list {
+        padding: var(--tt-space-3);
+    }
+
+    .personal-ranking__list li {
+        grid-template-columns: 38px 36px minmax(0, 1fr) auto;
+        gap: var(--tt-space-2);
+    }
+
+    .personal-ranking__mine {
+        grid-template-columns: 76px 48px minmax(0, 1fr) auto auto;
+        gap: var(--tt-space-2);
+        padding-right: var(--tt-space-3);
+    }
+
+    .personal-ranking__mine-rank {
+        padding-left: var(--tt-space-3);
+    }
+
+}

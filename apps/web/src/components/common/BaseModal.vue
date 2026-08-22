@@ -31,12 +31,15 @@ function onOverlayClick() {
     }
 }
 
-useOverlay({
+const { releaseHistory } = useOverlay({
     isOpen,
     panelRef: panel,
     canCloseOnEsc: () => props.closeOnEsc,
     requestClose: close,
 });
+
+/* 모달 안에서 다른 화면으로 이동하는 경우에만 쓴다. useOverlay 의 releaseHistory 주석 참고. */
+defineExpose({ releaseHistory });
 </script>
 
 <template>
@@ -85,7 +88,9 @@ useOverlay({
     display: flex;
     align-items: center;
     justify-content: center;
+    /* 아래 여백은 키보드가 가린 높이만큼 더 준다 — 시트와 같은 이유(useOverlay 주석 참고) */
     padding: var(--tt-space-5);
+    padding-bottom: calc(var(--tt-space-5) + var(--tt-keyboard-inset, 0px));
     background: var(--tt-overlay-dim);
 }
 

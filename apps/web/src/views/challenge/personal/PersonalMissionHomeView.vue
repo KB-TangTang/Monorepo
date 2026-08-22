@@ -1,0 +1,763 @@
+<script setup>
+import { onMounted, onUnmounted, ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
+import PersonalMissionConsentSheet from '@/components/challenge/personal/PersonalMissionConsentSheet.vue';
+import PersonalMissionUnlockSheet from '@/components/challenge/personal/PersonalMissionUnlockSheet.vue';
+import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vue';
+import PersonalBriefingCard from '@/components/challenge/personal/PersonalBriefingCard.vue';
+import PersonalWatchlistCard from '@/components/challenge/personal/PersonalWatchlistCard.vue';
+import PersonalWeeklyVerdictCard from '@/components/challenge/personal/PersonalWeeklyVerdictCard.vue';
+import PersonalScoreCard from '@/components/challenge/personal/PersonalScoreCard.vue';
+import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
+import PersonalTangiSheet from '@/components/challenge/personal/PersonalTangiSheet.vue';
+import PersonalVerdictModal from '@/components/challenge/personal/PersonalVerdictModal.vue';
+import PersonalNoAccountCard from '@/components/challenge/personal/PersonalNoAccountCard.vue';
+import PersonalTutorialOverlay from '@/components/challenge/personal/PersonalTutorialOverlay.vue';
+import BaseButton from '@/components/common/BaseButton.vue';
+import StateError from '@/components/common/StateError.vue';
+import StateLoading from '@/components/common/StateLoading.vue';
+import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
+import { useConsentStore } from '@/stores/consent';
+import { useAuthStore } from '@/stores/auth';
+import {
+    formatMissionWatchQuote,
+    formatWon,
+    formatMissionAssignmentSummary,
+    resolveMissionProsecutorState,
+    toWatchCategoryModel,
+    toWeeklyVerdictModel,
+} from '@/services/personalMissionFlow';
+import { hasSeenPersonalTutorial, markPersonalTutorialSeen } from '@/services/tutorialGuide';
+import {
+    MOCK_PROSECUTORS,
+    MOCK_VERDICT_SUCCESS,
+    MOCK_VERDICT_FAIL,
+} from '@/fixtures/personalChallenge';
+import { PERSONAL_MISSION_DIFFICULTIES } from '@/fixtures/personalMission';
+import buildingSupreme from '@/assets/images/court/building_supreme_v2.png';
+import defaultProsecutorTangi from '@/assets/images/prosecutor_tangtang/prosecutor_tangtang_A.png';
+import withdrawnTangi from '@/assets/images/emotions/13_sobbing.png';
+import insufficientTangi from '@/assets/images/emotions/03_gentle_smile.png';
+import { CHALLENGE_CONSENT_STATE, resolveChallengeConsentState } from '@/services/challengeConsent';
+
+const router = useRouter();
+const store = usePersonalMissionChallengeStore();
+const consentStore = useConsentStore();
+const authStore = useAuthStore();
+
+const isConsentOpen = ref(false);
+const isConsentSubmitting = ref(false);
+const consentError = ref('');
+const pageError = ref('');
+const isTangiSheetOpen = ref(false);
+const isVerdictOpen = ref(false);
+const isVerdictAcknowledging = ref(false);
+const verdictError = ref('');
+const showTutorial = ref(false);
+const isDevelopment = import.meta.env.DEV;
+const isReassigning = ref(false);
+const devActionMessage = ref('');
+/* 데모 버튼 8개를 펼쳐두면 화면 오른쪽 절반을 가려 디자인을 확인할 수 없다. 기본은 접어둔다. */
+const isDevPanelOpen = ref(false);
+const toastMessage = ref('');
+let toastTimer = null;
+const isMissionUnlockOpen = ref(false);
+const isMissionUnlockAcknowledging = ref(false);
+const missionUnlockError = ref('');
+const hasPendingMissionUnlock = ref(false);
+const isMissionUnlockPreview = ref(false);
+const isMissionUnlockDifficultyFlow = ref(false);
+
+const missionWatchQuote = computed(() =>
+    formatMissionWatchQuote(store.todayBriefing?.categoryName),
+);
+const missionProsecutors = computed(() =>
+    resolveMissionProsecutorState(
+        MOCK_PROSECUTORS,
+        store.todayBriefing?.difficultyName,
+        store.selectedProsecutorId,
+    ),
+);
+
+/*
+ * 헤더는 화면 상태와 무관하게 항상 같은 높이로 그린다(계좌 미연동·철회 포함).
+ * 상태에 따라 바뀌는 건 말풍선 문구뿐이다.
+ */
+const headerQuote = computed(() => {
+    if (store.screenState === 'no-account') {
+        return '수사할 증거가 없습니다.\n먼저 계좌를 연결해 주세요.';
+    }
+    if (store.screenState === 'withdrawn') {
+        return '챌린지 참여가 중지됐어요.\n언제든 다시 오세요.';
+    }
+    return missionWatchQuote.value;
+});
+/*
+ * 헤더 탕이는 **오늘 배정된 미션의 탕이**(missionProsecutors.current)다.
+ * 난이도를 바꿔도 오늘 헤더는 그대로여야 한다 — 바뀐 탕이는 다음 미션부터 나온다(#422).
+ * 여기서 `store.selectedProsecutor` 를 쓰면 저장 즉시 헤더가 바뀌어 그 규칙이 깨진다.
+ */
+const headerTangiImage = computed(
+    () => missionProsecutors.value.current?.image ?? defaultProsecutorTangi,
+);
+const headerTangiName = computed(() => missionProsecutors.value.current?.name ?? '탕이');
+
+/*
+ * 헤더 하단 곡면에 얹는 첫 섹션 제목. 오늘 볼 사건이 없는 상태(계좌 미연동·철회)에서는
+ * 비운다 — 곡면 높이는 제목이 없어도 그대로다.
+ */
+const headerSkirtTitle = computed(() =>
+    ['active', 'verdict', 'insufficient'].includes(store.screenState) ? '오늘의 미션' : '',
+);
+
+const cumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.cumulativeTransactionCount);
+    return Number.isFinite(count) && count >= 0 ? count : null;
+});
+const requiredCumulativeTransactionCount = computed(() => {
+    const count = Number(store.categoryAnalysis?.requiredCumulativeTransactionCount);
+    return Number.isFinite(count) && count > 0 ? count : null;
+});
+const qualificationProgress = computed(() => {
+    if (
+        cumulativeTransactionCount.value === null ||
+        requiredCumulativeTransactionCount.value === null
+    ) {
+        return 0;
+    }
+    return Math.min(
+        Math.round(
+            (cumulativeTransactionCount.value / requiredCumulativeTransactionCount.value) * 100,
+        ),
+        100,
+    );
+});
+
+/*
+ * 맞춤 미션 개시 안내 동기화. **실패를 삼킨다**(이슈 #314).
+ *
+ * 이건 장식성 넛지다. 동의·오늘 미션·카테고리 분석·연속일수·월간 점수가 전부 정상으로 로드돼도
+ * 이 호출 하나가 실패하면 바깥 try 가 페이지를 통째로 에러 화면으로 만들었다.
+ * 실제로 2026-08-19 EC2 가 그 상태였다 — #311 의 마이그레이션이 적용되지 않아 이 API 가 500 이었고,
+ * 그 컬럼이 공용 조회 목록에 있어 사용자 조회 전체가 함께 죽었다.
+ *
+ * 안내를 못 띄우는 것과 화면을 못 그리는 것은 무게가 다르다. 실패하면 안내만 생략한다.
+ */
+async function syncMissionUnlockQuietly() {
+    try {
+        hasPendingMissionUnlock.value = await store.syncMissionUnlock();
+    } catch (err) {
+        hasPendingMissionUnlock.value = false;
+        console.error('[PersonalMissionHome] 맞춤 미션 개시 안내 상태를 가져오지 못했다.', err);
+    }
+}
+const watchCategoryModel = computed(() => toWatchCategoryModel(store.categoryAnalysis));
+const weeklyVerdictModel = computed(() => toWeeklyVerdictModel(store.missionStreak));
+const selectedUnlockDifficulty = computed(
+    () =>
+        PERSONAL_MISSION_DIFFICULTIES.find(
+            (difficulty) => difficulty.id === store.selectedDifficultyId,
+        ) ?? PERSONAL_MISSION_DIFFICULTIES[1],
+);
+
+/*
+ * BaseModal과 BaseBottomSheet는 열릴 때 뒤로가기용 history 항목을 추가한다.
+ * 닫자마자 다음 화면을 열면 이전 오버레이의 history.back()이 새 화면까지 닫을 수 있으므로,
+ * 해당 항목이 정리된 뒤 다음 단계로 이동한다.
+ */
+function afterOverlayClosed(callback) {
+    if (!window.history.state?.ttOverlay) {
+        callback();
+        return;
+    }
+    window.addEventListener('popstate', callback, { once: true });
+}
+
+onMounted(async () => {
+    store.hydrate();
+
+    try {
+        await consentStore.loadMyConsents();
+        const challengeConsent = consentStore.myConsents.find((item) => item.type === 'CHALLENGE');
+        const consentState = resolveChallengeConsentState(challengeConsent);
+        store.setConsentState(consentState);
+
+        if (consentState !== CHALLENGE_CONSENT_STATE.FIRST) {
+            await store.loadPendingVerdict();
+            await Promise.all([
+                store.loadTodayMission(),
+                store.loadCategoryAnalysis(),
+                store.loadMissionStreak(),
+                store.loadMissionMonthlyScore(),
+            ]);
+            await syncMissionUnlockQuietly();
+        }
+    } catch (err) {
+        store.consentState = 'ERROR';
+        pageError.value = err.message ?? '챌린지 정보를 불러오지 못했어요.';
+    }
+
+    if (store.consentState === CHALLENGE_CONSENT_STATE.FIRST) {
+        isConsentOpen.value = true;
+        return;
+    }
+
+    if (store.screenState === 'error' || store.screenState === 'withdrawn') return;
+
+    if (!hasSeenPersonalTutorial()) {
+        showTutorial.value = true;
+        return;
+    }
+
+    if (hasPendingMissionUnlock.value) {
+        isMissionUnlockOpen.value = true;
+        return;
+    }
+
+    if (store.hasPendingVerdict) {
+        isVerdictOpen.value = true;
+    }
+});
+
+async function handleAgree() {
+    if (isConsentSubmitting.value) {
+        return;
+    }
+    isConsentSubmitting.value = true;
+    consentError.value = '';
+    try {
+        await consentStore.save('CHALLENGE', [{ type: 'CHALLENGE', agreed: true }]);
+        store.agree();
+        await store.waitForTodayMission();
+        await Promise.all([
+            store.loadCategoryAnalysis(),
+            store.loadMissionStreak(),
+            store.loadMissionMonthlyScore(),
+        ]);
+        await syncMissionUnlockQuietly();
+        isConsentOpen.value = false;
+        if (!hasSeenPersonalTutorial()) {
+            afterOverlayClosed(() => {
+                showTutorial.value = true;
+            });
+        } else if (hasPendingMissionUnlock.value) {
+            afterOverlayClosed(() => {
+                isMissionUnlockOpen.value = true;
+            });
+        }
+    } catch (err) {
+        consentError.value = err.message ?? '챌린지 참여 동의를 저장하지 못했어요.';
+    } finally {
+        isConsentSubmitting.value = false;
+    }
+}
+
+/*
+ * 완료 저장은 서버(tbl_user.tutorial_seen_at)로 나간다 — 비동기다.
+ * 저장 실패는 markPersonalTutorialSeen() 안에서 삼키므로(다음에 한 번 더 뜨는 게 전부)
+ * 여기서 따로 오류를 처리하지 않는다.
+ */
+async function onTutorialComplete() {
+    await markPersonalTutorialSeen();
+    if (hasPendingMissionUnlock.value) {
+        afterOverlayClosed(() => {
+            isMissionUnlockOpen.value = true;
+        });
+    }
+}
+
+async function acknowledgeMissionUnlock(destination) {
+    if (isMissionUnlockAcknowledging.value) return;
+
+    if (destination === 'difficulty') {
+        isMissionUnlockDifficultyFlow.value = true;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(openTangiSheet);
+        return;
+    }
+
+    if (isMissionUnlockPreview.value) {
+        isMissionUnlockPreview.value = false;
+        isMissionUnlockOpen.value = false;
+        return;
+    }
+
+    isMissionUnlockAcknowledging.value = true;
+    missionUnlockError.value = '';
+    try {
+        await store.acknowledgeMissionUnlock();
+        hasPendingMissionUnlock.value = false;
+        isMissionUnlockOpen.value = false;
+        afterOverlayClosed(() => {
+            if (store.hasPendingVerdict) {
+                isVerdictOpen.value = true;
+            }
+        });
+    } catch (err) {
+        missionUnlockError.value =
+            err.message ?? '안내 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+    } finally {
+        isMissionUnlockAcknowledging.value = false;
+    }
+}
+
+function openTangiSheet() {
+    isTangiSheetOpen.value = true;
+}
+
+function showToast(message) {
+    window.clearTimeout(toastTimer);
+    toastMessage.value = message;
+    toastTimer = window.setTimeout(() => {
+        toastMessage.value = '';
+    }, 3200);
+}
+
+onUnmounted(() => window.clearTimeout(toastTimer));
+
+async function handleProsecutorConfirm(prosecutorId) {
+    if (isMissionUnlockDifficultyFlow.value && isMissionUnlockPreview.value) {
+        isMissionUnlockDifficultyFlow.value = false;
+        isMissionUnlockPreview.value = false;
+        devActionMessage.value = '맞춤 사건 개시와 담당 탕이 선택 흐름을 미리 확인했어요.';
+        return;
+    }
+
+    try {
+        const user = await store.saveProsecutorDifficulty(prosecutorId);
+        authStore.mergeUser(user);
+        if (isMissionUnlockDifficultyFlow.value) {
+            await store.acknowledgeMissionUnlock();
+            hasPendingMissionUnlock.value = false;
+            isMissionUnlockDifficultyFlow.value = false;
+        }
+        const message = `난이도 변경 완료! 다음 미션부터 ‘${store.selectedProsecutor?.name}’가 적용돼요.`;
+        devActionMessage.value = message;
+        showToast(message);
+    } catch (err) {
+        devActionMessage.value = err.message ?? '담당 검사 난이도를 저장하지 못했어요.';
+    }
+}
+
+async function handleVerdictAcknowledge() {
+    if (isVerdictAcknowledging.value) return;
+    isVerdictAcknowledging.value = true;
+    verdictError.value = '';
+    try {
+        await store.acknowledgeVerdict();
+        isVerdictOpen.value = false;
+    } catch (err) {
+        verdictError.value = err.message ?? '판정 확인을 저장하지 못했어요. 다시 시도해 주세요.';
+    } finally {
+        isVerdictAcknowledging.value = false;
+    }
+}
+
+function linkAccount() {
+    router.push({ name: 'accountLinkInstitutions', query: { mode: 'add' } });
+}
+
+function openPersonalRanking() {
+    router.push({ name: 'personalRanking' });
+}
+
+function openConsentManage() {
+    router.push({ name: 'myConsents' });
+}
+
+function handleConsentLater() {
+    afterOverlayClosed(() => {
+        router.push({ name: 'home' });
+    });
+}
+
+function resetDemo() {
+    store.resetDemo();
+    isConsentOpen.value = true;
+}
+
+function setDemoSuccess() {
+    store.setDemoVerdict(MOCK_VERDICT_SUCCESS);
+    isVerdictOpen.value = true;
+}
+
+function setDemoFail() {
+    store.setDemoVerdict(MOCK_VERDICT_FAIL);
+    isVerdictOpen.value = true;
+}
+
+function showWithdrawnWithoutMissionDemo() {
+    store.setDemoWithdrawnWithoutMission();
+}
+
+function showInsufficientDemo() {
+    store.setDemoInsufficient();
+}
+
+function showWeeklyResultsDemo() {
+    store.setDemoWeeklyResults();
+    devActionMessage.value = '이번 주 판정에 인정·기각을 섞었다. 새로고침하면 실제 값으로 돌아간다';
+}
+
+function showMissionUnlockDemo() {
+    isMissionUnlockPreview.value = true;
+    missionUnlockError.value = '';
+    isMissionUnlockOpen.value = true;
+}
+
+async function reassignTodayMission() {
+    if (isReassigning.value) return;
+    isReassigning.value = true;
+    devActionMessage.value = '';
+    try {
+        const previousMission = store.todayMission;
+        const reassignedMission = await store.reassignTodayMission();
+        devActionMessage.value = `${formatMissionAssignmentSummary(previousMission)} → ${formatMissionAssignmentSummary(reassignedMission)}`;
+    } catch (err) {
+        devActionMessage.value = err.message ?? '오늘 미션 재배정에 실패했어요.';
+    } finally {
+        isReassigning.value = false;
+    }
+}
+</script>
+
+<template>
+    <div class="personal-home">
+        <!-- 오버레이 -->
+        <PersonalTutorialOverlay v-model="showTutorial" @complete="onTutorialComplete" />
+        <PersonalMissionConsentSheet
+            v-model="isConsentOpen"
+            :loading="isConsentSubmitting"
+            :error-message="consentError"
+            @agree="handleAgree"
+            @later="handleConsentLater"
+        />
+        <PersonalMissionUnlockSheet
+            v-model="isMissionUnlockOpen"
+            :difficulty="selectedUnlockDifficulty"
+            :loading="isMissionUnlockAcknowledging"
+            :error-message="missionUnlockError"
+            @set-difficulty="acknowledgeMissionUnlock('difficulty')"
+            @view-mission="acknowledgeMissionUnlock('mission')"
+        />
+        <PersonalTangiSheet
+            v-model="isTangiSheetOpen"
+            :current-prosecutor-id="store.selectedProsecutorId"
+            @confirm="handleProsecutorConfirm"
+        />
+        <PersonalVerdictModal
+            v-model="isVerdictOpen"
+            :verdict="store.pendingVerdict"
+            :is-acknowledging="isVerdictAcknowledging"
+            :error-message="verdictError"
+            @acknowledge="handleVerdictAcknowledge"
+        />
+
+        <!-- 화면 상태와 무관하게 같은 헤더를 쓴다. 바뀌는 건 말풍선 문구뿐이다. -->
+        <ChallengeCourtHeader
+            variant="supreme"
+            :court-image="buildingSupreme"
+            court-alt="탕탕 대법원"
+            subtitle="스스로의 소비 습관을 심판받는 곳"
+            :tangi-image="headerTangiImage"
+            tangi-role="검사"
+            :tangi-name="headerTangiName"
+            :quote="headerQuote"
+            :skirt-title="headerSkirtTitle"
+        />
+
+        <!-- 메인 컨텐츠 -->
+        <main
+            class="personal-home__content"
+            :class="{ 'personal-home__content--withdrawn': store.screenState === 'withdrawn' }"
+        >
+            <StateLoading v-if="store.screenState === 'loading'" />
+
+            <StateError
+                v-else-if="store.screenState === 'error'"
+                title="챌린지 정보를 불러오지 못했어요"
+                :message="pageError"
+                :retryable="false"
+            />
+
+            <section
+                v-else-if="store.screenState === 'withdrawn'"
+                class="personal-home__withdrawn-state"
+            >
+                <img
+                    :src="withdrawnTangi"
+                    alt="챌린지 참여 중지를 아쉬워하는 탕이"
+                    class="personal-home__withdrawn-tangi"
+                />
+                <h2>챌린지 참여가 중지되었어요</h2>
+                <p>다시 참여하려면 마이페이지의 동의 관리에서 챌린지 동의를 변경해주세요.</p>
+                <BaseButton variant="secondary" @click="openConsentManage">
+                    동의 관리로 이동
+                </BaseButton>
+            </section>
+
+            <!-- 화면 01: 기본 (진행 중) -->
+            <template v-if="store.screenState === 'active' || store.screenState === 'verdict'">
+                <div
+                    v-if="store.consentState === CHALLENGE_CONSENT_STATE.WITHDRAWN"
+                    class="personal-home__withdrawn-notice"
+                >
+                    챌린지 동의를 철회해 오늘 미션까지만 확인할 수 있어요. 내일부터 새 미션이
+                    배정되지 않아요.
+                </div>
+                <PersonalBriefingCard
+                    :mission-title="store.todayBriefing.missionTitle"
+                    :mission-content="store.todayBriefing.missionContent"
+                    :mission-type="store.todayBriefing.missionType"
+                    :mission-badge="store.todayBriefing.missionBadge"
+                    :category-name="store.todayBriefing.categoryName"
+                    :alibi-condition="store.todayBriefing.alibiCondition"
+                    :current-amount="store.todayBriefing.currentAmount"
+                    :limit-amount="store.todayBriefing.limitAmount"
+                    :prosecutor-name="missionProsecutors.current?.name"
+                    :prosecutor-image="missionProsecutors.current?.image"
+                    :upcoming-prosecutor-name="missionProsecutors.upcoming?.name"
+                    :upcoming-prosecutor-image="missionProsecutors.upcoming?.image"
+                    @prosecutor-click="openTangiSheet"
+                />
+
+                <PersonalWatchlistCard :items="watchCategoryModel.items" />
+
+                <section class="personal-home__section">
+                    <h2 class="personal-home__section-title">이번 주 판정</h2>
+                    <PersonalWeeklyVerdictCard
+                        :week-days="weeklyVerdictModel.days"
+                        :streak-days="weeklyVerdictModel.streakDays"
+                        :prosecutor-image="missionProsecutors.current?.image"
+                    />
+                </section>
+
+                <!--
+                    월간 이야기는 한 줄에 나란히 세운다 — 이번 달 누적 점수와 그 순위를 보러
+                    가는 입구(명예의 전당)는 같은 「월간」 맥락이라 붙어 있어야 이어 읽힌다.
+                    두 카드 모두 제목을 스스로 품고 있어 위에 섹션 제목을 세우지 않는다.
+                    인증서는 지난달치만 발급되므로 월 선택이 있는 성적표(랭킹)를 거쳐 들어간다.
+                -->
+                <div class="personal-home__month-row">
+                    <PersonalScoreCard
+                        :score="store.monthlyScore.score"
+                        :top-percent="store.monthlyScore.topPercent"
+                    />
+                    <PersonalMissionHonorBanner
+                        compact
+                        title="명예의 전당"
+                        @open="openPersonalRanking"
+                    />
+                </div>
+
+                <div class="personal-home__verdict-info">
+                    <svg
+                        class="personal-home__gavel-icon"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M14.5 3.5l6 6M4 20l6.5-6.5M2 22l2-2M14 4l-9.5 9.5c-.4.4-.4 1 0 1.4l4.1 4.1c.4.4 1 .4 1.4 0L19.5 9.5"
+                        />
+                        <path d="M9.5 8.5l5 5" />
+                    </svg>
+                    <span>오늘 자정에 판정되고, 곧바로 내일 사건이 배정돼요</span>
+                </div>
+            </template>
+
+            <!-- 화면 06: 계좌 미연동 -->
+            <template v-else-if="store.screenState === 'no-account'">
+                <PersonalNoAccountCard @link-account="linkAccount" />
+            </template>
+
+            <!-- 화면 05: 증거 부족 -->
+            <template v-else-if="store.screenState === 'insufficient'">
+                <!-- 오늘 수행할 절대형 미션을 가장 먼저 보여준다. -->
+                <div class="personal-home__common-mission">
+                    <div class="personal-home__common-meta">
+                        <span class="personal-home__common-badge">{{
+                            store.todayBriefing.missionBadge
+                        }}</span>
+                        <span>오늘의 공통 사건</span>
+                    </div>
+                    <div class="personal-home__common-title">
+                        {{ store.todayBriefing.missionTitle }}
+                    </div>
+                    <div class="personal-home__common-description">
+                        {{ store.todayBriefing.missionContent }}
+                    </div>
+                    <div class="personal-home__common-status">
+                        <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--tt-success)"
+                            stroke-width="2.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <circle cx="12" cy="12" r="8.5" />
+                            <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+                        </svg>
+                        <span>
+                            현재까지 {{ store.todayBriefing.categoryName }} 지출
+                            <b>{{ formatWon(store.todayBriefing.currentAmount) }}</b>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="personal-home__insufficient-banner">
+                    <img
+                        :src="insufficientTangi"
+                        alt=""
+                        class="personal-home__insufficient-tangi"
+                    />
+                    <div class="personal-home__insufficient-text">
+                        <div class="personal-home__insufficient-title">
+                            증거(소비 기록)가 모이는 동안<br />공통 사건을 배정해 드려요
+                        </div>
+                        <div class="personal-home__insufficient-sub">
+                            증거가 쌓이면 요주의 대상 3곳을 뽑아 맞춤 사건이 열려요.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="personal-home__conditions-card">
+                    <div class="personal-home__conditions-title">맞춤 사건이 열리는 조건</div>
+                    <div class="personal-home__conditions-list">
+                        <div class="personal-home__condition">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--done"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-success)"
+                                    stroke-width="2.6"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M5 12.5l4 4L19 7" />
+                                </svg>
+                            </span>
+                            <span class="personal-home__condition-label">계좌 연동</span>
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--done"
+                            >
+                                완료
+                            </span>
+                        </div>
+                        <div class="personal-home__condition">
+                            <span
+                                class="personal-home__condition-icon personal-home__condition-icon--progress"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--tt-text-muted)"
+                                    stroke-width="2.6"
+                                    stroke-linecap="round"
+                                >
+                                    <circle cx="6" cy="12" r="1" />
+                                    <circle cx="12" cy="12" r="1" />
+                                    <circle cx="18" cy="12" r="1" />
+                                </svg>
+                            </span>
+                            <span class="personal-home__condition-label">전체 소비 건수 확보</span>
+                            <span
+                                class="personal-home__condition-value personal-home__condition-value--progress"
+                            >
+                                {{ cumulativeTransactionCount }} /
+                                {{ requiredCumulativeTransactionCount }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="personal-home__progress-bar" aria-hidden="true">
+                        <div
+                            class="personal-home__progress-fill"
+                            :style="{ width: qualificationProgress + '%' }"
+                        ></div>
+                    </div>
+                    <button type="button" class="personal-home__link-more" @click="linkAccount">
+                        계좌 더 연동하기 ›
+                    </button>
+                </div>
+            </template>
+        </main>
+
+        <ChallengeModeTabBar active-mode="personal" />
+
+        <Transition name="personal-toast">
+            <div v-if="toastMessage" class="personal-home__toast" role="status">
+                {{ toastMessage }}
+            </div>
+        </Transition>
+
+        <!-- 데모 버튼. 펼치기 전에는 손잡이 하나만 떠 있어 화면을 가리지 않는다. -->
+        <div v-if="isDevelopment" class="personal-home__dev-controls">
+            <template v-if="isDevPanelOpen">
+                <span v-if="devActionMessage" class="personal-home__dev-message">{{
+                    devActionMessage
+                }}</span>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    :disabled="isReassigning"
+                    @click="reassignTodayMission"
+                >
+                    {{ isReassigning ? '재배정 중...' : '오늘 미션 재배정' }}
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="resetDemo">
+                    초기화
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showInsufficientDemo">
+                    데이터 부족 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showWeeklyResultsDemo">
+                    이번 주 판정 인정·기각 섞기
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="showMissionUnlockDemo">
+                    맞춤 사건 개시 안내
+                </button>
+                <button
+                    type="button"
+                    class="personal-home__dev-btn"
+                    @click="showWithdrawnWithoutMissionDemo"
+                >
+                    철회·미션 없음 화면
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoSuccess">
+                    미션 성공 팝업
+                </button>
+                <button type="button" class="personal-home__dev-btn" @click="setDemoFail">
+                    미션 실패 팝업
+                </button>
+            </template>
+
+            <button
+                type="button"
+                class="personal-home__dev-toggle"
+                :aria-expanded="isDevPanelOpen"
+                :aria-label="isDevPanelOpen ? '데모 버튼 접기' : '데모 버튼 펼치기'"
+                @click="isDevPanelOpen = !isDevPanelOpen"
+            >
+                {{ isDevPanelOpen ? '✕' : '데모' }}
+            </button>
+        </div>
+    </div>
+</template>
+
+<style scoped src="./PersonalMissionHomeView.css"></style>

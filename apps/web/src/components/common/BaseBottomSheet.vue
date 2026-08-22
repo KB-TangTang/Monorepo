@@ -12,6 +12,8 @@ const props = defineProps({
     title: { type: String, default: '' },
     closeOnOverlay: { type: Boolean, default: true },
     closeOnEsc: { type: Boolean, default: true },
+    /* 패널 높이를 고정한다. null 이면 콘텐츠에 맞춰 늘어난다 (기본) */
+    height: { type: String, default: null },
     /* 드래그 핸들을 아래로 이만큼(px) 끌면 닫는다 */
     dragCloseThreshold: { type: Number, default: 80 },
 });
@@ -62,12 +64,15 @@ function onDragEnd() {
     }
 }
 
-useOverlay({
+const { releaseHistory } = useOverlay({
     isOpen,
     panelRef: panel,
     canCloseOnEsc: () => props.closeOnEsc,
     requestClose: close,
 });
+
+/* 시트 안에서 다른 화면으로 이동하는 경우에만 쓴다. useOverlay 의 releaseHistory 주석 참고. */
+defineExpose({ releaseHistory });
 </script>
 
 <template>
@@ -78,7 +83,10 @@ useOverlay({
                     ref="panel"
                     class="tt-sheet__panel"
                     :class="{ 'tt-sheet__panel--dragging': dragging }"
-                    :style="dragOffset ? { transform: `translateY(${dragOffset}px)` } : null"
+                    :style="[
+                        height ? { height } : null,
+                        dragOffset ? { transform: `translateY(${dragOffset}px)` } : null,
+                    ]"
                     role="dialog"
                     aria-modal="true"
                     :aria-label="title || undefined"
@@ -120,6 +128,12 @@ useOverlay({
     align-items: flex-end;
     justify-content: center;
     background: var(--tt-overlay-dim);
+    /*
+     * 키보드가 가린 높이만큼 패널을 띄운다. iOS 는 키보드가 올라와도 fixed 요소를
+     * 밀어주지 않아 이 값이 없으면 시트가 키보드 밑에 깔린다 (useOverlay 의 주석 참고).
+     * 안드로이드·데스크톱에서는 값이 없거나 0 이라 아무 영향이 없다.
+     */
+    padding-bottom: var(--tt-keyboard-inset, 0px);
 }
 
 .tt-sheet__panel {
@@ -129,7 +143,8 @@ useOverlay({
     flex-direction: column;
     width: 100%;
     max-width: var(--tt-content-max);
-    max-height: 88vh;
+    /* 키보드가 올라온 만큼 최대 높이도 줄여야 패널 위쪽이 화면 밖으로 넘어가지 않는다 */
+    max-height: calc(88vh - var(--tt-keyboard-inset, 0px));
     padding: 0 var(--tt-space-5) calc(var(--tt-space-5) + env(safe-area-inset-bottom));
     font-family: var(--tt-font-sans);
     color: var(--tt-text);
@@ -172,6 +187,8 @@ useOverlay({
 }
 
 .tt-sheet__body {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     font-size: var(--tt-fs-body);
     line-height: var(--tt-lh-normal);

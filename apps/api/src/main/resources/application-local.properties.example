@@ -1,11 +1,87 @@
 # 이 파일을 같은 폴더에 application-local.properties 로 복사한 뒤 본인 값으로 채운다.
 # application-local.properties 는 .gitignore 대상이라 커밋되지 않는다.
 #
-# 사전 준비: db/00_init_local_db.sql 을 MySQL 관리자 계정으로 실행하면
-#            tangtang DB 와 tangtang 계정이 함께 생성된다.
+# 사전 준비: db/00_init_local_db.sql 의 CHANGE_ME_DB_PASSWORD 를 본인 비밀번호로 바꾼 뒤
+#            MySQL 관리자 계정으로 실행하면 tangtang DB 와 tangtang 계정이 함께 생성된다.
+#
+# ⚠️ jdbc.password 는 그때 정한 값과 같아야 한다. (.env 의 MYSQL_PASSWORD 와도 동일)
 
 jdbc.username=tangtang
-jdbc.password=tangtang1234
+jdbc.password=CHANGE_ME_DB_PASSWORD
 
 # 호스트·포트·DB명이 기본값(localhost:3306/tangtang)과 다를 때만 주석 해제
 #jdbc.url=jdbc:log4jdbc:mysql://localhost:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+
+# ── JWT 서명키 ─────────────────────────────────────────
+# HS256 은 256비트 이상을 요구한다. 32자 미만이면 기동 시 WeakKeyException 으로 실패한다.
+# 팀 개발용으로는 아무 랜덤 문자열 32자 이상이면 된다. 운영 값과 다르게 둔다.
+jwt.secret=CHANGE_ME_JWT_SECRET_AT_LEAST_32_CHARS
+
+# ── Google OAuth 클라이언트 (커밋 금지) ────────────────
+# Google Cloud Console > API 및 서비스 > 사용자 인증 정보 에서 발급.
+# 팀 개발용 클라이언트 하나를 공유한다. 값은 팀 채널에서 받는다.
+google.oauth.client-id=CHANGE_ME_GOOGLE_CLIENT_ID
+google.oauth.client-secret=CHANGE_ME_GOOGLE_CLIENT_SECRET
+
+# ── 토스증권 Open API (시세 연동) ──────────────────────
+# 값이 비어 있어도 앱은 뜬다 — 시세 갱신만 로그로 실패하고 넘어간다.
+toss.client-id=CHANGE_ME_TOSS_CLIENT_ID
+toss.client-secret=CHANGE_ME_TOSS_CLIENT_SECRET
+
+# === OpenAI (월간 리포트 분석 #156 · LLM 거래 카테고리화 #147 공용) ===
+# 두 기능이 같은 키를 쓴다. 이 줄 하나면 된다.
+# 값이 비어 있어도 앱은 뜬다 — 해당 기능만 실패한다.
+openai.api-key=CHANGE_ME_OPENAI_API_KEY
+openai.model=gpt-5-nano
+#openai.responses-url=https://api.openai.com/v1/responses
+openai.max-output-tokens=2048
+openai.reasoning-effort=low
+openai.connect-timeout-millis=3000
+openai.read-timeout-millis=15000
+
+# ── 계좌 연동 (이슈 #12) ────────────────────────────────
+# 평소에는 목서버로 돈다. 실 CODEF 를 붙일 때만 아래를 채운다.
+#
+# ⚠ **.properties 는 줄 끝 주석(#)을 지원하지 않는다.**
+#   `키=값   # 설명` 으로 쓰면 "값   # 설명" 전체가 값이 된다.
+#   설명은 반드시 값 줄과 분리해 별도 줄에 쓸 것. (2026-08-05 실제 사고)
+#
+# 데모 환경 주소는 https://development.codef.io 다.
+# public-key 는 CODEF 마이페이지 > 키 관리의 공개키(헤더 없는 Base64 한 줄).
+#
+#   financial.client=codef
+#   financial.codef.base-url=https://development.codef.io
+#   financial.codef.client-id=...
+#   financial.codef.client-secret=...
+#   financial.codef.public-key=...
+#
+# public-key 가 없으면 codef 모드 기동 시 즉시 실패한다 —
+# CODEF 는 평문 비밀번호를 거부하므로 이 값 없이는 인증이 성립하지 않는다.
+
+
+# ── 미션 자동 배정 시간(선택) ──────────────────────────────
+# 공통 기본값은 매일 Asia/Seoul 00:10이다. 로컬에서 다른 주기로
+# 테스트할 때만 아래 주석을 해제한다. 예시는 매분 0초에 실행한다.
+#mission.assignment.cron=0 * * * * *
+#mission.assignment.recovery-cron=0 */5 * * * *
+#mission.assignment.zone=Asia/Seoul
+
+# AI 명예 타이틀 생성은 실제 OpenAI 비용이 발생한다. 공통 기본값(매월 1일 00:40)과
+# 인증서 알림 기본값(매월 1일 00:50)을 사용하고, 로컬 검증 중에만 필요한 값을 덮어쓴다.
+# 매분 실행 예시는 실 API 키를 넣은 환경에서 사용하지 않는다.
+#mission.certificate.title.batch.cron=0 40 0 1 * *
+#mission.certificate.title.batch.recovery-cron=0 10 1 1 * *
+#mission.notification.certificate.cron=0 50 0 1 * *
+
+# ── 그룹 챌린지 상태 전이 배치 시간(선택) ─────────────────
+# 공통 기본값은 매일 Asia/Seoul 00:01이다. 시연·테스트로 자정을 기다릴 수 없을 때만
+# 주석을 해제한다. 예시는 매분 0초에 실행한다.
+#challenge.group.status-transition.cron=0 * * * * *
+#challenge.group.status-transition.zone=Asia/Seoul
+
+# 배치를 자정까지 기다리지 않고 돌리려면 그룹 챌린지 홈의 DEV 버튼을 누른다
+# (POST /api/dev/batches/group-challenge-status). 로컬에서는 별도 설정 없이 켜져 있다.
+
+# ── 그룹 채팅 Redis (이슈 #174) ──────────────────────
+redis.host=localhost
+redis.port=6379

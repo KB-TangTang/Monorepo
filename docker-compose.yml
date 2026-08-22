@@ -1,8 +1,20 @@
+# 컨테이너 로그 상한 (이슈 #376).
+# json-file 드라이버의 기본값에는 상한이 없어 로그가 디스크를 채울 때까지 커진다.
+# 서버에 /etc/docker/daemon.json 이 없어 데몬 차원의 기본값도 설정돼 있지 않다.
+# 지금 로그가 작아 보이는 것은 배포마다 down/up 이 컨테이너를 다시 만들어 로그가
+# 초기화되기 때문이다 — 배포가 멈추는 기간(시연 준비 등)에 그대로 노출된다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # === 1. 데이터베이스 ===
   db:
     image: mysql:8.0
+    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -10,7 +22,11 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: Asia/Seoul
     ports:
-      - "3307:3306"
+      # ⚠ 2026-08-14 점검에서 이 포트가 **인터넷에서 접속되는 것**을 확인했다 (이슈 #225).
+      # 조치는 AWS 보안그룹에서 팀 IP 로 제한하는 쪽이다 — 여기서 127.0.0.1 로 막으면
+      # 팀이 MySQL Workbench 로 EC2 DB 에 붙지 못한다(SSH 터널을 쓸 수 있는 사람이 없다).
+      # 워크벤치 접근이 더 이상 필요 없어지면 .env 에 DB_BIND=127.0.0.1 을 넣어 닫는다.
+      - "${DB_BIND:-0.0.0.0}:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./db:/docker-entrypoint-initdb.d
@@ -26,42 +42,114 @@ services:
     build:
       context: ../Financial-Mock-Server
       dockerfile: Dockerfile
+    logging: *default-logging
+    environment:
+      # 목서버는 자기 DB(financial_mock)를 이 db 컨테이너에서 쓴다.
+      # 이 값을 주지 않으면 목서버가 자기 컨테이너의 localhost 를 찾다가 DB 에 못 붙는다.
+      JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+      JDBC_URL: jdbc:log4jdbc:mysql://db:3306/financial_mock?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      JDBC_USERNAME: root
+      JDBC_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
     ports:
-      - "8081:8080"
+      # 호스트 안쪽에만 연다 (이슈 #225). 본서버는 compose 네트워크로 mock:8080 에 붙고,
+      # 로컬 개발자가 도커 밖 API 로 붙을 때 쓰는 http://localhost:8081 도 그대로 동작한다.
+      # 목서버에는 인증이 없어 외부에 열릴 이유가 없다 — 지금은 보안그룹이 막고 있지만
+      # 규칙 하나에만 의존하지 않게 바인딩에서도 막아둔다.
+      - "127.0.0.1:8081:8080"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080 || exit 1"]
+      # 실제 조회 API 로 확인한다. 루트(/)는 목서버가 DB 에 못 붙어도 404 를 돌려주므로
+      # 깨진 목서버를 healthy 로 보고해 버린다 (실제로 그래서 장애를 놓쳤다).
+      test: ["CMD-SHELL", "curl -f 'http://localhost:8080/api/v1/assets/accounts?scenarioKey=demo-normal-user' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # 톰캣 war 기동에 시간이 걸린다. 이 구간의 실패는 재시도 횟수로 세지 않는다.
+      start_period: 60s
 
   # === 3. 본서버 (비즈니스 로직) ===
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    logging: *default-logging
     environment:
+      APP_ENV: docker
       JDBC_DRIVER: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
       JDBC_URL: jdbc:log4jdbc:mysql://db:3306/tangtang?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
       JDBC_USERNAME: ${MYSQL_USER}
       JDBC_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-2048}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-low}
+      OPENAI_CONNECT_TIMEOUT_MILLIS: ${OPENAI_CONNECT_TIMEOUT_MILLIS:-3000}
+      OPENAI_READ_TIMEOUT_MILLIS: ${OPENAI_READ_TIMEOUT_MILLIS:-15000}
+      # 토스증권 시세 연동(이슈 #299). 값이 비어도 앱은 뜬다 — 시세 갱신만 실패 로그를 남긴다.
+      TOSS_CLIENT_ID: ${TOSS_CLIENT_ID:-}
+      TOSS_CLIENT_SECRET: ${TOSS_CLIENT_SECRET:-}
       CODEF_API_URL: ${CODEF_API_URL}
       CODEF_CLIENT_ID: ${CODEF_CLIENT_ID}
       CODEF_CLIENT_SECRET: ${CODEF_CLIENT_SECRET}
       MOCK_API_URL: http://mock:8080
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
-      AWS_REGION: ${AWS_REGION}
+      # 이미지 저장소 전환 스위치(이슈 #162). local = 아래 uploads 볼륨 / s3 = AWS S3.
+      # 이 줄이 없으면 .env 에 IMAGE_STORAGE=s3 를 적어도 컨테이너까지 전달되지 않는다.
+      IMAGE_STORAGE: ${IMAGE_STORAGE:-local}
+      # IMAGE_STORAGE=s3 일 때만 쓰인다. local 이면 비어 있어도 정상 기동한다.
+      # ⚠ 아래 4개는 최초 도커 구성(#2)부터 있던 키다. 다른 곳에 다시 적지 말 것 —
+      #   같은 environment 매핑에 키가 중복되면 docker compose 가 경고가 아니라
+      #   "mapping key already defined" 파싱 에러를 내고 down/up 이 둘 다 실패한다.
+      # ⚠ 키를 `${VAR}` 가 아니라 `${VAR:-}` 로 두는 이유: 운영(EC2)은 액세스 키 대신
+      #   IAM 인스턴스 역할을 쓰므로 .env 에 키 두 줄이 아예 없다. `${VAR}` 로 두면
+      #   배포마다 "variable is not set" 경고가 뜬다. 빈 값이면 AWS SDK 의 자격증명
+      #   체인이 환경변수 단계를 건너뛰고 인스턴스 역할까지 내려간다(실측).
+      #   반대로 빈 문자열이 아닌 아무 값이나 들어 있으면 SDK 가 그것을 쓰고 역할까지
+      #   내려가지 않는다 — .env 에 플레이스홀더를 남겨두면 안 된다.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      MOCK_SERVER_BASE_URL: http://mock:8080
+      APP_FRONT_URL: ${APP_FRONT_URL}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE}
+      # Swagger 문서 Basic 인증. 비워두면 배포 환경에서 문서가 404 로 숨는다(안전한 기본값).
+      SWAGGER_ACCESS_USERNAME: ${SWAGGER_ACCESS_USERNAME:-}
+      SWAGGER_ACCESS_PASSWORD: ${SWAGGER_ACCESS_PASSWORD:-}
+      # 고정지출 탐지 배치 시각(이슈 #387). application.properties 의 기본값과 같은 값을
+      # 여기에도 적어야 한다 — 이 줄이 없으면 .env 에 적은 값이 컨테이너에 닿지 않고
+      # 조용히 무시된다(2026-08-20 이전 상태가 그랬다).
+      # ⚠ 빈 문자열을 넘기면 Spring 이 cron 표현식 파싱에 실패해 앱이 기동하지 못한다.
+      #   그래서 `${VAR:-}` 가 아니라 기본값을 그대로 적은 `${VAR:-0 0 23 * * *}` 로 둔다.
+      FIXED_EXPENSE_DETECTION_CRON: "${FIXED_EXPENSE_DETECTION_CRON:-0 0 23 * * *}"
       TZ: Asia/Seoul
+    # 업로드된 프로필 이미지. 이 볼륨이 없으면 배포(down && up --build)마다 사진이 전부 사라진다.
+    volumes:
+      - uploads:/var/tangtang/uploads
     ports:
-      - "8080:8080"
+      # 바인딩 주소를 변수로 뺀다 (이슈 #225). 기본값은 지금까지와 같은 전체 공개다.
+      # TLS(nginx)를 앞에 세운 뒤에는 .env 에 API_BIND=127.0.0.1 을 넣어 외부 직결을 닫는다.
+      # nginx 는 compose 네트워크로 api:8080 에 붙으므로 이 값과 무관하게 동작한다.
+      # ⚠ nginx 를 세우기 전에 127.0.0.1 로 바꾸면 Vercel 이 API 에 닿지 못해 서비스가 멈춘다.
+      - "${API_BIND:-0.0.0.0}:8080:8080"
     depends_on:
       db:
         condition: service_healthy
+      # 목서버는 기동만 확인하고 넘어간다(service_healthy 아님).
+      # 목서버는 계좌 연동에만 쓰이는데, healthy 를 요구하면 목서버가 깨졌을 때
+      # api 컨테이너가 아예 시작하지 못해 서비스 전체가 내려간다.
+      # 2026-08-06 실제로 목서버 매퍼 XML 오류 하나로 전면 502 가 났다.
       mock:
+        condition: service_started
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
@@ -69,5 +157,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # === 4. Redis (그룹 채팅, 이슈 #174) ===
+  redis:
+    image: redis:7-alpine
+    container_name: tangtang-redis
+    restart: unless-stopped
+    logging: *default-logging
+    # AOF 필수. 장애 시 손실을 최대 1초로 제한한다 — 이 전제가 깨지면
+    # "채팅 원본을 MySQL 에 두지 않는다"는 결정(DECISIONS.md 2026-08-15)이 성립하지 않는다.
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    # 호스트 안쪽에만 연다. MySQL 3307 이 인터넷에 열려 있던 사고(이슈 #225)를 반복하지 않는다.
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   mysql_data:
+  uploads:
+  redis_data:

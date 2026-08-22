@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &gt; · &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨진다.
+-->
+<mapper namespace="com.kb.tangtang.challenge.mapper.IndictmentMapper">
+
+    <!--
+      기소 생성.
+
+      status 외의 판결 컬럼(result · verdict_method · ai_verdict_reason)은 INSERT 하지 않는다.
+      기소 시점에는 값이 없고, DB CHECK(ck_ind_result)가 DEFENSE_WAIT + result IS NULL 조합만 허용한다.
+
+      INSERT ... ON DUPLICATE KEY UPDATE 나 INSERT IGNORE 로 조용히 넘기지 않는다.
+      기소를 실제로 만들었을 때만 알림을 보내야 하는데, 둘 다 "만들었는지" 를 반환값으로
+      구분할 수 없다(IGNORE 는 0을 주지만 다른 오류까지 같이 삼킨다).
+      DuplicateKeyException 을 호출부가 잡는 편이 무엇을 건너뛰었는지 분명하다.
+
+      created_at 은 컬럼 기본값에 맡긴다. 화면·알림이 보여야 하는 것은 기소 생성 시각이 아니라
+      위반 날짜(challenge_date)라 되받아올 이유가 없다.
+    -->
+    <insert id="insertIndictment" parameterType="com.kb.tangtang.challenge.domain.Indictment"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tbl_indictment
+            (result_id, group_id, user_id, status, message)
+        VALUES
+            (#{resultId}, #{groupId}, #{userId}, #{status}, #{message})
+    </insert>
+
+    <!--
+      ── 이하 조회 (이슈 #169) ─────────────────────────────────────────────
+
+      별칭은 i(기소) · g(그룹) · r(기소 대상 일별 결과) 로 고정한다. 아래 조각들이 그 별칭을 쓴다.
+    -->
+    <sql id="fromIndictment">
+        FROM tbl_indictment i
+        JOIN tbl_challenge_group g ON g.id = i.group_id
+        JOIN tbl_group_challenge_daily_result r ON r.id = i.result_id
+    </sql>
+
+    <!--
+      한도 초과액. tbl_indictment 에 금액 컬럼이 없어 매번 다시 계산한다.
+
+      ⚠ 이 CASE 는 GroupChallengeResultMapper 의 findOverLimitDaily · findOverLimitPeriod 와
+        같은 계산을 되풀이한 것이다. 한쪽만 고치면 "기소는 됐는데 초과액이 0원" 처럼 보인다.
+        기소 판정과 화면 표시가 같은 값을 써야 해서 감수한 중복이다 —
+        금액을 기소 시점에 박아 두면 환불·재분류로 집계가 줄어도 옛 금액이 화면에 남는다.
+
+      일일평가는 위반한 그 날의 effective_amount(무죄 감액 반영값),
+      기간평가는 GroupChallengeResultMapper.xml 의 「★ 기간평가(PERIOD) 소비액 공식」 주석에 적힌 식이다.
+      그 주석이 원본이므로 식을 고칠 일이 생기면 거기부터 읽는다. 여기만 고치면 테스트가 깨진다.
+    -->
+    <sql id="exceededAmount">
+        <include refid="periodConsumption"/> - g.limit_amount
+    </sql>
+
+    <!--
+      기소 대상 구간의 소비액(감액 반영). exceededAmount 에서 한도를 빼기 전의 값이고,
+      변론 화면의 currentAmount 도 이 값을 그대로 쓴다. 두 화면이 다른 값을 보이면 안 된다.
+    -->
+    <sql id="periodConsumption">
+        CASE WHEN g.eval_type = 'PERIOD'
+             THEN COALESCE((SELECT GREATEST(SUM(rp.daily_amount - rp.verdict_deduction_amount), 0)
+                              FROM tbl_group_challenge_daily_result rp
+                             WHERE rp.group_id = g.id
+                               AND rp.user_id = i.user_id
+                               AND rp.challenge_date BETWEEN g.start_date AND g.end_date), 0)
+             ELSE r.effective_amount
+        END
+    </sql>
+
+    <!-- 표시용 닉네임. 소셜 로그인만 하고 닉네임을 안 정한 사용자가 빈칸으로 보이지 않게 한다 -->
+    <sql id="displayNickname">
+        COALESCE(NULLIF(TRIM(u.nickname), ''), u.social_name)
+    </sql>
+
+    <!-- 투표할 수 있는 사람 수. 피고 본인은 자기 재판에 투표할 수 없어 1 을 뺀다 -->
+    <sql id="totalVoters">
+        (SELECT COUNT(*) FROM tbl_group_member gm WHERE gm.group_id = i.group_id) - 1
+    </sql>
+
+    <!--
+      내가 변론해야 하는 기소.
+
+      마감이 지났는지는 SQL 이 거르지 않는다 — 거르는 쪽은 GroupTrialService#findMyTrials 다.
+      이유는 IndictmentMapper#findDefenseTodos 주석 참고.
+      idx_ind_user_status (user_id, status) 를 탄다.
+    -->
+    <select id="findDefenseTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">
+        SELECT i.id            AS indictment_id,
+               g.id            AS challenge_id,
+               g.group_name    AS challenge_name,
+               <include refid="exceededAmount"/> AS amount,
+               i.created_at    AS created_at
+        <include refid="fromIndictment"/>
+        WHERE i.user_id = #{userId}
+          AND i.status = 'DEFENSE_WAIT'
+          AND NOT EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id)
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      내가 투표해야 하는 기소.
+
+      tbl_group_member 조인이 "내가 그 그룹 사람인가" 를 겸한다. 남의 그룹 재판이 섞이면
+      투표 화면까지 열리므로 조인을 지우면 안 된다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findVoteTodos" resultType="com.kb.tangtang.challenge.domain.TrialTodoRow">
+        SELECT i.id         AS indictment_id,
+               g.id         AS challenge_id,
+               g.group_name AS challenge_name,
+               <include refid="displayNickname"/> AS defendant_nickname,
+               <include refid="exceededAmount"/>  AS amount,
+               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               <include refid="totalVoters"/> AS total_voters,
+               i.created_at AS created_at
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.status = 'VOTING'
+          AND i.user_id &lt;&gt; #{userId}
+          AND NOT EXISTS (SELECT 1 FROM tbl_vote v
+                           WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      진행 중인 재판 카드 한 장의 컬럼 (이슈 #169 · #432).
+
+      아래 findOpenByGroupId(그룹 상세)와 findOpenByUserId(지방법원 홈)가 이 조각을 공유한다.
+      ⚠ 두 곳이 같은 GroupIndictmentRow 로 받는다. 컬럼을 한쪽에만 더하면 다른 쪽 화면에서
+        그 필드가 조용히 0·NULL 이 된다 — 그래서 select 목록을 나눠 두지 않았다.
+
+      #{userId} 를 쓴다(my_verdict). 두 select 모두 그 이름의 파라미터를 받는다.
+    -->
+    <sql id="groupIndictmentColumns">
+        i.id     AS id,
+        g.id     AS group_id,
+        g.group_name AS group_name,
+        i.user_id AS user_id,
+        <include refid="displayNickname"/> AS nickname,
+        u.profile_image_key AS profile_image_key,
+        i.status AS status,
+        r.challenge_date    AS challenge_date,
+        <include refid="exceededAmount"/> AS exceeded_amount,
+        EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id) AS defended,
+        (SELECT v.verdict FROM tbl_vote v
+          WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+        (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+        <include refid="totalVoters"/> AS total_voters,
+        i.created_at AS created_at
+    </sql>
+
+    <!--
+      그룹 상세의 재판 카드. 확정된 기소(GUILTY · INNOCENT)는 카드가 아니라 전적으로 가므로 뺀다.
+
+      정렬은 오래된 순이다 — 캐러셀 첫 장이 마감이 가장 급한 재판이어야 한다.
+    -->
+    <select id="findOpenByGroupId" resultType="com.kb.tangtang.challenge.domain.GroupIndictmentRow">
+        SELECT <include refid="groupIndictmentColumns"/>
+        <include refid="fromIndictment"/>
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.group_id = #{groupId}
+          AND i.status IN ('DEFENSE_WAIT', 'VOTING')
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      지방법원 홈 「재판 현황」 (이슈 #432). 내가 속한 모든 그룹의 진행 중인 재판.
+
+      위 findOpenByGroupId 와 다른 곳은 WHERE 절 하나뿐이다 —
+      그룹 하나로 좁히는 대신 tbl_group_member 로 「내가 낀 그룹 전부」로 넓힌다.
+
+      ⚠ 쿼리를 「내가 피고」와 「남이 피고」로 나누지 않는다. 피고는 반드시 자기 그룹의
+        멤버이므로 이 조인 하나에 6가지 입장(내 변론 필요 · 변론 제출 · 심판받는 중 ·
+        남의 변론 대기 · 투표 필요 · 투표 완료)이 전부 들어온다.
+        나누면 두 결과를 합칠 때 내가 피고이면서 멤버인 행이 중복된다.
+
+      마감이 지났는지는 여기서 거르지 않는다 — findDefenseTodos 와 같은 사정이다
+      (마감 시간이 프로퍼티라 ${} 없이 SQL 에 넣을 수 없다).
+      GroupTrialService#findAllMyTrials 가 거른다.
+
+      정렬도 서비스가 다시 한다(할 일 있는 것 먼저). 여기서는 결과 순서를 고정하는 정도다.
+    -->
+    <select id="findOpenByUserId" resultType="com.kb.tangtang.challenge.domain.GroupIndictmentRow">
+        SELECT <include refid="groupIndictmentColumns"/>
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.status IN ('DEFENSE_WAIT', 'VOTING')
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      목록 카드 배지 3개를 그룹 단위로 한 번에 센다.
+
+      GROUP BY 라 재판이 없는 그룹은 행 자체가 안 나온다. 호출부가 기본값으로 채운다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findTrialSummaryByGroupIds"
+            resultType="com.kb.tangtang.challenge.domain.GroupTrialSummaryRow">
+        SELECT i.group_id AS group_id,
+               SUM(CASE WHEN i.user_id = #{userId}
+                         AND i.status = 'DEFENSE_WAIT'
+                         AND NOT EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id)
+                        THEN 1 ELSE 0 END) AS my_defense_needed_count,
+               SUM(CASE WHEN i.user_id &lt;&gt; #{userId}
+                         AND i.status = 'VOTING'
+                         AND NOT EXISTS (SELECT 1 FROM tbl_vote v
+                                          WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+                        THEN 1 ELSE 0 END) AS pending_vote_count,
+               SUM(CASE WHEN i.user_id &lt;&gt; #{userId}
+                         AND i.status = 'VOTING'
+                         AND EXISTS (SELECT 1 FROM tbl_vote v
+                                      WHERE v.indictment_id = i.id AND v.user_id = #{userId})
+                        THEN 1 ELSE 0 END) AS cast_vote_count
+        FROM tbl_indictment i
+        WHERE i.status IN ('DEFENSE_WAIT', 'VOTING')
+          AND i.group_id IN
+          <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+              #{groupId}
+          </foreach>
+        GROUP BY i.group_id
+    </select>
+
+    <!--
+      종료 그룹의 확정 재판 전적 (이슈 #173). 종료 화면 「재판 기록」 링크의 숫자.
+
+      위 findTrialSummaryByGroupIds 와 반대로 확정 상태(GUILTY·INNOCENT)만 센다.
+      SUM(CASE ...) 이 아니라 COUNT(CASE ...) 인 이유: 재판이 0건이면 SUM 은 NULL 을 돌려주고
+      행 클래스의 int 세터에서 죽는다. COUNT 는 0 이다.
+      GROUP BY 가 없어 행이 항상 하나 나온다 — 호출부가 NULL 방어를 할 필요가 없다.
+      idx_ind_group (group_id, status) 를 탄다.
+    -->
+    <select id="findClosedTrialStats"
+            resultType="com.kb.tangtang.challenge.domain.GroupTrialStatsRow">
+        SELECT COUNT(*) AS total_trials,
+               COUNT(CASE WHEN i.status = 'GUILTY' THEN 1 END) AS guilty_count,
+               COUNT(CASE WHEN i.status = 'INNOCENT' THEN 1 END) AS innocent_count
+          FROM tbl_indictment i
+         WHERE i.group_id = #{groupId}
+           AND i.status IN ('GUILTY', 'INNOCENT')
+    </select>
+
+    <!--
+      ── 이하 재판 상세 (이슈 #170) ────────────────────────────────────────
+    -->
+
+    <!--
+      재판 상세 한 벌. 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 이 한 문장을 공유한다.
+      화면마다 select 를 두면 같은 초과액을 네 곳에서 다르게 계산하게 된다.
+
+      ⚠ tbl_group_member 조인이 권한 검사다. 지우면 남의 그룹 재판이 열린다
+        (findVoteTodos:122 와 같은 이유). 확정된 기소도 내려보내야 해서 status 는 걸러지지 않는다.
+
+      ⚠ tbl_defense 를 조인하지 않는다. 증빙 이미지가 여러 장이면 행이 그만큼 늘어
+        나머지 컬럼이 전부 중복된다 — 변론은 DefenseMapper 로 따로 읽는다.
+
+      ⚠ guilty_count · innocent_count 는 항상 센다. 투표 중에 이 숫자를 화면에 내려보내면
+        유무죄 비율이 그대로 새어 편승 투표가 생기므로, 가리는 일은 GroupTrialService 가
+        한 곳에서 한다(이슈 #171 결정). SQL 을 상태별로 나누면 #172 가 개표를 공개할 때
+        조건을 두 군데서 풀어야 한다. idx_vote_indictment (indictment_id, verdict) 커버링이라
+        추가 비용은 거의 없다.
+
+      결산 구간 안내:
+        일일평가는 r.challenge_date 하루, 기간평가는 g.start_date ~ g.end_date 다.
+        기간평가에서도 challenge_date 를 함께 내려보낸다 — 기소가 붙은 행의 날짜라
+        「어느 날 집계에서 걸렸는지」 를 화면이 표시할 수 있다.
+    -->
+    <select id="findTrialDetail" resultType="com.kb.tangtang.challenge.domain.GroupTrialDetailRow">
+        SELECT i.id             AS indictment_id,
+               i.group_id       AS group_id,
+               g.group_name     AS group_name,
+               i.status         AS status,
+               i.result         AS result,
+               i.verdict_method AS verdict_method,
+               i.ai_verdict_reason AS ai_verdict_reason,
+               i.message        AS message,
+               i.user_id        AS user_id,
+               <include refid="displayNickname"/> AS nickname,
+               u.profile_image_key AS profile_image_key,
+               g.eval_type      AS eval_type,
+               r.challenge_date AS challenge_date,
+               g.start_date     AS start_date,
+               g.end_date       AS end_date,
+               g.category_id    AS category_id,
+               c.category_name  AS category_name,
+               g.limit_amount   AS limit_amount,
+               <include refid="periodConsumption"/> AS current_amount,
+               <include refid="exceededAmount"/>    AS exceeded_amount,
+               (SELECT v.verdict FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'GUILTY')   AS guilty_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'INNOCENT') AS innocent_count,
+               <include refid="totalVoters"/> AS total_voters,
+               i.created_at     AS created_at
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member gm ON gm.group_id = i.group_id AND gm.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        LEFT JOIN tbl_category c ON c.id = g.category_id
+        WHERE i.id = #{indictmentId}
+    </select>
+
+    <!--
+      ── 이하 상태 전이 (이슈 #170) ────────────────────────────────────────
+
+      두 구문 모두 WHERE 에 status = 'DEFENSE_WAIT' 를 둔다. 서비스가 SELECT 로 상태를 확인한
+      뒤라도 그 사이에 마감 배치나 중복 클릭이 상태를 옮길 수 있어서다. 0행을 돌려받으면
+      서비스가 예외로 되돌린다 — 조건 없이 UPDATE 하면 이미 확정된 판결을 되돌려 쓴다.
+
+      updated_at 은 컬럼의 ON UPDATE CURRENT_TIMESTAMP 에 맡긴다.
+    -->
+    <update id="moveToVoting">
+        UPDATE tbl_indictment
+           SET status = 'VOTING'
+         WHERE id = #{indictmentId}
+           AND status = 'DEFENSE_WAIT'
+    </update>
+
+    <!--
+      혐의 인정. result = 1 을 함께 쓰지 않으면 DB CHECK(ck_ind_result)가 막는다
+      (GUILTY 는 result = 1 조합만 허용).
+
+      tbl_vote · tbl_defense 행은 만들지 않는다 — schema.sql:505-508 의 계약이다.
+      목숨 차감과 무죄 감액 기록은 여기서 하지 않는다(이슈 #172).
+    -->
+    <update id="confirmConfession">
+        UPDATE tbl_indictment
+           SET status = 'GUILTY',
+               result = 1,
+               verdict_method = 'CONFESSION'
+         WHERE id = #{indictmentId}
+           AND status = 'DEFENSE_WAIT'
+    </update>
+
+    <!--
+      변론 마감 배치. 마감이 지난 기소를 한 번에 투표로 넘긴다.
+
+      status = 'DEFENSE_WAIT' 조건 하나가 멱등을 보장한다 — 두 번 돌려도 같은 상태다.
+      변론을 낸 건(VOTING)과 혐의를 인정한 건(GUILTY)은 애초에 걸리지 않는다.
+
+      마감 시각 컬럼을 두지 않는다(schema.sql:478-482 결정). created_at 에서 계산하며,
+      시간 값은 프로퍼티라 파라미터로 받는다 — ${} 는 금지다.
+
+      idx_ind_user_status 는 (user_id, status) 라 이 쿼리를 타지 못한다. 대신
+      idx_ind_group (group_id, status) 도 선두 컬럼이 group_id 여서 못 탄다 →
+      DEFENSE_WAIT 행이 몇 만 건으로 늘면 status 단독 인덱스를 검토한다.
+      지금은 진행 중인 기소가 수십~수백 건이라 풀스캔이 문제되지 않는다.
+    -->
+    <update id="moveExpiredDefensesToVoting">
+        UPDATE tbl_indictment
+           SET status = 'VOTING'
+         WHERE status = 'DEFENSE_WAIT'
+           AND created_at &lt;= DATE_SUB(NOW(), INTERVAL #{defenseHours} HOUR)
+    </update>
+
+    <!--
+      ── 이하 개표·판결 확정 (이슈 #172) ──────────────────────────────────
+    -->
+
+    <!--
+      개표 대상. 「투표 마감이 지났다 OR 투표할 사람이 전부 던졌다」 둘 중 하나면 잡는다.
+
+      ⚠ 조기 확정(뒤쪽 조건)이 이 배치의 핵심이다. 마감만 보면 전원이 5분 만에 투표를 끝낸
+        재판도 기소 + 30시간을 채워야 결과가 나온다. 그 사이 화면은 「투표 완료」에서 멈춰
+        있어 사용자는 서비스가 죽은 줄 안다. (팀 결정 2026-08-18)
+
+      분모는 totalVoters 조각(참여자 - 피고 1명)을 그대로 쓴다. 조건과 화면의 「n/m명 투표」가
+      다른 식을 쓰면 화면이 4/4 인데 개표가 안 되는 상태가 생긴다.
+
+      ⚠ 피고 혼자인 그룹은 totalVoters 가 0 이라 COUNT(*) &gt;= 0 이 항상 참이다 — 즉시 잡혀
+        0표 무죄로 확정된다. 의도한 동작이다. 투표할 사람이 없는 재판을 30시간 매달아 둘 이유가 없다.
+
+      마감 시각은 created_at + defense-hours + vote-hours 다(application.properties:139-146).
+      DATE_SUB 를 두 번 겹친 이유는 INTERVAL 의 피연산자에 파라미터 두 개를 더하는 식
+      (INTERVAL (? + ?) HOUR)이 드라이버·버전에 따라 타입 추론에 걸릴 수 있어서다.
+      결과는 같고 ${} 를 쓰지 않는다.
+
+      변론 유무를 보지 않는다. 무변론 재판도 그대로 투표에 올라와 있고 같은 규칙으로 개표된다
+      (팀 결정 2026-08-18 — 변론이 없다고 자동 유죄로 만들지 않는다).
+
+      LEFT JOIN tbl_defense 는 행을 늘리지 않는다 — uk_def_indictment 로 기소당 변론이 1건이다.
+      증빙 이미지는 조인하지 않는다(그쪽은 여러 장이라 행이 늘어난다).
+    -->
+    <select id="findVotingToTally" resultType="com.kb.tangtang.challenge.domain.VerdictTallyRow">
+        SELECT i.id        AS indictment_id,
+               i.group_id  AS group_id,
+               i.user_id   AS user_id,
+               i.result_id AS result_id,
+               <include refid="displayNickname"/> AS nickname,
+               i.message   AS message,
+               g.eval_type AS eval_type,
+               c.category_name AS category_name,
+               g.limit_amount  AS limit_amount,
+               <include refid="periodConsumption"/> AS current_amount,
+               <include refid="exceededAmount"/>    AS exceeded_amount,
+               d.content              AS defense_content,
+               d.actual_burden_amount AS actual_burden_amount,
+               d.deduction_amount     AS deduction_amount,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'GUILTY')   AS guilty_count,
+               (SELECT COUNT(*) FROM tbl_vote v
+                 WHERE v.indictment_id = i.id AND v.verdict = 'INNOCENT') AS innocent_count,
+               <include refid="totalVoters"/> AS total_voters
+        <include refid="fromIndictment"/>
+        JOIN tbl_user u ON u.id = i.user_id
+        LEFT JOIN tbl_category c ON c.id = g.category_id
+        LEFT JOIN tbl_defense d ON d.indictment_id = i.id
+        WHERE i.status = 'VOTING'
+          AND ( i.created_at &lt;= DATE_SUB(DATE_SUB(NOW(), INTERVAL #{defenseHours} HOUR),
+                                          INTERVAL #{voteHours} HOUR)
+                OR (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id)
+                     &gt;= <include refid="totalVoters"/> )
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      판결 확정.
+
+      ⚠ WHERE status = 'VOTING' 을 지우면 멱등이 깨진다. 호출부가 0행을 보고 후처리(목숨 차감·
+        감액 반영·이벤트)를 통째로 건너뛰는 구조라, 조건이 없으면 배치가 두 번 도는 것만으로
+        같은 피고의 목숨이 두 번 깎인다.
+
+      result 는 ck_ind_result 가 상태와의 조합만 허용해서 함께 쓴다(GUILTY=1 · INNOCENT=0).
+
+      ai_verdict_reason 은 AI_JUDGMENT 가 아니면 NULL 이어야 한다(ck_ind_ai_reason).
+      NULL 을 그대로 바인딩하므로 jdbcType 을 명시한다 — 없으면 드라이버가 타입을 못 정한다.
+    -->
+    <update id="confirmVerdict">
+        UPDATE tbl_indictment
+           SET status = #{status},
+               result = #{result},
+               verdict_method = #{verdictMethod},
+               ai_verdict_reason = #{aiVerdictReason,jdbcType=VARCHAR}
+         WHERE id = #{indictmentId}
+           AND status = 'VOTING'
+    </update>
+</mapper>

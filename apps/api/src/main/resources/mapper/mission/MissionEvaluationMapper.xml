@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kb.tangtang.mission.mapper.MissionEvaluationMapper">
+
+    <select id="findPendingAssignmentIds" resultType="java.lang.Long">
+        SELECT id
+          FROM tbl_user_mission_info
+         WHERE assign_date = #{assignDate}
+           AND result = 'PENDING'
+         ORDER BY id
+    </select>
+
+    <select id="findPendingAssignmentIdsBefore" resultType="java.lang.Long">
+        SELECT id
+          FROM tbl_user_mission_info
+         WHERE user_id = #{userId}
+           AND assign_date &lt; #{beforeDate}
+           AND result = 'PENDING'
+         ORDER BY assign_date, id
+    </select>
+
+    <select id="lockPendingAssignment"
+            resultType="com.kb.tangtang.mission.domain.MissionEvaluationTarget">
+        SELECT assignment.id AS assignment_id,
+               assignment.user_id,
+               assignment.assign_date,
+               assignment.target_value,
+               COALESCE(SUM(
+                   CASE WHEN mission_transaction.is_refund = 1
+                        THEN -COALESCE(mission_transaction.refunded_amount, mission_transaction.amount)
+                        ELSE mission_transaction.amount
+                   END
+               ), 0) AS current_amount
+          FROM tbl_user_mission_info assignment
+          JOIN tbl_mission_pool mission ON mission.id = assignment.mission_id
+          LEFT JOIN tbl_transaction mission_transaction
+            ON mission_transaction.user_id = assignment.user_id
+           AND mission_transaction.category_id = mission.category_id
+           AND mission_transaction.tr_date = assignment.assign_date
+           AND mission_transaction.classification = 'CONSUMPTION'
+           AND mission_transaction.direction = 'OUT'
+           AND mission_transaction.is_excluded_from_summary = 0
+         WHERE assignment.id = #{assignmentId}
+           AND assignment.result = 'PENDING'
+         GROUP BY assignment.id, assignment.user_id, assignment.assign_date, assignment.target_value
+         FOR UPDATE
+    </select>
+
+    <update id="updateMissionResult">
+        UPDATE tbl_user_mission_info
+           SET result = #{result},
+               evaluated_at = #{evaluatedAt}
+         WHERE id = #{assignmentId}
+           AND result = 'PENDING'
+    </update>
+
+    <insert id="recalculateStreak">
+        INSERT INTO tbl_streak_count
+            (user_id, streak_count, longest_streak_count, last_check_date)
+        SELECT #{userId},
+               COALESCE(MAX(CASE WHEN streak.last_success_date = latest.last_result_date
+                                 THEN streak.streak_length ELSE 0 END), 0),
+               COALESCE(MAX(streak.streak_length), 0),
+               #{checkedAt}
+          FROM (
+              SELECT MAX(assign_date) AS last_result_date
+                FROM tbl_user_mission_info
+               WHERE user_id = #{userId}
+                 AND result IN ('SUCCESS', 'FAIL')
+          ) latest
+          LEFT JOIN (
+              SELECT MAX(success.assign_date) AS last_success_date,
+                     COUNT(*) AS streak_length
+                FROM (
+                    SELECT assign_date,
+                           DATE_SUB(assign_date, INTERVAL ROW_NUMBER() OVER (ORDER BY assign_date) DAY)
+                               AS streak_group
+                      FROM tbl_user_mission_info
+                     WHERE user_id = #{userId}
+                       AND result = 'SUCCESS'
+                ) success
+               GROUP BY success.streak_group
+          ) streak ON 1 = 1
+        ON DUPLICATE KEY UPDATE
+            streak_count = VALUES(streak_count),
+            longest_streak_count = VALUES(longest_streak_count),
+            last_check_date = #{checkedAt}
+    </insert>
+
+</mapper>

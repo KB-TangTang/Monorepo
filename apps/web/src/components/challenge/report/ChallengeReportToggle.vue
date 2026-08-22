@@ -1,28 +1,39 @@
 <script setup>
-defineEmits(['open-transactions', 'open-monthly-report']);
+defineProps({
+    active: {
+        type: String,
+        default: 'monthly',
+        validator: (v) => ['monthly', 'trial'].includes(v),
+    },
+});
+
+defineEmits(['open-monthly-report', 'open-trial-report']);
 </script>
 
 <template>
-    <nav class="report-toggle" aria-label="자료실 화면 전환">
-        <button type="button" @click="$emit('open-transactions')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2z" />
-                <path d="M9 8h6M9 12h6" />
-            </svg>
-            <span>거래내역</span>
-        </button>
+    <nav class="report-toggle" aria-label="리포트 종류 전환">
         <button
             type="button"
-            class="report-toggle__active"
-            aria-current="page"
+            :class="{ 'report-toggle__active': active === 'monthly' }"
+            :aria-current="active === 'monthly' ? 'page' : undefined"
             @click="$emit('open-monthly-report')"
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 3.5h10l4 4v13H5z" />
                 <path d="M15 3.5v4h4M9 16v-3M12 16V9M15 16v-5" />
             </svg>
-            <span>리포트</span>
-            <i aria-hidden="true"></i>
+            <span>월간 보고서</span>
+        </button>
+        <button
+            type="button"
+            :class="{ 'report-toggle__active': active === 'trial' }"
+            :aria-current="active === 'trial' ? 'page' : undefined"
+            @click="$emit('open-trial-report')"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v16M7.5 20h9M4.5 8h15M4.5 8 2 14h5zM19.5 8 17 14h5z" />
+            </svg>
+            <span>재판 보고서</span>
         </button>
     </nav>
 </template>
@@ -73,27 +84,5 @@ defineEmits(['open-transactions', 'open-monthly-report']);
 .report-toggle .report-toggle__active {
     color: var(--tt-text);
     background: var(--tt-accent);
-}
-
-.report-toggle__active i {
-    position: absolute;
-    top: calc(var(--tt-space-1) * -1);
-    right: var(--tt-space-1);
-    width: 16px;
-    height: 16px;
-    background: color-mix(in srgb, var(--tt-text) 55%, var(--tt-accent));
-    border: 2px solid var(--tt-bg);
-    border-radius: var(--tt-radius-full);
-}
-
-.report-toggle__active i::after {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 4px;
-    height: 4px;
-    content: '';
-    background: var(--tt-bg);
-    border-radius: var(--tt-radius-full);
 }
 </style>

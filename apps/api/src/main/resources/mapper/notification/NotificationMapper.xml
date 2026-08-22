@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  typeAliases 를 쓰지 않는 프로젝트다. resultType 은 FQCN 으로 쓴다.
+  파라미터는 #{} 만 사용한다. ${} 는 SQL Injection 위험으로 금지.
+
+  ⚠ SQL 부등호는 &lt; 로 쓴다. 원시 < 를 쓰면 XML 파싱이 깨져
+    sqlSessionFactory 생성이 실패하고 컨텍스트가 통째로 뜨지 않는다 (2026-08-06 실제 발생).
+-->
+<mapper namespace="com.kb.tangtang.notification.mapper.NotificationMapper">
+
+    <sql id="columns">
+        id, user_id, type, title, content, deep_link_url, is_read, created_at
+    </sql>
+
+    <insert id="insert" parameterType="com.kb.tangtang.notification.domain.Notification"
+            useGeneratedKeys="true" keyProperty="id">
+        <!--
+          created_at 을 컬럼 기본값에 맡기지 않고 명시한다. 기본값에 맡기면
+          useGeneratedKeys 가 id 만 되받아 와 반환 객체의 createdAt 이 null 로 남고,
+          그 객체가 그대로 SSE 로 나간다 (프론트가 1970-01-01 로 묶는다).
+        -->
+        INSERT INTO tbl_notification (user_id, type, title, content, deep_link_url, is_read, created_at)
+        VALUES (#{userId}, #{type}, #{title}, #{content}, #{deepLinkUrl}, 0, #{createdAt})
+    </insert>
+
+    <select id="findPage" resultType="com.kb.tangtang.notification.domain.Notification">
+        SELECT <include refid="columns"/>
+        FROM tbl_notification
+        WHERE user_id = #{userId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{size}
+    </select>
+
+    <select id="findById" resultType="com.kb.tangtang.notification.domain.Notification">
+        SELECT <include refid="columns"/>
+        FROM tbl_notification
+        WHERE id = #{id} AND user_id = #{userId}
+    </select>
+
+    <select id="countUnread" resultType="int">
+        SELECT COUNT(*) FROM tbl_notification
+        WHERE user_id = #{userId} AND is_read = 0
+    </select>
+
+    <!--
+      중복 알림 억제용 (이슈 #70). deep_link_url 은 NULL 일 수 있으므로 = 비교만으로는 안 된다.
+      MySQL 의 null-safe 비교 연산자를 쓰지 않는 이유는 그 기호에 원시 부등호가 들어가
+      XML 파싱을 깨뜨릴 수 있어서다 — IS NULL 조합으로 같은 결과를 낸다.
+    -->
+    <select id="countUnreadSame" resultType="int">
+        SELECT COUNT(*) FROM tbl_notification
+        WHERE user_id = #{userId}
+          AND type = #{type}
+          AND is_read = 0
+          AND ((deep_link_url IS NULL AND #{deepLinkUrl} IS NULL)
+               OR deep_link_url = #{deepLinkUrl})
+    </select>
+
+    <update id="markRead">
+        UPDATE tbl_notification
+        SET is_read = 1
+        WHERE id = #{id} AND user_id = #{userId}
+    </update>
+
+    <update id="markAllRead">
+        UPDATE tbl_notification
+        SET is_read = 1
+        WHERE user_id = #{userId} AND is_read = 0
+    </update>
+
+    <delete id="deleteByUserAndType">
+        DELETE FROM tbl_notification
+        WHERE user_id = #{userId} AND type = #{type}
+    </delete>
+</mapper>
