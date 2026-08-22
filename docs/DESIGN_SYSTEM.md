@@ -41,6 +41,7 @@
 | `--tt-neutral-hint` | `#A6A9B6` | 힌트 · placeholder |
 | `--tt-neutral-surface` | `#FFFFFF` | 카드 배경 |
 | `--tt-neutral-paper` | `#FAFAFB` | 페이지 · 섹션 배경 |
+| `--tt-neutral-page` | `#F2F4F6` | 페이지 배경 — 선·그림자 없는 카드가 뜨는 바탕 |
 | `--tt-neutral-fill` | `#EFF1F5` | 입력 필드 · 비활성 |
 | `--tt-neutral-border` | `#E5E8EF` | 구분선 · 카드 테두리 |
 | `--tt-neutral-track` | `#E9ECF2` | 진행바 트랙 |
@@ -111,6 +112,7 @@
 | `--tt-surface-raised` | `--tt-ink-raised` | Ink 위에 겹치는 블록 |
 | `--tt-bg` | `--tt-neutral-surface` | 카드 배경 |
 | `--tt-bg-subtle` | `--tt-neutral-paper` | 페이지 · 섹션 배경 |
+| `--tt-bg-page` | `--tt-neutral-page` | 페이지 배경 — **선·그림자 없는 카드**가 뜨는 바탕 |
 | `--tt-bg-fill` | `--tt-neutral-fill` | 입력 필드 · 비활성 배경 |
 | `--tt-border` | `--tt-neutral-border` | 기본 선 |
 | `--tt-border-track` | `--tt-neutral-track` | 진행바 트랙 |
@@ -199,7 +201,17 @@
 | 레이아웃 토큰 | 값 | 용도 |
 |---|---|---|
 | `--tt-tabbar-height` | 64px | 탭바 높이 |
+| `--tt-app-bottom-inset` | 탭바 + safe-area + 16px | 앱 셸(`<main>`)이 탭바를 피해 잡는 아래 여백 |
+| `--tt-float-toggle-inset` | 76px (44+8+8+16) | 하단에 **떠 있는 토글**을 피하는 본문 여백 |
 | `--tt-content-max` | 480px | 본문 최대 폭 (모바일 웹 우선) |
+
+- `--tt-app-bottom-inset` 은 **페이지가 직접 쓸 일이 거의 없다.** 그 자리는 페이지 요소 밖이라
+  앱 셸의 흰 배경이 띠로 드러나는데, 이 보정은 `base.css` 의 `.tt-app__content > *` 규칙
+  (투명 `border-bottom` + 같은 크기 음수 마진)이 **모든 화면에 대해 이미** 처리한다.
+  화면에서 `padding-bottom` 으로 다시 더하면 여백이 두 배가 된다.
+- `--tt-float-toggle-inset` 은 `ChallengeModeTabBar` · `AssetLedgerToggle` · `ChallengeReportToggle`
+  처럼 **탭바 위에 떠 있는** 토글을 렌더링하는 화면만 본문 아래에 준다.
+  탭바 몫은 위 규칙이 맡으므로 **여기에 `--tt-tabbar-height` 를 다시 더하지 않는다.**
 
 ---
 
@@ -246,3 +258,5 @@
 | 2026-08-21 | 목재 명패를 없애고 화자 이름을 말풍선 머리로 옮기며 `--tt-elevation-court-nameplate` 삭제 (신규 토큰 없음 — 헤더 하단 곡면은 기존 `--tt-radius-2xl` 사용) |
 | 2026-08-21 | 페이지 배경 `--tt-neutral-paper` `#F7F8FA` → `#FAFAFB` (회색기 완화). `index.html` · `manifest.webmanifest` · `utils/themeColor.js` 의 종이색도 같은 값으로 맞춤 |
 | 2026-08-22 | 주간 판정 「인정」 원을 `--tt-success` 채움으로 (파랑 그라데이션 시안 폐기 — `--tt-blue-bright` · `--tt-blue-strong` · `--tt-info-gradient` 삭제) |
+| 2026-08-22 | `--tt-neutral-page` `#F2F4F6` → `--tt-bg-page` 신설. 선·그림자 없이 흰 카드만 세우는 화면의 배경 (재판탭 홈 2개에 시범 적용) |
+| 2026-08-22 | `--tt-app-bottom-inset` · `--tt-float-toggle-inset` 신설. 탭바 아래 흰 띠 제거(전역 `base.css` 규칙)와 떠 있는 토글 회피 여백을 토큰화 |
