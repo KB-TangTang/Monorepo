@@ -141,6 +141,36 @@ test('두 칸은 건수와 무관하게 정사각형이다', () => {
     assert.match(source(TODO_GRID), /\.todo-grid__cell \{[^}]*aspect-ratio: 1/);
 });
 
+test('두 칸은 숫자만 다른 같은 그림이 아니다', () => {
+    /*
+     * 톤이 38px 아이콘 상자 안에만 있으면 색이 닿는 면적이 정사각형의 4% 뿐이라 두 칸이
+     * 같아 보인다. 가장 큰 글자(건수)와 워터마크까지 톤을 끌어와 색과 실루엣으로 가른다.
+     */
+    const src = source(TODO_GRID);
+    for (const tone of ['danger', 'info']) {
+        assert.match(
+            src,
+            new RegExp(`\\.todo-grid__tile--\\w+ \\.todo-grid__count \\{[^}]*--tt-${tone}-deep`),
+        );
+    }
+    /* 워터마크는 글자를 늘리지 않고 면을 채우는 수단이다 — 늘리면 말줄임이 되살아난다 */
+    assert.match(src, /class="todo-grid__watermark"/);
+    assert.match(src, /\.todo-grid__tile \{[^}]*overflow: hidden/);
+});
+
+test('격자는 원시 팔레트가 아니라 의미 토큰을 참조한다', () => {
+    /* apps/web/AGENTS.md — 「컴포넌트는 의미 토큰만 참조한다」. 원시 토큰은 tokens.css 안에서만 */
+    assert.doesNotMatch(source(TODO_GRID), /--tt-(red|blue|brand|guilty|innocent|gray)-/);
+});
+
+test('타일은 눌리는 것으로 보인다', () => {
+    /* 격자가 목록을 여는 「버튼」이라는 걸 손끝으로 알린다. 0건 칸은 눌러도 반응하지 않는다 */
+    const src = source(TODO_GRID);
+    assert.match(src, /\.todo-grid__tile:active \{[^}]*transform: scale\(/);
+    assert.match(src, /\.todo-grid__tile:disabled:active \{[^}]*transform: none/);
+    assert.match(src, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
 test('지켜보는 재판은 지우지 않고 한 줄로 접는다', () => {
     /*
      * 할 일은 아니어도 「내 재판이 심판받는 중」은 이 화면에서 가장 궁금한 것이다.

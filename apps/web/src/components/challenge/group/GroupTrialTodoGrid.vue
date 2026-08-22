@@ -70,6 +70,13 @@ const tiles = computed(() => [
                 :disabled="!tile.count"
                 @click="emit('open', tile.kind)"
             >
+                <!--
+                  같은 글리프를 크게 깔아 빈 면을 채운다. 글자를 늘리지 않고 두 칸을
+                  실루엣으로 가르는 게 목적이다 (`TrialActionIcon` 은 이미 `aria-hidden`).
+                  DOM 맨 앞에 둬야 뒤 형제들이 위에 그려진다.
+                -->
+                <TrialActionIcon :name="tile.icon" class="todo-grid__watermark" />
+
                 <span class="todo-grid__icon">
                     <TrialActionIcon :name="tile.icon" class="todo-grid__glyph" />
                 </span>
@@ -120,9 +127,19 @@ const tiles = computed(() => [
     text-align: left;
     cursor: pointer;
     position: relative;
+    /* 워터마크가 모서리에서 잘려 나가야 「면을 채운 것」으로 보인다 */
+    overflow: hidden;
+    transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* 누르면 들어간다 — 격자가 목록을 여는 「버튼」이라는 걸 손끝으로 알린다 */
+.todo-grid__tile:active {
+    transform: scale(0.97);
 }
 .todo-grid__tile:disabled {
     cursor: default;
+}
+.todo-grid__tile:disabled:active {
+    transform: none;
 }
 
 /* 아이콘 박스는 재판 현황 카드의 접힌 줄과 같은 규격(38px · --tt-radius-md) */
@@ -139,13 +156,43 @@ const tiles = computed(() => [
     width: 20px;
     height: 20px;
 }
+
+/*
+ * 정사각형은 내용보다 넓어서 오른쪽 위가 통째로 빈다. 글자를 더 넣으면 말줄임이 되살아나므로
+ * 같은 글리프를 크게 깔아 면만 채운다. 두 모서리에서 잘려 나가게 밖으로 밀어 둔다.
+ * 색은 아이콘 배경과 같은 `*-subtle` 이라 위에 얹힌 글자 대비를 깎지 않는다.
+ */
+.todo-grid__watermark {
+    position: absolute;
+    right: -14px;
+    bottom: -12px;
+    width: 84px;
+    height: 84px;
+    z-index: 0;
+    pointer-events: none;
+}
+/* 워터마크는 z-index 0 이라, 내용은 명시적으로 그 위로 올린다 */
+.todo-grid__icon,
+.todo-grid__count,
+.todo-grid__label,
+.todo-grid__sub {
+    position: relative;
+    z-index: 1;
+}
+
 .todo-grid__tile--danger .todo-grid__icon {
-    background: var(--tt-red-soft);
-    color: var(--tt-red-deep);
+    background: var(--tt-danger-subtle);
+    color: var(--tt-danger-deep);
 }
 .todo-grid__tile--primary .todo-grid__icon {
-    background: var(--tt-blue-soft);
-    color: var(--tt-blue-deep);
+    background: var(--tt-info-subtle);
+    color: var(--tt-info-deep);
+}
+.todo-grid__tile--danger .todo-grid__watermark {
+    color: var(--tt-danger-subtle);
+}
+.todo-grid__tile--primary .todo-grid__watermark {
+    color: var(--tt-info-subtle);
 }
 
 /* 건수를 아래로 밀어 붙인다 — 아이콘은 위, 글자 묶음은 아래. 두 칸의 기준선이 같아진다 */
@@ -154,7 +201,16 @@ const tiles = computed(() => [
     font-size: var(--tt-fs-display);
     font-weight: var(--tt-fw-black);
     line-height: 1.1;
-    color: var(--tt-text);
+}
+/*
+ * 타일에서 가장 큰 글자다. 무채색으로 두면 두 칸이 숫자만 다른 같은 그림이 된다 —
+ * 아이콘 상자 안에만 있던 톤을 여기까지 끌어와 색으로도 갈리게 한다.
+ */
+.todo-grid__tile--danger .todo-grid__count {
+    color: var(--tt-danger-deep);
+}
+.todo-grid__tile--primary .todo-grid__count {
+    color: var(--tt-info-deep);
 }
 .todo-grid__unit {
     margin-left: 2px;
@@ -189,6 +245,9 @@ const tiles = computed(() => [
 .todo-grid__tile--empty .todo-grid__label {
     color: var(--tt-text-hint);
 }
+.todo-grid__tile--empty .todo-grid__watermark {
+    color: var(--tt-bg-fill);
+}
 
 /* 접힌 칸이 마감을 감추지 않게. 오른쪽 위는 카드에서 비어 있는 유일한 자리다 */
 .todo-grid__urgent {
@@ -197,9 +256,19 @@ const tiles = computed(() => [
     right: 12px;
     padding: 3px 7px;
     border-radius: var(--tt-radius-xs);
-    background: var(--tt-red-soft);
+    background: var(--tt-danger-subtle);
     font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
-    color: var(--tt-red-deep);
+    color: var(--tt-danger-deep);
+}
+
+/* 동작 줄이기를 켠 사용자에게는 눌림 효과를 끈다 (src/ 안 27개 파일이 같은 처리를 한다) */
+@media (prefers-reduced-motion: reduce) {
+    .todo-grid__tile {
+        transition: none;
+    }
+    .todo-grid__tile:active {
+        transform: none;
+    }
 }
 </style>
