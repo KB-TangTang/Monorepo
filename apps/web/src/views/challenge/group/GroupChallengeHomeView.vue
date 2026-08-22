@@ -4,11 +4,11 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
-import GroupTrialStatusCard from '@/components/challenge/group/GroupTrialStatusCard.vue';
+import GroupTrialTodoGrid from '@/components/challenge/group/GroupTrialTodoGrid.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
 import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
 import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
-import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
+import GroupTrialListSheet from '@/components/challenge/group/GroupTrialListSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
@@ -20,6 +20,7 @@ import ChallengeCourtHeader from '@/components/challenge/ChallengeCourtHeader.vu
 import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
+import objIndictImage from '@/assets/images/judgment/obj_indict.png';
 import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
 import { toTrialStatusCard } from '@/utils/groupTrial';
 import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
@@ -84,6 +85,21 @@ const sortedChallenges = computed(() =>
 
 const activeCount = computed(() => myChallenges.value.filter((ch) => !isUpcoming(ch)).length);
 
+/*
+ * 홈은 목록 화면이 아니다. 참여 그룹이 늘수록 이 섹션이 세로로 그대로 자라 위의 재판 현황을
+ * 화면 밖으로 밀어냈다 — 지금 할 일(재판)이 지금 할 일이 아닌 것(그룹 명부)에 밀리는 구조다.
+ * 홈은 상위 몇 건까지만 보여주고 나머지는 「전체보기」가 여는 목록 화면이 맡는다.
+ * `sortedChallenges` 가 진행 중을 위로 올려 두었으므로 잘려 나가는 쪽은 늘 시작 전이다.
+ */
+const HOME_CHALLENGE_LIMIT = 3;
+
+const homeChallenges = computed(() => sortedChallenges.value.slice(0, HOME_CHALLENGE_LIMIT));
+
+/* 잘린 게 있을 때만 「전체보기」가 총 개수를 밝힌다 — 3건 이하면 셀 것도 없다 */
+const hiddenChallengeCount = computed(
+    () => sortedChallenges.value.length - homeChallenges.value.length,
+);
+
 /* ── 재판 현황 (내가 속한 그룹의 진행 중인 재판 전부) ── */
 const myTrials = ref([]);
 
@@ -119,39 +135,69 @@ const trialCards = computed(() =>
 );
 
 /*
- * 바텀시트가 쓰는 얇은 행. 「할 일」만 담는다 — 시트는 훑어보고 바로 처리하는 자리라
- * 심판받는 중처럼 누를 것이 없는 재판이 섞이면 목록만 길어진다.
+ * 재판을 **「내 차례」와 「기다리는 중」으로 가른다**(#448).
+ * 식별자는 `watching` 그대로 둔다 — 화면 문구만 바뀐 것이라 여기까지 옮기면
+ * `openSheet` 값·CSS 클래스·테스트가 같이 흔들린다.
  *
- * 같은 `trialCards` 에서 뽑는다. 예전 `/my-trials` 를 따로 한 번 더 부르면 두 목록의
- * 건수가 어긋나는 순간이 생긴다(마감 필터를 서버가 각각 계산한다).
+ * 예전에는 진행 중인 재판 전부를 한 아코디언에 쌓았다. 그룹 여섯 개에 들어 있으면 재판도
+ * 여섯 줄이 되는데, 그중 내가 지금 손댈 수 있는 건 보통 한둘이다 — 나머지는 「내 변론을
+ * 제출했어요」·「○○님이 변론을 쓰는 중이에요」처럼 **눌러도 할 게 없는 줄**이라
+ * 정작 마감이 걸린 줄을 가렸다.
+ *
+ * 기준은 `STANCE.actionable` 하나다. 서버 정렬(`GroupTrialService#findAllMyTrials`)이
+ * 같은 기준으로 앞세우므로 여기서 나눠도 각 묶음 안의 마감 임박순은 그대로 남는다.
+ * 기다리는 쪽은 없애지 않는다 — 할 일은 아니어도 「내 재판이 어떻게 되고 있나」는
+ * 이 화면에서 가장 궁금한 것이다. 홈에는 한 줄로 접고 목록은 시트가 받는다.
  */
-const todoItems = computed(() =>
-    trialCards.value
-        .filter((card) => card.actionable)
-        .map((card) => ({
-            id: card.id,
-            type: card.action === 'defend' ? 'accuse' : 'vote',
-            title: card.title,
-            amount: card.exceededAmount,
-            challengeName: card.groupName,
-            challengeId: card.groupId,
-            indictmentId: card.id,
-            tally: `${card.voteCount}/${card.totalVoters} 투표`,
-            voteCount: card.voteCount,
-            totalVoters: card.totalVoters,
-            deadline: card.deadline,
-        })),
-);
+const myTurnTrials = computed(() => trialCards.value.filter((card) => card.actionable));
+const watchingTrials = computed(() => trialCards.value.filter((card) => !card.actionable));
 
-const hasTodo = computed(() => trialCards.value.length > 0);
+/*
+ * 내 차례를 다시 **행동별로** 가른다 — 할 일 격자의 두 칸이 이 둘이다.
+ * `action` 은 `utils/groupTrial.js` 의 `STANCE.action` 이 정한 값이라 여기서 다시 판정하지 않는다.
+ * 내 차례에는 `trial`(기다리기)이 섞이지 않는다 — 그건 `actionable: false` 쪽이다.
+ */
+const defendTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'defend'));
+const voteTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'vote'));
+
+/* 카드 자리는 이제 `myTurnTrials` · `watchingTrials` 가 직접 가른다 — `hasTodo` 는 지웠다 */
 const allDone = computed(() => trialCards.value.length === 0 && doneIds.value.length > 0);
 
 /* ── 카운트다운 ────────────────────────── */
 const { countdowns } = useCountdown(trialCards);
 
-/* ── 바텀시트 ──────────────────────────── */
-const showSheet = ref(false);
-const todoSheetRef = ref(null);
+/* 접힌 자리가 마감을 감춰 버리지 않게, 6시간 안쪽이 하나라도 있으면 그것만 밖으로 알린다 */
+function anyUrgent(list) {
+    return list.some((card) => countdowns.value[card.id]?.urgent);
+}
+const defendUrgent = computed(() => anyUrgent(defendTrials.value));
+const voteUrgent = computed(() => anyUrgent(voteTrials.value));
+const watchingUrgent = computed(() => anyUrgent(watchingTrials.value));
+
+/*
+ * ── 재판 목록 바텀시트 ─────────────────
+ * 세 묶음(변론·투표·기다리기)이 **시트 하나**를 돌려 쓴다. 목록 내용만 다르고 줄 모양은 같아서
+ * `showDefendSheet` · `showVoteSheet` … 로 늘리면 셋이 조금씩 어긋나기만 한다.
+ * 열려 있는 종류를 문자열 하나로 들고, 제목과 항목은 거기서 파생시킨다.
+ */
+const openSheet = ref(null); /* 'defend' | 'vote' | 'watching' | null */
+const sheetRef = ref(null);
+
+/*
+ * 시트 제목. 「기다리는 재판」은 한때 「지켜보는 재판」이었다 — 「지켜본다」도 **내 행동**이라
+ * 격자 두 칸(변론·투표)과 결이 겹쳐 「할 일이 아닌 쪽」이라는 게 낱말에서 안 갈렸다.
+ * 「판결 대기중」은 안 쓴다. `DEFENSE_WAITING`·`DEFENSE_SUBMITTED` 는 투표조차 시작 전이라
+ * 판결까지 두 단계 남았고, 넓게 읽으면 격자의 변론·투표 재판도 전부 판결 대기중이라 갈리지 않는다.
+ */
+const SHEET_TITLE = { defend: '변론할 재판', vote: '투표할 재판', watching: '기다리는 재판' };
+const sheetTitle = computed(() => SHEET_TITLE[openSheet.value] ?? '');
+
+const SHEET_SOURCE = {
+    defend: defendTrials,
+    vote: voteTrials,
+    watching: watchingTrials,
+};
+const sheetItems = computed(() => SHEET_SOURCE[openSheet.value]?.value ?? []);
 
 /* ── 토스트 ────────────────────────────── */
 const toast = ref(null);
@@ -167,7 +213,7 @@ function flash(msg) {
 
 /* ── 판사 탕이 말풍선 ─────────────────── */
 const judgeQuote = computed(() => {
-    const todoCount = todoItems.value.length;
+    const todoCount = myTurnTrials.value.length;
     if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요,\n서두르세요!`;
     if (allDone.value) return '모든 할 일을 처리했군요,\n훌륭해요!';
     if (activeCount.value > 0) return `진행 중인 챌린지가\n${activeCount.value}건 있어요`;
@@ -231,9 +277,9 @@ function goToTrial(action, groupId, indictmentId) {
     /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
      * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
      * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
-    if (showSheet.value) {
-        todoSheetRef.value?.releaseHistory?.();
-        showSheet.value = false;
+    if (openSheet.value) {
+        sheetRef.value?.releaseHistory?.();
+        openSheet.value = null;
     }
     router.replace({
         name: TRIAL_ROUTE[action],
@@ -241,14 +287,9 @@ function goToTrial(action, groupId, indictmentId) {
     });
 }
 
-/** 「재판 현황」 카드의 CTA. 어떤 입장이냐에 따라 변론·투표·현황 셋 중 하나로 간다. */
+/** 시트 안 재판 줄의 CTA. 어떤 입장이냐에 따라 변론·투표·현황 셋 중 하나로 간다. */
 function onOpenTrial({ item, action }) {
     goToTrial(action, item.groupId, item.id);
-}
-
-/** 바텀시트의 얇은 행. 여기는 할 일만 담기므로 변론·투표 둘뿐이다. */
-function onOpenTodo(item) {
-    goToTrial(item.type === 'accuse' ? 'defend' : 'vote', item.challengeId, item.indictmentId);
 }
 
 function goToAllChallenges() {
@@ -402,14 +443,23 @@ function goToChat(challenge) {
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- 재판 현황 / 방금 다 처리함 / 애초에 진행 중인 재판이 없음 -->
-            <GroupTrialStatusCard
-                v-if="hasTodo"
-                :items="trialCards"
-                :countdowns="countdowns"
-                @open="onOpenTrial"
+            <!--
+              내 차례인 재판을 **격자 두 칸으로 접는다**(#448). 목록을 그대로 쌓으면 그룹 수만큼
+              홈이 길어져 이 이슈가 없애려던 문제가 그대로 남는다. 격자는 건수와 무관하게 높이가 같다.
+              기다리는 재판은 아래 요약 줄이 받는다.
+              분기: 내 차례 있음 / 방금 다 처리함 / 기다리는 것만 남음 / 애초에 재판이 없음
+            -->
+            <GroupTrialTodoGrid
+                v-if="myTurnTrials.length"
+                :defend-count="defendTrials.length"
+                :vote-count="voteTrials.length"
+                :defend-urgent="defendUrgent"
+                :vote-urgent="voteUrgent"
+                @open="openSheet = $event"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
+            <!-- 재판은 도는데 내가 할 게 없는 상태. 「평온」이라고 하면 거짓말이 된다 -->
+            <p v-else-if="watchingTrials.length" class="gc-trial-idle">지금 내가 할 일은 없어요</p>
             <!-- 기소·투표가 아예 없는 평온 상태. 이 분기가 없으면 자리 전체가 빈 화면이 된다.
                  doneIds 는 DEV 토글로만 채워지므로 allDone 은 실사용에서 거의 오지 않는다. -->
             <template v-else>
@@ -417,12 +467,34 @@ function goToChat(challenge) {
                 <GroupMascotScene scene="peaceful" />
             </template>
 
+            <!--
+              기다리는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
+              할 일은 아니어도 이 화면에서 가장 궁금한 것이기 때문이다.
+              마감이 6시간 안쪽인 게 섞여 있으면 접힌 채로도 그것만 밖으로 알린다.
+            -->
+            <button
+                v-if="watchingTrials.length"
+                type="button"
+                class="gc-watching"
+                @click="openSheet = 'watching'"
+            >
+                <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 기다림의 대표 상태다 -->
+                <img class="gc-watching__art" :src="objIndictImage" alt="" />
+                <span class="gc-watching__label">
+                    기다리는 재판 {{ watchingTrials.length }}건
+                </span>
+                <span v-if="watchingUrgent" class="gc-watching__urgent">마감 임박</span>
+                <span class="gc-watching__arrow" aria-hidden="true">›</span>
+            </button>
+
             <!-- 내 챌린지 — 진행 중과 시작 전을 한 카드에 행으로 쌓는다 -->
             <div class="gc-section">
                 <div class="gc-section-top">
                     <span class="gc-section-title">내 챌린지</span>
+                    <!-- 잘린 게 있으면 몇 개가 더 있는지 여기서 밝힌다. 안 그러면 홈이
+                         「내 챌린지는 3개뿐」이라고 잘못 말한다 -->
                     <button type="button" class="gc-view-all" @click="goToAllChallenges">
-                        전체보기 ›
+                        {{ hiddenChallengeCount ? `+${hiddenChallengeCount}개 더` : '전체보기' }} ›
                     </button>
                 </div>
 
@@ -432,7 +504,7 @@ function goToChat(challenge) {
                     </p>
 
                     <div
-                        v-for="ch in sortedChallenges"
+                        v-for="ch in homeChallenges"
                         :key="ch.id"
                         class="gc-group-row"
                         @click="goToDetail(ch)"
@@ -512,18 +584,18 @@ function goToChat(challenge) {
         <ChallengeModeTabBar active-mode="group" />
 
         <!--
-          ===== TO-DO 바텀시트 =====
-          **여는 버튼이 지금은 없다.** #432 에서 재판 현황 카드가 아코디언이 되면서 진행 스테퍼부터
-          CTA 까지 그 자리에서 전부 보여주게 돼 「할 일 N건 ›」 시트와 역할이 겹쳤다. 버튼만 뺐고
-          배선은 그대로 둔다 — `todoItems` 는 판사 탕이 말풍선(`judgeQuote`)이 계속 쓰고,
-          시트를 되살릴지 지울지는 아직 정하지 않았다.
+          ===== 재판 목록 바텀시트 (#448) =====
+          변론·투표·기다리기 **세 목록이 이 하나를 돌려 쓴다.** 격자의 두 칸과 아래 요약 줄이
+          모두 여기로 들어온다 — `openSheet` 가 어느 목록인지만 정하고 줄 모양은 전부 같다.
         -->
-        <GroupTodoSheet
-            ref="todoSheetRef"
-            v-model="showSheet"
-            :items="todoItems"
+        <GroupTrialListSheet
+            ref="sheetRef"
+            :model-value="openSheet !== null"
+            :title="sheetTitle"
+            :items="sheetItems"
             :countdowns="countdowns"
-            @open="onOpenTodo"
+            @update:model-value="openSheet = $event ? openSheet : null"
+            @open="onOpenTrial"
         />
 
         <!-- ===== 참여코드 입장 바텀시트 ===== -->
@@ -593,9 +665,93 @@ function goToChat(challenge) {
     z-index: 3;
 }
 
+/* ── 기다리는 재판 요약 줄 ─────────────── */
+/*
+ * **흰 면은 주되 그림자는 주지 않는다.** 한때 배경조차 없었는데(`background: none`),
+ * 위의 격자 두 칸과 아래 「내 챌린지」 카드가 둘 다 흰 면이라 이 줄만 **두 덩어리 사이의
+ * 빈틈**으로 보였다 — 누를 수 있다는 신호가 오른쪽 `›` 하나뿐이었다.
+ *
+ * 그렇다고 `--tt-elevation-*` 을 얹으면 격자의 세 번째 칸이 되어 「할 일이 하나 더 있다」로
+ * 읽힌다. 접어 둔 이유가 그것인데 그러면 도로아미타불이다.
+ *
+ * 페이지 배경이 `--tt-bg-page`(흰색과 13/255 차이)라 **그림자 없이도 흰 면이 선다.**
+ * 그 토큰이 #423 에서 들어온 이유가 정확히 이것이다(`tokens.css` 주석 참고).
+ * 결과적으로 계층이 「그림자 유무」로 갈린다 — 격자는 떠 있고, 이 줄은 바닥에 붙어 있다.
+ */
+.gc-watching {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: var(--tt-space-2);
+    padding: 11px 15px;
+    background: var(--tt-bg);
+    border: none;
+    border-radius: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.gc-watching:active {
+    background: var(--tt-bg-fill);
+}
+
+/*
+ * 격자 두 칸이 판사봉·투표함을 들고 있어서, 이 줄만 그림이 없으면 「같은 묶음의 세 번째」로
+ * 안 읽힌다. 다만 **할 일이 아니므로** 타일보다 확실히 작게(26px) 둔다.
+ */
+.gc-watching__art {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    flex: none;
+    margin-left: -3px;
+}
+
+.gc-watching__label {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+}
+
+/* 접힌 줄이 마감을 통째로 감추지 않게 하는 유일한 장치다. 색만으로 말한다 */
+.gc-watching__urgent {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-danger);
+    padding: 2px 7px;
+    border-radius: var(--tt-radius-xs);
+    background: var(--tt-danger-subtle);
+}
+
+.gc-watching__arrow {
+    margin-left: auto;
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text-hint);
+}
+
+/* 재판은 도는데 내가 할 게 없는 상태. 카드 자리를 비우지 않을 만큼만 차지한다 */
+.gc-trial-idle {
+    margin: 0;
+    padding: 18px 0;
+    background: var(--tt-bg);
+    border-radius: var(--tt-radius-xl);
+    box-shadow: var(--tt-elevation-2);
+    text-align: center;
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+}
+
 /* ── 진행 중인 챌린지 섹션 ─────────────── */
+/*
+ * 재판 현황과 내 챌린지는 성격이 다르다 — 앞은 마감이 걸린 할 일 큐고, 뒤는 내가 속한 그룹의
+ * 명부다. 10px 로는 두 덩어리가 한 스크롤 흐름으로 이어져 「카드가 계속 나온다」로 읽혔다.
+ * 섹션 제목이 자기 앞에 숨 쉴 자리를 갖도록 벌린다.
+ */
 .gc-section {
-    margin-top: 10px;
+    margin-top: var(--tt-space-6);
 }
 
 .gc-section-top {
@@ -628,6 +784,7 @@ function goToChat(challenge) {
  * 나열하므로 두 화면의 시각 언어가 이걸로 같아진다.
  *
  * 선도 그림자도 두지 않는다. 카드를 띄우는 일은 페이지 배경(--tt-bg-page)이 맡는다.
+ * **그림자가 없는 것이 여기서는 위계다** — 위의 재판 현황만 떠 있고 이 명부는 바닥에 붙는다.
  */
 .gc-groups {
     margin-top: 11px;
@@ -646,13 +803,17 @@ function goToChat(challenge) {
 }
 
 /* ── 그룹 카드 ────────────────────────── */
+/*
+ * 재판 현황 카드보다 한 급 작게 잡는다(패딩·라운드·아이콘). 두 블록이 같은 몸집이면
+ * 「무엇을 먼저 봐야 하나」가 안 정해져 화면 전체가 평평하게 읽힌다.
+ */
 .gc-group-row {
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 13px 15px;
+    padding: 11px 14px;
     background: var(--tt-bg);
-    border-radius: 18px;
+    border-radius: 16px;
     cursor: pointer;
     transition: opacity 0.15s ease;
 }
@@ -662,9 +823,9 @@ function goToChat(challenge) {
 }
 
 .gc-group-row__icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
     flex: none;
     display: flex;
     align-items: center;
