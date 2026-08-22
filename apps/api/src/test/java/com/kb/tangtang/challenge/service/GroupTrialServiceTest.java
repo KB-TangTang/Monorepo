@@ -25,6 +25,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -315,5 +317,124 @@ class GroupTrialServiceTest {
         assertEquals(VerdictMethod.AI_JUDGMENT.name(), detail.getVerdictMethod());
         assertEquals("변론이 사실과 다르다", detail.getAiVerdictReason());
         assertEquals(2, detail.getGuiltyCount());
+    }
+
+    /* ══ 지방법원 홈 「재판 현황」 (이슈 #432) ═══════════════════ */
+
+    /**
+     * 6가지 입장 중 하나를 만든다. 조합을 만드는 축이 네 개(피고 · 상태 · 변론 · 내 표)라
+     * 픽스처를 상태별로 두면 여섯 벌이 된다 — 하나만 고치고 나머지를 잊는다.
+     */
+    private GroupIndictmentRow trialRow(long id, long defendantId, String status,
+                                        boolean defended, String myVerdict,
+                                        LocalDateTime createdAt) {
+        GroupIndictmentRow row = new GroupIndictmentRow();
+        row.setId(id);
+        row.setGroupId(3L);
+        row.setGroupName("배달 소비 줄이기");
+        row.setUserId(defendantId);
+        row.setNickname("지판");
+        row.setStatus(status);
+        row.setChallengeDate(LocalDate.of(2026, 8, 5));
+        row.setExceededAmount(new BigDecimal("6800"));
+        row.setDefended(defended);
+        row.setMyVerdict(myVerdict);
+        row.setCreatedAt(createdAt);
+        return row;
+    }
+
+    /**
+     * 여섯 가지가 <b>모두</b> 내려가야 한다. 예전 {@code findMyTrials} 는 1·5번(내가 지금
+     * 행동할 수 있는 것)만 줬고, 그래서 <b>내가 기소당해 그룹원들이 나를 심판하는 중인
+     * 상태가 화면에서 사라졌다</b> — 목숨이 걸려 있어 가장 궁금한 상태다.
+     *
+     * <p>거르는 축이 상태 하나가 아니라 넷이라, 한 축만 잘못 걸어도 특정 상태가 통째로
+     * 사라지면서 화면은 「재판이 없네」로 멀쩡히 보인다.
+     */
+    @Test
+    @DisplayName("재판 현황은 내 입장 6가지를 모두 내려보낸다")
+    void allMyTrialsCoversEverySixStates() {
+        when(indictmentMapper.findOpenByUserId(USER_ID)).thenReturn(List.of(
+                trialRow(1L, USER_ID, "DEFENSE_WAIT", false, null, NOW),
+                trialRow(2L, USER_ID, "DEFENSE_WAIT", true, null, NOW),
+                trialRow(3L, USER_ID, "VOTING", true, null, NOW),
+                trialRow(4L, 9L, "DEFENSE_WAIT", false, null, NOW),
+                trialRow(5L, 9L, "VOTING", true, null, NOW),
+                trialRow(6L, 9L, "VOTING", true, "GUILTY", NOW)));
+
+        List<GroupIndictmentDto> cards = service().findAllMyTrials(USER_ID);
+
+        assertEquals(6, cards.size());
+        assertEquals(Set.of(1L, 2L, 3L, 4L, 5L, 6L),
+                cards.stream().map(GroupIndictmentDto::getId).collect(Collectors.toSet()));
+        /*
+         * 순서는 아래 sortsActionableFirstThenByDeadline 이 본다. 여기서는 할 일 두 건이
+         * 앞으로 나왔다는 것까지만 — 마감이 전부 같아도 상태에 따라 6h·30h 로 갈려서
+         * 뒤쪽 네 건의 순서까지 못박으면 이 테스트가 정렬 규칙 테스트와 겹친다.
+         */
+        assertEquals(List.of(1L, 5L),
+                cards.stream().limit(2).map(GroupIndictmentDto::getId).toList());
+    }
+
+    /**
+     * 할 일이 있는 것(내 변론 필요 · 내 투표 필요)이 먼저 오고, 그 안에서 마감 임박순이다.
+     *
+     * <p>정렬을 화면에 맡기면 아코디언을 펼칠 때마다 카드가 다시 튄다. 위 6가지 테스트가
+     * 순서까지 보지만 그건 마감이 전부 같을 때의 순서라 — 여기서 마감을 벌려 확인한다.
+     */
+    @Test
+    @DisplayName("할 일이 있는 재판이 먼저 오고 그 안에서 마감 임박순이다")
+    void sortsActionableFirstThenByDeadline() {
+        when(indictmentMapper.findOpenByUserId(USER_ID)).thenReturn(List.of(
+                // 할 일 없음 · 마감이 가장 급하다 (그래도 뒤로 간다)
+                trialRow(1L, 9L, "VOTING", true, "GUILTY", NOW.minusHours(25)),
+                // 할 일 있음 · 마감이 가장 멀다
+                trialRow(2L, 9L, "VOTING", true, null, NOW),
+                // 할 일 있음 · 마감이 더 급하다
+                trialRow(3L, USER_ID, "DEFENSE_WAIT", false, null, NOW.minusHours(1))));
+
+        List<GroupIndictmentDto> cards = service().findAllMyTrials(USER_ID);
+
+        assertEquals(List.of(3L, 2L, 1L),
+                cards.stream().map(GroupIndictmentDto::getId).toList());
+    }
+
+    /**
+     * 마감 판단 기준이 <b>상태별로 다르다.</b> 변론 대기는 변론 마감(6h), 투표 중은 투표 마감(30h)이다.
+     *
+     * <p>한쪽 기준만 쓰면 둘 중 하나가 통째로 어긋난다 — 투표 마감으로만 재면 변론 마감이
+     * 24시간 지난 재판이 「변론 필요」로 남아 눌러 들어간 뒤 제출에서야 튕기고,
+     * 변론 마감으로만 재면 투표가 열린 재판이 열리자마자 목록에서 사라진다.
+     */
+    @Test
+    @DisplayName("마감이 지난 재판은 상태에 맞는 마감으로 걸러진다")
+    void dropsExpiredByStatusSpecificDeadline() {
+        when(indictmentMapper.findOpenByUserId(USER_ID)).thenReturn(List.of(
+                // 변론 마감(6h)이 지났다 → 빠진다
+                trialRow(1L, USER_ID, "DEFENSE_WAIT", false, null, NOW.minusHours(7)),
+                // 변론 마감은 지났지만 투표 마감(30h)은 남았다 → 남는다
+                trialRow(2L, 9L, "VOTING", true, null, NOW.minusHours(7)),
+                // 투표 마감도 지났다 → 빠진다
+                trialRow(3L, 9L, "VOTING", true, null, NOW.minusHours(31))));
+
+        List<GroupIndictmentDto> cards = service().findAllMyTrials(USER_ID);
+
+        assertEquals(List.of(2L), cards.stream().map(GroupIndictmentDto::getId).toList());
+    }
+
+    /**
+     * 카드 제목의 카테고리·한도는 화면이 참여 그룹 목록과 조인해 채운다. 그 열쇠가 {@code groupId} 다.
+     * 빠지면 여러 그룹이 섞인 목록에서 어느 그룹 것인지 알 수 없어 조인 자체가 불가능하다.
+     */
+    @Test
+    @DisplayName("재판 카드는 소속 그룹을 함께 내려보낸다")
+    void allMyTrialsCarriesGroup() {
+        when(indictmentMapper.findOpenByUserId(USER_ID))
+                .thenReturn(List.of(trialRow(1L, 9L, "VOTING", true, null, NOW)));
+
+        GroupIndictmentDto card = service().findAllMyTrials(USER_ID).get(0);
+
+        assertEquals(3L, card.getGroupId());
+        assertEquals("배달 소비 줄이기", card.getGroupName());
     }
 }

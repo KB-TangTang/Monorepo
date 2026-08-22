@@ -1260,18 +1260,23 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
 
-## 그룹 챌린지 — 재판 진입로 (이슈 #169)
+## 그룹 챌린지 — 재판 진입로 (이슈 #169 · #432)
 
-홈 「오늘의 할 일」과 그룹 상세 화면이 쓰는 조회 2종이다. **쓰기(변론 제출·투표)는 여기 없다** —
+지방법원 홈과 그룹 상세 화면이 쓰는 조회 3종이다. **쓰기(변론 제출·투표)는 여기 없다** —
 이슈 #170 · #171 범위다.
 
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | GET | `/api/group-challenges/my-trials` | Bearer | `MyTrial[]` |
+| GET | `/api/group-challenges/trials` | Bearer | `GroupIndictment[]` |
 | GET | `/api/group-challenges/{groupId}/detail` | Bearer | `ChallengeGroupDetail` |
 
-> `/my-trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다 먼저 매칭한다.
-> 순서를 바꿔도 같다.
+> `/my-trials` · `/trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다
+> 먼저 매칭한다. 순서를 바꿔도 같다.
+
+**앞의 둘은 범위가 다르다.** `/my-trials` 는 「내가 지금 <b>행동할 수 있는</b> 것」 2가지(내 변론 ·
+내 투표)이고, `/trials` 는 「내가 속한 그룹의 진행 중인 재판 <b>전부</b>」 6가지다.
+`/my-trials` 를 지우지 않은 것은 전체 보기 바텀시트가 아직 그 얇은 모양을 쓰기 때문이다.
 
 ### 마감 시각은 저장값이 아니라 계산값이다
 
@@ -1284,8 +1289,14 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 ```
 
 - 프로퍼티를 줄이면 **이미 생성된 기소의 마감도 함께 앞당겨진다.** 시연 때 코드를 고칠 필요가 없다.
-- **마감이 지난 건도 목록에서 그대로 내려간다.** 지우는 일은 상태 전이 배치가 한다 —
-  조회가 마감을 판단해 숨기면 배치가 아직 안 돈 사이 화면과 DB 가 어긋난다.
+- **마감이 지난 건은 `/my-trials` · `/trials` 에서 빠진다.** 목록에 남겨 두면 카운트다운이
+  `00:00:00` 인 줄을 눌러 화면까지 들어간 뒤 제출에서야 튕긴다. 상태 전이 배치와 판단 주체가
+  둘이 되지만, 배치는 `status` 를 옮기고 조회는 **보여줄지**를 정한다 — 배치가 아직 안 돈
+  구간에서 옳은 답은 「보여주지 않는다」다.
+  `{groupId}/detail` 의 `indictments[]` 는 그룹 상세라 <b>거르지 않는다</b>(그 화면은
+  「지금 할 일」이 아니라 그룹의 재판 목록이다).
+- **마감 판단 기준은 상태가 정한다** — `DEFENSE_WAIT` 은 변론 마감, `VOTING` 은 투표 마감이다.
+  한쪽 기준만 쓰면 투표가 열린 재판이 열리자마자 사라지거나, 변론 마감이 지난 건이 남는다.
 - 응답은 **ISO-8601 절대시각**(`2026-08-16T15:00:00`)이다. 남은 분 수로 주지 않는다 —
   화면을 열어 둔 채 몇 시간이 지나면 카운트다운이 응답 받은 시점 기준으로 굳는다.
 
@@ -1303,6 +1314,35 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - **「3/5 투표」 같은 표시 문구는 담지 않는다.** 문구를 서버가 만들면 디자인을 고칠 때마다
   war 를 다시 올려야 한다. 서버는 재료만 주고 `api/groupChallenge.js` 가 조립한다.
 
+### `GroupIndictment` — 재판 현황 (이슈 #432)
+
+`{ id, groupId, groupName, userId, nickname, profileImageUrl, status, settlementDate,
+exceededAmount, mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
+
+`{groupId}/detail` 의 `indictments[]` 와 **같은 모양이다.** 지방법원 홈이 여러 그룹의 재판을
+한 목록에 섞어 내리므로 `groupId` · `groupName` 이 붙는 것만 다르다(그룹 상세 응답에도 같이
+붙지만 그쪽 화면은 이미 아는 값이라 쓰지 않는다).
+
+재판 한 건에서 나올 수 있는 **내 입장 6가지**를 전부 준다.
+
+| 피고 | `status` | 조건 | 내 입장 | 할 일 |
+|---|---|---|---|---|
+| 나 | `DEFENSE_WAIT` | `defended: false` | 변론 필요 | ✅ |
+| 나 | `DEFENSE_WAIT` | `defended: true` | 변론 제출 | |
+| 나 | `VOTING` | — | 심판받는 중 | |
+| 남 | `DEFENSE_WAIT` | — | 변론 대기 | |
+| 남 | `VOTING` | `myVote: null` | 투표 필요 | ✅ |
+| 남 | `VOTING` | `myVote` 있음 | 투표 완료 | |
+
+- **뱃지·문구·CTA 는 서버가 정하지 않는다.** 위 네 값으로 프론트(`utils/groupTrial.js`)가 만든다.
+  판정을 서버로 올리면 상태가 하나 늘 때마다 war 를 다시 올려야 한다.
+- 정렬은 **할 일이 있는 것 먼저, 그 안에서 마감 임박순**이다. 화면에 맡기지 않는 이유는
+  아코디언을 펼칠 때마다 카드가 다시 튀기 때문이다.
+- 카드 제목에 쓰는 **카테고리·한도는 여기 없다.** 화면이 이미 들고 있는 참여 그룹 목록
+  (`GET /api/group-challenges`)을 `groupId` 로 조인해 채운다 — 같은 값을 재판 수만큼 되풀이해
+  내려보내지 않기 위함이다.
+- **사건번호는 없다.** `tbl_indictment` 에 대응하는 컬럼이 없다(디자인 시안에는 있다).
+
 ### `ChallengeGroupDetail` — 상세 화면 한 벌
 
 목록과 같은 `ChallengeGroup` 에 상세 전용 필드를 얹은 것이다. **그룹 필드는 한 겹 없이 같은
@@ -1318,13 +1358,13 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 - `usagePercent` 는 **100 을 넘을 수 있다**(화면이 막대만 100% 에서 자른다).
   한도 0원인 무지출 챌린지는 한 푼이라도 쓰면 100 이다.
 
-`indictments[]` = `{ id, userId, nickname, profileImageUrl, status, settlementDate, exceededAmount,
-mine, defended, myVote, voteCount, totalVoters, defenseDeadline, voteDeadline }`
+`indictments[]` = 위 **`GroupIndictment` 과 같은 모양**이다(`groupId`·`groupName` 포함 —
+이 화면은 이미 아는 값이라 쓰지 않는다).
 
 - 진행 중(`DEFENSE_WAIT`·`VOTING`)인 기소만 **오래된 순**(= 마감이 급한 순)으로 준다.
   확정된 기소는 카드가 아니라 전적으로 간다.
-- **카드 종류는 서버가 정하지 않는다.** 프론트가 `mine`·`status`·`myVote` 를 조합해
-  「변론 필요 / 변론 제출됨 / 투표 필요 / 투표 완료」를 만든다.
+- **카드 종류는 서버가 정하지 않는다.** 프론트가 `mine`·`status`·`defended`·`myVote` 를 조합해
+  만든다. 6가지 표는 위 `GroupIndictment` 절에 있다.
 - **마감 두 개를 둘 다 채운다.** 상태별로 한 쪽만 채우면 상태 전이가 도는 순간 화면에서
   마감이 잠깐 사라진다.
 - `settlementDate` 는 기소 생성일이 아니라 **위반한 날짜**다. 심야 거래를 다음 날 배치가 잡아

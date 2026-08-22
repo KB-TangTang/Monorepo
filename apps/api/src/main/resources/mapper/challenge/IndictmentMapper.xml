@@ -130,28 +130,69 @@
     </select>
 
     <!--
+      진행 중인 재판 카드 한 장의 컬럼 (이슈 #169 · #432).
+
+      아래 findOpenByGroupId(그룹 상세)와 findOpenByUserId(지방법원 홈)가 이 조각을 공유한다.
+      ⚠ 두 곳이 같은 GroupIndictmentRow 로 받는다. 컬럼을 한쪽에만 더하면 다른 쪽 화면에서
+        그 필드가 조용히 0·NULL 이 된다 — 그래서 select 목록을 나눠 두지 않았다.
+
+      #{userId} 를 쓴다(my_verdict). 두 select 모두 그 이름의 파라미터를 받는다.
+    -->
+    <sql id="groupIndictmentColumns">
+        i.id     AS id,
+        g.id     AS group_id,
+        g.group_name AS group_name,
+        i.user_id AS user_id,
+        <include refid="displayNickname"/> AS nickname,
+        u.profile_image_key AS profile_image_key,
+        i.status AS status,
+        r.challenge_date    AS challenge_date,
+        <include refid="exceededAmount"/> AS exceeded_amount,
+        EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id) AS defended,
+        (SELECT v.verdict FROM tbl_vote v
+          WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+        (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
+        <include refid="totalVoters"/> AS total_voters,
+        i.created_at AS created_at
+    </sql>
+
+    <!--
       그룹 상세의 재판 카드. 확정된 기소(GUILTY · INNOCENT)는 카드가 아니라 전적으로 가므로 뺀다.
 
       정렬은 오래된 순이다 — 캐러셀 첫 장이 마감이 가장 급한 재판이어야 한다.
     -->
     <select id="findOpenByGroupId" resultType="com.kb.tangtang.challenge.domain.GroupIndictmentRow">
-        SELECT i.id     AS id,
-               i.user_id AS user_id,
-               <include refid="displayNickname"/> AS nickname,
-               u.profile_image_key AS profile_image_key,
-               i.status AS status,
-               r.challenge_date    AS challenge_date,
-               <include refid="exceededAmount"/> AS exceeded_amount,
-               EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id) AS defended,
-               (SELECT v.verdict FROM tbl_vote v
-                 WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
-               (SELECT COUNT(*) FROM tbl_vote v WHERE v.indictment_id = i.id) AS vote_count,
-               <include refid="totalVoters"/> AS total_voters,
-               i.created_at AS created_at
+        SELECT <include refid="groupIndictmentColumns"/>
         <include refid="fromIndictment"/>
         JOIN tbl_user u ON u.id = i.user_id
         WHERE i.group_id = #{groupId}
           AND i.status IN ('DEFENSE_WAIT', 'VOTING')
+        ORDER BY i.created_at, i.id
+    </select>
+
+    <!--
+      지방법원 홈 「재판 현황」 (이슈 #432). 내가 속한 모든 그룹의 진행 중인 재판.
+
+      위 findOpenByGroupId 와 다른 곳은 WHERE 절 하나뿐이다 —
+      그룹 하나로 좁히는 대신 tbl_group_member 로 「내가 낀 그룹 전부」로 넓힌다.
+
+      ⚠ 쿼리를 「내가 피고」와 「남이 피고」로 나누지 않는다. 피고는 반드시 자기 그룹의
+        멤버이므로 이 조인 하나에 6가지 입장(내 변론 필요 · 변론 제출 · 심판받는 중 ·
+        남의 변론 대기 · 투표 필요 · 투표 완료)이 전부 들어온다.
+        나누면 두 결과를 합칠 때 내가 피고이면서 멤버인 행이 중복된다.
+
+      마감이 지났는지는 여기서 거르지 않는다 — findDefenseTodos 와 같은 사정이다
+      (마감 시간이 프로퍼티라 ${} 없이 SQL 에 넣을 수 없다).
+      GroupTrialService#findAllMyTrials 가 거른다.
+
+      정렬도 서비스가 다시 한다(할 일 있는 것 먼저). 여기서는 결과 순서를 고정하는 정도다.
+    -->
+    <select id="findOpenByUserId" resultType="com.kb.tangtang.challenge.domain.GroupIndictmentRow">
+        SELECT <include refid="groupIndictmentColumns"/>
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.status IN ('DEFENSE_WAIT', 'VOTING')
         ORDER BY i.created_at, i.id
     </select>
 
