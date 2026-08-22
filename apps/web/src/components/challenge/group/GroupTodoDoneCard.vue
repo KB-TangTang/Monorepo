@@ -48,7 +48,7 @@ import mascotCelebration from '@/assets/images/emotions/10_celebration.png';
     flex: none;
 }
 .done-card__label {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     letter-spacing: 0.08em;
     color: var(--tt-success);
@@ -80,13 +80,13 @@ import mascotCelebration from '@/assets/images/emotions/10_celebration.png';
 /* ── 텍스트 ─────────────────────────── */
 .done-card__title {
     margin-top: 6px;
-    font-size: var(--tt-fs-button);
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
 }
 .done-card__desc {
     margin-top: 4px;
-    font-size: var(--tt-fs-badge);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     text-align: center;
     line-height: 1.6;

@@ -381,7 +381,13 @@ function goToChat(challenge) {
 
 <template>
     <div class="gc-page">
-        <!-- ===== 다크 헤더 (지방법원 건물) ===== -->
+        <!--
+          ===== 다크 헤더 (지방법원 건물) =====
+          첫 섹션 제목 「재판 현황」은 헤더 하단 곡면에 얹는다 — 개인 미션 홈(「오늘의 미션」)과
+          같은 구조라야 두 화면의 본문 시작점이 같게 읽힌다.
+          개인 미션 홈처럼 상태에 따라 비우지는 않는다. 평온 상태에서도 「재판 현황」 아래에
+          「기소도 투표도 없어요」가 오는 편이 자연스럽고, 곡면 높이는 어차피 고정이다.
+        -->
         <ChallengeCourtHeader
             variant="district"
             :court-image="buildingDistrict"
@@ -391,23 +397,11 @@ function goToChat(challenge) {
             tangi-role="판사"
             tangi-name="탕이"
             :quote="judgeQuote"
+            skirt-title="재판 현황"
         />
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- 재판 현황. 카드는 진행 중인 재판 전부를 담고, 시트는 그중 할 일만 얇은 행으로 훑는다 -->
-            <div v-if="hasTodo" class="gc-section-top gc-section-top--todo">
-                <span class="gc-section-title">재판 현황</span>
-                <button
-                    v-if="todoItems.length"
-                    type="button"
-                    class="gc-view-all"
-                    @click="showSheet = true"
-                >
-                    할 일 {{ todoItems.length }}건 ›
-                </button>
-            </div>
-
             <!-- 재판 현황 / 방금 다 처리함 / 애초에 진행 중인 재판이 없음 -->
             <GroupTrialStatusCard
                 v-if="hasTodo"
@@ -517,7 +511,13 @@ function goToChat(challenge) {
         <!-- ===== 개인/그룹 세그먼트 (팀 공용) ===== -->
         <ChallengeModeTabBar active-mode="group" />
 
-        <!-- ===== TO-DO 바텀시트 ===== -->
+        <!--
+          ===== TO-DO 바텀시트 =====
+          **여는 버튼이 지금은 없다.** #432 에서 재판 현황 카드가 아코디언이 되면서 진행 스테퍼부터
+          CTA 까지 그 자리에서 전부 보여주게 돼 「할 일 N건 ›」 시트와 역할이 겹쳤다. 버튼만 뺐고
+          배선은 그대로 둔다 — `todoItems` 는 판사 탕이 말풍선(`judgeQuote`)이 계속 쓰고,
+          시트를 되살릴지 지울지는 아직 정하지 않았다.
+        -->
         <GroupTodoSheet
             ref="todoSheetRef"
             v-model="showSheet"
@@ -586,7 +586,9 @@ function goToChat(challenge) {
 
 /* ── 본문 ──────────────────────────────── */
 .gc-body {
-    padding: 10px 22px 0;
+    /* 헤더 곡면(court-header__skirt)과 좌우가 같아야 한다 — 곡면에 얹힌 섹션 제목과
+       아래 카드의 왼쪽 끝이 어긋나 보인다. 개인 미션 홈 .personal-home__content 와 같은 값 */
+    padding: var(--tt-space-2) var(--tt-screen-padding) 0;
     position: relative;
     z-index: 3;
 }
@@ -602,11 +604,6 @@ function goToChat(challenge) {
     justify-content: space-between;
 }
 
-/* TO-DO 카드 바로 위에 붙는 머리줄. 카드가 곧바로 이어지므로 아래 여백만 조금 준다 */
-.gc-section-top--todo {
-    padding-bottom: 8px;
-}
-
 .gc-section-title {
     font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
@@ -614,7 +611,7 @@ function goToChat(challenge) {
 }
 
 .gc-view-all {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-muted);
     background: none;
@@ -644,7 +641,7 @@ function goToChat(challenge) {
     background: var(--tt-bg);
     border-radius: 18px;
     text-align: center;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
 }
 
@@ -718,7 +715,7 @@ function goToChat(challenge) {
 
 .gc-group-row__chip {
     flex: none;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 3px 8px;
     border-radius: var(--tt-radius-full);
@@ -736,7 +733,7 @@ function goToChat(challenge) {
 .gc-group-row__chat {
     display: block;
     margin-top: 3px;
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -787,7 +784,7 @@ function goToChat(challenge) {
     border: none;
     cursor: pointer;
     font-family: inherit;
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-black);
     color: var(--tt-primary);
     transition: opacity 0.15s ease;
@@ -810,8 +807,8 @@ function goToChat(challenge) {
 /* ── 토스트 ────────────────────────────── */
 .gc-toast {
     position: fixed;
-    left: 22px;
-    right: 22px;
+    left: var(--tt-screen-padding);
+    right: var(--tt-screen-padding);
     bottom: calc(var(--tt-tabbar-height) + 80px);
     z-index: var(--tt-z-toast, 50);
     display: flex;

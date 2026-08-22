@@ -48,14 +48,14 @@
 }
 
 .gc-peaceful__label {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     letter-spacing: 0.08em;
     color: var(--tt-green);
 }
 
 .gc-peaceful__badge {
-    font-size: var(--tt-fs-overline);
+    font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-black);
     padding: 4px 10px;
     border-radius: var(--tt-radius-full);
@@ -65,14 +65,14 @@
 
 /* ── 제목 + 설명 ────────────────────────── */
 .gc-peaceful__title {
-    font-size: 16px;
+    font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     margin-top: 11px;
     color: var(--tt-text);
 }
 
 .gc-peaceful__subtitle {
-    font-size: var(--tt-fs-caption);
+    font-size: var(--tt-fs-body);
     color: var(--tt-text-muted);
     margin-top: 4px;
 }

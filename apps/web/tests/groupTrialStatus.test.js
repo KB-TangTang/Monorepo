@@ -200,9 +200,11 @@ test('목데이터가 6가지 입장을 전부 담는다', async () => {
 
 test('목재판의 groupId 가 모두 목 그룹 목록에 있다', async () => {
     /*
-     * 카테고리·한도는 홈이 `myChallenges` 에서 `groupId` 로 찾아 붙인다. 없는 그룹을 가리키면
-     * 조인이 조용히 실패해 펼친 카드의 메타 줄만 비어 나온다 — 에러도 경고도 안 뜬다.
-     * 실제로 처음 목데이터가 없는 그룹(3번)을 가리키고 있었다.
+     * 홈이 `myChallenges` 에서 `groupId` 로 찾아 그룹 정보를 붙인다. 없는 그룹을 가리키면
+     * 조인이 조용히 실패한다 — 에러도 경고도 안 뜬다. 실제로 처음 목데이터가 없는 그룹(3번)을
+     * 가리키고 있었다. 재판과 그룹이 서로 다른 이름을 보여주는 것도 여기서 잡는다.
+     *
+     * ⚠ #443 에서 카드가 카테고리·한도를 쓰지 않게 됐다(조인 자체는 남아 있다 — `state/BACKLOG.md`).
      */
     isMockMode.value = true;
     try {
@@ -253,4 +255,64 @@ test('아코디언은 한 번에 하나만 펼친다', () => {
     assert.match(code, /const openId = ref\(undefined\)/);
     assert.match(code, /if \(openId\.value === undefined\) return index === 0/);
     assert.match(code, /openId\.value = isOpen\(item, index\) \? null : item\.id/);
+});
+
+/* ══════════════════════════════════════════════════
+ * 카드가 같은 말을 두 번 하지 않는다 (이슈 #443)
+ * ══════════════════════════════════════════════════ */
+
+test('뱃지는 명령이 아니라 재판 단계를 말한다', () => {
+    /* 「변론 필요」는 바로 옆 제목 「내 변론이 필요해요」와 같은 말이었다 */
+    assert.equal(
+        toTrialStatusCard(trial({ isMine: true, status: 'DEFENSE_WAIT' })).badge,
+        '변론 중',
+    );
+    assert.equal(toTrialStatusCard(trial({ isMine: false, status: 'VOTING' })).badge, '투표 중');
+
+    /* 명령형이 되살아나면 같은 지적을 다시 받는다 — 6가지 입장 전부를 본다 */
+    const allSix = [
+        { isMine: true, status: 'DEFENSE_WAIT', hasDefended: false },
+        { isMine: true, status: 'DEFENSE_WAIT', hasDefended: true },
+        { isMine: true, status: 'VOTING' },
+        { isMine: false, status: 'DEFENSE_WAIT' },
+        { isMine: false, status: 'VOTING', myVote: null },
+        { isMine: false, status: 'VOTING', myVote: 'GUILTY' },
+    ];
+    for (const overrides of allSix) {
+        assert.doesNotMatch(toTrialStatusCard(trial(overrides)).badge, /필요|하세요/);
+    }
+});
+
+test('접힌 줄은 아바타 · 뱃지 · 제목 한 줄로 끝난다', () => {
+    const code = source(CARD);
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
+
+    /*
+     * 재판이 6건씩 뜬다. 행마다 카테고리·그룹명·초과금액·타이머가 같이 붙으면 목록이 안 읽힌다.
+     * 카테고리·한도·초과금액은 CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여주고,
+     * 남은 시간은 펼친 본문으로 내렸다 — 접힌 줄에 두면 6행이 매초 같이 떨린다.
+     */
+    assert.doesNotMatch(summary, /categoryName|exceededAmount|groupName|countdownOf/);
+    /* 「마감 오늘 22:00」 같은 글 표기는 카운트다운과 같은 말이라 되살리지 않는다 */
+    assert.doesNotMatch(code, /마감 \{\{/);
+    /* 카운트다운 자체는 살아 있어야 한다 — 펼친 본문에서 */
+    assert.match(code, /countdownOf\(item\)\.text/);
+});
+
+test('뱃지는 pill 이 아니라 모서리만 둥근 사각형이다', () => {
+    const code = source(CARD);
+    const badge = code.slice(code.indexOf('.trial-status__badge {'));
+
+    /* 카드가 --tt-radius-xl(22px). 그 안의 태그는 --tt-radius-xs(8px) — 토큰이 「태그」용으로 정의돼 있다 */
+    assert.match(badge.slice(0, 200), /border-radius: var\(--tt-radius-xs\)/);
+    assert.doesNotMatch(badge.slice(0, 200), /--tt-radius-full/);
+});
+
+test('아코디언은 고정 높이가 아니라 실제 높이로 여닫는다', () => {
+    const code = source(CARD);
+
+    assert.match(code, /<Transition/);
+    assert.match(code, /el\.scrollHeight/);
+    /* DefenseWriteView 의 고정 max-height 패턴은 투표 바가 조건부인 이 패널에서 잘린다 */
+    assert.doesNotMatch(code, /max-height:\s*\d+px/);
 });

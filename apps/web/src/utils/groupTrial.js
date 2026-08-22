@@ -209,45 +209,48 @@ export function trialStance(trial) {
  *
  * `action` 은 CTA 가 열 화면이다 — 라우팅은 화면이 안다. 여기서 경로를 만들면
  * 그룹 상세와 지방법원 홈이 서로 다른 되돌아갈 곳을 갖게 된다.
+ *
+ * `badge` 는 **재판이 지금 어느 단계인가**만 말한다. 명령형(「변론 필요」)은 바로 옆의
+ * 제목(「내 변론이 필요해요」)과 같은 말이라 뺐다 — 급함은 `tone`(색)이 맡는다.
  */
 const STANCE = {
     DEFENSE_NEEDED: {
-        badge: '변론 필요',
+        badge: '변론 중',
         tone: 'danger',
         actionable: true,
         cta: '변론 작성하기',
         action: 'defend',
     },
     DEFENSE_SUBMITTED: {
-        badge: '변론 제출',
+        badge: '변론 중',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     ON_TRIAL: {
-        badge: '심판받는 중',
+        badge: '투표 중',
         tone: 'danger',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     DEFENSE_WAITING: {
-        badge: '변론 대기',
+        badge: '변론 중',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     VOTE_NEEDED: {
-        badge: '투표 필요',
+        badge: '투표 중',
         tone: 'primary',
         actionable: true,
         cta: '변론 확인하고 투표하기',
         action: 'vote',
     },
     VOTE_DONE: {
-        badge: '투표 완료',
+        badge: '투표 중',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
