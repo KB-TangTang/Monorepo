@@ -30,8 +30,10 @@ public final class ChatRedisKeys {
         return "chat:members:" + groupId;
     }
 
-    /** 알림 도배 방지 쿨다운 */
-    public static String notifyCooldown(long groupId, long userId) {
-        return "chat:notify-cd:" + groupId + ":" + userId;
-    }
+    /*
+     * chat:notify-cd:{groupId}:{userId} 가 있었다. 같은 방·같은 사람에게 30초에 한 번만 알림을
+     * 보내던 키다. 이슈 #423 에서 이 SSE 이벤트가 그룹챌린지 홈의 배지·미리보기를 갱신하는
+     * 데이터 채널이 되면서 없앴다 — 자세한 이유는 ChatMessageService#pushChatAlert 주석에 있다.
+     * 남아 있던 키는 TTL 30초라 알아서 사라진다.
+     */
 }

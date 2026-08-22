@@ -30,9 +30,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,7 +64,6 @@ class ChatMessageServiceTest {
                         "재판이 열렸어요", LocalDateTime.now(), ChatSystemType.TRIAL_OPENED,
                         "/group-challenges/7/trial", "2026-재판-0001", null));
         lenient().when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L, 12L));
-        lenient().when(store.tryAcquireNotifyCooldown(anyLong(), anyLong())).thenReturn(true);
     }
 
     @Test
@@ -114,15 +115,20 @@ class ChatMessageServiceTest {
     }
 
     @Test
-    @DisplayName("쿨다운에 걸리면 알림을 건너뛰고 배지만 올린다")
-    void skipsNotificationWhileCoolingDown() {
+    @DisplayName("연타로 보내도 매 통 알림이 나간다 — 홈 배지·미리보기가 이 이벤트로만 갱신된다")
+    void notifiesOnEveryMessage() {
+        /*
+         * 한때 같은 방·같은 사람에게 30초에 한 번만 보냈다(chat:notify-cd 쿨다운). 알림을 팝업으로만
+         * 보던 시절의 도배 방지였는데, 이 이벤트가 그룹챌린지 홈의 데이터 채널이 되면서(#423)
+         * **연타로 보낸 메시지가 홈에 안 뜨고 개수도 작게 남는** 원인이 됐다. 이슈 #423 에서 제거.
+         */
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(SENDER_ID));
-        when(store.tryAcquireNotifyCooldown(GROUP_ID, 12L)).thenReturn(false);
 
         service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕");
+        service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕2");
+        service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕3");
 
-        verify(store).increaseUnread(eq(GROUP_ID), any());
-        verify(notificationSender, never()).push(eq(12L), anyString(), any());
+        verify(notificationSender, times(3)).push(eq(12L), eq("chat"), any());
     }
 
     @Test
@@ -192,7 +198,9 @@ class ChatMessageServiceTest {
     void continuesNotifyingOtherRecipientsWhenOneFails() {
         when(access.memberIdsOf(GROUP_ID)).thenReturn(Set.of(SENDER_ID, 9L, 12L, 15L));
         when(sessions.activeUserIds(GROUP_ID)).thenReturn(Set.of(SENDER_ID));
-        when(store.tryAcquireNotifyCooldown(GROUP_ID, 9L)).thenThrow(new RuntimeException("Redis 장애"));
+        /* 쿨다운 조회를 실패 주입점으로 쓰다가 그것을 없애(#423) 실제 전송 자체가 터지는 쪽으로 옮겼다 */
+        doThrow(new RuntimeException("전송 실패")).when(notificationSender)
+                .push(eq(9L), anyString(), any());
 
         service.send(GROUP_ID, SENDER_ID, "절약왕", "안녕");
 
