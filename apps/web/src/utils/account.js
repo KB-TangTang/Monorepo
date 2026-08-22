@@ -137,14 +137,26 @@ export function isLinkFlowRoute(routeName) {
 }
 
 /**
+ * 온보딩 중 첫 단계에서 "뒤로"를 누르면 갈 화면 — 바로 앞 온보딩 단계인 금융동의 (이슈 #439).
+ *
+ * 온보딩으로 들어오면 진입점이 기록되지 않아(아래 LINK_ENTRY_IGNORED_ROUTES) 기본 착지점으로
+ * 나가는데, 온보딩 게이트가 그 착지점에서 곧바로 기관 선택으로 되돌려보낸다. 눌러도 화면이
+ * 그대로라 버튼이 죽은 것처럼 보였다. 반면 **앞 단계 화면은 게이트가 면제한다**
+ * (utils/user.js isAtOrBeforeStep) — 금융동의로 보내면 막히지 않는다. 그래서 온보딩 구간의
+ * 뒤로는 진입점을 보지 않고 이 화면으로 고정한다.
+ * (문자열로 적는 이유: utils/user.js 가 이 파일을 import 하므로 역참조하면 순환이 된다)
+ */
+export const LINK_ONBOARDING_PREV_ROUTE = 'financialConsent';
+
+/**
  * 진입점으로 **기록하면 안 되는** 라우트.
  *
- * 온보딩(금융 동의 → 기관 선택)은 강제 단계다. 여기를 진입점으로 기록해두면 플로우에서 나갈 때
- * 동의 화면으로 되돌아가는데, 온보딩 게이트(resolveOnboardingRedirect)가 곧바로 다시 앞으로 보내
- * 두 화면 사이를 왕복한다. 기록하지 않으면 기본 착지점으로 나가고, 그다음 갈 곳은 게이트가 정한다.
- * (라우트 이름을 문자열로 적는 이유: utils/user.js 가 이 파일을 import 하므로 역참조하면 순환이 된다)
+ * 온보딩(금융 동의 → 기관 선택)은 강제 단계다. 여기를 진입점으로 기록해두면 **연결을 끝낸 뒤**
+ * 완료 화면이 나갈 곳(linkExitRoute)까지 동의 화면이 된다 — 이미 마친 동의를 다시 보여주게 된다.
+ * 온보딩 중 첫 단계의 뒤로는 진입점이 아니라 LINK_ONBOARDING_PREV_ROUTE 가 맡으므로
+ * 기록하지 않아도 잃는 것이 없다.
  */
-const LINK_ENTRY_IGNORED_ROUTES = ['financialConsent'];
+const LINK_ENTRY_IGNORED_ROUTES = [LINK_ONBOARDING_PREV_ROUTE];
 
 /**
  * 플로우 **밖**에서 첫 단계로 들어올 때 기록할 진입점 라우트 이름. 기록하지 않아야 하면 `null`.
@@ -190,13 +202,23 @@ export function linkExitRoute(entryRoute) {
  * 결과적으로 뒤로가기를 눌러도 **화면이 그대로인 것처럼 보인다**(2026-08-06 실제 발생).
  * 그래서 히스토리에 기대지 않고 나갈 곳을 명시한다.
  *
+ * 온보딩 강제 구간(`onboarding`)의 첫 단계는 진입점·기본 착지점 대신 앞 온보딩 단계(금융동의)로
+ * 간다 — 이유는 LINK_ONBOARDING_PREV_ROUTE 주석 참고. 2단계부터는 온보딩 여부와 무관하다.
+ *
  * @param {string} current 지금 단계
  * @param {string} [entryRoute] 플로우에 들어온 화면(스토어가 기록한다). 없으면 기본 착지점으로 나간다
+ * @param {{onboarding?: boolean}} [options] 온보딩 강제 구간인지(auth.needsAccountLink)
  * @returns {{type: 'step', step: string} | {type: 'route', name: string}}
  */
-export function prevLinkDestination(current, entryRoute) {
+export function prevLinkDestination(current, entryRoute, { onboarding = false } = {}) {
     const step = prevLinkStep(current);
-    return step ? { type: 'step', step } : { type: 'route', name: linkExitRoute(entryRoute) };
+    if (step) {
+        return { type: 'step', step };
+    }
+    if (onboarding) {
+        return { type: 'route', name: LINK_ONBOARDING_PREV_ROUTE };
+    }
+    return { type: 'route', name: linkExitRoute(entryRoute) };
 }
 
 /** 진행 표시용. 1부터 센다. */

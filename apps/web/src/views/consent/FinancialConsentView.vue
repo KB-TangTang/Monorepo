@@ -54,17 +54,31 @@ async function onSubmit() {
         isSaving.value = false;
     }
 }
+
+/**
+ * 뒤로 = 바로 앞 온보딩 단계인 서비스 동의 (이슈 #439).
+ *
+ * router.back() 은 쓰지 않는다 — 앞 화면(ServiceConsentView)이 replace 로 밀어 넣어
+ * 히스토리 직전이 /login 이라, 눌러도 로그인 → 홈 → 온보딩 게이트를 거쳐 제자리로 돌아왔다.
+ * 갈 곳을 명시하면 게이트가 막지 않는다(앞 단계 화면은 면제, utils/user.js isAtOrBeforeStep).
+ * 서비스 동의 화면은 기존 동의로 체크박스를 시드하므로 다시 들어가도 빈 화면이 아니다.
+ */
+function onBack() {
+    router.replace({ name: 'consent' });
+}
 </script>
 
 <template>
     <div class="financial-consent">
-        <!--
-          뒤로가기를 두지 않는다 (이슈 #439). 이 화면은 온보딩 게이트다.
-          앞 화면(ServiceConsentView)이 replace 로 밀어 넣어 히스토리 직전이 /login 이고,
-          눌러도 로그인 → 홈 → 온보딩 게이트를 거쳐 제자리로 돌아왔다.
-          정책은 tests/backNavigation.test.js 의 MUST_NOT_HAVE_BACK 에 있다.
-        -->
         <header class="financial-consent__header">
+            <button
+                class="financial-consent__back"
+                type="button"
+                aria-label="이전 단계로"
+                @click="onBack"
+            >
+                ‹
+            </button>
             <h1 class="financial-consent__title">금융데이터 수집 동의</h1>
         </header>
 
@@ -146,6 +160,16 @@ async function onSubmit() {
     display: flex;
     align-items: center;
     gap: var(--tt-space-3);
+}
+
+.financial-consent__back {
+    border: 0;
+    background: none;
+    font-size: var(--tt-fs-title);
+    color: var(--tt-text);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
 }
 
 .financial-consent__title {
