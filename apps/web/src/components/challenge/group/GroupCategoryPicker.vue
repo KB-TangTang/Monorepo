@@ -10,10 +10,10 @@
 import { ref, onMounted } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
 import { fetchCategories } from '@/api/category';
-import { toGroupCategorySections } from '@/utils/groupCategory';
+import { GROUP_CATEGORY_ALL_LABEL, toGroupCategorySections } from '@/utils/groupCategory';
 
 /** 카테고리를 고르지 않았을 때의 이름. 「전체 소비를 합산한다」는 뜻이다. */
-const ALL_LABEL = '총 소비';
+const ALL_LABEL = GROUP_CATEGORY_ALL_LABEL;
 
 defineProps({
     categoryId: { type: Number, default: null },
@@ -77,9 +77,7 @@ function select(id, name) {
     </button>
 
     <BaseBottomSheet v-model="isOpen" title="대상 카테고리">
-        <p class="gcp-sheet__desc">
-            고른 카테고리의 소비만 합산해요. 하나만 고를 수 있어요.
-        </p>
+        <p class="gcp-sheet__desc">고른 카테고리의 소비만 합산해요. 하나만 고를 수 있어요.</p>
 
         <div class="gcp-sheet__chips">
             <button
@@ -187,7 +185,9 @@ function select(id, name) {
     background: var(--tt-bg-fill);
     border: none;
     border-radius: var(--tt-radius-full);
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .gcp-chip--active {
