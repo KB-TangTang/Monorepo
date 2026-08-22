@@ -65,6 +65,23 @@ public interface IndictmentMapper {
                                                @Param("userId") Long userId);
 
     /**
+     * 내가 속한 <b>모든</b> 그룹의 진행 중인 재판 (이슈 #432). 지방법원 홈 「재판 현황」.
+     *
+     * <p>{@link #findOpenByGroupId} 와 select 조각을 공유하고 WHERE 만 다르다 —
+     * 그룹 하나로 좁히는 대신 {@code tbl_group_member} 로 내가 낀 그룹 전부로 넓힌다.
+     *
+     * <p><b>「내가 피고」와 「남이 피고」로 쿼리를 나누지 않는다.</b> 피고는 반드시 자기 그룹의
+     * 멤버라 이 조인 하나에 6가지 입장이 전부 들어온다. 나누면 내가 피고인 행이 양쪽에
+     * 잡혀 중복된다.
+     *
+     * <p>{@link #findDefenseTodos} 와 마찬가지로 <b>마감이 지났는지는 거르지 않는다.</b>
+     * {@code GroupTrialService#findAllMyTrials} 가 거른다.
+     *
+     * @param userId 보는 사람. 소속 판정과 내 표({@code myVerdict}) 두 가지에 쓴다
+     */
+    List<GroupIndictmentRow> findOpenByUserId(@Param("userId") Long userId);
+
+    /**
      * 목록 카드의 재판 배지를 한 번에 센다 (이슈 #169).
      *
      * <p>재판이 없는 그룹은 <b>행이 나오지 않는다.</b> 호출부가 기본값(0 · null)으로 채운다 —

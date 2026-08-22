@@ -179,24 +179,96 @@ public class GroupTrialService {
     public List<GroupIndictmentDto> findGroupIndictments(long userId, long groupId) {
         List<GroupIndictmentDto> cards = new ArrayList<>();
         for (GroupIndictmentRow row : indictmentMapper.findOpenByGroupId(groupId, userId)) {
-            cards.add(GroupIndictmentDto.builder()
-                    .id(row.getId())
-                    .userId(row.getUserId())
-                    .nickname(row.getNickname())
-                    .profileImageUrl(imageStorage.urlOf(row.getProfileImageKey()))
-                    .status(row.getStatus())
-                    .settlementDate(row.getChallengeDate())
-                    .exceededAmount(row.getExceededAmount())
-                    .mine(row.getUserId() != null && row.getUserId() == userId)
-                    .defended(row.isDefended())
-                    .myVote(row.getMyVerdict())
-                    .voteCount(row.getVoteCount())
-                    .totalVoters(row.getTotalVoters())
-                    .defenseDeadline(row.getCreatedAt().plusHours(defenseHours))
-                    .voteDeadline(row.getCreatedAt().plusHours(defenseHours + voteHours))
-                    .build());
+            cards.add(toCard(row, userId));
         }
         return cards;
+    }
+
+    /**
+     * 지방법원 홈 「재판 현황」 — 내가 속한 <b>모든</b> 그룹의 진행 중인 재판 (이슈 #432).
+     *
+     * <p>{@link #findMyTrials} 가 「내가 지금 행동할 수 있는 것」 2가지만 주는 데 비해 여기는
+     * 재판 한 건에서 나올 수 있는 내 입장 <b>6가지를 전부</b> 준다
+     * ({@link GroupIndictmentDto} 주석의 표). 내가 기소당해 그룹원들이 나를 투표로 심판하는
+     * 중인 상태가 가장 궁금한데 예전에는 그룹 상세까지 들어가야만 볼 수 있었다.
+     *
+     * <p><b>마감이 지난 건은 내리지 않는다.</b> 근거는 {@link #findMyTrials} 주석과 같다 —
+     * 상태 전이 배치가 아직 안 돈 구간에서 옳은 답은 「보여주지 않는다」다. 다만 여기서는
+     * 「할 일」이 아니라 「현황」이라 판단 기준이 상태별로 갈린다(변론 대기는 변론 마감,
+     * 투표 중은 투표 마감).
+     *
+     * <p><b>정렬은 서버가 끝낸다.</b> 할 일이 있는 것(변론 필요 · 투표 필요)이 먼저 오고,
+     * 그 안에서 마감 임박순이다. 「할 일인가」 판정을 서버가 하는 게 {@link GroupIndictmentDto}
+     * 주석의 「카드 종류는 서버가 정하지 않는다」와 어긋나 보이지만, 정하는 것은 <b>순서</b>이지
+     * 뱃지·문구가 아니다. 프론트가 정렬하면 아코디언을 펼칠 때마다 카드가 다시 튄다.
+     */
+    @Transactional(readOnly = true)
+    public List<GroupIndictmentDto> findAllMyTrials(long userId) {
+        List<GroupIndictmentDto> cards = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(clock);
+
+        for (GroupIndictmentRow row : indictmentMapper.findOpenByUserId(userId)) {
+            GroupIndictmentDto card = toCard(row, userId);
+            if (deadlineOf(card).isBefore(now)) {
+                continue;
+            }
+            cards.add(card);
+        }
+
+        cards.sort(Comparator.comparing((GroupIndictmentDto c) -> actionable(c) ? 0 : 1)
+                .thenComparing(GroupTrialService::deadlineOf)
+                .thenComparing(GroupIndictmentDto::getId));
+        return cards;
+    }
+
+    /**
+     * 지금 걸려 있는 마감. 상태가 정한다 — 변론 대기면 변론 마감, 투표 중이면 투표 마감이다.
+     *
+     * <p>DTO 가 마감 두 개를 다 들고 있는 이유는 {@link GroupIndictmentDto} 주석에 있다.
+     * 고를 책임이 화면과 여기 둘로 갈리는데, 여기서 고르는 것은 「거를지 / 어디에 놓을지」이고
+     * 화면이 고르는 것은 「카운트다운에 무엇을 띄울지」라 같은 규칙이면 된다.
+     */
+    private static LocalDateTime deadlineOf(GroupIndictmentDto card) {
+        return IndictmentStatus.DEFENSE_WAIT.name().equals(card.getStatus())
+                ? card.getDefenseDeadline()
+                : card.getVoteDeadline();
+    }
+
+    /**
+     * 내가 지금 손댈 수 있는 재판인가. 정렬에서 위로 올리는 데만 쓴다.
+     *
+     * <p>{@link #findMyTrials} 가 내려보내는 두 종류와 <b>같은 조건이어야 한다.</b>
+     * 한쪽만 고치면 홈 상단에 「변론 필요」로 뜬 카드가 바텀시트에는 없는 일이 생긴다.
+     */
+    private static boolean actionable(GroupIndictmentDto card) {
+        if (card.isMine()) {
+            return IndictmentStatus.DEFENSE_WAIT.name().equals(card.getStatus())
+                    && !card.isDefended();
+        }
+        return IndictmentStatus.VOTING.name().equals(card.getStatus())
+                && card.getMyVote() == null;
+    }
+
+    /** 그룹 상세와 지방법원 홈이 같은 카드를 쓴다. 조립을 두 벌 두면 한쪽에만 필드가 붙는다. */
+    private GroupIndictmentDto toCard(GroupIndictmentRow row, long userId) {
+        return GroupIndictmentDto.builder()
+                .id(row.getId())
+                .groupId(row.getGroupId())
+                .groupName(row.getGroupName())
+                .userId(row.getUserId())
+                .nickname(row.getNickname())
+                .profileImageUrl(imageStorage.urlOf(row.getProfileImageKey()))
+                .status(row.getStatus())
+                .settlementDate(row.getChallengeDate())
+                .exceededAmount(row.getExceededAmount())
+                .mine(row.getUserId() != null && row.getUserId() == userId)
+                .defended(row.isDefended())
+                .myVote(row.getMyVerdict())
+                .voteCount(row.getVoteCount())
+                .totalVoters(row.getTotalVoters())
+                .defenseDeadline(row.getCreatedAt().plusHours(defenseHours))
+                .voteDeadline(row.getCreatedAt().plusHours(defenseHours + voteHours))
+                .build();
     }
 
     /**
