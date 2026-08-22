@@ -512,7 +512,12 @@
   정규화 경계를 여기서도 둔다.
 - `GET /api/assets/investments` 의 `profitLossAmount`·`profitLossRate` 는 화면이 다시 계산하지
   않고 `tbl_investment_holding` 에 동기화된 값을 그대로 옮긴다.
-- `GET /api/assets/loans` 는 `loanNoEncrypted`(내부 upsert 키)를 응답에 포함하지 않는다.
+- `GET /api/assets/loans` 는 `loanNoEncrypted`(내부 upsert 키)를 응답에 포함하지 않지만 `bankCode`
+  는 포함한다(로고 표시용, `/api/assets/summary` 의 `composition`·`assetGroups` 와 달리 종류별
+  상세는 기관 배지가 필요하다).
+- `GET /api/assets/accounts` 의 `accounts[]` 항목에는 `manageable` 필드가 있다(연결 계좌 관리
+  화면과 DTO 를 공유하는 흔적). 이 엔드포인트는 `type` 이 `DEMAND_DEPOSIT`·`SAVINGS`·`PAY_MONEY`
+  로 고정돼 대출 표시 행(`manageable=false`)이 섞여 들어오지 않으므로 여기서는 항상 `true` 다.
 
 ```json
 // GET /api/assets/accounts?type=PAY_MONEY
@@ -533,7 +538,8 @@
         "syncStatus": "NORMAL",
         "lastSyncAt": "2026-08-15T09:00:00",
         "syncFailReason": null,
-        "expiresAt": "2027-08-15T00:00:00"
+        "expiresAt": "2027-08-15T00:00:00",
+        "manageable": true
       }
     ]
   }
@@ -578,6 +584,7 @@
       {
         "loanId": 3,
         "bankName": "하나은행",
+        "bankCode": "0081",
         "loanType": "신용대출",
         "loanAmount": 2000000,
         "balance": 1500000,
@@ -604,6 +611,19 @@
 |---|---|---|---|
 | POST | `/api/financial-syncs` | Bearer | `{ status, syncedSources, syncedAt, collectedTransactionCount, ruleCategorizedCount, llmPendingTransactionCount, llmCategorizationStatus }` |
 
+요청 본문 — **없어도 된다** (`@RequestBody(required = false)`). 평소에는 빈 채로 호출한다.
+```json
+{
+  "institutionCodes": ["CP_KB"]
+}
+```
+- `institutionCodes` 는 선택 항목이다. 대출·페이머니는 계좌 연동(`AccountLinkService.link()`)이
+  다루지 못해 `tbl_connected_account` 행이 생기지 않고, 이 동기화의 수집 범위(scope)는 평소 그
+  테이블에 이미 있는 기관 코드로만 정해진다 — 그래서 두 업권은 한 번 선택돼도 범위에 영영 들어오지
+  못하는 순환이 있었다(이슈 #334). 계좌 연동 완료 직후 최초 동기화(`LinkDoneView`)에서만 방금 선택한
+  기관 코드를 여기 채워 보내 범위를 넓힌다. 그 뒤로는 생성된 `tbl_connected_account`/`tbl_loan`
+  행 덕분에 평소처럼 scope 에 자연히 포함되므로, 두 번째 동기화부터는 비워 보낸다.
+
 ```json
 {
   "success": true,
@@ -619,14 +639,30 @@
 }
 ```
 
+- `syncedSources` 는 항상 6종 고정 목록이다 — 이번 호출에서 실제로 데이터가 있었던 업권만 골라
+  돌려주지 않는다.
 - `collectedTransactionCount`·`ruleCategorizedCount`·`llmPendingTransactionCount` 는 전부 **이번 호출 한 번에서 upsert 된 거래 기준**이다(사용자의 누적 미분류 거래 수가 아니다).
 - 저장이 끝난 뒤 규칙 1~4단계(사용자 가맹점 매핑 → 공용 가맹점 매핑 → MCC/업종명 → 키워드)로 **동기** 카테고리화한다. `ruleCategorizedCount` 는 이 응답 안에서 확정된 값이다.
-- 규칙으로도 분류하지 못한 소비 거래는 이 응답 이후 **비동기**로 LLM 분류 작업(`tbl_llm_categorization_job`, 사용자별 transaction_date 오름차순 최대 20건 배치)에 등록된다. 실제 LLM 호출은 이번 범위에 포함되지 않는다 — 작업 등록까지만 한다.
+- 규칙으로도 분류하지 못한 소비 거래는 이 응답 이후 **비동기**로 LLM 분류 작업(`tbl_llm_categorization_job`, 사용자별 transaction_date 오름차순 최대 20건 배치)에 등록된다. 실제 LLM 호출은 이번 범위에 포함되지 않는다 — 작업 등록까지만 한다. 이 작업 등록은 응답을 만든 뒤 이벤트(`LlmCategorizationRequestedEvent`)로 비동기 실행되므로, 이 응답의 `llmPendingTransactionCount`·`llmCategorizationStatus` 는 작업 행이 실제로 만들어졌는지와 무관하게 규칙 분류 결과만으로 계산된다.
 - `llmCategorizationStatus`: `PENDING`(LLM 대상 거래가 있음) · `NOT_REQUIRED`(전부 규칙으로 분류됐거나 대상 자체가 없음).
 - 사용자가 직접 지정한 카테고리(`category_source='USER'`)는 재동기화로 자동 분류가 절대 덮어쓰지 않는다(DB 레벨 가드).
 - 환불 거래(`is_refund=1`)는 일반 거래와 동일하게 규칙 1~4단계를 적용하되, 전부 미스하면 LLM 대상에서는 제외한다. 원거래 카테고리를 그대로 물려받는(계승) 처리는 **후속 작업**이다.
 - `tbl_merchant_category_map`(공용 캐시)에 대한 write-back(3·4단계 판정 결과를 다시 채워 넣는 것)은 이번 범위가 아니다 — 비어 있으면 2단계는 항상 미스로 3단계로 넘어간다.
 - 정기 동기화 스케줄러, 연결된 전체 사용자 대상 자동 동기화, 증분 동기화 조회 범위 변경도 이번 범위 밖이다.
+- `financial.client=codef` 전환은 **계좌 연동(1~5단계) 흐름에만 적용된다.** 이 엔드포인트는
+  `FinancialSyncClientConfig` 가 항상 목서버 클라이언트로 고정 배선돼 있어, 실 CODEF 로 전환해도
+  이 동기화는 계속 목서버를 호출한다.
+
+### 금융 데이터 동기화 에러 코드
+
+| 코드 | HTTP | 의미 |
+|---|---|---|
+| `EXTERNAL_API_UNAVAILABLE` | 400 | 목서버 연결 실패(네트워크 단절·타임아웃) |
+| `EXTERNAL_API_ERROR` | 400 | 목서버 응답이 실패 코드·빈 본문이거나, 방금 저장한 계좌·대출·카드를 다시 찾지 못함 |
+
+> 저장 단계(`SAVE`)·카테고리화 단계에서 나는 예외는 `BusinessException` 이 아닐 수도 있다 —
+> 그 경우 `500 INTERNAL_ERROR` 로 응답하지만, 어느 소스에서 실패했는지는 `tbl_financial_sync_history`
+> (`failed_source`·`fail_reason`)에는 항상 남는다.
 
 ### LLM 분류 작업 처리 (후속 구현)
 
