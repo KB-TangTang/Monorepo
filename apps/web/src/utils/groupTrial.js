@@ -165,6 +165,147 @@ export function toVoteScreen(detail) {
 }
 
 /* ──────────────────────────────────────────────────────────────
+ * 재판 현황 — 내 입장 6가지 (이슈 #432)
+ * ────────────────────────────────────────────────────────────── */
+
+/** 재판 진행 4단계. 카드의 스테퍼가 이 순서 그대로 그려진다. */
+export const TRIAL_STEPS = ['기소', '변론', '투표', '판결'];
+
+/**
+ * 진행 중인 재판 하나에 대해 내가 어떤 입장인가 — 6가지.
+ *
+ * <pre>
+ *  피고  상태           조건            stance              할 일
+ *  ────────────────────────────────────────────────────────────
+ *  나    DEFENSE_WAIT   변론 전         DEFENSE_NEEDED       ✅
+ *  나    DEFENSE_WAIT   변론 냄         DEFENSE_SUBMITTED
+ *  나    VOTING         —               ON_TRIAL
+ *  남    DEFENSE_WAIT   —               DEFENSE_WAITING
+ *  남    VOTING         내 표 없음      VOTE_NEEDED          ✅
+ *  남    VOTING         내 표 있음      VOTE_DONE
+ * </pre>
+ *
+ * <b>이 판정은 여기서만 한다.</b> 뱃지·문구·CTA 를 화면마다 다시 만들면 조건이 하나씩 빠진다 —
+ * 실제로 `GroupDetailTrialCarousel` 이 `defended` 를 안 봐서 변론을 낸 뒤에도
+ * 「내 변론이 필요해요」를 띄웠고, 변론 대기 중인 남의 재판에 투표 버튼을 그렸다.
+ *
+ * 입력의 상태는 `DEFENSE_WAIT` · `VOTING` 둘 중 하나다. 확정된 재판은 서버가
+ * 두 조회(`findOpenByGroupId` · `findOpenByUserId`) 모두에서 걸러 내려보내지 않는다.
+ */
+export function trialStance(trial) {
+    if (trial.isMine) {
+        if (trial.status !== 'DEFENSE_WAIT') return 'ON_TRIAL';
+        return trial.hasDefended ? 'DEFENSE_SUBMITTED' : 'DEFENSE_NEEDED';
+    }
+    if (trial.status === 'DEFENSE_WAIT') return 'DEFENSE_WAITING';
+    return trial.myVote ? 'VOTE_DONE' : 'VOTE_NEEDED';
+}
+
+/**
+ * 입장별 표시 정보.
+ *
+ * `actionable` 은 **지금 내가 할 일이 있는가**다. 서버 정렬(`GroupTrialService#findAllMyTrials`)이
+ * 같은 기준으로 앞에 세우므로 둘이 어긋나면 「할 일」 뱃지가 붙은 카드가 아래로 밀린다.
+ *
+ * `action` 은 CTA 가 열 화면이다 — 라우팅은 화면이 안다. 여기서 경로를 만들면
+ * 그룹 상세와 지방법원 홈이 서로 다른 되돌아갈 곳을 갖게 된다.
+ */
+const STANCE = {
+    DEFENSE_NEEDED: {
+        badge: '변론 필요',
+        tone: 'danger',
+        actionable: true,
+        cta: '변론 작성하기',
+        action: 'defend',
+    },
+    DEFENSE_SUBMITTED: {
+        badge: '변론 제출',
+        tone: 'muted',
+        actionable: false,
+        cta: '재판 현황 보기',
+        action: 'trial',
+    },
+    ON_TRIAL: {
+        badge: '심판받는 중',
+        tone: 'danger',
+        actionable: false,
+        cta: '재판 현황 보기',
+        action: 'trial',
+    },
+    DEFENSE_WAITING: {
+        badge: '변론 대기',
+        tone: 'muted',
+        actionable: false,
+        cta: '재판 현황 보기',
+        action: 'trial',
+    },
+    VOTE_NEEDED: {
+        badge: '투표 필요',
+        tone: 'primary',
+        actionable: true,
+        cta: '변론 확인하고 투표하기',
+        action: 'vote',
+    },
+    VOTE_DONE: {
+        badge: '투표 완료',
+        tone: 'muted',
+        actionable: false,
+        cta: '재판 현황 보기',
+        action: 'trial',
+    },
+};
+
+/** 접힌 줄에 한 줄로 뜨는 제목. 남의 재판은 피고 닉네임이 들어간다. */
+function stanceTitle(stance, nickname) {
+    switch (stance) {
+        case 'DEFENSE_NEEDED':
+            return '내 변론이 필요해요';
+        case 'DEFENSE_SUBMITTED':
+            return '내 변론을 제출했어요';
+        case 'ON_TRIAL':
+            return '내 재판이 심판받는 중이에요';
+        case 'DEFENSE_WAITING':
+            return `${nickname}님이 변론을 쓰는 중이에요`;
+        case 'VOTE_NEEDED':
+            return `${nickname}님 재판에 투표해주세요`;
+        default:
+            return `${nickname}님 재판에 투표했어요`;
+    }
+}
+
+/**
+ * 진행 중인 재판 → 「재판 현황」 아코디언 카드 한 장.
+ *
+ * 입력은 `toIndictmentViewModel` 을 지난 값이다(`isMine` · `hasDefended` · `deadline`).
+ * 그룹 상세 캐러셀과 지방법원 홈이 **같은 함수를 지난 같은 모양**을 그린다.
+ *
+ * 카테고리·한도는 여기서 채우지 않는다. 화면이 이미 들고 있는 참여 그룹 목록과
+ * `groupId` 로 이어 붙이는 편이 응답을 두 번 내려보내는 것보다 싸다.
+ */
+export function toTrialStatusCard(trial) {
+    const stance = trialStance(trial);
+    const meta = STANCE[stance];
+    const voting = trial.status === 'VOTING';
+    const totalVoters = trial.totalVoters ?? 0;
+    const voteCount = trial.voteCount ?? 0;
+
+    return {
+        ...trial,
+        stance,
+        ...meta,
+        title: stanceTitle(stance, trial.nickname),
+        /* 투표는 변론이 끝나야 열린다. 변론 대기 중에 0/5 를 그리면 아무도 안 던진 것처럼 보인다. */
+        showVote: voting,
+        voteCount,
+        totalVoters,
+        votePercent: totalVoters > 0 ? Math.round((voteCount / totalVoters) * 100) : 0,
+        /* 스테퍼에서 지금 칸. 앞 칸은 지난 것, 뒤 칸은 아직 오지 않은 것으로 그린다. */
+        stepIndex: voting ? 2 : 1,
+        deadlineLabel: formatDeadlineLabel(trial.deadline),
+    };
+}
+
+/* ──────────────────────────────────────────────────────────────
  * 판결 확정 (이슈 #172)
  * ────────────────────────────────────────────────────────────── */
 

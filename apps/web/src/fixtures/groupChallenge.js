@@ -629,3 +629,131 @@ export const MOCK_TODO_ITEMS = [
         deadlineMinutes: 52 * 60,
     },
 ];
+
+/* ────────────────────────────────────────────────────────────
+ * 6. 지방법원 홈 「재판 현황」 시드 (이슈 #432)
+ *
+ *    위 TO-DO 시드와 달리 **서버 `GroupIndictmentDto` 모양 그대로**다
+ *    (`mine` · `defended` · `myVote` — 화면 이름으로 바꾸는 일은
+ *     api/groupChallenge.js 의 toIndictmentViewModel 이 한다).
+ *
+ *    내 입장 6가지가 한 번에 다 보이도록 짰다. 하나라도 빠지면 그 상태의
+ *    카드를 목모드에서 확인할 방법이 없어진다.
+ *    정렬은 서버가 하므로 여기서는 **할 일 있는 것을 앞에** 두어 흉내만 낸다.
+ * ──────────────────────────────────────────────────────────── */
+
+export const MOCK_TRIAL_STATUS = [
+    /* ① 내가 피고 · 변론 전 — 할 일 있음 */
+    {
+        id: 101,
+        groupId: 1,
+        groupName: '배달 소비 줄이기',
+        userId: 1,
+        nickname: '나',
+        profileImageUrl: null,
+        status: 'DEFENSE_WAIT',
+        settlementDate: '2026-08-05',
+        exceededAmount: 6800,
+        mine: true,
+        defended: false,
+        myVote: null,
+        voteCount: 0,
+        totalVoters: 5,
+        deadlineMinutes: 3 * 60 + 20,
+    },
+    /* ⑤ 남이 피고 · 투표 중 · 내 표 없음 — 할 일 있음 */
+    {
+        id: 102,
+        groupId: 1,
+        groupName: '배달 소비 줄이기',
+        userId: 2,
+        nickname: '지판',
+        profileImageUrl: null,
+        status: 'VOTING',
+        settlementDate: '2026-08-05',
+        exceededAmount: 12400,
+        mine: false,
+        defended: true,
+        myVote: null,
+        voteCount: 3,
+        totalVoters: 5,
+        deadlineMinutes: 8 * 60,
+    },
+    /* ③ 내가 피고 · 투표 중 — 심판받는 중 */
+    {
+        id: 103,
+        groupId: 5,
+        groupName: '편의점 간식 줄이기',
+        userId: 1,
+        nickname: '나',
+        profileImageUrl: null,
+        status: 'VOTING',
+        settlementDate: '2026-08-04',
+        exceededAmount: 23000,
+        mine: true,
+        defended: true,
+        myVote: null,
+        voteCount: 2,
+        totalVoters: 5,
+        deadlineMinutes: 14 * 60,
+    },
+    /* ④ 남이 피고 · 변론 대기 — 아직 투표할 수 없다 */
+    {
+        id: 104,
+        groupId: 4,
+        groupName: '택시 대신 지하철',
+        userId: 3,
+        nickname: '현우',
+        profileImageUrl: null,
+        status: 'DEFENSE_WAIT',
+        settlementDate: '2026-08-06',
+        exceededAmount: 9100,
+        mine: false,
+        defended: false,
+        myVote: null,
+        voteCount: 0,
+        totalVoters: 5,
+        deadlineMinutes: 20 * 60,
+    },
+    /* ⑥ 남이 피고 · 투표 중 · 내 표 있음 */
+    {
+        id: 105,
+        groupId: 4,
+        groupName: '택시 대신 지하철',
+        userId: 4,
+        nickname: '민지',
+        profileImageUrl: null,
+        status: 'VOTING',
+        settlementDate: '2026-08-03',
+        exceededAmount: 4500,
+        mine: false,
+        defended: true,
+        myVote: 'INNOCENT',
+        voteCount: 4,
+        totalVoters: 5,
+        deadlineMinutes: 31 * 60,
+    },
+    /*
+     * ② 내가 피고 · 변론을 냈는데 상태가 아직 DEFENSE_WAIT.
+     *    변론을 내면 서버가 그 자리에서 VOTING 으로 넘기므로 실서버에서는 드물지만,
+     *    이 조합에서 「변론 작성하기」를 띄우면 서버가 거절하는 화면으로 보내게 된다.
+     *    카드가 그 함정을 밟지 않는지 목모드에서 눈으로 확인하려고 남겨 둔다.
+     */
+    {
+        id: 106,
+        groupId: 5,
+        groupName: '편의점 간식 줄이기',
+        userId: 1,
+        nickname: '나',
+        profileImageUrl: null,
+        status: 'DEFENSE_WAIT',
+        settlementDate: '2026-08-06',
+        exceededAmount: 15200,
+        mine: true,
+        defended: true,
+        myVote: null,
+        voteCount: 0,
+        totalVoters: 5,
+        deadlineMinutes: 46 * 60,
+    },
+];
