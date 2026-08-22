@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { formatDecimal, formatInteger } from '@/utils/challengeReport';
 
 const props = defineProps({
     ranking: { type: Object, default: null },
@@ -14,10 +15,6 @@ const hasRanking = computed(
         Number.isFinite(props.ranking?.topPercent) &&
         Number.isFinite(props.ranking?.totalScore),
 );
-
-function formatNumber(value) {
-    return value.toLocaleString('ko-KR');
-}
 </script>
 
 <template>
@@ -30,12 +27,12 @@ function formatNumber(value) {
         <div v-if="hasRanking" class="ranking-summary-card__overview">
             <div class="ranking-summary-card__emblem" aria-label="내 순위">
                 <span>RANK</span>
-                <strong>{{ formatNumber(ranking.rank) }}</strong>
+                <strong>{{ formatInteger(ranking.rank) }}</strong>
                 <small>위</small>
             </div>
             <div class="ranking-summary-card__percentile">
                 <span>전체 참가자 중</span>
-                <strong>상위 {{ formatNumber(ranking.topPercent) }}%</strong>
+                <strong>상위 {{ formatDecimal(ranking.topPercent) }}%</strong>
                 <small v-if="bestWeekday">가장 잘 지킨 요일 · {{ bestWeekday }}</small>
             </div>
         </div>
@@ -47,15 +44,15 @@ function formatNumber(value) {
         >
             <div v-if="hasRanking">
                 <dt>누적 점수</dt>
-                <dd>{{ formatNumber(ranking.totalScore) }}<small>점</small></dd>
+                <dd>{{ formatInteger(ranking.totalScore) }}<small>점</small></dd>
             </div>
             <div>
                 <dt>도전 일수</dt>
-                <dd>{{ formatNumber(challengeDays) }}<small>일</small></dd>
+                <dd>{{ formatInteger(challengeDays) }}<small>일</small></dd>
             </div>
             <div>
                 <dt>최고 연속 성공</dt>
-                <dd>{{ formatNumber(bestStreakDays) }}<small>일</small></dd>
+                <dd>{{ formatInteger(bestStreakDays) }}<small>일</small></dd>
             </div>
         </dl>
     </section>

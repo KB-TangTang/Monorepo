@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import ChallengeSavingsGuide from '@/components/challenge/report/ChallengeSavingsGuide.vue';
-import { formatSignedWon, formatWon } from '@/utils/challengeReport';
+import { formatInteger, formatSignedWon, formatWon } from '@/utils/challengeReport';
 
 const props = defineProps({ report: { type: Object, required: true } });
 
@@ -92,7 +92,9 @@ const topSavingCategory = computed(() =>
                                         <i>{{ category.code }}</i>
                                         <strong
                                             >{{ category.name }}
-                                            <span>{{ category.days }}일</span></strong
+                                            <span
+                                                >{{ formatInteger(category.days) }}일</span
+                                            ></strong
                                         >
                                         <b>{{ formatSignedWon(category.amount) }}</b>
                                     </li>
@@ -105,7 +107,9 @@ const topSavingCategory = computed(() =>
                                         <span
                                             >·
                                             {{
-                                                report.challengeDays - report.successfulDays
+                                                formatInteger(
+                                                    report.challengeDays - report.successfulDays,
+                                                )
                                             }}일</span
                                         ></strong
                                     >
@@ -116,7 +120,9 @@ const topSavingCategory = computed(() =>
                                         <i>{{ category.code }}</i>
                                         <strong
                                             >{{ category.name }}
-                                            <span>{{ category.days }}일</span></strong
+                                            <span
+                                                >{{ formatInteger(category.days) }}일</span
+                                            ></strong
                                         >
                                         <b
                                             :class="{

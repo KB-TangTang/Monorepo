@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth';
 import {
     buildMonthlyTrendSlots,
     fetchMonthlyConsumptionState,
+    formatInteger,
     formatPeriod,
     formatWon,
     isLatestAvailableCompletedReport,
@@ -274,7 +275,7 @@ onMounted(async () => {
                     </div>
                     <p v-if="fixedExpenseStatus === 'detected'">
                         고정 지출로 의심되는 내역이
-                        {{ report.fixedExpenseCandidateCount }}건 있어요
+                        {{ formatInteger(report.fixedExpenseCandidateCount) }}건 있어요
                     </p>
                     <p v-else>반복 결제를 확인하고 고정 지출을 관리해 보세요</p>
                 </div>

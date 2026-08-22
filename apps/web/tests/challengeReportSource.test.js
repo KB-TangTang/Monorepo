@@ -43,3 +43,18 @@ test('랭킹 카드에 챌린지 요약을 결합하고 순 절감액 카드보�
     assert.match(content, /지방법원 법정 기록/);
     assert.match(groupRecordCard, /참여한 법정 기록이 없어요!',\s*'친구와 함께 법정을 열어봐요!/);
 });
+
+test('난이도 변경은 대법원 화면을 건드리지 않고 리포트 전용 바텀시트에서 저장한다', () => {
+    const reportView = source('src/views/challenge/report/ChallengeReportView.vue');
+    const difficultySheet = source('src/components/challenge/report/ChallengeDifficultySheet.vue');
+
+    assert.match(reportView, /import ChallengeDifficultySheet/);
+    assert.match(reportView, /@change-difficulty="openDifficultySheet"/);
+    assert.match(reportView, /personalMissionStore\.saveProsecutorDifficulty\(prosecutorId\)/);
+    assert.doesNotMatch(reportView, /personalMissionChallengeDifficulty/);
+    assert.match(difficultySheet, /BaseBottomSheet/);
+    assert.match(difficultySheet, /누구에게 수사를 맡길까요\?/);
+    assert.match(reportView, /:loading="isDifficultySaving"/);
+    assert.match(difficultySheet, /loading: \{ type: Boolean, default: false \}/);
+    assert.match(difficultySheet, /errorMessage/);
+});
