@@ -340,10 +340,10 @@ test('투표 현황은 막대가 아니라 점이다', () => {
     assert.match(code, /\{\{ item\.voteCount \}\} \/ \{\{ item\.totalVoters \}\}명 투표/);
 });
 
-test('남은 시간은 CTA 쪽에 붙는다', () => {
+test('남은 시간은 뱃지로 CTA 쪽에 붙는다', () => {
     /*
      * 한때 패널 맨 위 왼쪽의 회색 캡션이었다 — 이 패널에서 **유일하게 급한 값인데 가장 약하게**
-     * 그려져 있었다. 「지금 눌러야 하나」를 판단하는 두 값(투표 수 · 남은 시간)을 버튼 바로
+     * 그려져 있었다. 「지금 눌러야 하나」를 판단하는 두 값(투표 현황 · 남은 시간)을 버튼 바로
      * 위에 모은다. 스테퍼 → 계기판 → CTA 순서가 뒤집히면 그 판단이 다시 흩어진다.
      */
     const code = source(TRIAL_CARD);
@@ -353,9 +353,22 @@ test('남은 시간은 CTA 쪽에 붙는다', () => {
     assert.ok(steps < meter && meter < cta, '스테퍼 → 계기판 → CTA 순서여야 한다');
 
     /* 변론 단계라 투표 현황이 없어도 시계 자리가 오른쪽 그대로여야 한다 — 행마다 움직이면 안 된다 */
-    assert.match(code, /\.trial-status__countdown \{[^}]*margin-left: auto/);
+    assert.match(code, /\.trial-status__timer \{[^}]*margin-left: auto/);
     /* 투표 현황은 `v-if`, 남은 시간은 항상 나온다 */
     assert.match(code, /v-if="item\.showVote" class="trial-status__vote"/);
+
+    /*
+     * 글자만 줄줄이 있던 계기판에서 이 값만 면을 갖는다. 「남은 시간」 라벨은 시계 그림이
+     * 대신한다 — 라벨이 한 줄의 절반을 먹고 있었다.
+     */
+    assert.match(code, /\.trial-status__timer \{[^}]*background: var\(--tt-bg-fill\)/);
+    assert.match(code, /<ClockIcon class="trial-status__timer-icon"/);
+    assert.doesNotMatch(code, /남은 시간 \{\{/);
+    /* 급할 때는 면까지 붉어진다 — 색을 못 봐도 「이것만 다르다」가 형태로 남는다 */
+    assert.match(
+        code,
+        /\.trial-status__timer--urgent \{[^}]*background: var\(--tt-danger-subtle\)/,
+    );
 });
 
 test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {

@@ -2,8 +2,8 @@
   재판 현황 — 지방법원 홈 (이슈 #432 · #443 · #448)
 
   진행 중인 재판을 아코디언으로 보여준다.
-  접히면 **두 줄**(오브젝트 그림 · 할 일 라벨 / 그룹명 · 셰브론),
-  펼치면 진행 스테퍼 · 계기판(투표 점 · 남은 시간) · CTA 다.
+  접히면 **두 줄**(오브젝트 그림 · 챌린지 이름 / 피고 얼굴 · 이름 · 셰브론),
+  펼치면 진행 스테퍼 · 계기판(투표 점 · 남은 시간 뱃지) · CTA 다.
 
   **이제 홈이 아니라 시트가 이 카드를 쓴다**(#448 3차). 홈은 할 일을 격자 두 칸으로 접고
   (`GroupTrialTodoGrid`), 목록은 `GroupTrialListSheet` 가 받는다. 머리줄은 시트 헤더가
@@ -15,11 +15,14 @@
   「…투표해주세요」와 「…투표했어요」가 **화면에서 완전히 같은 줄**이 됐다.
   구분점(내가 뭘 하는가)을 첫 줄로 당기고, 잘려도 되는 맥락을 둘째 줄로 내린다.
 
-  **왜 아바타가 아니라 그림이 왼쪽인가.** 이 목록에서 가장 중요한 건 「내가 뭘 해야 하나」다.
-  게다가 내 재판일 때 아바타에는 **내 얼굴**이 떠서 아무것도 알려주지 않았다.
-  아바타는 한때 둘째 줄에 남의 재판일 때만 그렸는데, 그것도 걷었다(#448 7차) —
-  둘째 줄에 아바타·「지판님 재판」·그룹명 셋이 들어가 좁은 화면에서 **그룹명이 먼저 잘렸다.**
-  여러 그룹에 겹쳐 있을 때 행을 가르는 건 그룹명이다. 누구의 재판인지는 CTA 가 여는 화면이 말한다.
+  **왜 아바타가 아니라 그림이 왼쪽인가.** 왼쪽 앵커는 재판 단계를 말한다 — 격자 타일과 같은
+  사물이라 「이 타일이 저 목록을 연다」가 이어져 읽힌다. 아바타는 그 일을 못 한다.
+
+  **아바타는 둘째 줄에서 크게 쓴다**(#448 10차). 한때 셋(아바타·「지판님 재판」·그룹명)이
+  둘째 줄에 들어가 그룹명이 먼저 잘려서 통째로 걷었는데(7차), 그때 **같은 챌린지에서 두 명이
+  동시에 기소되면 두 행이 완전히 같아지는** 문제가 생겼다. 첫 줄을 챌린지 이름으로 올리고
+  둘째 줄을 얼굴 + 이름만 남겨 셋을 둘로 줄였다. 내 재판이면 내 얼굴이 뜨는데, 아바타의 일이
+  「내가 뭘 하나」에서 「누가 피고인가」로 바뀌었으므로 이제 그게 맞는 답이다.
 
   접힌 줄에 **남은 시간은 두지 않는다**(#443). 6행이 매초 같이 떨려 훑기를 방해한다.
   카테고리·한도·초과금액도 두지 않는다 — CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여준다.
@@ -33,7 +36,8 @@
 -->
 <script setup>
 import { ref } from 'vue';
-import { ChevronDownIcon } from '@heroicons/vue/24/outline';
+import { ChevronDownIcon, ClockIcon } from '@heroicons/vue/24/outline';
+import UserAvatar from '@/components/common/UserAvatar.vue';
 import objDefenseImage from '@/assets/images/judgment/obj_defense.png';
 import objVoteImage from '@/assets/images/judgment/obj_vote.png';
 import objIndictImage from '@/assets/images/judgment/obj_indict.png';
@@ -130,21 +134,33 @@ function onLeave(el) {
                     <img class="trial-status__art" :src="ART[item.icon]" alt="" />
 
                     <span class="trial-status__body">
-                        <!-- 첫째 줄 = 구분점. 라벨이라 4~9자다 — 말줄임에 닿지 않는다 -->
+                        <!--
+                             첫째 줄 = 어느 챌린지인가. 한때 「투표하기」 같은 할 일 라벨이었는데
+                             걷었다(#448 10차) — **시트 제목이 이미 그 말을 하고 있다.**
+                             「투표할 재판」 시트를 열면 모든 행이 투표라서, 라벨이 여섯 번 반복될
+                             뿐 행을 가르지 못했다. 챌린지 이름은 행마다 다르다.
+                             그룹 목록이 아직 안 왔으면 `groupName` 이 비므로 라벨로 되돌린다.
+                        -->
                         <span
                             class="trial-status__title"
                             :class="{ 'trial-status__title--muted': !item.actionable }"
                         >
-                            {{ item.title }}
+                            {{ item.groupName || item.title }}
                         </span>
                         <!--
-                             둘째 줄 = 어느 그룹인가. 아바타·닉네임(「지판님 재판」)은 뺐다 —
-                             한 줄에 세 조각이 들어가 좁은 화면에서 그룹명이 먼저 잘렸는데,
-                             **여러 그룹에 겹쳐 있을 때 행을 가르는 건 그룹명**이다.
-                             누구의 재판인지는 CTA 가 여는 화면이 원본으로 보여준다.
+                             둘째 줄 = 누가 기소됐나. 같은 그룹에서 두 명이 동시에 기소되면
+                             챌린지 이름만으로는 두 행이 똑같아진다 — 그때 행을 가르는 건 얼굴이다.
+                             내 재판이면 내 얼굴이 뜨는데, 여기서는 그게 맞다.
+                             아바타의 일이 「내가 뭘 하나」가 아니라 「누가 피고인가」로 바뀌었다.
                         -->
-                        <span v-if="item.groupName" class="trial-status__sub-text">
-                            {{ item.groupName }}
+                        <span class="trial-status__sub">
+                            <UserAvatar
+                                class="trial-status__sub-avatar"
+                                :image-url="item.profileImage"
+                                :name="item.nickname"
+                                :size="26"
+                            />
+                            <span class="trial-status__sub-text">{{ item.subject }}</span>
                         </span>
                     </span>
 
@@ -207,13 +223,19 @@ function onLeave(el) {
                                     </span>
                                 </span>
 
+                                <!--
+                                     「남은 시간」이라는 라벨은 뗐다(#448 10차). 시계 그림이
+                                     그 말을 대신하고, 뱃지 자체가 「이건 재는 값이다」를 말한다.
+                                     라벨을 두면 계기판 한 줄에서 글자가 절반을 먹었다.
+                                -->
                                 <span
-                                    class="trial-status__countdown"
+                                    class="trial-status__timer"
                                     :class="{
-                                        'trial-status__countdown--urgent': countdownOf(item).urgent,
+                                        'trial-status__timer--urgent': countdownOf(item).urgent,
                                     }"
                                 >
-                                    남은 시간 {{ countdownOf(item).text }}
+                                    <ClockIcon class="trial-status__timer-icon" />
+                                    {{ countdownOf(item).text }}
                                 </span>
                             </div>
 
@@ -309,7 +331,22 @@ function onLeave(el) {
 .trial-status__title--muted {
     color: var(--tt-text-muted);
 }
-/* 이 줄이 말줄임을 맡는다 — 첫 줄 제목은 라벨이라 4~9자로 짧다 */
+/*
+ * 아바타는 **작게 두지 않는다** (#448 10차). 예전에는 「지판님 재판 · 그룹명」 사이에 끼어
+ * 17px 짜리 장식이었는데, 지금은 이 행이 누구 것인지 가르는 유일한 조각이다 —
+ * 같은 챌린지에서 두 명이 동시에 기소되면 첫 줄이 똑같아지고 얼굴만 다르다.
+ * 26px 이라 둘째 줄이 첫 줄보다 높아지지만, 그만큼 행에 무게가 생긴다.
+ */
+.trial-status__sub {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+.trial-status__sub-avatar {
+    flex: none;
+}
+/* 말줄임은 이 줄이 맡는다. 익명 텍스트 노드에는 안 걸려서 span 으로 감싼다 */
 .trial-status__sub-text {
     min-width: 0;
     font-size: var(--tt-fs-caption);
@@ -494,21 +531,39 @@ function onLeave(el) {
     color: var(--tt-blue-deep);
 }
 /*
+ * 남은 시간은 **뱃지**다 (#448 10차). 글자만 줄줄이 있던 계기판에서 이 값만 면을 갖는다 —
+ * 패널에서 유일하게 매초 변하고 유일하게 급한 값이라 다른 어휘를 쓸 자격이 있다.
+ * 「남은 시간」 라벨은 뗐다. 시계 그림이 그 말을 하고, 라벨이 한 줄의 절반을 먹고 있었다.
+ *
  * mono 는 같은 크기에서도 폭이 넓어 한 단계 올리면 좁은 화면에서 넘친다 — caption 에 남긴다.
  * `margin-left: auto` 라 왼쪽에 투표 현황이 없어도(변론 단계) 자리가 오른쪽 그대로다.
- * 색은 예전의 `--tt-text-muted` 보다 한 단계 올렸다. 이 패널에서 유일하게 급한 값이다.
  */
-.trial-status__countdown {
+.trial-status__timer {
     margin-left: auto;
     flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px 4px 7px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-bg-fill);
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
+    /* 뱃지가 되면서 줄 높이가 커진다. 옆의 투표 점과 밑선을 맞추려고 baseline 을 끊는다 */
+    align-self: center;
 }
-.trial-status__countdown--urgent {
-    font-weight: var(--tt-fw-black);
+/* 6시간 안쪽. 면까지 붉어지므로 색맹이어도 「이것만 다르다」가 형태로 남는다 */
+.trial-status__timer--urgent {
+    background: var(--tt-danger-subtle);
     color: var(--tt-red-deep);
+    font-weight: var(--tt-fw-black);
+}
+.trial-status__timer-icon {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.2;
 }
 
 /* ── CTA ────────────────────────────── */

@@ -344,13 +344,33 @@ test('왼쪽 앵커는 아바타가 아니라 재판 단계 그림이다', () =>
     const code = source(CARD);
     const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
 
-    /* 내 재판일 때 아바타에는 내 얼굴이 떠서 아무것도 알려주지 않았다 */
+    /* 앵커는 격자 타일과 같은 사물이라 「이 타일이 저 목록을 연다」가 이어져 읽힌다 */
     assert.match(summary, /class="trial-status__art" :src="ART\[item\.icon\]"/);
-    /* 아바타는 둘째 줄에도 남기지 않았다 — 셋이 들어가면 좁은 화면에서 그룹명이 먼저 잘린다 */
-    assert.doesNotMatch(code, /UserAvatar/);
-    assert.doesNotMatch(summary, /item\.subject/);
+    /* 아바타가 앵커 자리로 올라오면 안 된다 — 얼굴은 단계를 말하지 못한다 */
+    const anchor = summary.slice(0, summary.indexOf('trial-status__body'));
+    assert.doesNotMatch(anchor, /UserAvatar/);
     /* 뱃지 글자는 그림이 대신한다 */
     assert.doesNotMatch(code, /item\.badge/);
+});
+
+test('접힌 줄은 챌린지 이름과 피고 얼굴로 갈린다', () => {
+    /*
+     * 첫 줄이 「투표하기」 같은 할 일 라벨이던 때가 있었는데(#448 2차) 걷었다(10차).
+     * **시트 제목이 이미 그 말을 한다** — 「투표할 재판」을 열면 모든 행이 투표라서
+     * 라벨이 여섯 번 반복될 뿐 행을 가르지 못했다.
+     *
+     * 얼굴이 필요한 이유는 챌린지 이름만으로는 안 갈리는 경우가 있어서다 —
+     * 같은 그룹에서 두 명이 동시에 기소되면 첫 줄이 똑같아진다.
+     */
+    const code = source(CARD);
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
+
+    assert.match(summary, /\{\{ item\.groupName \|\| item\.title \}\}/);
+    assert.match(summary, /<UserAvatar/);
+    assert.match(summary, /item\.subject/);
+    /* 「너무 작게 하지 마라」 — 장식이 아니라 행을 가르는 조각이다 */
+    const size = summary.match(/:size="(\d+)"/);
+    assert.ok(Number(size[1]) >= 24, `아바타가 ${size[1]}px 로 작다`);
 });
 
 test('투표 점은 접힌 줄이 아니라 펼친 본문에 있다', () => {
