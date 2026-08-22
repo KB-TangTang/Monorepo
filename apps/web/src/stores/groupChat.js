@@ -246,10 +246,14 @@ export const useGroupChatStore = defineStore('groupChat', () => {
      * 방을 만든 직후부터 대화가 된다. 게다가 서버가 시작일을 반드시 내일 이후로 막으므로
      * 만들고 나서 처음 떠드는 구간이 통째로 RECRUITING 이다 — `['ACTIVE']` 만 물으면
      * 정작 대화가 오가는 방이 배지 계산에서 통째로 빠진다. 홈이 부르는 것과 같은 조합이다.
+     *
+     * **재판 중(JUDGING)도 함께 묻는다.** 채팅은 CLOSED 만 막히므로(ChatRoomAccessService)
+     * 재판 구간의 방도 배지 대상이다. 빼 두면 `syncChatSummary` 가 교체 방식이라 그 방에서
+     * 실시간으로 켜진 점이 다음 목록 조회 때 지워진다.
      */
     async function refreshChatSummary() {
         try {
-            syncChatSummary(await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING']));
+            syncChatSummary(await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING', 'JUDGING']));
         } catch {
             /* 무시 */
         }

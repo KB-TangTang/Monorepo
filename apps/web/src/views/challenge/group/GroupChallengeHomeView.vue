@@ -43,10 +43,20 @@ async function loadMyChallenges() {
          * (ChallengeGroupService.validateCreate) 그룹을 만들거나 참여코드로 들어온 직후에는
          * ACTIVE 가 하나도 없다 — ACTIVE 만 부르던 예전에는 방금 한 행동이 홈에서 흔적도 없이
          * 사라지고 판사 탕이가 「새로운 챌린지에 참여해보세요」라고 되묻는 상태였다.
+         *
+         * **재판 중(JUDGING)까지 부르되 카드에서는 뺀다.** 채팅은 JUDGING 에서도 입장이 열려 있어
+         * (ChatRoomAccessService — CLOSED 만 막는다) 배지는 그 방까지 세야 한다. 반면 카드는
+         * `currentDay`·`daysUntilStart` 가 둘 다 NULL 로 내려와 「D-7」·「null일차」가 찍힌다.
+         *
+         * **아래 세 줄은 순서가 계약이다.** `syncChatSummary` 에 `raw` 가 아니라
+         * `myChallenges.value` 를 넘기면 JUDGING 이 이미 빠진 배열이 들어가 배지 수정이
+         * 통째로 무효가 된다 — 그런데도 테스트는 통과한다. 한 줄로 합치지 말 것.
          */
-        myChallenges.value = await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING']);
+        const raw = await fetchMyGroupChallenges(['ACTIVE', 'RECRUITING', 'JUDGING']);
         /* 서버 값으로 채팅 배지를 정정한다. 실시간으로 올려 둔 어림값이 여기서 진짜 수로 바뀐다 */
-        groupChat.syncChatSummary(myChallenges.value);
+        groupChat.syncChatSummary(raw);
+        /* 목데이터의 진행 중 항목에는 `status` 가 없다 — 화이트리스트가 아니라 `!==` 여야 한다 */
+        myChallenges.value = raw.filter((ch) => ch.status !== 'JUDGING');
     } catch {
         /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비어 있으면 판사 탕이가
          * "새로운 챌린지에 참여해보세요" 로 안내한다. */
