@@ -18,6 +18,7 @@ function source(path) {
 
 const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 const TRIAL_CARD = 'src/components/challenge/group/GroupTrialStatusCard.vue';
+const WATCH_SHEET = 'src/components/challenge/group/GroupWatchingTrialSheet.vue';
 
 test('홈은 내 챌린지를 상위 몇 건까지만 그린다', () => {
     /*
@@ -77,4 +78,103 @@ test('두 섹션 사이는 토큰 간격으로 벌린다', () => {
      * 임의 px 로 되돌아가면 다음 사람이 다시 눈대중으로 만진다.
      */
     assert.match(source(HOME), /\.gc-section \{[^}]*margin-top: var\(--tt-space-\d\)/);
+});
+
+/* ── 「내 차례」 큐 (시안 A) ────────────────────────────── */
+
+test('재판을 「내 차례」와 「지켜보는 중」으로 가른다', () => {
+    /*
+     * 기준은 `STANCE.actionable` 하나여야 한다. 여기서 status 를 다시 보면 그룹 상세
+     * 캐러셀과 판정이 갈린다 — 같은 재판이 화면마다 다른 뱃지를 달게 된다.
+     */
+    const src = source(HOME);
+    assert.match(
+        src,
+        /myTurnTrials = computed\(\(\) => trialCards\.value\.filter\(\(card\) => card\.actionable\)/,
+    );
+    assert.match(
+        src,
+        /watchingTrials = computed\(\(\) => trialCards\.value\.filter\(\(card\) => !card\.actionable\)/,
+    );
+});
+
+test('홈 카드에는 내 차례인 재판만 올린다', () => {
+    /*
+     * 여기가 `trialCards` 로 되돌아가면 「내 변론을 제출했어요」처럼 눌러도 할 게 없는 줄이
+     * 다시 섞여, 마감이 걸린 줄을 아래로 밀어낸다. 이 화면이 원래 갖고 있던 문제다.
+     */
+    const src = source(HOME);
+    assert.match(
+        src,
+        /<GroupTrialStatusCard\s+v-if="myTurnTrials\.length"\s+:items="myTurnTrials"/,
+    );
+});
+
+test('지켜보는 재판은 지우지 않고 한 줄로 접는다', () => {
+    /*
+     * 할 일은 아니어도 「내 재판이 심판받는 중」은 이 화면에서 가장 궁금한 것이다.
+     * 큐에서 뺀다고 화면에서까지 사라지면 상세 화면까지 들어가야만 알 수 있다.
+     */
+    const src = source(HOME);
+    assert.match(src, /v-if="watchingTrials\.length"[\s\S]*?showWatchingSheet = true/);
+    assert.match(src, /지켜보는 재판 \{\{ watchingTrials\.length \}\}건/);
+});
+
+test('접힌 요약 줄이 마감을 통째로 감추지 않는다', () => {
+    /*
+     * 접으면 매초 도는 타이머가 같이 사라진다. 6시간 안쪽(useCountdown 의 `urgent`)이
+     * 하나라도 있으면 그것만 밖으로 알려야 시트를 열 이유가 생긴다.
+     */
+    const src = source(HOME);
+    assert.match(src, /watchingUrgent = computed\([\s\S]*?countdowns\.value\[card\.id\]\?\.urgent/);
+    assert.match(src, /v-if="watchingUrgent"/);
+});
+
+test('재판은 도는데 내가 할 게 없는 상태를 「평온」이라고 하지 않는다', () => {
+    /*
+     * `GroupPeacefulCard` 는 「오늘까지 모두 기준 안에서 소비했어요」라고 말한다.
+     * 남의 재판이 돌고 있는데 이게 뜨면 화면이 거짓말을 한다.
+     */
+    const src = source(HOME);
+    assert.match(src, /v-else-if="watchingTrials\.length" class="gc-trial-idle"/);
+    /* 평온 분기는 그 뒤에 와야 한다 — 순서가 뒤집히면 위 분기가 영영 안 걸린다 */
+    const idleAt = src.indexOf('gc-trial-idle');
+    const peacefulAt = src.indexOf('<GroupPeacefulCard');
+    assert.ok(idleAt < peacefulAt, '「할 일 없음」 분기가 평온 분기보다 앞에 와야 한다');
+});
+
+test('지켜보는 재판 시트는 재판 현황 카드를 그대로 쓴다', () => {
+    /*
+     * 같은 재판을 두 자리에서 다르게 그리면 뱃지·제목·CTA 판정이 갈린다.
+     * 지켜보는 입장은 CTA 가 전부 「재판 현황 보기」라 이 자리에서도 말이 맞는다.
+     */
+    const src = source(WATCH_SHEET);
+    assert.match(src, /import GroupTrialStatusCard from/);
+    assert.match(src, /import BaseBottomSheet from '@\/components\/common\/BaseBottomSheet\.vue'/);
+});
+
+test('지켜보는 재판을 처리할 일 시트에 밀어 넣지 않는다', () => {
+    /*
+     * `GroupTodoSheet` 는 처리할 일 전용이다 — 머리글이 「처리할 일 N건」이고 필터 칩이
+     * 「기소 / 투표」, 행마다 「변론」·「투표」 버튼이 붙는다. 지켜보는 재판에 그 버튼을 달면
+     * 눌러서 아무것도 못 하는 화면으로 보낸다.
+     */
+    const src = source(HOME);
+    assert.match(src, /<GroupTodoSheet[^>]*\n[^>]*:items="todoItems"/);
+    assert.match(src, /<GroupWatchingTrialSheet[\s\S]{0,200}?:items="watchingTrials"/);
+});
+
+test('시트 안에서 이동할 때 history 를 먼저 양도한다', () => {
+    /*
+     * 안 하면 시트가 닫히면서 history.back() 이 라우터 이동을 되감는다
+     * (`common/useOverlay.js` 주석 — GroupTodoSheet 가 같은 이유로 같은 것을 노출한다).
+     */
+    assert.match(
+        source(WATCH_SHEET),
+        /releaseHistory: \(\) => sheetRef\.value\?\.releaseHistory\?\.\(\)/,
+    );
+    assert.match(
+        source(HOME),
+        /if \(showWatchingSheet\.value\) \{[\s\S]*?watchingSheetRef\.value\?\.releaseHistory\?\.\(\)/,
+    );
 });

@@ -9,6 +9,7 @@ import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vu
 import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
 import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
 import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
+import GroupWatchingTrialSheet from '@/components/challenge/group/GroupWatchingTrialSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
@@ -134,6 +135,22 @@ const trialCards = computed(() =>
 );
 
 /*
+ * 재판을 **「내 차례」와 「지켜보는 중」으로 가른다**(#448).
+ *
+ * 예전에는 진행 중인 재판 전부를 한 아코디언에 쌓았다. 그룹 여섯 개에 들어 있으면 재판도
+ * 여섯 줄이 되는데, 그중 내가 지금 손댈 수 있는 건 보통 한둘이다 — 나머지는 「내 변론을
+ * 제출했어요」·「○○님이 변론을 쓰는 중이에요」처럼 **눌러도 할 게 없는 줄**이라
+ * 정작 마감이 걸린 줄을 가렸다.
+ *
+ * 기준은 `STANCE.actionable` 하나다. 서버 정렬(`GroupTrialService#findAllMyTrials`)이
+ * 같은 기준으로 앞세우므로 여기서 나눠도 각 묶음 안의 마감 임박순은 그대로 남는다.
+ * 지켜보는 쪽은 없애지 않는다 — 할 일은 아니어도 「내 재판이 어떻게 되고 있나」는
+ * 이 화면에서 가장 궁금한 것이다. 홈에는 한 줄로 접고 목록은 시트가 받는다.
+ */
+const myTurnTrials = computed(() => trialCards.value.filter((card) => card.actionable));
+const watchingTrials = computed(() => trialCards.value.filter((card) => !card.actionable));
+
+/*
  * 바텀시트가 쓰는 얇은 행. 「할 일」만 담는다 — 시트는 훑어보고 바로 처리하는 자리라
  * 심판받는 중처럼 누를 것이 없는 재판이 섞이면 목록만 길어진다.
  *
@@ -158,15 +175,24 @@ const todoItems = computed(() =>
         })),
 );
 
-const hasTodo = computed(() => trialCards.value.length > 0);
+/* 카드 자리는 이제 `myTurnTrials` · `watchingTrials` 가 직접 가른다 — `hasTodo` 는 지웠다 */
 const allDone = computed(() => trialCards.value.length === 0 && doneIds.value.length > 0);
 
 /* ── 카운트다운 ────────────────────────── */
 const { countdowns } = useCountdown(trialCards);
 
+/* 접힌 요약 줄이 마감을 감춰 버리지 않게, 6시간 안쪽이 하나라도 있으면 그것만 밖으로 알린다 */
+const watchingUrgent = computed(() =>
+    watchingTrials.value.some((card) => countdowns.value[card.id]?.urgent),
+);
+
 /* ── 바텀시트 ──────────────────────────── */
 const showSheet = ref(false);
 const todoSheetRef = ref(null);
+
+/* 지켜보는 재판 목록. 홈의 요약 줄이 여는 유일한 자리다 */
+const showWatchingSheet = ref(false);
+const watchingSheetRef = ref(null);
 
 /* ── 토스트 ────────────────────────────── */
 const toast = ref(null);
@@ -249,6 +275,10 @@ function goToTrial(action, groupId, indictmentId) {
     if (showSheet.value) {
         todoSheetRef.value?.releaseHistory?.();
         showSheet.value = false;
+    }
+    if (showWatchingSheet.value) {
+        watchingSheetRef.value?.releaseHistory?.();
+        showWatchingSheet.value = false;
     }
     router.replace({
         name: TRIAL_ROUTE[action],
@@ -417,20 +447,44 @@ function goToChat(challenge) {
 
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
-            <!-- 재판 현황 / 방금 다 처리함 / 애초에 진행 중인 재판이 없음 -->
+            <!--
+              내 차례인 재판만 카드에 남긴다(#448). 지켜보는 재판은 아래 요약 줄이 받는다 —
+              눌러도 할 게 없는 줄이 섞이면 정작 마감이 걸린 줄을 가린다.
+              분기: 내 차례 있음 / 방금 다 처리함 / 지켜보기만 남음 / 애초에 재판이 없음
+            -->
             <GroupTrialStatusCard
-                v-if="hasTodo"
-                :items="trialCards"
+                v-if="myTurnTrials.length"
+                :items="myTurnTrials"
                 :countdowns="countdowns"
                 @open="onOpenTrial"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
+            <!-- 재판은 도는데 내가 할 게 없는 상태. 「평온」이라고 하면 거짓말이 된다 -->
+            <p v-else-if="watchingTrials.length" class="gc-trial-idle">지금 내가 할 일은 없어요</p>
             <!-- 기소·투표가 아예 없는 평온 상태. 이 분기가 없으면 자리 전체가 빈 화면이 된다.
                  doneIds 는 DEV 토글로만 채워지므로 allDone 은 실사용에서 거의 오지 않는다. -->
             <template v-else>
                 <GroupPeacefulCard />
                 <GroupMascotScene scene="peaceful" />
             </template>
+
+            <!--
+              지켜보는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
+              할 일은 아니어도 이 화면에서 가장 궁금한 것이기 때문이다.
+              마감이 6시간 안쪽인 게 섞여 있으면 접힌 채로도 그것만 밖으로 알린다.
+            -->
+            <button
+                v-if="watchingTrials.length"
+                type="button"
+                class="gc-watching"
+                @click="showWatchingSheet = true"
+            >
+                <span class="gc-watching__label">
+                    지켜보는 재판 {{ watchingTrials.length }}건
+                </span>
+                <span v-if="watchingUrgent" class="gc-watching__urgent">마감 임박</span>
+                <span class="gc-watching__arrow" aria-hidden="true">›</span>
+            </button>
 
             <!-- 내 챌린지 — 진행 중과 시작 전을 한 카드에 행으로 쌓는다 -->
             <div class="gc-section">
@@ -543,6 +597,15 @@ function goToChat(challenge) {
             @open="onOpenTodo"
         />
 
+        <!-- ===== 지켜보는 재판 바텀시트 (#448) ===== -->
+        <GroupWatchingTrialSheet
+            ref="watchingSheetRef"
+            v-model="showWatchingSheet"
+            :items="watchingTrials"
+            :countdowns="countdowns"
+            @open="onOpenTrial"
+        />
+
         <!-- ===== 참여코드 입장 바텀시트 ===== -->
         <GroupJoinCodeSheet v-model="showJoinSheet" />
 
@@ -608,6 +671,66 @@ function goToChat(challenge) {
     padding: var(--tt-space-2) var(--tt-screen-padding) 0;
     position: relative;
     z-index: 3;
+}
+
+/* ── 지켜보는 재판 요약 줄 ─────────────── */
+/*
+ * 위의 재판 현황 카드와 **일부러 다르게** 생겼다. 그림자도 흰 배경도 없다 —
+ * 이건 재판이 아니라 재판 목록으로 가는 문이고, 문이 카드처럼 보이면 「할 일이 하나 더
+ * 있다」로 읽힌다. 그래서 카드 아래에 얇게 붙는 줄로 둔다.
+ */
+.gc-watching {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: var(--tt-space-2);
+    padding: 11px 15px;
+    background: none;
+    border: none;
+    border-radius: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.gc-watching:active {
+    background: var(--tt-bg-fill);
+}
+
+.gc-watching__label {
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+}
+
+/* 접힌 줄이 마감을 통째로 감추지 않게 하는 유일한 장치다. 색만으로 말한다 */
+.gc-watching__urgent {
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-danger);
+    padding: 2px 7px;
+    border-radius: var(--tt-radius-xs);
+    background: var(--tt-danger-subtle);
+}
+
+.gc-watching__arrow {
+    margin-left: auto;
+    font-size: var(--tt-fs-body);
+    color: var(--tt-text-hint);
+}
+
+/* 재판은 도는데 내가 할 게 없는 상태. 카드 자리를 비우지 않을 만큼만 차지한다 */
+.gc-trial-idle {
+    margin: 0;
+    padding: 18px 0;
+    background: var(--tt-bg);
+    border-radius: var(--tt-radius-xl);
+    box-shadow: var(--tt-elevation-2);
+    text-align: center;
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
 }
 
 /* ── 진행 중인 챌린지 섹션 ─────────────── */
