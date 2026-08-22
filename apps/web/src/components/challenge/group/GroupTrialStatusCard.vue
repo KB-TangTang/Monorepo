@@ -3,7 +3,7 @@
 
   진행 중인 재판을 아코디언으로 보여준다.
   접히면 **두 줄**(오브젝트 그림 · 할 일 라벨 / 그룹명 · 셰브론),
-  펼치면 남은 시간 · 진행 스테퍼 · 투표 현황 · CTA 다.
+  펼치면 진행 스테퍼 · 계기판(투표 수 · 남은 시간 · 투표 바) · CTA 다.
 
   **이제 홈이 아니라 시트가 이 카드를 쓴다**(#448 3차). 홈은 할 일을 격자 두 칸으로 접고
   (`GroupTrialTodoGrid`), 목록은 `GroupTrialListSheet` 가 받는다. 머리줄은 시트 헤더가
@@ -161,16 +161,6 @@ function onLeave(el) {
                 >
                     <div v-if="isOpen(item, index)" class="trial-status__panel">
                         <div class="trial-status__panel-inner">
-                            <!-- 남은 시간. 접힌 줄에 두면 6행이 매초 같이 떨려 훑기가 어렵다 -->
-                            <div
-                                class="trial-status__countdown"
-                                :class="{
-                                    'trial-status__countdown--urgent': countdownOf(item).urgent,
-                                }"
-                            >
-                                남은 시간 {{ countdownOf(item).text }}
-                            </div>
-
                             <!-- 진행 스테퍼 -->
                             <ol class="trial-status__steps">
                                 <li
@@ -187,17 +177,37 @@ function onLeave(el) {
                                 </li>
                             </ol>
 
-                            <!-- 투표 현황 — 변론이 끝나야 열린다 -->
-                            <div v-if="item.showVote" class="trial-status__vote">
-                                <div class="trial-status__vote-track">
+                            <!--
+                                 계기판 — 「지금 눌러야 하나」를 판단하는 두 값을 CTA 바로 위에 붙인다.
+                                 남은 시간은 한때 패널 맨 위 왼쪽의 회색 캡션이었다. 이 패널에서
+                                 **유일하게 급한 값인데 가장 약하게** 그려져 있었다.
+                                 투표 수(왼쪽) ↔ 남은 시간(오른쪽)으로 양끝에 건다. 변론 단계라
+                                 투표가 없으면 남은 시간만 남는데, `margin-left: auto` 덕에
+                                 자리가 그대로 오른쪽이다 — 행마다 시계가 움직이면 안 된다.
+                            -->
+                            <div class="trial-status__meter">
+                                <div class="trial-status__meter-head">
+                                    <span v-if="item.showVote" class="trial-status__vote-count">
+                                        {{ item.voteCount }} / {{ item.totalVoters }}명 투표
+                                    </span>
+                                    <span
+                                        class="trial-status__countdown"
+                                        :class="{
+                                            'trial-status__countdown--urgent':
+                                                countdownOf(item).urgent,
+                                        }"
+                                    >
+                                        남은 시간 {{ countdownOf(item).text }}
+                                    </span>
+                                </div>
+
+                                <!-- 투표 바 — 변론이 끝나야 열린다 -->
+                                <div v-if="item.showVote" class="trial-status__vote-track">
                                     <div
                                         class="trial-status__vote-fill"
                                         :style="{ width: `${item.votePercent}%` }"
                                     />
                                 </div>
-                                <span class="trial-status__vote-count">
-                                    {{ item.voteCount }} / {{ item.totalVoters }}명 투표
-                                </span>
                             </div>
 
                             <button
@@ -321,24 +331,28 @@ function onLeave(el) {
     overflow: hidden;
 }
 /*
- * 펼친 본문은 **사건 기록**이다 (#448). 접힌 줄 6행은 훑는 면이라 흰 바탕을 그대로 두고,
- * 열었을 때만 서류가 나온다 — 「펼친다 = 기록을 펼친다」로 아코디언 자체에 의미가 붙는다.
- * `openId` 가 단일이라 종이는 한 번에 하나만 나오고, 그래서 목록이 시끄러워지지 않는다.
+ * **서류 상자를 걷었다** (#448 8차). 한때 아이보리 종이(`--tt-doc-bg` + `--tt-doc-rule` 테두리)를
+ * 깔아 「펼친다 = 사건 기록을 펼친다」로 읽히려 했는데, 화면에서 그렇게 안 읽혔다.
  *
- * 어휘는 새로 만들지 않았다. `--tt-doc-*` 은 소환장(`GroupSummonCard`)이 쓰던 것을 그대로 쓴다.
- * 다만 소환장의 기울임·낙하·인장은 **한 번 보는 히어로**용이라 여기엔 가져오지 않는다.
+ * 1. **면이 안 보인다.** `--tt-doc-bg`(#fdfbf3)와 이 카드 바탕(#ffffff)의 차이가
+ *    R 2 · G 4 · B 12 다. 실제로 보이는 건 종이가 아니라 `#d8d3c4` 테두리 1px 뿐이었다.
+ * 2. **표면이 3겹이었다.** 바텀시트 → 흰 카드(elevation-2) → 이 상자. 겹칠 때마다 쓸 대비를
+ *    까먹는데 세 번째에는 남은 게 없다.
+ *
+ * 소환장(`GroupSummonCard`)에서 종이가 먹히는 건 **화면을 꽉 채우고** 명조·괘선·인장이 같이
+ * 있어서다. 여기는 90px 상자에 위젯 셋이라 그 신호를 못 싣는다 — 실으려면 행이 커지는데
+ * 목록 6행에서는 그게 더 큰 손해다. 서류 어휘는 **스테퍼의 명조 한 줄만** 남긴다.
+ *
+ * 상자가 없어졌으니 미완료 색도 종이 괘선(`--tt-doc-rule`)에서 진행바 트랙(`--tt-border-track`)
+ * 으로 되돌린다. 흰 바탕 위에서는 회청이 제자리다.
  */
 .trial-status__panel-inner {
-    /* 아래 여백을 패딩이 아니라 margin 으로 준다 — 패널은 height:0 이 되어야 하므로 패딩을 못 갖는다.
+    /* 여백을 패딩이 아니라 margin 으로 준다 — 패널은 height:0 이 되어야 하므로 패딩을 못 갖는다.
        부모가 overflow:hidden 이라 이 margin 은 밖으로 새지 않고 scrollHeight 에 그대로 잡힌다 */
-    margin: 0 2px 13px;
-    background: var(--tt-doc-bg);
-    border: 1px solid var(--tt-doc-rule);
-    border-radius: var(--tt-radius-sm);
-    padding: 12px 13px 13px;
+    margin: 4px 2px 14px;
     display: flex;
     flex-direction: column;
-    gap: 11px;
+    gap: 13px;
 }
 
 .panel-enter-active,
@@ -350,17 +364,6 @@ function onLeave(el) {
 .panel-enter-from,
 .panel-leave-to {
     opacity: 0;
-}
-
-/* mono 는 같은 크기에서도 폭이 넓어 한 단계 올리면 좁은 화면에서 넘친다 — caption 에 남긴다 */
-.trial-status__countdown {
-    font-family: var(--tt-font-mono);
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-muted);
-}
-.trial-status__countdown--urgent {
-    color: var(--tt-red-deep);
 }
 
 /* ── 진행 스테퍼 ────────────────────── */
@@ -378,11 +381,7 @@ function onLeave(el) {
     gap: 5px;
     position: relative;
 }
-/*
- * 칸 사이를 잇는 선. 마지막 칸 뒤에는 그리지 않는다.
- * 미완료 색은 진행바 트랙(`--tt-border-track` #e9ecf2, 회청)이 아니라 종이 괘선(`--tt-doc-rule`)이다 —
- * 아이보리 바탕 위에 회청 회색이 얹히면 그 조각만 서류 밖에서 온 것처럼 뜬다.
- */
+/* 칸 사이를 잇는 선. 마지막 칸 뒤에는 그리지 않는다 */
 .trial-status__step:not(:last-child)::after {
     content: '';
     position: absolute;
@@ -390,7 +389,7 @@ function onLeave(el) {
     left: 50%;
     width: 100%;
     height: 2px;
-    background: var(--tt-doc-rule);
+    background: var(--tt-border-track);
 }
 .trial-status__step--done:not(:last-child)::after {
     background: var(--tt-blue);
@@ -401,7 +400,7 @@ function onLeave(el) {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--tt-doc-rule);
+    background: var(--tt-border-track);
 }
 .trial-status__step--done .trial-status__step-dot {
     background: var(--tt-blue);
@@ -412,7 +411,8 @@ function onLeave(el) {
 }
 /*
  * 4칸을 가로로 나눠 쓰므로 caption 까지 올리면 좁은 화면에서 줄바꿈된다.
- * 「기소 ─ 변론 ─ 투표 ─ 판결」은 재판 절차 그 자체다 — 서류 안이니 명조로 쓴다.
+ * 「기소 ─ 변론 ─ 투표 ─ 판결」은 재판 절차 그 자체다 — **서류 어휘 중 유일하게 남긴 것**이
+ * 이 명조다. 상자는 걷었지만 이 네 글자는 흰 바탕에서도 자기 몫을 한다(위 주석 참고).
  * `--tt-font-serif`(나눔명조)는 `index.html:69` 에서 이미 전역으로 불러오고 있다.
  */
 .trial-status__step-name {
@@ -430,18 +430,47 @@ function onLeave(el) {
     font-weight: var(--tt-fw-black);
 }
 
-/* ── 투표 현황 ──────────────────────── */
-.trial-status__vote {
+/* ── 계기판 (투표 수 · 남은 시간 · 투표 바) ─── */
+.trial-status__meter {
     display: flex;
-    align-items: center;
-    gap: 9px;
+    flex-direction: column;
+    gap: 7px;
+}
+/*
+ * 두 값을 양끝에 건다. `baseline` 이라 sans(투표 수)와 mono(시계)의 밑선이 맞는다 —
+ * `center` 로 두면 두 글꼴의 x-height 차이만큼 어긋나 보인다.
+ */
+.trial-status__meter-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--tt-space-2);
+}
+/* 투표 수와 같은 급으로 맞춘다. 한 줄에 둘이 서니 크기가 다르면 한쪽이 부속처럼 읽힌다 */
+.trial-status__vote-count {
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-blue-deep);
+}
+/*
+ * mono 는 같은 크기에서도 폭이 넓어 한 단계 올리면 좁은 화면에서 넘친다 — caption 에 남긴다.
+ * `margin-left: auto` 라 왼쪽에 투표 수가 없어도(변론 단계) 자리가 오른쪽 그대로다.
+ * 색은 예전의 `--tt-text-muted` 보다 한 단계 올렸다. 이 패널에서 유일하게 급한 값이다.
+ */
+.trial-status__countdown {
+    margin-left: auto;
+    font-family: var(--tt-font-mono);
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-body);
+}
+.trial-status__countdown--urgent {
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-red-deep);
 }
 .trial-status__vote-track {
-    flex: 1;
     height: 6px;
     border-radius: var(--tt-radius-full);
-    /* 스테퍼와 같은 이유로 종이 괘선 톤 — 같은 서류 안에서 미완료 색이 둘이면 안 된다 */
-    background: var(--tt-doc-rule);
+    background: var(--tt-border-track);
     overflow: hidden;
 }
 .trial-status__vote-fill {
@@ -449,12 +478,6 @@ function onLeave(el) {
     border-radius: var(--tt-radius-full);
     background: var(--tt-blue);
     transition: width 0.25s ease;
-}
-.trial-status__vote-count {
-    flex: none;
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-blue-deep);
 }
 
 /* ── CTA ────────────────────────────── */

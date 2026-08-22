@@ -294,33 +294,54 @@ test('시트 머리줄은 시트만 그린다', () => {
     assert.doesNotMatch(source(TRIAL_CARD), /trial-status__head/);
 });
 
-/* ── 펼친 본문 = 사건 기록 (시안 E 의 「종이 질감」) ─────── */
+/* ── 펼친 본문 ─────────────────────────────────────── */
 
-test('서류 바탕은 펼친 본문에만 깔린다', () => {
+test('펼친 본문은 상자를 갖지 않는다', () => {
     /*
-     * 접힌 줄 6행은 **훑는 면**이다. 여기까지 아이보리로 깔면 목록 전체가 색을 갖게 돼
-     * 아래 「내 챌린지」와의 위계가 아니라 화면 전체의 톤이 바뀐다.
-     * 종이는 펼쳤을 때만 — `openId` 가 단일이라 한 번에 하나만 나온다.
+     * 한때 아이보리 서류(`--tt-doc-bg` + `--tt-doc-rule` 테두리)를 깔았다가 걷었다(#448 8차).
+     * `--tt-doc-bg`(#fdfbf3)와 카드 바탕(#ffffff)의 차이가 B 12/255 뿐이라 종이는 안 보이고
+     * 베이지 테두리만 보였고, 바텀시트 → 흰 카드 → 이 상자로 **표면이 3겹**이 됐다.
+     *
+     * 되살리고 싶으면 종이를 다시 칠하는 게 아니라 면적과 신호(괘선·명조 소제목·인장)를
+     * 같이 실어야 한다. 그건 행 높이를 늘리는 일이라 목록 6행에서는 다른 결정이다.
      */
     const code = source(TRIAL_CARD);
-    assert.match(code, /\.trial-status__panel-inner \{[^}]*background: var\(--tt-doc-bg\)/);
-    assert.doesNotMatch(code, /\.trial-status \{[^}]*--tt-doc-/);
+    const inner = code.match(/\.trial-status__panel-inner \{[^}]*\}/)[0];
+    assert.doesNotMatch(inner, /background/);
+    assert.doesNotMatch(inner, /border/);
+    /* 종이 토큰이 이 파일에서 완전히 빠졌는지 — 스테퍼·투표 바에도 남아 있으면 안 된다 */
+    assert.doesNotMatch(code, /var\(--tt-doc-/);
 });
 
-test('서류 어휘를 새로 만들지 않고 소환장 토큰을 쓴다', () => {
+test('서류 어휘는 스테퍼의 명조 한 줄만 남긴다', () => {
     /*
-     * `--tt-doc-*` 과 `--tt-font-serif` 는 `GroupSummonCard`(초대코드 소환장) 때문에 이미 있다.
+     * 상자는 걷었지만 「기소 ─ 변론 ─ 투표 ─ 판결」은 재판 절차 그 자체라 명조를 유지한다.
+     * `--tt-font-serif` 는 `GroupSummonCard`(초대코드 소환장) 때문에 이미 있는 토큰이다 —
      * 여기서 HEX 를 새로 박거나 토큰을 신설하면 같은 「법정 서류」가 두 벌이 된다.
      */
     const code = source(TRIAL_CARD);
     assert.match(code, /\.trial-status__step-name \{[^}]*font-family: var\(--tt-font-serif\)/);
+    /* 상자가 없으니 미완료 색은 종이 괘선이 아니라 진행바 트랙(회청)으로 돌아온다 */
+    assert.match(code, /\.trial-status__step-dot \{[^}]*background: var\(--tt-border-track\)/);
+    assert.match(code, /\.trial-status__vote-track \{[^}]*background: var\(--tt-border-track\)/);
+});
+
+test('남은 시간은 CTA 쪽에 붙는다', () => {
     /*
-     * 미완료 색이 서류 안에서 둘이면 안 된다 — 진행바 트랙(회청)은 아이보리 위에서 뜬다.
-     * 검사 범위는 **펼친 본문 이후**로 끊는다. 접힌 줄은 흰 바탕이라 회청 트랙이 제자리고,
-     * 실제로 투표 점(#448)이 그 색을 쓴다. 파일 전체를 훑으면 그것까지 잡는다.
+     * 한때 패널 맨 위 왼쪽의 회색 캡션이었다 — 이 패널에서 **유일하게 급한 값인데 가장 약하게**
+     * 그려져 있었다. 「지금 눌러야 하나」를 판단하는 두 값(투표 수 · 남은 시간)을 버튼 바로
+     * 위에 모은다. 스테퍼 → 계기판 → CTA 순서가 뒤집히면 그 판단이 다시 흩어진다.
      */
-    const panel = code.slice(code.indexOf('/* ── 펼친 본문'));
-    assert.doesNotMatch(panel, /background: var\(--tt-border-track\)/);
+    const code = source(TRIAL_CARD);
+    const steps = code.indexOf('trial-status__steps');
+    const meter = code.indexOf('trial-status__meter');
+    const cta = code.indexOf('trial-status__cta');
+    assert.ok(steps < meter && meter < cta, '스테퍼 → 계기판 → CTA 순서여야 한다');
+
+    /* 변론 단계라 투표 수가 없어도 시계 자리가 오른쪽 그대로여야 한다 — 행마다 움직이면 안 된다 */
+    assert.match(code, /\.trial-status__countdown \{[^}]*margin-left: auto/);
+    /* 투표 수는 `v-if`, 남은 시간은 항상 나온다 */
+    assert.match(code, /v-if="item\.showVote" class="trial-status__vote-count"/);
 });
 
 test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {
