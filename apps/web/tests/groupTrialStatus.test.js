@@ -43,7 +43,8 @@ function source(path) {
 const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 const CARD = 'src/components/challenge/group/GroupTrialStatusCard.vue';
 const CAROUSEL = 'src/components/challenge/group/GroupDetailTrialCarousel.vue';
-const WATCHING_SHEET = 'src/components/challenge/group/GroupWatchingTrialSheet.vue';
+const TODO_GRID = 'src/components/challenge/group/GroupTrialTodoGrid.vue';
+const ICON = 'src/components/challenge/group/TrialActionIcon.vue';
 
 /** `toIndictmentViewModel` 을 지난 뒤의 모양. 화면 이름(`isMine`·`hasDefended`)을 쓴다. */
 function trial(overrides = {}) {
@@ -353,11 +354,15 @@ test('왼쪽 앵커는 아바타가 아니라 할 일 아이콘이다', () => {
     assert.doesNotMatch(code, /item\.badge/);
 });
 
-test('머리줄은 홈에서만 그린다', () => {
-    /* 바텀시트는 시트 헤더가 이미 같은 말을 한다 — 두 번 쓰면 「지켜보는 재판」이 두 줄이 된다 */
-    assert.match(source(CARD), /heading: \{ type: String, default: '' \}/);
-    assert.match(source(HOME), /heading="내 차례"/);
-    assert.doesNotMatch(source(WATCHING_SHEET), /heading=/);
+test('타일과 목록 줄이 같은 글리프를 쓴다', () => {
+    /*
+     * 타일에서 본 망치와 목록에서 본 망치가 다르면 「이 타일이 저 목록을 연다」가 안 읽힌다.
+     * path 를 각자 들고 있으면 한쪽만 고쳐진다 — 조각 하나를 둘이 나눠 쓴다.
+     */
+    assert.match(source(CARD), /import TrialActionIcon from '\.\/TrialActionIcon\.vue'/);
+    assert.match(source(TODO_GRID), /import TrialActionIcon from '\.\/TrialActionIcon\.vue'/);
+    /* 같은 이름 네 가지(`STANCE.icon`)를 둘 다 그대로 넘긴다 */
+    assert.match(source(ICON), /\['gavel', 'ballot', 'clock', 'scale'\]/);
 });
 
 test('아코디언은 고정 높이가 아니라 실제 높이로 여닫는다', () => {

@@ -4,12 +4,11 @@ import { useRouter } from 'vue-router';
 import ChallengeModeTabBar from '@/components/challenge/ChallengeModeTabBar.vue';
 import GroupTutorialOverlay from '@/components/challenge/group/GroupTutorialOverlay.vue';
 import GroupJoinCodeSheet from '@/components/challenge/group/GroupJoinCodeSheet.vue';
-import GroupTrialStatusCard from '@/components/challenge/group/GroupTrialStatusCard.vue';
+import GroupTrialTodoGrid from '@/components/challenge/group/GroupTrialTodoGrid.vue';
 import GroupTodoDoneCard from '@/components/challenge/group/GroupTodoDoneCard.vue';
 import GroupPeacefulCard from '@/components/challenge/group/GroupPeacefulCard.vue';
 import GroupMascotScene from '@/components/challenge/group/GroupMascotScene.vue';
-import GroupTodoSheet from '@/components/challenge/group/GroupTodoSheet.vue';
-import GroupWatchingTrialSheet from '@/components/challenge/group/GroupWatchingTrialSheet.vue';
+import GroupTrialListSheet from '@/components/challenge/group/GroupTrialListSheet.vue';
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
@@ -151,29 +150,12 @@ const myTurnTrials = computed(() => trialCards.value.filter((card) => card.actio
 const watchingTrials = computed(() => trialCards.value.filter((card) => !card.actionable));
 
 /*
- * 바텀시트가 쓰는 얇은 행. 「할 일」만 담는다 — 시트는 훑어보고 바로 처리하는 자리라
- * 심판받는 중처럼 누를 것이 없는 재판이 섞이면 목록만 길어진다.
- *
- * 같은 `trialCards` 에서 뽑는다. 예전 `/my-trials` 를 따로 한 번 더 부르면 두 목록의
- * 건수가 어긋나는 순간이 생긴다(마감 필터를 서버가 각각 계산한다).
+ * 내 차례를 다시 **행동별로** 가른다 — 할 일 격자의 두 칸이 이 둘이다.
+ * `action` 은 `utils/groupTrial.js` 의 `STANCE.action` 이 정한 값이라 여기서 다시 판정하지 않는다.
+ * 내 차례에는 `trial`(지켜보기)이 섞이지 않는다 — 그건 `actionable: false` 쪽이다.
  */
-const todoItems = computed(() =>
-    trialCards.value
-        .filter((card) => card.actionable)
-        .map((card) => ({
-            id: card.id,
-            type: card.action === 'defend' ? 'accuse' : 'vote',
-            title: card.title,
-            amount: card.exceededAmount,
-            challengeName: card.groupName,
-            challengeId: card.groupId,
-            indictmentId: card.id,
-            tally: `${card.voteCount}/${card.totalVoters} 투표`,
-            voteCount: card.voteCount,
-            totalVoters: card.totalVoters,
-            deadline: card.deadline,
-        })),
-);
+const defendTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'defend'));
+const voteTrials = computed(() => myTurnTrials.value.filter((card) => card.action === 'vote'));
 
 /* 카드 자리는 이제 `myTurnTrials` · `watchingTrials` 가 직접 가른다 — `hasTodo` 는 지웠다 */
 const allDone = computed(() => trialCards.value.length === 0 && doneIds.value.length > 0);
@@ -181,18 +163,32 @@ const allDone = computed(() => trialCards.value.length === 0 && doneIds.value.le
 /* ── 카운트다운 ────────────────────────── */
 const { countdowns } = useCountdown(trialCards);
 
-/* 접힌 요약 줄이 마감을 감춰 버리지 않게, 6시간 안쪽이 하나라도 있으면 그것만 밖으로 알린다 */
-const watchingUrgent = computed(() =>
-    watchingTrials.value.some((card) => countdowns.value[card.id]?.urgent),
-);
+/* 접힌 자리가 마감을 감춰 버리지 않게, 6시간 안쪽이 하나라도 있으면 그것만 밖으로 알린다 */
+function anyUrgent(list) {
+    return list.some((card) => countdowns.value[card.id]?.urgent);
+}
+const defendUrgent = computed(() => anyUrgent(defendTrials.value));
+const voteUrgent = computed(() => anyUrgent(voteTrials.value));
+const watchingUrgent = computed(() => anyUrgent(watchingTrials.value));
 
-/* ── 바텀시트 ──────────────────────────── */
-const showSheet = ref(false);
-const todoSheetRef = ref(null);
+/*
+ * ── 재판 목록 바텀시트 ─────────────────
+ * 세 묶음(변론·투표·지켜보기)이 **시트 하나**를 돌려 쓴다. 목록 내용만 다르고 줄 모양은 같아서
+ * `showDefendSheet` · `showVoteSheet` … 로 늘리면 셋이 조금씩 어긋나기만 한다.
+ * 열려 있는 종류를 문자열 하나로 들고, 제목과 항목은 거기서 파생시킨다.
+ */
+const openSheet = ref(null); /* 'defend' | 'vote' | 'watching' | null */
+const sheetRef = ref(null);
 
-/* 지켜보는 재판 목록. 홈의 요약 줄이 여는 유일한 자리다 */
-const showWatchingSheet = ref(false);
-const watchingSheetRef = ref(null);
+const SHEET_TITLE = { defend: '변론할 재판', vote: '투표할 재판', watching: '지켜보는 재판' };
+const sheetTitle = computed(() => SHEET_TITLE[openSheet.value] ?? '');
+
+const SHEET_SOURCE = {
+    defend: defendTrials,
+    vote: voteTrials,
+    watching: watchingTrials,
+};
+const sheetItems = computed(() => SHEET_SOURCE[openSheet.value]?.value ?? []);
 
 /* ── 토스트 ────────────────────────────── */
 const toast = ref(null);
@@ -208,7 +204,7 @@ function flash(msg) {
 
 /* ── 판사 탕이 말풍선 ─────────────────── */
 const judgeQuote = computed(() => {
-    const todoCount = todoItems.value.length;
+    const todoCount = myTurnTrials.value.length;
     if (todoCount > 0) return `밀린 할 일이 ${todoCount}건 있어요,\n서두르세요!`;
     if (allDone.value) return '모든 할 일을 처리했군요,\n훌륭해요!';
     if (activeCount.value > 0) return `진행 중인 챌린지가\n${activeCount.value}건 있어요`;
@@ -272,13 +268,9 @@ function goToTrial(action, groupId, indictmentId) {
     /* 바텀시트 안에서 이동할 때는 시트의 history 항목을 먼저 양도한 뒤
      * router.replace 를 써야 한다. 그렇지 않으면 시트가 닫히면서
      * history.back() 이 라우터 이동을 되감는다 (useOverlay 주석 참고). */
-    if (showSheet.value) {
-        todoSheetRef.value?.releaseHistory?.();
-        showSheet.value = false;
-    }
-    if (showWatchingSheet.value) {
-        watchingSheetRef.value?.releaseHistory?.();
-        showWatchingSheet.value = false;
+    if (openSheet.value) {
+        sheetRef.value?.releaseHistory?.();
+        openSheet.value = null;
     }
     router.replace({
         name: TRIAL_ROUTE[action],
@@ -286,14 +278,9 @@ function goToTrial(action, groupId, indictmentId) {
     });
 }
 
-/** 「재판 현황」 카드의 CTA. 어떤 입장이냐에 따라 변론·투표·현황 셋 중 하나로 간다. */
+/** 시트 안 재판 줄의 CTA. 어떤 입장이냐에 따라 변론·투표·현황 셋 중 하나로 간다. */
 function onOpenTrial({ item, action }) {
     goToTrial(action, item.groupId, item.id);
-}
-
-/** 바텀시트의 얇은 행. 여기는 할 일만 담기므로 변론·투표 둘뿐이다. */
-function onOpenTodo(item) {
-    goToTrial(item.type === 'accuse' ? 'defend' : 'vote', item.challengeId, item.indictmentId);
 }
 
 function goToAllChallenges() {
@@ -448,16 +435,18 @@ function goToChat(challenge) {
         <!-- ===== 본문 ===== -->
         <main class="gc-body">
             <!--
-              내 차례인 재판만 카드에 남긴다(#448). 지켜보는 재판은 아래 요약 줄이 받는다 —
-              눌러도 할 게 없는 줄이 섞이면 정작 마감이 걸린 줄을 가린다.
+              내 차례인 재판을 **격자 두 칸으로 접는다**(#448). 목록을 그대로 쌓으면 그룹 수만큼
+              홈이 길어져 이 이슈가 없애려던 문제가 그대로 남는다. 격자는 건수와 무관하게 높이가 같다.
+              지켜보는 재판은 아래 요약 줄이 받는다.
               분기: 내 차례 있음 / 방금 다 처리함 / 지켜보기만 남음 / 애초에 재판이 없음
             -->
-            <GroupTrialStatusCard
+            <GroupTrialTodoGrid
                 v-if="myTurnTrials.length"
-                :items="myTurnTrials"
-                :countdowns="countdowns"
-                heading="내 차례"
-                @open="onOpenTrial"
+                :defend-count="defendTrials.length"
+                :vote-count="voteTrials.length"
+                :defend-urgent="defendUrgent"
+                :vote-urgent="voteUrgent"
+                @open="openSheet = $event"
             />
             <GroupTodoDoneCard v-else-if="allDone" />
             <!-- 재판은 도는데 내가 할 게 없는 상태. 「평온」이라고 하면 거짓말이 된다 -->
@@ -478,7 +467,7 @@ function goToChat(challenge) {
                 v-if="watchingTrials.length"
                 type="button"
                 class="gc-watching"
-                @click="showWatchingSheet = true"
+                @click="openSheet = 'watching'"
             >
                 <span class="gc-watching__label">
                     지켜보는 재판 {{ watchingTrials.length }}건
@@ -584,26 +573,17 @@ function goToChat(challenge) {
         <ChallengeModeTabBar active-mode="group" />
 
         <!--
-          ===== TO-DO 바텀시트 =====
-          **여는 버튼이 지금은 없다.** #432 에서 재판 현황 카드가 아코디언이 되면서 진행 스테퍼부터
-          CTA 까지 그 자리에서 전부 보여주게 돼 「할 일 N건 ›」 시트와 역할이 겹쳤다. 버튼만 뺐고
-          배선은 그대로 둔다 — `todoItems` 는 판사 탕이 말풍선(`judgeQuote`)이 계속 쓰고,
-          시트를 되살릴지 지울지는 아직 정하지 않았다.
+          ===== 재판 목록 바텀시트 (#448) =====
+          변론·투표·지켜보기 **세 목록이 이 하나를 돌려 쓴다.** 격자의 두 칸과 아래 요약 줄이
+          모두 여기로 들어온다 — `openSheet` 가 어느 목록인지만 정하고 줄 모양은 전부 같다.
         -->
-        <GroupTodoSheet
-            ref="todoSheetRef"
-            v-model="showSheet"
-            :items="todoItems"
+        <GroupTrialListSheet
+            ref="sheetRef"
+            :model-value="openSheet !== null"
+            :title="sheetTitle"
+            :items="sheetItems"
             :countdowns="countdowns"
-            @open="onOpenTodo"
-        />
-
-        <!-- ===== 지켜보는 재판 바텀시트 (#448) ===== -->
-        <GroupWatchingTrialSheet
-            ref="watchingSheetRef"
-            v-model="showWatchingSheet"
-            :items="watchingTrials"
-            :countdowns="countdowns"
+            @update:model-value="openSheet = $event ? openSheet : null"
             @open="onOpenTrial"
         />
 

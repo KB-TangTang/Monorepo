@@ -5,6 +5,10 @@
   접히면 **두 줄**(행동 아이콘 · 할 일 라벨 / 누구·어느 그룹 · 투표 점 · 셰브론),
   펼치면 남은 시간 · 진행 스테퍼 · 투표 현황 · CTA 다.
 
+  **이제 홈이 아니라 시트가 이 카드를 쓴다**(#448 3차). 홈은 할 일을 격자 두 칸으로 접고
+  (`GroupTrialTodoGrid`), 목록은 `GroupTrialListSheet` 가 받는다. 머리줄은 시트 헤더가
+  그리므로 여기서는 그리지 않는다 — 두 자리에서 「변론할 재판 2건」이 두 번 뜨면 안 된다.
+
   **왜 두 줄인가 (#448 2차).** 예전에는 한 줄에 완결된 문장을 넣었다 —
   「{닉}님 재판에 투표해주세요」. 한국어는 술어가 뒤에 오는데 말줄임은 뒤를 자른다.
   360px 에서 제목에 남는 폭이 152px 이라 11자에서 잘렸고, 그 결과
@@ -24,8 +28,8 @@
 <script setup>
 import { ref } from 'vue';
 import { ChevronDownIcon } from '@heroicons/vue/24/outline';
-import { ClockIcon, ScaleIcon } from '@heroicons/vue/24/solid';
 import UserAvatar from '@/components/common/UserAvatar.vue';
+import TrialActionIcon from './TrialActionIcon.vue';
 import { TRIAL_STEPS } from '@/utils/groupTrial';
 
 const props = defineProps({
@@ -33,12 +37,6 @@ const props = defineProps({
     items: { type: Array, required: true },
     /** 아이템 id → { text, urgent } 맵 */
     countdowns: { type: Object, required: true },
-    /*
-     * 머리줄 앞말. 비면 머리줄 자체를 안 그린다 — 바텀시트는 시트 헤더가 이미 같은 말을 한다.
-     * 홈에서는 필요하다: 「재판 현황」이 다크 헤더 곡면에 있어 스크롤하면 사라지고,
-     * 흰 카드와 시각적으로 끊겨 있어 이 목록이 무엇인지 카드 안에서는 알 수 없었다.
-     */
-    heading: { type: String, default: '' },
 });
 
 const emit = defineEmits(['open']);
@@ -89,15 +87,6 @@ function onLeave(el) {
 
 <template>
     <section class="trial-status">
-        <!--
-             무슨 목록인지 카드 안에서 말한다. 「재판 현황」은 다크 헤더 곡면에 있어
-             스크롤하면 사라지고, 흰 카드와 시각적으로 끊겨 있어 이어 읽히지 않았다.
-        -->
-        <header v-if="heading" class="trial-status__head">
-            <span class="trial-status__head-title">{{ heading }} {{ items.length }}건</span>
-            <span class="trial-status__head-sort">마감 임박순</span>
-        </header>
-
         <ul class="trial-status__list">
             <li
                 v-for="(item, index) in items"
@@ -114,30 +103,7 @@ function onLeave(el) {
                 >
                     <!-- 왼쪽 앵커 = 할 일의 종류. 모양이 달라 색을 못 봐도 갈린다 -->
                     <span class="trial-status__icon" :class="`trial-status__icon--${item.tone}`">
-                        <svg
-                            v-if="item.icon === 'gavel'"
-                            class="trial-status__glyph"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M1 21h12v2H1zM5.245 8.07l2.83-2.827 14.14 14.14-2.828 2.83zM12.317 1l5.657 5.657-2.83 2.83-5.654-5.66zM3.825 9.485l5.657 5.657-2.828 2.828-5.657-5.657z"
-                            />
-                        </svg>
-                        <svg
-                            v-else-if="item.icon === 'ballot'"
-                            class="trial-status__glyph"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M18 13h-.68l-2 2h1.91L19 17H5l1.78-2h2.05l-2-2H6l-3 3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-4l-3-3zm-1-5.05l-4.95 4.95-3.54-3.54 4.95-4.95 3.54 3.54zm-4.24-5.66L6.39 8.66c-.39.39-.39 1.02 0 1.41l4.95 4.95c.39.39 1.02.39 1.41 0l6.36-6.36c.39-.39.39-1.02 0-1.41L14.16 2.3c-.38-.4-1.01-.4-1.4-.01z"
-                            />
-                        </svg>
-                        <ScaleIcon v-else-if="item.icon === 'scale'" class="trial-status__glyph" />
-                        <ClockIcon v-else class="trial-status__glyph" />
+                        <TrialActionIcon :name="item.icon" class="trial-status__glyph" />
                     </span>
 
                     <span class="trial-status__body">
@@ -263,26 +229,6 @@ function onLeave(el) {
     border-radius: var(--tt-radius-xl);
     padding: 6px 15px 4px;
     box-shadow: var(--tt-elevation-2);
-}
-
-/* ── 머리줄 ─────────────────────────── */
-.trial-status__head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 6px 2px 7px;
-}
-.trial-status__head-title {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-black);
-    letter-spacing: 0.02em;
-    color: var(--tt-text-muted);
-}
-/* 정렬 기준을 밝힌다. 「왜 이 순서인가」를 묻지 않게 하는 한 줄이라 앞말보다 더 물러난다 */
-.trial-status__head-sort {
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-hint);
 }
 
 /* ── 목록 ───────────────────────────── */

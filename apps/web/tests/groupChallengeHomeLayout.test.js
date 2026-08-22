@@ -18,7 +18,8 @@ function source(path) {
 
 const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 const TRIAL_CARD = 'src/components/challenge/group/GroupTrialStatusCard.vue';
-const WATCH_SHEET = 'src/components/challenge/group/GroupWatchingTrialSheet.vue';
+const LIST_SHEET = 'src/components/challenge/group/GroupTrialListSheet.vue';
+const TODO_GRID = 'src/components/challenge/group/GroupTrialTodoGrid.vue';
 
 test('홈은 내 챌린지를 상위 몇 건까지만 그린다', () => {
     /*
@@ -51,10 +52,10 @@ test('빈 상태 판정은 자른 목록이 아니라 전체로 본다', () => {
 
 test('할 일 큐만 바닥에서 떠 있다', () => {
     /*
-     * 위계를 만드는 건 그림자 하나가 아니라 **차이**다. 재판 현황에 그림자를 주면서
+     * 위계를 만드는 건 그림자 하나가 아니라 **차이**다. 할 일 격자에 그림자를 주면서
      * 아래 명부 행에도 같이 주면 아무것도 안 준 것과 같다.
      */
-    assert.match(source(TRIAL_CARD), /\.trial-status \{[^}]*box-shadow: var\(--tt-elevation-2\)/);
+    assert.match(source(TODO_GRID), /\.todo-grid__tile \{[^}]*box-shadow: var\(--tt-elevation-2\)/);
     assert.doesNotMatch(source(HOME), /\.gc-group-row \{[^}]*box-shadow/);
 });
 
@@ -98,36 +99,75 @@ test('재판을 「내 차례」와 「지켜보는 중」으로 가른다', () 
     );
 });
 
-test('홈 카드에는 내 차례인 재판만 올린다', () => {
+test('내 차례를 다시 변론·투표로 가른다', () => {
     /*
-     * 여기가 `trialCards` 로 되돌아가면 「내 변론을 제출했어요」처럼 눌러도 할 게 없는 줄이
-     * 다시 섞여, 마감이 걸린 줄을 아래로 밀어낸다. 이 화면이 원래 갖고 있던 문제다.
+     * 격자의 두 칸이 이 둘이다. 기준은 `STANCE.action` 이어야 한다 — 여기서 status 를
+     * 다시 보면 CTA 가 여는 화면과 타일이 여는 목록이 어긋난다.
      */
     const src = source(HOME);
-    assert.match(
-        src,
-        /<GroupTrialStatusCard\s+v-if="myTurnTrials\.length"\s+:items="myTurnTrials"/,
-    );
+    assert.match(src, /defendTrials = computed\([\s\S]*?card\.action === 'defend'/);
+    assert.match(src, /voteTrials = computed\([\s\S]*?card\.action === 'vote'/);
+});
+
+test('홈은 내 차례를 목록이 아니라 격자 두 칸으로 접는다', () => {
+    /*
+     * 목록을 그대로 쌓으면 그룹이 늘수록 홈이 세로로 자란다 — #448 이 없애려던 문제다.
+     * 격자는 건수와 무관하게 높이가 같다. 여기가 `GroupTrialStatusCard` 로 되돌아가면
+     * 「행 개수만큼 홈이 길어진다」가 그대로 살아난다.
+     */
+    const src = source(HOME);
+    assert.match(src, /<GroupTrialTodoGrid\s+v-if="myTurnTrials\.length"/);
+    assert.match(src, /:defend-count="defendTrials\.length"/);
+    assert.match(src, /:vote-count="voteTrials\.length"/);
+    assert.doesNotMatch(src, /<GroupTrialStatusCard/);
+});
+
+test('0건인 칸도 지우지 않고 흐리게 남긴다', () => {
+    /*
+     * 격자의 값은 「항상 같은 모양」이다. 한 칸이 사라지면 남은 칸이 전체 폭으로 늘어나
+     * 매번 다른 화면이 된다 — 목록을 접은 이유가 통째로 무효가 된다.
+     */
+    const src = source(TODO_GRID);
+    assert.match(src, /todo-grid__tile--empty/);
+    assert.match(src, /:disabled="!tile\.count"/);
+    assert.doesNotMatch(src, /v-if="tile\.count"/);
+});
+
+test('두 칸은 건수와 무관하게 정사각형이다', () => {
+    /*
+     * `aspect-ratio` 는 **셀**이 갖는다. 버튼에 걸면 안쪽 내용이 넘칠 때 비율이 아니라
+     * 내용이 이겨서 두 칸 높이가 어긋난다.
+     */
+    assert.match(source(TODO_GRID), /\.todo-grid__cell \{[^}]*aspect-ratio: 1/);
 });
 
 test('지켜보는 재판은 지우지 않고 한 줄로 접는다', () => {
     /*
      * 할 일은 아니어도 「내 재판이 심판받는 중」은 이 화면에서 가장 궁금한 것이다.
      * 큐에서 뺀다고 화면에서까지 사라지면 상세 화면까지 들어가야만 알 수 있다.
+     * 격자에 세 번째 칸으로 넣지도 않는다 — 지켜보기는 할 일이 아니다.
      */
     const src = source(HOME);
-    assert.match(src, /v-if="watchingTrials\.length"[\s\S]*?showWatchingSheet = true/);
+    assert.match(src, /v-if="watchingTrials\.length"[\s\S]*?openSheet = 'watching'/);
     assert.match(src, /지켜보는 재판 \{\{ watchingTrials\.length \}\}건/);
 });
 
-test('접힌 요약 줄이 마감을 통째로 감추지 않는다', () => {
+test('접은 자리가 마감을 통째로 감추지 않는다', () => {
     /*
      * 접으면 매초 도는 타이머가 같이 사라진다. 6시간 안쪽(useCountdown 의 `urgent`)이
-     * 하나라도 있으면 그것만 밖으로 알려야 시트를 열 이유가 생긴다.
+     * 하나라도 있으면 그것만 밖으로 알려야 열어 볼 이유가 생긴다.
+     * 격자 두 칸과 지켜보기 줄 **셋 다** 접힌 자리라 셋 다 알려야 한다.
      */
     const src = source(HOME);
-    assert.match(src, /watchingUrgent = computed\([\s\S]*?countdowns\.value\[card\.id\]\?\.urgent/);
+    assert.match(
+        src,
+        /function anyUrgent\(list\) \{[\s\S]*?countdowns\.value\[card\.id\]\?\.urgent/,
+    );
+    for (const name of ['defendUrgent', 'voteUrgent', 'watchingUrgent']) {
+        assert.match(src, new RegExp(`${name} = computed\\(\\(\\) => anyUrgent\\(`), name);
+    }
     assert.match(src, /v-if="watchingUrgent"/);
+    assert.match(source(TODO_GRID), /v-if="tile\.urgent"/);
 });
 
 test('재판은 도는데 내가 할 게 없는 상태를 「평온」이라고 하지 않는다', () => {
@@ -143,25 +183,31 @@ test('재판은 도는데 내가 할 게 없는 상태를 「평온」이라고 
     assert.ok(idleAt < peacefulAt, '「할 일 없음」 분기가 평온 분기보다 앞에 와야 한다');
 });
 
-test('지켜보는 재판 시트는 재판 현황 카드를 그대로 쓴다', () => {
+test('세 목록이 시트 하나를 돌려 쓴다', () => {
     /*
-     * 같은 재판을 두 자리에서 다르게 그리면 뱃지·제목·CTA 판정이 갈린다.
-     * 지켜보는 입장은 CTA 가 전부 「재판 현황 보기」라 이 자리에서도 말이 맞는다.
+     * 변론·투표·지켜보기는 제목과 담긴 항목만 다르고 줄 모양·정렬·CTA 가 전부 같다.
+     * 시트를 셋으로 나누면 그 셋이 조금씩 어긋난다.
+     * 같은 재판을 두 자리에서 다르게 그리지 않도록 줄은 `GroupTrialStatusCard` 가 그린다.
      */
-    const src = source(WATCH_SHEET);
-    assert.match(src, /import GroupTrialStatusCard from/);
-    assert.match(src, /import BaseBottomSheet from '@\/components\/common\/BaseBottomSheet\.vue'/);
+    const sheet = source(LIST_SHEET);
+    assert.match(sheet, /import GroupTrialStatusCard from/);
+    assert.match(
+        sheet,
+        /import BaseBottomSheet from '@\/components\/common\/BaseBottomSheet\.vue'/,
+    );
+
+    const src = source(HOME);
+    assert.match(src, /const openSheet = ref\(null\)/);
+    assert.match(src, /SHEET_TITLE = \{[^}]*defend: '변론할 재판'[^}]*watching: '지켜보는 재판'/);
+    assert.match(src, /<GroupTrialListSheet[\s\S]{0,300}?:items="sheetItems"/);
 });
 
-test('지켜보는 재판을 처리할 일 시트에 밀어 넣지 않는다', () => {
+test('시트 머리줄은 시트만 그린다', () => {
     /*
-     * `GroupTodoSheet` 는 처리할 일 전용이다 — 머리글이 「처리할 일 N건」이고 필터 칩이
-     * 「기소 / 투표」, 행마다 「변론」·「투표」 버튼이 붙는다. 지켜보는 재판에 그 버튼을 달면
-     * 눌러서 아무것도 못 하는 화면으로 보낸다.
+     * 카드에 머리줄을 되살리면 「변론할 재판 2건」이 시트 헤더와 카드 안에 두 번 뜬다.
      */
-    const src = source(HOME);
-    assert.match(src, /<GroupTodoSheet[^>]*\n[^>]*:items="todoItems"/);
-    assert.match(src, /<GroupWatchingTrialSheet[\s\S]{0,200}?:items="watchingTrials"/);
+    assert.match(source(LIST_SHEET), /\{\{ title \}\} \{\{ items\.length \}\}건/);
+    assert.doesNotMatch(source(TRIAL_CARD), /trial-status__head/);
 });
 
 /* ── 펼친 본문 = 사건 기록 (시안 E 의 「종이 질감」) ─────── */
@@ -205,14 +251,14 @@ test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {
 test('시트 안에서 이동할 때 history 를 먼저 양도한다', () => {
     /*
      * 안 하면 시트가 닫히면서 history.back() 이 라우터 이동을 되감는다
-     * (`common/useOverlay.js` 주석 — GroupTodoSheet 가 같은 이유로 같은 것을 노출한다).
+     * (`common/useOverlay.js` 주석 참고).
      */
     assert.match(
-        source(WATCH_SHEET),
+        source(LIST_SHEET),
         /releaseHistory: \(\) => sheetRef\.value\?\.releaseHistory\?\.\(\)/,
     );
     assert.match(
         source(HOME),
-        /if \(showWatchingSheet\.value\) \{[\s\S]*?watchingSheetRef\.value\?\.releaseHistory\?\.\(\)/,
+        /if \(openSheet\.value\) \{[\s\S]*?sheetRef\.value\?\.releaseHistory\?\.\(\)/,
     );
 });
