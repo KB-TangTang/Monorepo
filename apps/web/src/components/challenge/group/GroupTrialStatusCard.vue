@@ -271,8 +271,22 @@ function onLeave(el) {
 .trial-status__panel {
     overflow: hidden;
 }
+/*
+ * 펼친 본문은 **사건 기록**이다 (#448). 접힌 줄 6행은 훑는 면이라 흰 바탕을 그대로 두고,
+ * 열었을 때만 서류가 나온다 — 「펼친다 = 기록을 펼친다」로 아코디언 자체에 의미가 붙는다.
+ * `openId` 가 단일이라 종이는 한 번에 하나만 나오고, 그래서 목록이 시끄러워지지 않는다.
+ *
+ * 어휘는 새로 만들지 않았다. `--tt-doc-*` 은 소환장(`GroupSummonCard`)이 쓰던 것을 그대로 쓴다.
+ * 다만 소환장의 기울임·낙하·인장은 **한 번 보는 히어로**용이라 여기엔 가져오지 않는다.
+ */
 .trial-status__panel-inner {
-    padding: 2px 2px 13px;
+    /* 아래 여백을 패딩이 아니라 margin 으로 준다 — 패널은 height:0 이 되어야 하므로 패딩을 못 갖는다.
+       부모가 overflow:hidden 이라 이 margin 은 밖으로 새지 않고 scrollHeight 에 그대로 잡힌다 */
+    margin: 0 2px 13px;
+    background: var(--tt-doc-bg);
+    border: 1px solid var(--tt-doc-rule);
+    border-radius: var(--tt-radius-sm);
+    padding: 12px 13px 13px;
     display: flex;
     flex-direction: column;
     gap: 11px;
@@ -315,7 +329,11 @@ function onLeave(el) {
     gap: 5px;
     position: relative;
 }
-/* 칸 사이를 잇는 선. 마지막 칸 뒤에는 그리지 않는다 */
+/*
+ * 칸 사이를 잇는 선. 마지막 칸 뒤에는 그리지 않는다.
+ * 미완료 색은 진행바 트랙(`--tt-border-track` #e9ecf2, 회청)이 아니라 종이 괘선(`--tt-doc-rule`)이다 —
+ * 아이보리 바탕 위에 회청 회색이 얹히면 그 조각만 서류 밖에서 온 것처럼 뜬다.
+ */
 .trial-status__step:not(:last-child)::after {
     content: '';
     position: absolute;
@@ -323,7 +341,7 @@ function onLeave(el) {
     left: 50%;
     width: 100%;
     height: 2px;
-    background: var(--tt-border-track);
+    background: var(--tt-doc-rule);
 }
 .trial-status__step--done:not(:last-child)::after {
     background: var(--tt-blue);
@@ -334,7 +352,7 @@ function onLeave(el) {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--tt-border-track);
+    background: var(--tt-doc-rule);
 }
 .trial-status__step--done .trial-status__step-dot {
     background: var(--tt-blue);
@@ -343,10 +361,16 @@ function onLeave(el) {
     background: var(--tt-red);
     box-shadow: 0 0 0 4px var(--tt-red-soft);
 }
-/* 4칸을 가로로 나눠 쓰므로 caption 까지 올리면 좁은 화면에서 줄바꿈된다 */
+/*
+ * 4칸을 가로로 나눠 쓰므로 caption 까지 올리면 좁은 화면에서 줄바꿈된다.
+ * 「기소 ─ 변론 ─ 투표 ─ 판결」은 재판 절차 그 자체다 — 서류 안이니 명조로 쓴다.
+ * `--tt-font-serif`(나눔명조)는 `index.html:69` 에서 이미 전역으로 불러오고 있다.
+ */
 .trial-status__step-name {
+    font-family: var(--tt-font-serif);
     font-size: var(--tt-fs-badge);
     font-weight: var(--tt-fw-bold);
+    letter-spacing: 0.06em;
     color: var(--tt-text-hint);
 }
 .trial-status__step--done .trial-status__step-name {
@@ -367,7 +391,8 @@ function onLeave(el) {
     flex: 1;
     height: 6px;
     border-radius: var(--tt-radius-full);
-    background: var(--tt-border-track);
+    /* 스테퍼와 같은 이유로 종이 괘선 톤 — 같은 서류 안에서 미완료 색이 둘이면 안 된다 */
+    background: var(--tt-doc-rule);
     overflow: hidden;
 }
 .trial-status__vote-fill {

@@ -164,6 +164,40 @@ test('지켜보는 재판을 처리할 일 시트에 밀어 넣지 않는다', (
     assert.match(src, /<GroupWatchingTrialSheet[\s\S]{0,200}?:items="watchingTrials"/);
 });
 
+/* ── 펼친 본문 = 사건 기록 (시안 E 의 「종이 질감」) ─────── */
+
+test('서류 바탕은 펼친 본문에만 깔린다', () => {
+    /*
+     * 접힌 줄 6행은 **훑는 면**이다. 여기까지 아이보리로 깔면 목록 전체가 색을 갖게 돼
+     * 아래 「내 챌린지」와의 위계가 아니라 화면 전체의 톤이 바뀐다.
+     * 종이는 펼쳤을 때만 — `openId` 가 단일이라 한 번에 하나만 나온다.
+     */
+    const code = source(TRIAL_CARD);
+    assert.match(code, /\.trial-status__panel-inner \{[^}]*background: var\(--tt-doc-bg\)/);
+    assert.doesNotMatch(code, /\.trial-status \{[^}]*--tt-doc-/);
+});
+
+test('서류 어휘를 새로 만들지 않고 소환장 토큰을 쓴다', () => {
+    /*
+     * `--tt-doc-*` 과 `--tt-font-serif` 는 `GroupSummonCard`(초대코드 소환장) 때문에 이미 있다.
+     * 여기서 HEX 를 새로 박거나 토큰을 신설하면 같은 「법정 서류」가 두 벌이 된다.
+     */
+    const code = source(TRIAL_CARD);
+    assert.match(code, /\.trial-status__step-name \{[^}]*font-family: var\(--tt-font-serif\)/);
+    /* 미완료 색이 서류 안에서 둘이면 안 된다 — 진행바 트랙(회청)은 아이보리 위에서 뜬다.
+       주석에는 남아 있어도 되므로 선언부만 본다 */
+    assert.doesNotMatch(code, /background: var\(--tt-border-track\)/);
+});
+
+test('패널 껍데기는 여전히 패딩을 갖지 않는다', () => {
+    /*
+     * 서류 상자를 만들면서 여백을 `__panel` 로 올리고 싶어지는데, 그러면 height:0 이 돼도
+     * 패딩만큼 남아 닫힌 행이 부풀고 여닫기 애니메이션이 그 높이에서 시작·종료한다.
+     * 여백은 안쪽의 margin 이 갖는다(부모가 overflow:hidden 이라 scrollHeight 에 잡힌다).
+     */
+    assert.doesNotMatch(source(TRIAL_CARD), /\.trial-status__panel \{[^}]*padding/);
+});
+
 test('시트 안에서 이동할 때 history 를 먼저 양도한다', () => {
     /*
      * 안 하면 시트가 닫히면서 history.back() 이 라우터 이동을 되감는다
