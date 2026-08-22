@@ -7,6 +7,9 @@ import {
     composeMonthlyConsumptionReport,
     fetchMonthlyConsumptionState,
     formatChangeRate,
+    formatDecimal,
+    formatInteger,
+    formatWon,
     getPreviousPeriod,
     isAvailableReportMonth,
     isLatestAvailableCompletedReport,
@@ -154,7 +157,11 @@ test('2월 온보딩과 3~4월 리포트는 월 선택에서 활성화한다', (
 test('카테고리 증감과 화면 상태를 표시한다', () => {
     assert.equal(formatChangeRate(28), '▲28%');
     assert.equal(formatChangeRate(-12), '▼12%');
+    assert.equal(formatChangeRate(12.75), '▲12.75%');
     assert.equal(formatChangeRate(0), '−0%');
+    assert.equal(formatWon(4500.9), '4,500원');
+    assert.equal(formatInteger(3.9), '3');
+    assert.equal(formatDecimal(18.42), '18.42');
     assert.equal(resolveReportState({ loading: true, error: '실패', report: {} }), 'loading');
     assert.equal(resolveReportState({ error: '실패', report: {} }), 'error');
     assert.equal(resolveReportState({ report: null }), 'empty');

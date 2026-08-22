@@ -147,8 +147,20 @@ export function resolveMonthlySavingsAnalogyCard(report) {
     };
 }
 
+export function formatInteger(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.trunc(number).toLocaleString('ko-KR') : '0';
+}
+
+export function formatDecimal(value) {
+    const number = Number(value);
+    return Number.isFinite(number)
+        ? number.toLocaleString('ko-KR', { maximumFractionDigits: 20 })
+        : '0';
+}
+
 export function formatWon(value) {
-    return `${new Intl.NumberFormat('ko-KR').format(value)}원`;
+    return `${formatInteger(value)}원`;
 }
 
 export function formatPeriod(period) {
@@ -208,7 +220,7 @@ export function formatChangeRate(rate) {
     if (rate === 0) {
         return '−0%';
     }
-    return `${rate > 0 ? '▲' : '▼'}${Math.abs(rate)}%`;
+    return `${rate > 0 ? '▲' : '▼'}${formatDecimal(Math.abs(rate))}%`;
 }
 
 export function resolveReportState({ loading, error, report }) {

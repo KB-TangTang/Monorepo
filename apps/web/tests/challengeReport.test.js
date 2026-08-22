@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    formatDecimal,
+    formatInteger,
     formatPercentagePoint,
     formatPeriod,
     formatSignedWon,
@@ -13,9 +15,14 @@ import {
 
 test('리포트 표시 값을 포맷한다', () => {
     assert.equal(formatWon(74000), '74,000원');
+    assert.equal(formatWon(74000.98), '74,000원');
     assert.equal(formatSignedWon(40000), '+40,000원');
     assert.equal(formatSignedWon(-22000), '-22,000원');
+    assert.equal(formatInteger(12.75), '12');
+    assert.equal(formatInteger(-12.75), '-12');
+    assert.equal(formatDecimal(12.75), '12.75');
     assert.equal(formatPercentagePoint(9), '+9%');
+    assert.equal(formatPercentagePoint(-1.25), '-1.25%');
     assert.equal(formatPeriod('2026-06'), '2026년 6월');
     assert.equal(formatPeriod(''), '');
 });

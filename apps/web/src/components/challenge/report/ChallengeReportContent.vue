@@ -1,6 +1,11 @@
 <script setup>
 import { ref } from 'vue';
-import { formatPercentage, formatPercentagePoint, formatPeriod } from '@/utils/challengeReport';
+import {
+    formatInteger,
+    formatPercentage,
+    formatPercentagePoint,
+    formatPeriod,
+} from '@/utils/challengeReport';
 import ChallengeConsumptionHabitDropdown from '@/components/challenge/report/ChallengeConsumptionHabitDropdown.vue';
 import ChallengeGroupRecordCard from '@/components/challenge/report/ChallengeGroupRecordCard.vue';
 import ChallengeRankingSummaryCard from '@/components/challenge/report/ChallengeRankingSummaryCard.vue';
@@ -26,10 +31,10 @@ const isWeeklyResultsOpen = ref(false);
             <div class="mission-card__body">
                 <p id="mission-success-title">미션 성공률</p>
                 <strong class="mission-card__score">
-                    {{ report.missionSuccessRate }}<small>%</small>
+                    {{ formatPercentage(report.missionSuccessRate) }}
                 </strong>
                 <p v-if="showComparison" class="mission-card__comparison">
-                    {{ report.successfulDays }}일 성공 · 전월 대비
+                    {{ formatInteger(report.successfulDays) }}일 성공 · 전월 대비
                     <b>{{ formatPercentagePoint(report.monthOverMonthPercentagePoint) }}</b>
                 </p>
                 <div class="mission-card__track" aria-hidden="true">
@@ -63,7 +68,11 @@ const isWeeklyResultsOpen = ref(false);
                             <div class="weekly-card__track" aria-hidden="true">
                                 <span :style="{ width: formatPercentage(week.successRate) }"></span>
                             </div>
-                            <b>{{ week.successDays }}/{{ week.totalDays }}</b>
+                            <b
+                                >{{ formatInteger(week.successDays) }}/{{
+                                    formatInteger(week.totalDays)
+                                }}</b
+                            >
                         </li>
                     </ul>
                 </section>
@@ -91,13 +100,15 @@ const isWeeklyResultsOpen = ref(false);
                         >
                             {{ difficulty.level }}
                         </span>
-                        <span class="difficulty-card__attempts">{{ difficulty.attempts }}회</span>
+                        <span class="difficulty-card__attempts"
+                            >{{ formatInteger(difficulty.attempts) }}회</span
+                        >
                         <div class="difficulty-card__track" aria-hidden="true">
                             <span
                                 :style="{ width: formatPercentage(difficulty.successRate) }"
                             ></span>
                         </div>
-                        <strong>{{ difficulty.successRate }}%</strong>
+                        <strong>{{ formatPercentage(difficulty.successRate) }}</strong>
                     </li>
                 </ul>
                 <footer>

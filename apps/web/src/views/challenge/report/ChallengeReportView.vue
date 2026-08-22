@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
 import ChallengeMonthPicker from '@/components/challenge/report/ChallengeMonthPicker.vue';
+import ChallengeDifficultySheet from '@/components/challenge/report/ChallengeDifficultySheet.vue';
 import ChallengeReportContent from '@/components/challenge/report/ChallengeReportContent.vue';
 import ChallengeReportOnboarding from '@/components/challenge/report/ChallengeReportOnboarding.vue';
 import ChallengeReportToggle from '@/components/challenge/report/ChallengeReportToggle.vue';
@@ -10,6 +11,8 @@ import ChallengeSavingsGuide from '@/components/challenge/report/ChallengeSaving
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import { fetchMissionRankings } from '@/api/personalMission';
+import { useAuthStore } from '@/stores/auth';
+import { usePersonalMissionChallengeStore } from '@/stores/personalMission';
 import {
     getPreviousPeriod,
     getEmptyReportCopy,
@@ -19,6 +22,8 @@ import { hasSeenNetSavingsGuide, markNetSavingsGuideSeen } from '@/services/chal
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
+const personalMissionStore = usePersonalMissionChallengeStore();
 const report = ref(null);
 const months = ref([]);
 const selectedPeriod = ref('');
@@ -26,7 +31,12 @@ const loading = ref(true);
 const errorMessage = ref('');
 const isMonthPickerOpen = ref(false);
 const isGuideOpen = ref(false);
+const isDifficultySheetOpen = ref(false);
+const isDifficultySaving = ref(false);
+const difficultyError = ref('');
 const entryState = ref(null);
+
+const DIFFICULTY_NAME_BY_ID = { 1: 'EASY', 2: 'NORMAL', 3: 'HARD' };
 
 const state = computed(() =>
     resolveChallengeReportState({
@@ -41,6 +51,12 @@ const selectedMonth = computed(() =>
     months.value.find((month) => month.value === selectedPeriod.value),
 );
 const pickerPeriod = computed(() => selectedPeriod.value || getPreviousPeriod());
+const currentProsecutorId = computed(
+    () =>
+        DIFFICULTY_NAME_BY_ID[authStore.user?.difficultyId] ??
+        personalMissionStore.selectedProsecutorId ??
+        'NORMAL',
+);
 
 async function loadMonths() {
     const availability = await fetchChallengeReportMonths();
@@ -135,6 +151,29 @@ function openGroupHistory() {
     router.push({ name: 'groupChallengeList', query: { tab: 'ended' } });
 }
 
+function openDifficultySheet() {
+    difficultyError.value = '';
+    isDifficultySheetOpen.value = true;
+}
+
+async function changeDifficulty(prosecutorId) {
+    if (isDifficultySaving.value) {
+        return;
+    }
+
+    isDifficultySaving.value = true;
+    difficultyError.value = '';
+    try {
+        const user = await personalMissionStore.saveProsecutorDifficulty(prosecutorId);
+        authStore.mergeUser(user);
+        isDifficultySheetOpen.value = false;
+    } catch (error) {
+        difficultyError.value = error.message ?? '담당 검사 난이도를 저장하지 못했어요.';
+    } finally {
+        isDifficultySaving.value = false;
+    }
+}
+
 function startPersonalChallenge() {
     router.push({ name: 'personalMissionChallenge' });
 }
@@ -173,7 +212,7 @@ onMounted(initialize);
             v-else
             :report="report"
             :show-comparison="report.hasPreviousComparison ?? !selectedMonth?.firstReport"
-            @change-difficulty="router.push({ name: 'personalMissionChallengeDifficulty' })"
+            @change-difficulty="openDifficultySheet"
             @open-group-history="openGroupHistory"
         />
 
@@ -189,6 +228,13 @@ onMounted(initialize);
             @select="selectPeriod"
         />
         <ChallengeSavingsGuide v-model="isGuideOpen" @understood="acknowledgeGuide" />
+        <ChallengeDifficultySheet
+            v-model="isDifficultySheetOpen"
+            :current-prosecutor-id="currentProsecutorId"
+            :loading="isDifficultySaving"
+            :error-message="difficultyError"
+            @confirm="changeDifficulty"
+        />
     </article>
 </template>
 

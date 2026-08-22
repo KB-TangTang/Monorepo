@@ -1,19 +1,31 @@
+export function formatInteger(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.trunc(number).toLocaleString('ko-KR') : '0';
+}
+
+export function formatDecimal(value) {
+    const number = Number(value);
+    return Number.isFinite(number)
+        ? number.toLocaleString('ko-KR', { maximumFractionDigits: 20 })
+        : '0';
+}
+
 export function formatWon(value) {
-    return `${new Intl.NumberFormat('ko-KR').format(value)}원`;
+    return `${formatInteger(value)}원`;
 }
 
 export function formatSignedWon(value) {
-    const sign = value > 0 ? '+' : '';
+    const sign = Number(value) > 0 ? '+' : '';
     return `${sign}${formatWon(value)}`;
 }
 
 export function formatPercentage(value) {
-    return `${value}%`;
+    return `${formatDecimal(value)}%`;
 }
 
 export function formatPercentagePoint(value) {
-    const sign = value > 0 ? '+' : '';
-    return `${sign}${value}%`;
+    const sign = Number(value) > 0 ? '+' : '';
+    return `${sign}${formatDecimal(value)}%`;
 }
 
 export function formatPeriod(period) {

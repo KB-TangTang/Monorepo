@@ -1,6 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { formatChangeRate, formatWon, splitMonthlyCategories } from '@/utils/monthlyConsumption';
+import {
+    formatChangeRate,
+    formatDecimal,
+    formatWon,
+    splitMonthlyCategories,
+} from '@/utils/monthlyConsumption';
 
 const props = defineProps({
     report: { type: Object, required: true },
@@ -64,7 +69,7 @@ const chartStyle = computed(() => {
                     <li v-for="category in report.parentCategories" :key="category.name">
                         <i :class="`category-report__dot--${category.tone}`"></i>
                         <span>{{ category.name }}</span
-                        ><b>{{ category.ratio }}%</b>
+                        ><b>{{ formatDecimal(category.ratio) }}%</b>
                     </li>
                 </ul>
             </div>
