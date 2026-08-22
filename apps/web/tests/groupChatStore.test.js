@@ -385,3 +385,113 @@ test('멤버 목록에 없는 발신자는 null 이다 — 화면이 메시지�
     assert.equal(store.nicknameOf(999), null);
     assert.equal(store.nicknameOf(null), null);
 });
+
+/* ── 방 밖에서 보는 채팅 요약 (이슈 #423) ────────────── */
+
+/*
+ * 채팅은 접근성이 나빴다 — 목록 화면까지 세 번 들어가야 대화가 보였다.
+ * 그래서 홈 행과 지방법원 토글이 「안 읽은 개수 · 마지막 한 줄」을 직접 그리게 했고,
+ * 그 값은 이 스토어가 앱 단위로 들고 있다. 아래는 그 값이 살아남는 조건들이다.
+ */
+
+test('요약은 목록 응답으로 통째로 교체된다 — 나간 그룹이 남지 않는다', () => {
+    const store = newStore();
+    store.syncChatSummary([{ id: 1, unreadChatCount: 3, lastChatMessage: '준서: 참았다' }]);
+    /* 2번 그룹만 남은 응답. 1번이 병합으로 살아남으면 이미 끝난 방의 배지가 계속 뜬다 */
+    store.syncChatSummary([{ id: 2, unreadChatCount: 1, lastChatMessage: '민지: 편의점' }]);
+
+    assert.equal(store.unreadByGroup[1], undefined);
+    assert.equal(store.unreadByGroup[2], 1);
+    assert.equal(store.lastMessageByGroup[1], undefined);
+});
+
+test('실시간 채팅 알림은 개수를 올리고 마지막 줄을 갈아끼운다', () => {
+    const store = newStore();
+    store.syncChatSummary([{ id: 5, unreadChatCount: 2, lastChatMessage: '유현: 예전 말' }]);
+
+    store.receiveChatAlert({ groupId: 5, senderNickname: '민지', content: '지금 말' });
+
+    assert.equal(store.unreadByGroup[5], 3);
+    assert.equal(store.lastMessageByGroup[5], '민지: 지금 말');
+});
+
+test('알림은 문자열 groupId 로 와도 같은 방에 쌓인다', () => {
+    /* SSE 본문은 JSON 이라 서버가 Long 을 문자열로 흘려도 이상하지 않다 */
+    const store = newStore();
+    store.receiveChatAlert({ groupId: '9', senderNickname: '탕이', content: '안녕' });
+
+    assert.equal(store.unreadByGroup[9], 1);
+});
+
+test('지금 열어 둔 방의 알림은 무시한다 — 보고 있는 대화에 배지가 붙으면 안 된다', async () => {
+    const store = newStore();
+    await store.enterRoom(4);
+
+    store.receiveChatAlert({ groupId: 4, senderNickname: '민지', content: '보고 있다' });
+
+    assert.equal(store.unreadByGroup[4] ?? 0, 0);
+    assert.equal(store.hasUnreadChat, false);
+});
+
+test('채팅방에 들어가면 그 방 배지가 내려간다', async () => {
+    /* 서버 카운터는 resetUnreadCount 가 0 으로 만든다. 화면 사본만 남으면 배지가 안 꺼진다 */
+    const store = newStore();
+    store.syncChatSummary([{ id: 6, unreadChatCount: 7, lastChatMessage: '하은: 왔다' }]);
+
+    await store.enterRoom(6);
+
+    assert.equal(store.unreadByGroup[6], 0);
+    assert.equal(store.hasUnreadChat, false);
+});
+
+test('leaveRoom 은 요약을 지우지 않는다 — 방 밖에서 읽는 값이다', async () => {
+    /*
+     * 여기가 이 기능의 급소다. 요약을 방 상태와 같이 초기화하면 채팅방을 한 번 열었다 닫는
+     * 것만으로 다른 방들의 배지가 통째로 사라진다 — 화면에서는 「그냥 안 뜨네」로 보인다.
+     */
+    const store = newStore();
+    store.syncChatSummary([{ id: 8, unreadChatCount: 4, lastChatMessage: '준서: 남아야 한다' }]);
+    await store.enterRoom(3);
+
+    store.leaveRoom();
+
+    assert.equal(store.unreadByGroup[8], 4);
+    assert.equal(store.lastMessageByGroup[8], '준서: 남아야 한다');
+});
+
+test('로그아웃은 요약을 비운다 — 다음 사람에게 앞사람 대화가 보이면 안 된다', () => {
+    const store = newStore();
+    store.syncChatSummary([{ id: 8, unreadChatCount: 4, lastChatMessage: '준서: 비밀' }]);
+
+    store.clearChatSummary();
+
+    assert.deepEqual(store.unreadByGroup, {});
+    assert.deepEqual(store.lastMessageByGroup, {});
+    assert.equal(store.hasUnreadChat, false);
+});
+
+test('씨 뿌리기는 시작 전 그룹까지 물어본다', async () => {
+    /*
+     * `['ACTIVE']` 만 물으면 정작 대화가 가장 활발한 방이 빠진다. 채팅에는 상태 제한이 없고
+     * (ChatMessageService 에 status 검사가 없다) 서버가 시작일을 반드시 내일 이후로 막아서
+     * **만들고 나서 처음 떠드는 구간이 통째로 RECRUITING** 이기 때문이다.
+     * 실제로 이 한 줄 때문에 배지도 점도 안 뜨는 상태였다.
+     */
+    const store = newStore();
+    groupStub.setMyChallengesResponse([{ id: 2, unreadChatCount: 5, lastChatMessage: '민지: 야' }]);
+
+    await store.refreshChatSummary();
+
+    assert.deepEqual(groupStub.myChallengeCalls, [['ACTIVE', 'RECRUITING']]);
+    assert.equal(store.unreadByGroup[2], 5);
+});
+
+test('씨 뿌리기가 실패해도 조용히 넘어간다', async () => {
+    /* 점 하나 때문에 로그인 직후 첫 화면이 막히면 안 된다 */
+    const store = newStore();
+    groupStub.setMyChallengesError(new Error('네트워크'));
+
+    await store.refreshChatSummary();
+
+    assert.deepEqual(store.unreadByGroup, {});
+});
