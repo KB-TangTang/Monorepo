@@ -18,9 +18,14 @@ defineEmits(['view-trend']);
 
 const SPARK_WIDTH = 96;
 const SPARK_HEIGHT = 40;
+// 끝점 마커(circle r) 반지름. getSparklinePoints 의 padding 으로도 넘겨 마커가
+// viewBox 가장자리에서 잘리지 않게 한다(이슈 #444) — 두 값이 어긋나면 다시 잘린다.
+const SPARK_MARKER_RADIUS = 3;
 
 const changeVariant = computed(() => (props.monthOverMonthChange < 0 ? 'guilty' : 'innocent'));
-const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SPARK_HEIGHT));
+const sparkline = computed(() =>
+    getSparklinePoints(props.trend, SPARK_WIDTH, SPARK_HEIGHT, SPARK_MARKER_RADIUS),
+);
 </script>
 
 <template>
@@ -28,11 +33,7 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
         <template #header>
             <div class="net-worth__head">
                 <span>순자산</span>
-                <button
-                    type="button"
-                    class="net-worth__trend-link"
-                    @click="$emit('view-trend')"
-                >
+                <button type="button" class="net-worth__trend-link" @click="$emit('view-trend')">
                     추이 보기 ›
                 </button>
             </div>
@@ -67,7 +68,7 @@ const sparkline = computed(() => getSparklinePoints(props.trend, SPARK_WIDTH, SP
                     v-if="sparkline.lastPoint"
                     :cx="sparkline.lastPoint.x"
                     :cy="sparkline.lastPoint.y"
-                    r="3"
+                    :r="SPARK_MARKER_RADIUS"
                     fill="var(--tt-primary)"
                 />
             </svg>
