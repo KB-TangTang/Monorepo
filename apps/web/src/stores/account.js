@@ -155,14 +155,20 @@ export const useAccountStore = defineStore('account', () => {
     }
 
     function goPrevStep(current) {
-        const target = prevLinkDestination(current, entryRoute.value);
+        /*
+         * 온보딩 강제 구간 판정은 온보딩 게이트와 같은 플래그(needsAccountLink)를 본다 (이슈 #439).
+         * 다른 근거로 판정하면 "뒤로가 보내는 곳"과 "게이트가 허락하는 곳"이 어긋나 다시 죽은 버튼이 된다.
+         */
+        const target = prevLinkDestination(current, entryRoute.value, {
+            onboarding: useAuthStore().needsAccountLink,
+        });
         if (target.type === 'step') {
             goStep(target.step);
             return;
         }
         /*
-         * 첫 단계에서는 플로우 밖으로 나간다 — 들어온 화면(entryRoute)이 있으면 그곳으로,
-         * 없으면 기본 착지점으로. router.back() 은 쓰지 않는다 —
+         * 첫 단계에서는 플로우 밖으로 나간다 — 온보딩 중이면 앞 단계(금융동의)로, 아니면 들어온
+         * 화면(entryRoute)이 있으면 그곳으로, 없으면 기본 착지점으로. router.back() 은 쓰지 않는다 —
          * 이유는 utils/account.js 의 prevLinkDestination 주석 참고.
          * replace 로 나가야 나간 뒤 다시 뒤로가기를 눌렀을 때 이 화면으로 되돌아오지 않는다.
          */

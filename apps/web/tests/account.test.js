@@ -50,7 +50,10 @@ test('완료 화면에는 선택 계좌와 자동 연동 대출을 함께 표시
 
     assert.deepEqual(
         accounts.map((account) => [account.accountId, account.bankCode]),
-        [[1, '0004'], [-11, '0004']],
+        [
+            [1, '0004'],
+            [-11, '0004'],
+        ],
     );
 });
 
@@ -481,7 +484,29 @@ test('진입점 기록이 없으면 기본 착지점으로 나간다', () => {
     assert.equal(linkExitRoute('my'), 'my');
 });
 
+test('온보딩 강제 구간의 첫 단계는 진입점 대신 금융동의로 되돌아간다', () => {
+    // 온보딩은 진입점을 기록하지 않아 기본 착지점으로 나가는데, 거기서 게이트가 곧바로
+    // 기관 선택으로 되돌려보내 버튼이 죽은 것처럼 보였다 (이슈 #439). 앞 단계는 게이트가 면제한다.
+    assert.deepEqual(prevLinkDestination('institutions', '', { onboarding: true }), {
+        type: 'route',
+        name: 'financialConsent',
+    });
+    assert.deepEqual(prevLinkDestination('institutions', 'my', { onboarding: true }), {
+        type: 'route',
+        name: 'financialConsent',
+    });
+    // 온보딩이 아니면 기존 규칙 그대로다.
+    assert.deepEqual(prevLinkDestination('institutions', 'my', { onboarding: false }), {
+        type: 'route',
+        name: 'my',
+    });
+});
+
 test('두 번째 단계부터는 진입점과 무관하게 이전 단계로 간다', () => {
+    assert.deepEqual(prevLinkDestination('auth', '', { onboarding: true }), {
+        type: 'step',
+        step: 'institutions',
+    });
     assert.deepEqual(prevLinkDestination('auth'), { type: 'step', step: 'institutions' });
     assert.deepEqual(prevLinkDestination('progress'), { type: 'step', step: 'auth' });
     assert.deepEqual(prevLinkDestination('select'), { type: 'step', step: 'progress' });
