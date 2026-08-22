@@ -103,6 +103,7 @@
     min-width: 0;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-end;
     padding: var(--tt-space-3) var(--tt-space-1) var(--tt-space-5);
     overflow: visible;
     background: var(--tt-bg);
@@ -113,21 +114,21 @@
 
 .personal-ranking__podium-item--1 {
     order: 2;
-    min-height: 244px;
+    min-height: 270px;
     background: var(--tt-accent-subtle);
     animation-delay: 0.15s;
 }
 
 .personal-ranking__podium-item--2 {
     order: 1;
-    min-height: 212px;
+    min-height: 250px;
     background: var(--tt-info-subtle);
     animation-delay: 0.05s;
 }
 
 .personal-ranking__podium-item--3 {
     order: 3;
-    min-height: 212px;
+    min-height: 210px;
     background: var(--tt-danger-subtle);
     animation-delay: 0.1s;
 }
@@ -162,15 +163,11 @@
 .personal-ranking__podium-avatar {
     display: flex;
     width: 100%;
-    height: 118px;
+    height: 126px;
     align-items: flex-end;
     justify-content: center;
     margin-top: var(--tt-space-2);
     overflow: hidden;
-}
-
-.personal-ranking__podium-item--1 .personal-ranking__podium-avatar {
-    height: 142px;
 }
 
 .personal-ranking__podium-avatar img {
@@ -181,14 +178,14 @@
     object-position: center bottom;
 }
 
-.personal-ranking__podium-item--1 .personal-ranking__podium-avatar img {
-    width: 150px;
-    height: 150px;
-}
-
 .personal-ranking__podium-name {
+    width: 100%;
     margin-top: var(--tt-space-2);
+    overflow: hidden;
     font-size: var(--tt-fs-label);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .personal-ranking__podium-score {
@@ -250,6 +247,13 @@
     font-size: var(--tt-fs-label);
 }
 
+.personal-ranking__list li > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .personal-ranking__list li > b {
     font-size: var(--tt-fs-label);
     color: var(--tt-text-body);
@@ -276,6 +280,14 @@
     background: var(--tt-info-subtle);
     border-radius: var(--tt-radius-lg);
     box-shadow: var(--tt-elevation-2);
+}
+
+.personal-ranking__mine > b {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--tt-fs-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .personal-ranking__mine-rank {
@@ -330,7 +342,7 @@
     }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 430px) {
     .personal-ranking {
         padding-right: var(--tt-space-3);
         padding-left: var(--tt-space-3);
@@ -350,11 +362,6 @@
         height: 112px;
     }
 
-    .personal-ranking__podium-item--1 .personal-ranking__podium-avatar img {
-        width: 132px;
-        height: 132px;
-    }
-
     .personal-ranking__list {
         padding: var(--tt-space-3);
     }
@@ -365,7 +372,7 @@
     }
 
     .personal-ranking__mine {
-        grid-template-columns: 86px 42px minmax(0, 1fr) auto auto;
+        grid-template-columns: 76px 48px minmax(0, 1fr) auto auto;
         gap: var(--tt-space-2);
         padding-right: var(--tt-space-3);
     }
@@ -374,7 +381,4 @@
         padding-left: var(--tt-space-3);
     }
 
-    .personal-ranking__mine-percentile {
-        display: none;
-    }
 }
