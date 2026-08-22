@@ -1028,6 +1028,7 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '레저', '골프존'
     UNION ALL SELECT '레저', '스크린골프'
     UNION ALL SELECT '레저', '볼링장'
+    UNION ALL SELECT '레저', '오락실'
     UNION ALL SELECT '교통권', '대한항공'
     UNION ALL SELECT '교통권', '아시아나항공'
     UNION ALL SELECT '교통권', '제주항공'
