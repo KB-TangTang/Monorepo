@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
-import { formatAssetHomeWon, formatSignedWon, getSparklinePoints } from '@/utils/asset';
+import { formatSignedWon, formatWon, getSparklinePoints } from '@/utils/asset';
 
 const props = defineProps({
     netWorth: { type: Number, required: true },
@@ -41,7 +41,7 @@ const sparkline = computed(() =>
 
         <div class="net-worth__body">
             <div class="net-worth__main">
-                <p class="net-worth__amount">{{ formatAssetHomeWon(netWorth) }}</p>
+                <p class="net-worth__amount">{{ formatWon(netWorth) }}</p>
                 <div class="net-worth__change-row">
                     <BaseBadge :variant="changeVariant">
                         {{ formatSignedWon(monthOverMonthChange) }}
