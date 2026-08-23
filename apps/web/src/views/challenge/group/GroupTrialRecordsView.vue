@@ -22,6 +22,7 @@ import StateEmpty from '@/components/common/StateEmpty.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import GroupTrialRecordCard from '@/components/challenge/group/GroupTrialRecordCard.vue';
+import GroupRecordScopeSegment from '@/components/challenge/group/GroupRecordScopeSegment.vue';
 import GroupHonorCourtEntry from '@/components/challenge/group/GroupHonorCourtEntry.vue';
 
 const route = useRoute();
@@ -53,14 +54,41 @@ async function load() {
 }
 
 /*
+ * 범위 필터. 서버에 다시 묻지 않고 손에 있는 목록을 가른다 —
+ * 기록은 확정된 것만 와서 화면에 있는 동안 늘지 않는다.
+ */
+const scope = ref('all');
+
+const mineRecords = computed(() => records.value.filter((item) => item.isMine));
+const visibleRecords = computed(() => {
+    if (scope.value === 'mine') return mineRecords.value;
+    if (scope.value === 'others') return records.value.filter((item) => !item.isMine);
+    return records.value;
+});
+
+const scopeCounts = computed(() => ({
+    all: records.value.length,
+    mine: mineRecords.value.length,
+    others: records.value.length - mineRecords.value.length,
+}));
+
+/*
  * 요약은 목록에서 센다. 그룹 상세 응답의 `trialStats` 는 **CLOSED 일 때만 채워져서**
  * (`ChallengeGroupDetailService.java:135`) 진행 중 그룹에서는 빈 값이 온다.
  * 이미 손에 목록이 있으니 요청을 더 보낼 이유가 없다.
+ *
+ * **보이는 것만 센다.** 전체 건수를 그대로 두면 「내 재판」 탭에서 목록엔 1건인데
+ * 위에는 총 8건이라 적혀 요약이 목록과 다른 말을 한다.
  */
 const guiltyCount = computed(
-    () => records.value.filter((item) => item.verdict === 'GUILTY').length,
+    () => visibleRecords.value.filter((item) => item.verdict === 'GUILTY').length,
 );
-const innocentCount = computed(() => records.value.length - guiltyCount.value);
+const innocentCount = computed(() => visibleRecords.value.length - guiltyCount.value);
+
+/** 탭을 좁혀서 0건이 된 경우의 문구. 기록이 아예 없는 경우(`StateEmpty`)와 다른 상황이다 */
+const emptyScopeTitle = computed(() =>
+    scope.value === 'mine' ? '내 재판 기록이 없어요' : '그룹원의 재판 기록이 없어요',
+);
 
 function openRecord({ item }) {
     /*
@@ -103,17 +131,44 @@ function goToRanking() {
         />
 
         <template v-else>
-            <!-- 요약 스트립 — 목록을 훑기 전에 규모를 먼저 준다 -->
+            <!--
+                 범위 세그먼트. 기록이 적어도 접지 않는다 — 건수에 따라 있다 없다 하면
+                 들어올 때마다 화면 구조가 달라져 어디를 눌러야 할지 매번 다시 찾는다.
+            -->
+            <GroupRecordScopeSegment
+                v-model="scope"
+                :counts="scopeCounts"
+                class="trial-records__scope"
+            />
+
+            <!-- 요약 스트립 — 목록을 훑기 전에 규모를 먼저 준다. 세그먼트를 따라 같이 좁혀진다 -->
             <div class="trial-records__summary">
-                <span class="trial-records__total">총 {{ records.length }}건</span>
-                <span class="trial-records__split">
-                    <span class="trial-records__guilty">유죄 {{ guiltyCount }}</span>
-                    <span class="trial-records__dot">·</span>
-                    <span class="trial-records__innocent">무죄 {{ innocentCount }}</span>
+                <span class="trial-records__counts">
+                    <span class="trial-records__total">총 {{ visibleRecords.length }}건</span>
+                    <span class="trial-records__split">
+                        <span class="trial-records__guilty">유죄 {{ guiltyCount }}</span>
+                        <span class="trial-records__dot">·</span>
+                        <span class="trial-records__innocent">무죄 {{ innocentCount }}</span>
+                    </span>
                 </span>
+
+                <!--
+                     정렬 축을 적어 둔다. 행에서 결산일을 뺀 뒤로 화면에 시각이 하나도 안 남아
+                     순서를 눈으로 확인할 방법이 없어졌다.
+
+                     **고를 수 있는 것처럼 보이면 안 된다.** 정렬은 SQL 이 끝내 놓았고
+                     (`IndictmentMapper.xml:312` · `:328` 의 `ORDER BY i.updated_at DESC`)
+                     바꿀 수단이 없다. 버튼 모양을 주면 눌러도 아무 일이 없는 자리가 된다.
+                -->
+                <span class="trial-records__sort">최근 확정순</span>
             </div>
 
-            <GroupTrialRecordCard :items="records" :show-group="isAllMode" @open="openRecord" />
+            <StateEmpty
+                v-if="!visibleRecords.length"
+                :title="emptyScopeTitle"
+                description="다른 범위를 눌러 보세요."
+            />
+            <GroupTrialRecordCard v-else :items="visibleRecords" @open="openRecord" />
         </template>
 
         <!--
@@ -124,7 +179,6 @@ function goToRanking() {
         <GroupHonorCourtEntry
             v-if="!isAllMode && !loading"
             class="trial-records__honor"
-            variant="active"
             @open="goToRanking"
         />
     </div>
@@ -137,6 +191,10 @@ function goToRanking() {
     background: var(--tt-bg-page);
 }
 
+.trial-records__scope {
+    margin-bottom: var(--tt-space-3);
+}
+
 .trial-records__summary {
     display: flex;
     align-items: baseline;
@@ -144,10 +202,24 @@ function goToRanking() {
     gap: var(--tt-space-2);
     padding: 0 4px var(--tt-space-3);
 }
+.trial-records__counts {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+}
 .trial-records__total {
+    flex: none;
     font-size: var(--tt-fs-label);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
+}
+/* 읽히되 세지 않는다. 숫자보다 한 단계 작고 흐리다 */
+.trial-records__sort {
+    flex: none;
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-medium);
+    color: var(--tt-text-hint);
 }
 .trial-records__split {
     display: flex;

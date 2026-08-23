@@ -23,6 +23,7 @@ const CARD_FILES = [
     'src/components/challenge/group/GroupTrialListSheet.vue',
     /* 재판 기록 진입도 홈에서 열리므로 같은 타이포 규칙을 받는다 */
     'src/components/challenge/group/GroupTrialRecordCard.vue',
+    'src/components/challenge/group/GroupRecordScopeSegment.vue',
     'src/components/challenge/group/GroupHonorCourtEntry.vue',
 ];
 

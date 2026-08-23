@@ -11,6 +11,10 @@
   **개표를 가리지 않는다.** 투표 중에 표 수를 감춘 건 편승 투표를 막으려던 것이고(이슈 #171),
   그 근거는 투표가 열려 있는 동안에만 성립한다. 확정된 뒤에 감추면 기록이 기록이 아니게 된다.
 
+  **행에 담는 건 딱 네 가지 — 판결 · 챌린지 · 누구 · 개표.** 결산일 · 초과액 · 판결 사유는
+  판결문에 전부 있고, 목록에서까지 늘어놓으면 세 줄이 다 회색 잔글씨가 돼 판결 도장이 묻힌다.
+  목록은 「어느 재판이었는지 알아보고 눌러 들어가는」 자리다.
+
   판정·문구·톤·목적지는 전부 `utils/groupTrial.js` 의 `toTrialRecordCard` 가 정해서 준다.
   여기서 `status` 를 다시 보지 않는다 — 그러면 화면마다 유무죄 어휘가 갈린다.
 -->
@@ -21,31 +25,21 @@ import { ChevronRightIcon } from '@heroicons/vue/24/outline';
 defineProps({
     /** `toTrialRecordCard` 를 지난 기록 배열. 최근 확정순 정렬은 서버가 끝내 놓았다 */
     items: { type: Array, required: true },
-    /**
-     * 그룹명을 함께 보여줄지. 전체 기록(지방법원 홈 진입)에서만 켠다 —
-     * 그룹 상세에서 켜면 모든 행에 같은 그룹명이 반복될 뿐 행을 가르지 못한다.
-     */
-    showGroup: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['open']);
-
-/** `1200` → `1,200원`. 초과액이 0 이면 표시하지 않는다(자백·무투표 건에 실제로 0 이 온다). */
-function formatAmount(amount) {
-    return `${Number(amount ?? 0).toLocaleString('ko-KR')}원`;
-}
 </script>
 
 <template>
     <section class="trial-record">
         <ul class="trial-record__list">
             <li v-for="item in items" :key="item.id" class="trial-record__row">
-                <button
-                    type="button"
-                    class="trial-record__button"
-                    :class="{ 'trial-record__button--mine': item.isMine }"
-                    @click="emit('open', { item })"
-                >
+                <!--
+                     내 재판을 왼쪽 강조선으로 표시하지 않는다. 선이 폭을 먹어 그 행만 도장이
+                     안쪽으로 밀리고, 목록을 세로로 훑을 때 유무죄 도장이 한 줄로 안 선다.
+                     구분은 배지가 맡는다 — 도장 위치는 모든 행에서 같아야 한다.
+                -->
+                <button type="button" class="trial-record__button" @click="emit('open', { item })">
                     <!--
                          왼쪽 판결 도장. 캐러셀의 `__stamp` 와 같은 어휘(원형 테두리 · 기울기 · 반투명)를
                          쓰되 색만 유무죄로 가른다. 목록이라 캐러셀(58px)보다 한 단계 작다.
@@ -59,43 +53,32 @@ function formatAmount(amount) {
                     </span>
 
                     <span class="trial-record__body">
-                        <!-- 첫 줄 = 누구의 재판인가. 같은 날 두 명이 확정되면 여기서만 갈린다 -->
+                        <!--
+                             첫 줄 = 어느 챌린지였나. 그룹 기록에서는 모든 행이 같은 값이라
+                             중복이지만, 빼면 그 화면만 두 줄이 돼 도장 세로 위치가 전체 기록과
+                             달라진다. 행 구조를 두 벌로 만들지 않는다.
+                        -->
+                        <span class="trial-record__title">{{ item.groupName }}</span>
+
+                        <!-- 둘째 줄 = 누구의 재판인가. 같은 챌린지에서 행을 가르는 유일한 값 -->
                         <span class="trial-record__head">
                             <UserAvatar
                                 class="trial-record__avatar"
                                 :image-url="item.profileImage"
                                 :name="item.nickname"
-                                :size="22"
+                                :size="20"
                             />
                             <span class="trial-record__nickname">{{ item.nickname }}</span>
                             <span v-if="item.isMine" class="trial-record__mine">내 재판</span>
                         </span>
 
                         <!--
-                             둘째 줄 = 언제·얼마. 그룹명은 전체 기록에서만 앞에 붙는다.
-                             확정 시각(`confirmedLabel`)이 아니라 결산일(`settlementDate`)이
-                             먼저다 — 사용자가 기억하는 건 「그날 얼마 썼는가」다.
-                        -->
-                        <span class="trial-record__meta">
-                            <span v-if="showGroup && item.groupName" class="trial-record__group">
-                                {{ item.groupName }}
-                            </span>
-                            <span>{{ item.settlementDate }} 결산</span>
-                            <span
-                                v-if="item.exceededAmount > 0"
-                                class="trial-record__amount"
-                                :class="`trial-record__amount--${item.tone}`"
-                            >
-                                +{{ formatAmount(item.exceededAmount) }}
-                            </span>
-                        </span>
-
-                        <!--
-                             셋째 줄 = 어떻게 그렇게 됐나. 개표가 있으면 숫자를, 없으면(자백·무투표)
-                             사유 문구만 남는다. 「0 : 0」을 그리면 아무도 투표 안 한 것처럼 읽힌다.
+                             셋째 줄 = 개표. 자백·무투표 건은 표가 없어 「0 : 0」이 되는데,
+                             그걸 그리면 아무도 투표 안 한 게 아니라 전원 기권한 것처럼 읽힌다.
+                             자리는 비우지 않는다 — 그 행만 두 줄이 되면 도장이 위로 올라붙는다.
                         -->
                         <span class="trial-record__tally">
-                            <span v-if="item.totalVoters > 0" class="trial-record__votes">
+                            <template v-if="item.totalVoters > 0">
                                 <span class="trial-record__votes-guilty">{{
                                     item.guiltyCount
                                 }}</span>
@@ -106,9 +89,8 @@ function formatAmount(amount) {
                                 <span class="trial-record__votes-total"
                                     >/ {{ item.totalVoters }}명</span
                                 >
-                            </span>
-                            <span v-if="item.myVote" class="trial-record__myvote">내 표</span>
-                            <span class="trial-record__reason">{{ item.reason }}</span>
+                            </template>
+                            <span v-else class="trial-record__novote">투표 없이 확정</span>
                         </span>
                     </span>
 
@@ -147,14 +129,6 @@ function formatAmount(amount) {
     text-align: left;
     cursor: pointer;
 }
-/*
- * 내 재판은 왼쪽에 강조선을 세운다. 배경을 칠하면 행 높이가 달라 보여 목록이 울퉁불퉁해진다.
- * 선은 폭만 먹고 리듬을 건드리지 않는다.
- */
-.trial-record__button--mine {
-    box-shadow: inset 3px 0 0 -0.5px var(--tt-primary);
-    padding-left: 8px;
-}
 
 /* ── 판결 도장 ──────────────────────── */
 .trial-record__stamp {
@@ -188,6 +162,17 @@ function formatAmount(amount) {
     gap: 3px;
 }
 
+/* 첫 줄이 이 행의 제목이다. 아래 두 줄보다 굵고 진해야 훑을 때 눈이 여기서 멈춘다 */
+.trial-record__title {
+    min-width: 0;
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .trial-record__head {
     display: flex;
     align-items: center;
@@ -199,65 +184,35 @@ function formatAmount(amount) {
 }
 .trial-record__nickname {
     min-width: 0;
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.trial-record__mine {
-    flex: none;
-    padding: 1px 6px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-primary-subtle);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-primary);
-}
-
-.trial-record__meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
     font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-medium);
-    color: var(--tt-text-muted);
-}
-/* 전체 기록에서만 뜬다. 가장 먼저 잘려도 되는 값이라 말줄임을 여기 건다 */
-.trial-record__group {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.trial-record__amount {
+/*
+ * 연한 배지(`--tt-primary-subtle` 위 파란 글자)는 옆 닉네임과 명도가 비슷해 그냥 글자로 읽혔다.
+ * 목록에서 내 재판을 찾는 게 이 배지의 유일한 일이라 면을 채워 대비를 세운다.
+ * `flex: none` 이라 닉네임이 길어져도 이 배지가 먼저 잘리지 않는다.
+ */
+.trial-record__mine {
     flex: none;
-    font-family: var(--tt-font-mono);
-    font-weight: var(--tt-fw-bold);
-}
-.trial-record__amount--guilty {
-    color: var(--tt-danger);
-}
-.trial-record__amount--innocent {
-    color: var(--tt-text-muted);
+    padding: 2px 7px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-primary);
+    font-size: var(--tt-fs-badge);
+    font-weight: var(--tt-fw-black);
+    line-height: 1.3;
+    color: var(--tt-bg);
 }
 
 .trial-record__tally {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    font-size: var(--tt-fs-caption);
-}
-.trial-record__votes {
-    flex: none;
-    display: flex;
     align-items: baseline;
     gap: 3px;
+    min-width: 0;
+    font-size: var(--tt-fs-caption);
     font-family: var(--tt-font-mono);
     font-weight: var(--tt-fw-bold);
 }
@@ -274,23 +229,11 @@ function formatAmount(amount) {
     font-size: var(--tt-fs-badge);
     color: var(--tt-text-hint);
 }
-.trial-record__myvote {
-    flex: none;
-    padding: 1px 6px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-bg-fill);
-    font-size: var(--tt-fs-badge);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-text-body);
-}
-/* 사유는 가장 길고 가장 덜 급하다. 남는 폭을 먹고 넘치면 잘린다 */
-.trial-record__reason {
-    min-width: 0;
+/* 숫자가 없는 행. 개표 자리를 대신 채워 세 줄 리듬을 지킨다 */
+.trial-record__novote {
+    font-family: var(--tt-font-sans);
     font-weight: var(--tt-fw-medium);
     color: var(--tt-text-hint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .trial-record__chevron {

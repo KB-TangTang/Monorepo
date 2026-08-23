@@ -358,11 +358,7 @@ async function handleDelete() {
                      명예 법정은 스크롤 맨 아래다. 「끝나고 나면 어떻게 되나」라
                      위에 두면 최종 순위표·재판 기록보다 먼저 읽혀 우선순위가 뒤집힌다.
                 -->
-                <GroupHonorCourtEntry
-                    class="gc-detail__honor"
-                    variant="closed"
-                    @open="goToRanking"
-                />
+                <GroupHonorCourtEntry class="gc-detail__honor" @open="goToRanking" />
             </template>
 
             <!-- 시작 전 / 진행 중 -->
@@ -435,11 +431,7 @@ async function handleDelete() {
                     :eval-type="ch.evalType"
                 />
 
-                <GroupHonorCourtEntry
-                    class="gc-detail__honor"
-                    variant="active"
-                    @open="goToRanking"
-                />
+                <GroupHonorCourtEntry class="gc-detail__honor" @open="goToRanking" />
             </template>
         </div>
 

@@ -1,188 +1,137 @@
 <!--
-  명예 법정 진입 배너 — 스크롤 하단
+  그룹 명예 법정 진입 배너 — 그룹 상세 · 재판 기록 화면의 스크롤 맨 아래.
 
-  「재판 기록」과 「명예 법정」은 서로 다른 곳인데, 그룹 상세에서는 둘 다 같은 순위 화면으로
-  가고 있었다. 기록 진입을 실제 기록 화면으로 되돌리면서 **순위 진입은 이 배너가 맡는다.**
+  **왜 개인 「명예의 전당」 배너를 그대로 쓰지 않나.**
+  한 번 `PersonalMissionHonorBanner` 를 공용으로 올려 글만 갈아끼워 봤는데, 두 배너가
+  똑같이 생겨서 개인 랭킹인지 그룹 순위인지 구별이 안 됐다. 목적지가 다른 입구는
+  형태로 달라야 한다 — 여기서 갈리는 건 문구가 아니라 **탕이가 몇 명이냐**다.
 
-  **왜 하단인가.** 순위는 「지금 뭘 해야 하나」가 아니라 「끝나고 나면 어떻게 되나」다.
-  위에 두면 진행 중인 재판·멤버 현황보다 먼저 읽혀 화면의 우선순위가 뒤집힌다.
-  스크롤을 끝까지 내린 사람은 이미 할 일을 다 본 사람이라 그 자리가 맞다.
+  탕이 셋을 시상대와 같은 **2위–1위–3위** 순서로 세운다(`GroupHonorPodium` 의 배치 규칙).
+  가운데 1위만 크고 트로피를 들고 있어, 한눈에 「여럿이 겨룬 순위」로 읽힌다.
+  개인 배너는 탕이 하나라 그것만으로 두 화면이 갈린다.
 
-  갈색 토큰(`--tt-kraft` · `--tt-wood`)을 쓴다. 팀 규칙상 갈색은 판사봉·인장·종이 질감에만
-  허용되는데, 이 배너가 그리는 것이 **법대와 트로피**라 정당한 용처다.
-  주변 카드가 전부 흰 면이라 이 한 장만 종이색이면 「다른 곳으로 나간다」가 형태로 읽힌다.
+  갈색(`--tt-wood`·`--tt-kraft`)은 쓰지 않는다. 그 토큰은 판사봉·인장·종이 질감 전용이고
+  순위는 문서가 아니다. 골드 계열이 트로피·시상대와 같은 어휘라 여기 맞는다.
 -->
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
-import { TrophyIcon, ChevronRightIcon } from '@heroicons/vue/24/solid';
+import firstTangi from '@/assets/images/ranking/tang-ranking-first.png';
+import secondTangi from '@/assets/images/ranking/tang-ranking-second.png';
+import thirdTangi from '@/assets/images/ranking/tang-ranking-third.png';
 
-defineProps({
-    /**
-     * `closed` = 챌린지가 끝난 뒤(확정 순위), `active` = 진행 중(중간 순위).
-     * 문구만 가른다 — 진행 중에 「최종 순위」라고 적으면 아직 안 끝난 순위를 확정으로 읽는다.
-     */
-    variant: { type: String, default: 'active' },
-    /** 비우면 variant 기본 문구를 쓴다. 화면이 더 구체적인 말을 갖고 있으면 그걸 넘긴다 */
-    subtitle: { type: String, default: '' },
-});
-
-const emit = defineEmits(['open']);
-
-const root = ref(null);
-const shown = ref(false);
-let observer = null;
-
-/*
- * 뷰포트에 들어올 때 한 번만 떠오른다. 하단에 있어 처음에는 화면 밖이라,
- * 마운트 시점에 애니메이션을 돌리면 사용자가 내려왔을 때는 이미 끝나 있다.
- *
- * 동작 줄이기를 켠 사용자에게는 관찰 자체를 걸지 않고 즉시 보여준다 —
- * 관찰만 걸고 CSS 로 트랜지션을 끄면 `shown` 이 false 인 동안 배너가 투명하게 남는다.
- */
-onMounted(() => {
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduced || typeof IntersectionObserver === 'undefined') {
-        shown.value = true;
-        return;
-    }
-
-    observer = new IntersectionObserver(
-        (entries) => {
-            if (!entries.some((entry) => entry.isIntersecting)) return;
-            shown.value = true;
-            observer?.disconnect();
-            observer = null;
-        },
-        { threshold: 0.25 },
-    );
-    if (root.value) observer.observe(root.value);
-});
-
-onUnmounted(() => {
-    observer?.disconnect();
-    observer = null;
-});
+defineEmits(['open']);
 </script>
 
 <template>
-    <button
-        ref="root"
-        type="button"
-        class="honor-entry"
-        :class="{ 'honor-entry--shown': shown }"
-        @click="emit('open')"
-    >
-        <span class="honor-entry__seal" aria-hidden="true">
-            <TrophyIcon class="honor-entry__trophy" />
+    <button type="button" class="honor-court" @click="$emit('open')">
+        <span class="honor-court__content">
+            <strong class="honor-court__title">그룹 명예 법정</strong>
+            <span class="honor-court__description">우리 그룹의 절약 순위를 확인해 보세요</span>
         </span>
 
-        <span class="honor-entry__body">
-            <span class="honor-entry__title">명예 법정</span>
-            <span class="honor-entry__subtitle">
-                {{
-                    subtitle ||
-                    (variant === 'closed'
-                        ? '이번 챌린지의 최종 순위를 확인해요'
-                        : '지금까지의 절약 순위를 확인해요')
-                }}
-            </span>
-        </span>
-
-        <span class="honor-entry__cta">
-            순위 보기
-            <ChevronRightIcon class="honor-entry__chevron" />
+        <!-- 시상대와 같은 2위–1위–3위 배치. 순서를 바꾸면 1위가 가장자리로 밀린다 -->
+        <span class="honor-court__crew" aria-hidden="true">
+            <img class="honor-court__tangi" :src="secondTangi" alt="" />
+            <img class="honor-court__tangi honor-court__tangi--first" :src="firstTangi" alt="" />
+            <img class="honor-court__tangi" :src="thirdTangi" alt="" />
         </span>
     </button>
 </template>
 
 <style scoped>
-.honor-entry {
-    width: 100%;
+.honor-court {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 15px 16px;
-    border: 1.5px solid var(--tt-wood);
-    border-radius: var(--tt-radius-lg);
-    background: var(--tt-kraft);
+    width: 100%;
+    min-height: 116px;
+    padding: var(--tt-space-4);
+    overflow: hidden;
+    font-family: var(--tt-font-sans);
     text-align: left;
     cursor: pointer;
-
-    /* 진입 전 상태. `--shown` 이 붙으면 제자리로 올라온다 */
-    opacity: 0;
-    transform: translateY(12px);
-    transition:
-        opacity 0.42s ease,
-        transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.honor-entry--shown {
-    opacity: 1;
-    transform: none;
+    background: var(--tt-accent-subtle);
+    /*
+     * <button> 이라 border 를 안 적으면 브라우저 기본 테두리(2px outset)가 그려진다.
+     * <div> 카드처럼 선언을 지우면 되는 게 아니라 반드시 값을 적어야 한다.
+     */
+    border: 1px solid var(--tt-accent-subtle-border);
+    border-radius: var(--tt-radius-lg);
 }
 
-/* 인장 — 원형 테두리 안의 트로피. 도장 어휘를 재판 기록 카드와 공유한다 */
-.honor-entry__seal {
-    flex: none;
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    border: 1.5px solid var(--tt-wood);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.honor-entry__trophy {
-    width: 20px;
-    height: 20px;
-    color: var(--tt-accent);
-}
-
-.honor-entry__body {
-    flex: 1;
-    min-width: 0;
+.honor-court__content {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-}
-.honor-entry__title {
-    font-family: var(--tt-font-serif);
-    font-size: var(--tt-fs-label);
-    font-weight: var(--tt-fw-black);
-    letter-spacing: 0.04em;
-    color: var(--tt-text);
-}
-.honor-entry__subtitle {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-medium);
-    color: var(--tt-text-body);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    gap: var(--tt-space-2);
+    /* 탕이 셋이 오른쪽 아래에 얹히므로 글이 그 밑으로 들어가지 않게 비워둔다 */
+    min-width: 0;
+    padding-right: 146px;
 }
 
-.honor-entry__cta {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 1px;
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-bold);
-    color: var(--tt-wood);
+.honor-court__title {
+    font-size: var(--tt-fs-section);
+    font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-snug);
+    color: var(--tt-text);
 }
-.honor-entry__chevron {
-    width: 13px;
-    height: 13px;
+
+.honor-court__description {
+    font-size: var(--tt-fs-caption);
+    line-height: var(--tt-lh-normal);
+    color: var(--tt-accent-deep);
 }
 
 /*
- * 관찰을 아예 걸지 않아 `shown` 이 곧바로 true 이지만, 클래스가 붙는 프레임에
- * 트랜지션이 한 번 돌 수 있다. 여기서도 끊어 둔다.
+ * 바닥(`bottom: 0`)에 맞춰 세운다. 가운데를 기준으로 두면 키가 다른 셋이
+ * 공중에 뜬 것처럼 어긋나 보인다. `flex-end` 로 발끝을 맞춘다.
  */
-@media (prefers-reduced-motion: reduce) {
-    .honor-entry {
-        opacity: 1;
-        transform: none;
-        transition: none;
+.honor-court__crew {
+    position: absolute;
+    right: 10px;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+}
+
+.honor-court__tangi {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+}
+
+/* 1위만 크고 앞에 선다. 겹쳐야 「따로 선 셋」이 아니라 한 무리로 읽힌다 */
+.honor-court__tangi--first {
+    z-index: 1;
+    width: 64px;
+    height: 64px;
+    margin: 0 -10px;
+}
+
+.honor-court:hover {
+    filter: brightness(0.98);
+}
+
+.honor-court:focus-visible {
+    outline: 2px solid var(--tt-accent-deep);
+    outline-offset: 2px;
+}
+
+/* 좁은 화면에서는 셋을 더 겹치고 줄여 제목이 두 줄로 접히는 것을 막는다 */
+@media (max-width: 359px) {
+    .honor-court__content {
+        padding-right: 124px;
+    }
+
+    .honor-court__tangi {
+        width: 44px;
+        height: 44px;
+    }
+
+    .honor-court__tangi--first {
+        width: 56px;
+        height: 56px;
+        margin: 0 -12px;
     }
 }
 </style>
