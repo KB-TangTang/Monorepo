@@ -7,6 +7,7 @@ import {
     calcLinkProgress,
     canEnterLinkStep,
     connectedAccountsForDone,
+    connectedRowFigure,
     consentExpiryLabel,
     formatAmount,
     formatBirthDate,
@@ -40,6 +41,23 @@ test('자동 연동 행의 제외 목록은 넣고 빼기를 되풀이해도 원
     assert.deepEqual(base, [-1]);
     assert.deepEqual(withToggledId(added, -1), [-2]);
     assert.deepEqual(withToggledId(null, 5), [5]);
+});
+
+test('카드 행은 잔액 대신 카드 종류를 쓴다 (#467)', () => {
+    /* 카드는 자산이 아니라 거래 출처다. 0원을 그리면 "잔액 0원인 자산"으로 읽힌다. */
+    assert.equal(connectedRowFigure({ accountType: 'CARD', cardTypeCode: '01' }), '신용카드');
+    assert.equal(connectedRowFigure({ accountType: 'CARD', cardTypeCode: '02' }), '체크카드');
+    /* 판정 규칙은 백엔드 PaymentMethodLabels 와 같다 — 01 이 아니면 체크다. */
+    assert.equal(connectedRowFigure({ accountType: 'CARD' }), '체크카드');
+});
+
+test('카드가 아닌 행은 그대로 잔액을 쓴다', () => {
+    assert.equal(
+        connectedRowFigure({ accountType: 'DEMAND_DEPOSIT', balance: 3586900 }),
+        '3,586,900원',
+    );
+    assert.equal(connectedRowFigure({ accountType: 'LOAN', balance: 14200000 }), '14,200,000원');
+    assert.equal(connectedRowFigure(null), '0원');
 });
 
 test('대출 표시 행(manageable=false)에는 「지금 동기화」를 그리지 않는다 (#467)', () => {

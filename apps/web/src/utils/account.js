@@ -137,6 +137,20 @@ export function withToggledId(ids, id) {
 }
 
 /**
+ * 연결 계좌 관리 행의 오른쪽 숫자 자리에 무엇을 쓸지 (#467).
+ *
+ * 카드는 잔액이 없다 — 자산이 아니라 **거래의 출처**라 이 목록에만 나온다. 0원을 그리면 "잔액 0원인 자산"으로
+ * 읽히므로 카드 종류를 대신 쓴다. 종류 판정은 백엔드 `PaymentMethodLabels`·동기화와 **같은 규칙**이다
+ * (`01`=신용, 나머지=체크) — 장부의 "KB국민카드 체크카드" 와 이 화면이 같은 카드를 다르게 부르면 안 된다.
+ */
+export function connectedRowFigure(account) {
+    if (account && account.accountType === 'CARD') {
+        return account.cardTypeCode === '01' ? '신용카드' : '체크카드';
+    }
+    return formatAmount(account ? account.balance : 0);
+}
+
+/**
  * 연결 계좌 관리의 더보기 시트에 「지금 동기화」를 그릴지 (#467).
  *
  * 대출 표시 행은 서버가 `manageable: false` 로 내린다 — tbl_loan 을 `-id` 로 꾸민 행이라 개별 재조회가
