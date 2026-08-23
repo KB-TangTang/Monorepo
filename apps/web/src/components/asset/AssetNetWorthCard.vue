@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
 import BaseBadge from '@/components/common/BaseBadge.vue';
-import { formatAssetHomeWon, formatSignedWon, getSparklinePoints } from '@/utils/asset';
+import { formatSignedWon, formatWon, getSparklinePoints } from '@/utils/asset';
 
 const props = defineProps({
     netWorth: { type: Number, required: true },
@@ -22,7 +22,28 @@ const SPARK_HEIGHT = 40;
 // viewBox 가장자리에서 잘리지 않게 한다(이슈 #444) — 두 값이 어긋나면 다시 잘린다.
 const SPARK_MARKER_RADIUS = 3;
 
+/*
+ * 순자산이 1000만원대로 올라가면 「9,824,700원」이 카드 폭을 넘겨 두 줄로 잘렸다.
+ * 단위를 「~만원」으로 줄이면 끝자리가 사라지므로, 전체 금액을 유지한 채 자릿수만큼
+ * 글자 크기를 낮춘다. 옆의 스파크라인(96px)이 폭을 고정으로 먹기 때문에 금액에 남는
+ * 자리는 375px 화면에서 약 190px 뿐이다 — 아래 값은 그 폭에 「-1,234,567,890원」까지
+ * 한 줄로 들어가도록 잡았다. 스파크라인 폭을 바꾸면 이 표도 같이 손봐야 한다.
+ */
+const AMOUNT_FONT_STEPS = [
+    { maxDigits: 6, fontSize: 'var(--tt-fs-stat)' },
+    { maxDigits: 7, fontSize: '26px' },
+    { maxDigits: 8, fontSize: '24px' },
+    { maxDigits: 9, fontSize: '22px' },
+    { maxDigits: 10, fontSize: '20px' },
+];
+const AMOUNT_FONT_SIZE_MIN = '18px';
+
 const changeVariant = computed(() => (props.monthOverMonthChange < 0 ? 'guilty' : 'innocent'));
+const amountStyle = computed(() => {
+    const digits = String(Math.abs(Math.trunc(props.netWorth))).length;
+    const step = AMOUNT_FONT_STEPS.find((item) => digits <= item.maxDigits);
+    return { fontSize: step ? step.fontSize : AMOUNT_FONT_SIZE_MIN };
+});
 const sparkline = computed(() =>
     getSparklinePoints(props.trend, SPARK_WIDTH, SPARK_HEIGHT, SPARK_MARKER_RADIUS),
 );
@@ -41,7 +62,7 @@ const sparkline = computed(() =>
 
         <div class="net-worth__body">
             <div class="net-worth__main">
-                <p class="net-worth__amount">{{ formatAssetHomeWon(netWorth) }}</p>
+                <p class="net-worth__amount" :style="amountStyle">{{ formatWon(netWorth) }}</p>
                 <div class="net-worth__change-row">
                     <BaseBadge :variant="changeVariant">
                         {{ formatSignedWon(monthOverMonthChange) }}
@@ -101,12 +122,14 @@ const sparkline = computed(() =>
     gap: var(--tt-space-4);
 }
 
+/* font-size 는 자릿수에 따라 amountStyle 이 인라인으로 덮는다 — 여기 값은 기본값이다. */
 .net-worth__amount {
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-numeric);
     font-weight: var(--tt-fw-black);
     line-height: var(--tt-lh-tight);
     color: var(--tt-text);
+    white-space: nowrap;
 }
 
 .net-worth__change-row {

@@ -2,6 +2,7 @@ package com.kb.tangtang.transaction.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.transaction.domain.TransactionListRow;
+import com.kb.tangtang.transaction.dto.DailySpendingSummaryDto;
 import com.kb.tangtang.transaction.dto.LedgerSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionListItemDto;
 import com.kb.tangtang.transaction.dto.TransactionListResponseDto;
@@ -28,6 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TransactionQueryServiceTest {
@@ -198,5 +201,128 @@ class TransactionQueryServiceTest {
         LedgerSummaryDto summary = service.getTransactions(USER_ID, "2026-07").getSummary();
 
         assertEquals(0, BigDecimal.ZERO.compareTo(summary.getMonthOverMonthRate()));
+    }
+
+    /* ── 홈 「오늘 쓴 돈」 요약 (이슈 #450 A블록) ────────────────────── */
+
+    /** 구간을 매처에 박아 둔다 — any() 로 뭉개면 "어느 구간을 물었나" 검증이 통째로 무의미해진다. */
+    private void stubConsumption(LocalDate start, LocalDate end, String amount) {
+        when(transactionMapper.sumNetConsumption(eq(USER_ID), eq(start), eq(end)))
+                .thenReturn(new BigDecimal(amount));
+    }
+
+    /** KST 기준 시각을 고정한 서비스. */
+    private TransactionQueryService serviceAt(String instant) {
+        return new TransactionQueryService(transactionMapper,
+                Clock.fixed(Instant.parse(instant), ZoneId.of("Asia/Seoul")));
+    }
+
+    @Test
+    @DisplayName("오늘·어제·이번 달을 각각 반개구간으로 조회한다 — 이번 달은 월 전체(1일~다음 달 1일)다")
+    void queriesTodayYesterdayAndWholeMonthRanges() {
+        // 이번 달을 month-to-date(1일~내일)로 자르면 장부 월 요약과 값이 갈린다 —
+        // 카드에 「거래내역」 입구가 붙어 있어 한 탭 거리에서 바로 어긋나 보인다.
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "32000");
+        stubConsumption(LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15), "40000");
+        stubConsumption(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1), "486300");
+
+        DailySpendingSummaryDto summary = service.getDailySpendingSummary(USER_ID);
+
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16));
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15));
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
+        assertEquals("2026-08-15", summary.getDate());
+        assertEquals(0, new BigDecimal("32000").compareTo(summary.getTodayAmount()));
+        assertEquals(0, new BigDecimal("486300").compareTo(summary.getMonthAmount()));
+    }
+
+    @Test
+    @DisplayName("자정을 넘기면 KST 기준으로 '오늘'이 하루 넘어가고, 이번 달 구간은 그대로다")
+    void todayRollsOverAtKoreanMidnight() {
+        // 서버 타임존이 UTC 로 뜨면 여기가 9시간 어긋난다 — date 필드가 그 사고의 유일한 단서다.
+        DailySpendingSummaryDto beforeMidnight = serviceAt("2026-08-15T14:59:59Z").getDailySpendingSummary(USER_ID);
+        DailySpendingSummaryDto afterMidnight = serviceAt("2026-08-15T15:00:00Z").getDailySpendingSummary(USER_ID);
+
+        assertEquals("2026-08-15", beforeMidnight.getDate());
+        assertEquals("2026-08-16", afterMidnight.getDate());
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 16), LocalDate.of(2026, 8, 17));
+        verify(transactionMapper, times(2))
+                .sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
+    }
+
+    @Test
+    @DisplayName("어제 지출이 0이면 증감률은 null이다 — 장부처럼 0을 주면 '어제와 비슷하게 쓰는 중'이라는 거짓말이 뜬다")
+    void changeRateIsNullWhenYesterdaySpentIsZero() {
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "50000");
+        stubConsumption(LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15), "0");
+
+        assertNull(service.getDailySpendingSummary(USER_ID).getChangeRate());
+    }
+
+    @Test
+    @DisplayName("어제 순지출이 음수(환불이 소비보다 큼)여도 증감률은 null이다")
+    void changeRateIsNullWhenYesterdaySpentIsNegative() {
+        // 음수를 분모로 쓰면 부호가 뒤집혀 "더 썼는데 적게 쓰는 중"이 뜬다. 0만 막으면 이 구멍이 남는다.
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "50000");
+        stubConsumption(LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15), "-12000");
+
+        assertNull(service.getDailySpendingSummary(USER_ID).getChangeRate());
+    }
+
+    @Test
+    @DisplayName("어제보다 덜 썼으면 증감률이 음수다")
+    void changeRateIsNegativeWhenSpentLessThanYesterday() {
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "8000");
+        stubConsumption(LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15), "10000");
+
+        assertEquals(0, new BigDecimal("-20.00")
+                .compareTo(service.getDailySpendingSummary(USER_ID).getChangeRate()));
+    }
+
+    @Test
+    @DisplayName("어제보다 더 썼으면 증감률이 양수다")
+    void changeRateIsPositiveWhenSpentMoreThanYesterday() {
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "15000");
+        stubConsumption(LocalDate.of(2026, 8, 14), LocalDate.of(2026, 8, 15), "10000");
+
+        assertEquals(0, new BigDecimal("50.00")
+                .compareTo(service.getDailySpendingSummary(USER_ID).getChangeRate()));
+    }
+
+    @Test
+    @DisplayName("오늘 환불이 소비보다 크면 음수를 그대로 내보낸다")
+    void todayAmountKeepsNegativeSignWhenRefundExceedsSpending() {
+        // 장부의 totalSpent 도 상계 결과를 그대로 보여주고 프론트 formatHomeAmount 가 -12,000 을 찍는다.
+        // 여기서만 0으로 자르면 같은 소비가 두 화면에서 다른 값이 된다.
+        stubConsumption(LocalDate.of(2026, 8, 15), LocalDate.of(2026, 8, 16), "-12000");
+        stubConsumption(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1), "300000");
+
+        DailySpendingSummaryDto summary = service.getDailySpendingSummary(USER_ID);
+
+        assertEquals(0, new BigDecimal("-12000").compareTo(summary.getTodayAmount()));
+    }
+
+    @Test
+    @DisplayName("집계 결과가 없어도 금액은 null이 아니라 0이다")
+    void amountsAreZeroInsteadOfNullWhenNoRowsMatch() {
+        // 금액에 null 을 주면 카드가 「—」·「집계 중」으로 떠 정상인 0원 소비가 장애처럼 보인다.
+        // 그 자리는 API 호출 실패 전용이다.
+        DailySpendingSummaryDto summary = service.getDailySpendingSummary(USER_ID);
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(summary.getTodayAmount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(summary.getMonthAmount()));
+        assertNull(summary.getChangeRate());
+    }
+
+    @Test
+    @DisplayName("월초 첫날이면 이번 달 구간은 하루짜리고 어제는 전달을 가리킨다")
+    void firstDayOfMonthKeepsMonthRangeAndPointsYesterdayToPreviousMonth() {
+        TransactionQueryService firstDayService = serviceAt("2026-08-01T03:00:00Z");
+
+        DailySpendingSummaryDto summary = firstDayService.getDailySpendingSummary(USER_ID);
+
+        assertEquals("2026-08-01", summary.getDate());
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 7, 31), LocalDate.of(2026, 8, 1));
+        verify(transactionMapper).sumNetConsumption(USER_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
     }
 }

@@ -7,7 +7,7 @@
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import { formatAssetHomeWon, getCompositionRatios, toneColor } from '@/utils/asset';
+import { formatWon, getCompositionRatios, toneColor } from '@/utils/asset';
 
 const props = defineProps({
     composition: { type: Array, required: true },
@@ -61,7 +61,7 @@ const chartStyle = computed(() => {
                     ></span>
                     <span class="asset-composition__legend-label">{{ item.label }}</span>
                     <span class="asset-composition__legend-amount">{{
-                        formatAssetHomeWon(item.amount)
+                        formatWon(item.amount)
                     }}</span>
                 </li>
             </ul>
@@ -127,15 +127,22 @@ const chartStyle = computed(() => {
     border-radius: var(--tt-radius-full);
 }
 
+/* 금액을 전체 자릿수로 적으면서 좁아졌다 — 넘치면 라벨(「예금·적금」 등)을 줄여 금액을 지킨다. */
 .asset-composition__legend-label {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
     color: var(--tt-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .asset-composition__legend-amount {
+    flex: none;
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     color: var(--tt-text);
+    white-space: nowrap;
 }
 </style>

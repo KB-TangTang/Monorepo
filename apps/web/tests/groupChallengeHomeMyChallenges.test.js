@@ -182,17 +182,11 @@ test('「총 소비」 표기는 만들기 화면과 목록이 같은 상수를 
 
 /* ── TO-DO 투표 진행바 ─────────────────────────────── */
 
-const TODO_ITEM = 'src/components/challenge/group/GroupTodoItem.vue';
-
-test('투표 건에는 진행바를 그리고 변론 건에는 그리지 않는다', () => {
-    const src = source(TODO_ITEM);
-    assert.match(src, /if \(isAccuse\.value \|\| !totalVoters\) return null;/);
-    assert.match(src, /v-if="votePercent !== null"/);
-});
-
 test('투표 목데이터는 tally 와 함께 숫자도 갖는다', () => {
     /*
-     * 진행바는 `tally`('3/5 투표') 문자열이 아니라 `voteCount`/`totalVoters` 를 읽는다.
+     * `MOCK_TODO_ITEMS` 는 개인 홈(`views/HomeView.vue`)이 `fetchMyTrials` 로 계속 쓴다.
+     * 그룹 홈에서 이 목록을 쓰던 `GroupTodoItem` 은 #448 에서 지웠지만, 진행바는 `tally`
+     * ('3/5 투표') 문자열이 아니라 `voteCount`/`totalVoters` 를 읽는다 —
      * 목데이터에 숫자가 없으면 목모드에서 바가 통째로 사라진다.
      */
     for (const item of MOCK_TODO_ITEMS.filter((i) => i.type === 'vote')) {

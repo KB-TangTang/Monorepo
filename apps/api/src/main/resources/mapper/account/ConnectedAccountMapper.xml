@@ -155,4 +155,12 @@
         LIMIT #{limit}
     </select>
 
+    <!-- 대출·카드 제외 그림자 행 제거(#467). is_active=0 조건이 실제 연결 행을 지킨다. -->
+    <delete id="deleteInactiveByHash">
+        DELETE FROM tbl_connected_account
+        WHERE user_id = #{userId}
+          AND account_no_encrypted = #{accountNoEncrypted}
+          AND is_active = 0
+    </delete>
+
 </mapper>

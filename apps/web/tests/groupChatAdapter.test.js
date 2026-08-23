@@ -146,3 +146,48 @@ test('메시지: 시스템 필드가 없던 시절 메시지는 null 로 복원�
     assert.equal(message.deepLink, null);
     assert.equal(message.caseNo, null);
 });
+
+/*
+ * 판결 결과 (이슈 #304). 화면은 이 값으로만 유죄·무죄를 가른다 — 문구를 파싱하면 문구
+ * 한 글자에 색이 뒤집힌다. 표는 0 과 null 을 구분해야 한다.
+ * (필 표시 규칙 자체는 tests/groupChatTrialPill.test.js 에 있다)
+ */
+test('메시지: 판결 결과를 그대로 옮긴다', () => {
+    const message = toChatMessage({
+        messageId: 9,
+        type: 'SYSTEM',
+        content: '절약왕님, 유죄예요. 목숨 1개가 차감됐어요.',
+        sentAt: '2026-08-19T09:00:00',
+        systemType: 'VERDICT_CONFIRMED',
+        verdict: { outcome: 'GUILTY', guiltyVotes: 4, innocentVotes: 2, livesLost: 1 },
+    });
+
+    assert.deepEqual(message.verdict, {
+        outcome: 'GUILTY',
+        guiltyVotes: 4,
+        innocentVotes: 2,
+        livesLost: 1,
+    });
+});
+
+test('메시지: 판결 표의 0 과 null 을 뭉개지 않는다', () => {
+    const confession = toChatMessage({
+        type: 'SYSTEM',
+        messageId: 1,
+        verdict: { outcome: 'GUILTY', guiltyVotes: null, innocentVotes: null, livesLost: 1 },
+    });
+    const noVote = toChatMessage({
+        type: 'SYSTEM',
+        messageId: 2,
+        verdict: { outcome: 'INNOCENT', guiltyVotes: 0, innocentVotes: 0, livesLost: 0 },
+    });
+
+    assert.equal(confession.verdict.guiltyVotes, null, '없는 투표를 0 으로 만들면 표를 지어내게 된다');
+    assert.equal(noVote.verdict.guiltyVotes, 0, '실제로 0표인 것은 0 으로 남아야 한다');
+});
+
+test('메시지: 결과가 없는 옛 판결 메시지는 verdict 가 null 이다', () => {
+    const message = toChatMessage({ messageId: 3, type: 'SYSTEM', systemType: 'VERDICT_CONFIRMED' });
+
+    assert.equal(message.verdict, null);
+});

@@ -43,6 +43,7 @@ function source(path) {
 const HOME = 'src/views/challenge/group/GroupChallengeHomeView.vue';
 const CARD = 'src/components/challenge/group/GroupTrialStatusCard.vue';
 const CAROUSEL = 'src/components/challenge/group/GroupDetailTrialCarousel.vue';
+const TODO_GRID = 'src/components/challenge/group/GroupTrialTodoGrid.vue';
 
 /** `toIndictmentViewModel` 을 지난 뒤의 모양. 화면 이름(`isMine`·`hasDefended`)을 쓴다. */
 function trial(overrides = {}) {
@@ -157,23 +158,31 @@ test('스테퍼의 현재 칸은 상태를 따라간다', () => {
     assert.equal(toTrialStatusCard(trial({ status: 'VOTING' })).stepIndex, 2);
 });
 
-test('배심원이 없어도 투표 진행바가 사라지지 않는다', () => {
-    /* 0 으로 나누면 NaN 이 width 로 들어가 바가 통째로 없어진다 */
+test('배심원이 없으면 점을 그리지 않는다', () => {
+    /*
+     * 예전에는 `votePercent` 로 진행바 폭을 잡아서 0 으로 나누면 NaN 이 width 에 들어가
+     * 바가 통째로 없어졌다. 막대를 점으로 바꾸면서(#448 9차) 그 값 자체를 지웠다 —
+     * `buildVoteDots` 가 `total <= 0` 을 `null` 로 떨어뜨려 나눗셈이 아예 없다.
+     */
     const card = toTrialStatusCard(trial({ status: 'VOTING', voteCount: 0, totalVoters: 0 }));
-    assert.equal(card.votePercent, 0);
-
-    assert.equal(
-        toTrialStatusCard(trial({ status: 'VOTING', voteCount: 3, totalVoters: 5 })).votePercent,
-        60,
-    );
+    assert.equal(card.voteDots, null);
+    assert.equal(card.votePercent, undefined);
 });
 
-test('남의 재판 제목에는 피고 닉네임이 들어간다', () => {
-    assert.match(toTrialStatusCard(trial({ status: 'VOTING' })).title, /지판/);
-    /* 내 재판에 내 닉네임을 넣으면 「지판님 재판에 투표해주세요」가 나에게 뜬다 */
-    assert.doesNotMatch(
-        toTrialStatusCard(trial({ isMine: true, status: 'VOTING', nickname: '지판' })).title,
-        /지판/,
+test('피고 닉네임은 제목이 아니라 둘째 줄에 들어간다', () => {
+    /*
+     * 예전에는 제목이 「{닉}님 재판에 투표해주세요」였다. 한국어는 술어가 뒤에 오는데
+     * 말줄임은 뒤를 자른다 — 360px 에서 제목에 남는 폭이 152px 이라 11자에서 잘렸고,
+     * 「…투표해주세요」와 「…투표했어요」가 화면에서 같은 줄이 됐다.
+     * 닉네임은 잘려도 되는 자리(`subject`)로 내리고, 제목은 구분점만 갖는다.
+     */
+    assert.match(toTrialStatusCard(trial({ status: 'VOTING' })).subject, /지판/);
+    assert.doesNotMatch(toTrialStatusCard(trial({ status: 'VOTING' })).title, /지판/);
+
+    /* 내 재판에 내 닉네임을 넣으면 「지판님 재판」이 나에게 뜬다 */
+    assert.equal(
+        toTrialStatusCard(trial({ isMine: true, status: 'VOTING', nickname: '지판' })).subject,
+        '내 재판',
     );
 });
 
@@ -261,51 +270,144 @@ test('아코디언은 한 번에 하나만 펼친다', () => {
  * 카드가 같은 말을 두 번 하지 않는다 (이슈 #443)
  * ══════════════════════════════════════════════════ */
 
-test('뱃지는 명령이 아니라 재판 단계를 말한다', () => {
-    /* 「변론 필요」는 바로 옆 제목 「내 변론이 필요해요」와 같은 말이었다 */
-    assert.equal(
-        toTrialStatusCard(trial({ isMine: true, status: 'DEFENSE_WAIT' })).badge,
-        '변론 중',
-    );
-    assert.equal(toTrialStatusCard(trial({ isMine: false, status: 'VOTING' })).badge, '투표 중');
+/** 입장 6가지를 만드는 최소 override. 여러 테스트가 같은 배열을 본다 */
+const ALL_SIX = [
+    { isMine: true, status: 'DEFENSE_WAIT', hasDefended: false },
+    { isMine: true, status: 'DEFENSE_WAIT', hasDefended: true },
+    { isMine: true, status: 'VOTING' },
+    { isMine: false, status: 'DEFENSE_WAIT' },
+    { isMine: false, status: 'VOTING', myVote: null },
+    { isMine: false, status: 'VOTING', myVote: 'GUILTY' },
+];
 
-    /* 명령형이 되살아나면 같은 지적을 다시 받는다 — 6가지 입장 전부를 본다 */
-    const allSix = [
-        { isMine: true, status: 'DEFENSE_WAIT', hasDefended: false },
-        { isMine: true, status: 'DEFENSE_WAIT', hasDefended: true },
-        { isMine: true, status: 'VOTING' },
-        { isMine: false, status: 'DEFENSE_WAIT' },
-        { isMine: false, status: 'VOTING', myVote: null },
-        { isMine: false, status: 'VOTING', myVote: 'GUILTY' },
-    ];
-    for (const overrides of allSix) {
-        assert.doesNotMatch(toTrialStatusCard(trial(overrides)).badge, /필요|하세요/);
+/* ══════════════════════════════════════════════════
+ * 접힌 줄 두 줄 재구성 (이슈 #448)
+ * ══════════════════════════════════════════════════ */
+
+test('제목은 6가지 입장을 전부 다른 낱말로 가른다', () => {
+    /*
+     * #443 에서 뱃지를 「변론 중 / 투표 중」 두 낱말로 줄이고 급함은 색(`tone`)에 맡겼다.
+     * 그 결과 「내가 변론을 냈다」(DEFENSE_SUBMITTED)와 「남이 변론을 쓰는 중」(DEFENSE_WAITING)이
+     * 회색 「변론 중」 둘로 화면에서 완전히 같아졌다. 글자가 다시 6가지를 갈라야 한다.
+     */
+    const titles = ALL_SIX.map((overrides) => toTrialStatusCard(trial(overrides)).title);
+
+    assert.equal(new Set(titles).size, 6, titles.join(' / '));
+    for (const title of titles) {
+        /* 제목은 문장이 아니라 라벨이다. 길면 다시 말줄임에 걸린다 */
+        assert.ok(title.length <= 9, title);
+        /* 명령형(「~해주세요」)은 잔소리로 읽혀 #443 에서 걷어냈다 */
+        assert.doesNotMatch(title, /하세요|해주세요/);
     }
 });
 
-test('접힌 줄은 아바타 · 뱃지 · 제목 한 줄로 끝난다', () => {
+test('투표 현황은 색이 아니라 모양으로 내 표를 가른다', () => {
+    /* 「나는 던졌는데 남들이 아직」과 「나도 아직」이 사용자가 가장 자주 헷갈리는 두 상태다 */
+    const notYet = toTrialStatusCard(trial({ status: 'VOTING', myVote: null, voteCount: 2 }));
+    const voted = toTrialStatusCard(trial({ status: 'VOTING', myVote: 'GUILTY', voteCount: 3 }));
+
+    assert.equal(notYet.voteDots[0], 'mine-todo');
+    assert.equal(voted.voteDots[0], 'mine-done');
+
+    /* 내 표는 `voteCount` 에 이미 들어 있다 — 빼지 않으면 내 칸과 남의 칸에 두 번 그려진다 */
+    assert.deepEqual(voted.voteDots, ['mine-done', 'done', 'done', 'todo', 'todo']);
+    assert.deepEqual(notYet.voteDots, ['mine-todo', 'done', 'done', 'todo', 'todo']);
+
+    /* 피고는 자기 재판의 배심원이 아니다(`canVote` 와 같은 규칙) — 내 칸을 만들면 남의 표를 내 것처럼 그린다 */
+    const mine = toTrialStatusCard(trial({ isMine: true, status: 'VOTING', voteCount: 2 }));
+    assert.deepEqual(mine.voteDots, ['done', 'done', 'todo', 'todo', 'todo']);
+
+    /* 변론 대기 중에 0/5 를 그리면 아무도 안 던진 것처럼 보인다 */
+    assert.equal(toTrialStatusCard(trial({ status: 'DEFENSE_WAIT' })).voteDots, null);
+    /* 정원이 많으면 점이 줄을 밀어낸다 — 화면이 숫자로 떨어뜨리도록 null 을 준다 */
+    assert.equal(toTrialStatusCard(trial({ status: 'VOTING', totalVoters: 20 })).voteDots, null);
+});
+
+test('접힌 줄은 두 줄이고 타이머는 여전히 없다', () => {
     const code = source(CARD);
     const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
 
-    /*
-     * 재판이 6건씩 뜬다. 행마다 카테고리·그룹명·초과금액·타이머가 같이 붙으면 목록이 안 읽힌다.
-     * 카테고리·한도·초과금액은 CTA 가 여는 변론 화면이 거래내역 원본으로 다시 보여주고,
-     * 남은 시간은 펼친 본문으로 내렸다 — 접힌 줄에 두면 6행이 매초 같이 떨린다.
-     */
-    assert.doesNotMatch(summary, /categoryName|exceededAmount|groupName|countdownOf/);
+    /* 구분점은 첫 줄, 잘려도 되는 맥락은 둘째 줄 */
+    assert.match(summary, /trial-status__title/);
+    assert.match(summary, /trial-status__sub-text/);
+    /* 그룹명은 둘째 줄로 들어왔다. 카테고리·초과금액은 CTA 가 여는 변론 화면이 원본으로 보여준다 */
+    assert.doesNotMatch(summary, /categoryName|exceededAmount/);
+    /* 남은 시간은 펼친 본문에 있다 — 접힌 줄에 두면 6행이 매초 같이 떨린다 */
+    assert.doesNotMatch(summary, /countdownOf/);
     /* 「마감 오늘 22:00」 같은 글 표기는 카운트다운과 같은 말이라 되살리지 않는다 */
     assert.doesNotMatch(code, /마감 \{\{/);
     /* 카운트다운 자체는 살아 있어야 한다 — 펼친 본문에서 */
     assert.match(code, /countdownOf\(item\)\.text/);
 });
 
-test('뱃지는 pill 이 아니라 모서리만 둥근 사각형이다', () => {
+test('왼쪽 앵커는 아바타가 아니라 재판 단계 그림이다', () => {
     const code = source(CARD);
-    const badge = code.slice(code.indexOf('.trial-status__badge {'));
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
 
-    /* 카드가 --tt-radius-xl(22px). 그 안의 태그는 --tt-radius-xs(8px) — 토큰이 「태그」용으로 정의돼 있다 */
-    assert.match(badge.slice(0, 200), /border-radius: var\(--tt-radius-xs\)/);
-    assert.doesNotMatch(badge.slice(0, 200), /--tt-radius-full/);
+    /* 앵커는 격자 타일과 같은 사물이라 「이 타일이 저 목록을 연다」가 이어져 읽힌다 */
+    assert.match(summary, /class="trial-status__art" :src="ART\[item\.icon\]"/);
+    /* 아바타가 앵커 자리로 올라오면 안 된다 — 얼굴은 단계를 말하지 못한다 */
+    const anchor = summary.slice(0, summary.indexOf('trial-status__body'));
+    assert.doesNotMatch(anchor, /UserAvatar/);
+    /* 뱃지 글자는 그림이 대신한다 */
+    assert.doesNotMatch(code, /item\.badge/);
+});
+
+test('접힌 줄은 챌린지 이름과 피고 얼굴로 갈린다', () => {
+    /*
+     * 첫 줄이 「투표하기」 같은 할 일 라벨이던 때가 있었는데(#448 2차) 걷었다(10차).
+     * **시트 제목이 이미 그 말을 한다** — 「투표할 재판」을 열면 모든 행이 투표라서
+     * 라벨이 여섯 번 반복될 뿐 행을 가르지 못했다.
+     *
+     * 얼굴이 필요한 이유는 챌린지 이름만으로는 안 갈리는 경우가 있어서다 —
+     * 같은 그룹에서 두 명이 동시에 기소되면 첫 줄이 똑같아진다.
+     */
+    const code = source(CARD);
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
+
+    assert.match(summary, /\{\{ item\.groupName \|\| item\.title \}\}/);
+    assert.match(summary, /<UserAvatar/);
+    assert.match(summary, /item\.subject/);
+    /* 「너무 작게 하지 마라」 — 장식이 아니라 행을 가르는 조각이다 */
+    const size = summary.match(/:size="(\d+)"/);
+    assert.ok(Number(size[1]) >= 24, `아바타가 ${size[1]}px 로 작다`);
+});
+
+test('투표 점은 접힌 줄이 아니라 펼친 본문에 있다', () => {
+    /*
+     * 접힌 줄에서는 파란 점 무리가 셰브론 바로 옆에 붙어 「눌러야 할 것」처럼 읽혔다 —
+     * 라벨이 없고 자기도 누를 수 있는 버튼 안이라 그렇다(#448 7차).
+     * 점 자체를 버린 건 아니고 펼친 본문으로 옮겼다(#448 9차). 거기서는 「3 / 5명 투표」
+     * 라벨을 달고 있고 누를 수 없는 블록이라 같은 오해가 안 생긴다.
+     */
+    const code = source(CARD);
+    const summary = code.slice(code.indexOf('trial-status__summary'), code.indexOf('<Transition'));
+    assert.doesNotMatch(summary, /item\.voteDots/);
+    /* 정원 초과 폴백이던 접힌 줄의 숫자 조각은 되살리지 않는다 — 본문이 숫자를 항상 말한다 */
+    assert.doesNotMatch(code, /trial-status__votenum/);
+    assert.match(code, /v-for="\(dot, dotIndex\) in item\.voteDots"/);
+});
+
+test('타일과 목록 줄이 같은 사물을 가리킨다', () => {
+    /*
+     * 타일에서 본 판사봉과 시트에서 본 판사봉이 다른 사물이면 「이 타일이 저 목록을 연다」가 안 읽힌다.
+     * **키를 `STANCE.icon` 이름으로 맞춰** 한쪽만 엉뚱한 사물로 갈아 끼우지 못하게 한다.
+     *
+     * `STANCE.icon` 은 이름이 넷인데 그림은 셋이라 둘을 합쳤다. 합치는 축은 **재판 단계**다 —
+     * `clock`(변론 대기) → 기소장, `scale`(심판받는 중) → `ballot` 과 같은 투표함.
+     */
+    const card = source(CARD);
+    assert.match(card, /gavel: objDefenseImage/);
+    assert.match(card, /ballot: objVoteImage/);
+    assert.match(card, /clock: objIndictImage/);
+    assert.match(card, /scale: objVoteImage/);
+
+    const grid = source(TODO_GRID);
+    assert.match(grid, /const ART = \{ gavel: objDefenseImage, ballot: objVoteImage \}/);
+    assert.match(grid, /const WATERMARK = \{ gavel: wmDefenseImage, ballot: wmVoteImage \}/);
+    /* 타일이 그 키를 실제로 들고 있어야 매핑이 산다 */
+    assert.match(grid, /icon: 'gavel'/);
+    assert.match(grid, /icon: 'ballot'/);
 });
 
 test('아코디언은 고정 높이가 아니라 실제 높이로 여닫는다', () => {

@@ -16,6 +16,8 @@ import com.kb.tangtang.account.domain.AuthStatus;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.dto.*;
+import com.kb.tangtang.account.domain.Card;
+import com.kb.tangtang.account.mapper.CardMapper;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -57,6 +59,7 @@ class AccountLinkServiceTest {
     private FinancialDataClient client;
     private ConnectedAccountMapper mapper;
     private LoanMapper loanMapper;
+    private CardMapper cardMapper;
     private LinkProgressStore store;
     private ConsentService consentService;
     private FinancialSyncClient syncClient;
@@ -72,11 +75,13 @@ class AccountLinkServiceTest {
         client = mock(FinancialDataClient.class);
         mapper = mock(ConnectedAccountMapper.class);
         loanMapper = mock(LoanMapper.class);
+        cardMapper = mock(CardMapper.class);
         store = new LinkProgressStore(CLOCK);
         consentService = mock(ConsentService.class);
         syncClient = mock(FinancialSyncClient.class);
         scenarioKeyProvider = mock(ScenarioKeyProvider.class);
-        service = new AccountLinkService(client, mapper, loanMapper, store, new InstitutionCatalog(),
+        service = new AccountLinkService(client, mapper, loanMapper, cardMapper, store,
+                new InstitutionCatalog(),
                 new AccountNumberPolicy("test-secret-key-for-account-hash-0001"),
                 syncClient, scenarioKeyProvider, capturingPublisher,
                 consentService, BATCH_FIXED_DELAY_MS, CLOCK);
@@ -88,6 +93,7 @@ class AccountLinkServiceTest {
 
         when(mapper.findActiveByUser(anyLong())).thenReturn(List.of());
         when(loanMapper.findByUser(anyLong())).thenReturn(List.of());
+        when(cardMapper.findByUser(anyLong())).thenReturn(List.of());
         when(mapper.findActiveHashes(anyLong())).thenReturn(List.of());
         when(mapper.findInactiveKeysByUser(anyLong())).thenReturn(List.of());
         /* 기본은 "제한 없음" — 목서버가 그렇다. 제한하는 경우는 개별 테스트에서 덮어쓴다. */
@@ -358,6 +364,183 @@ class AccountLinkServiceTest {
         assertEquals(0, result.getLinkedCount());
         assertTrue(result.isDirectAssetsPending());
         verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("#467: 자동 연동 미리보기에서 체크를 푼 상품은 원본 키로 제외 행(is_active=0)을 남긴다")
+    void linkRecordsExclusionForUncheckedAutoIncludedPreview() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB", "CP_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "CP_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB", "CP_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+        List<LinkableGroupDto> groups = service.linkableAccounts(USER_ID, "conn-1");
+        long loanPreviewId = groups.stream()
+                .flatMap(group -> group.getAccounts().stream())
+                .filter(row -> "LOAN".equals(row.getAccountType()))
+                .findFirst().orElseThrow().getAccountId();
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+        linkRequest.setExcludedAccountIds(List.of(loanPreviewId, 999L));   // 999 는 화면이 지어낸 id
+
+        LinkResultDto result = service.link(USER_ID, linkRequest);
+
+        assertTrue(result.isDirectAssetsPending());   // 페이머니는 그대로 연동된다
+        /* 키는 FinancialSyncServiceImpl 이 저장할 때 쓰는 것과 같아야 건너뛴다. */
+        verify(mapper).insert(argThat(row ->
+                "MOCK-LOAN-11".equals(row.getAccountNoEncrypted()) && "LOAN".equals(row.getAccountType())
+                        && "CP_KB".equals(row.getBankCode())));
+        verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-11");
+        verify(mapper, never()).deactivateByHash(eq(USER_ID), argThat(key -> key.startsWith("MOCK-PAYMONEY")));
+    }
+
+    @Test
+    @DisplayName("#467: 관리 목록의 대출 행을 해제하면 행은 두고 제외 키(숨김)만 남긴다 — 예전엔 400")
+    void disconnectLoanRecordsExclusionWithoutDeleting() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(
+                Loan.builder().id(7L).userId(USER_ID).loanNoEncrypted("MOCK-LOAN-301")
+                        .bankCode("CP_KB").bankName("KB캐피탈").loanType("KB 신용대출").build()));
+
+        DisconnectResultDto result = service.disconnect(USER_ID, ManagedAccountId.ofLoan(7L));
+
+        assertTrue(result.isDisconnected());
+        verify(mapper).insert(argThat(row -> "MOCK-LOAN-301".equals(row.getAccountNoEncrypted())));
+        verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-301");
+        /* 은행 계좌와 같은 원칙 — 해제 전까지 모은 이력은 남긴다. 조회 말고는 tbl_loan 을 건드리지 않는다. */
+        verify(loanMapper).findByUser(USER_ID);
+        verifyNoMoreInteractions(loanMapper);
+        verify(mapper, never()).deactivate(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("#467: 연결 계좌 관리 목록에 카드도 나온다 — 잔액 없이 거래 출처로")
+    void connectedAccountsIncludeCards() {
+        when(cardMapper.findByUser(USER_ID)).thenReturn(List.of(
+                Card.builder().id(4L).userId(USER_ID).institutionCode("0381").institutionName("KB국민카드")
+                        .productName("KB My WE:SH 카드").cardNoMasked("1234-****-****-5678")
+                        .cardTypeCode("01").build()));
+
+        ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
+
+        assertEquals(1, result.getAccounts().size());
+        ConnectedAccountDto row = result.getAccounts().get(0);
+        assertEquals("CARD", row.getAccountType());
+        assertEquals("KB My WE:SH 카드", row.getAccountName());
+        assertEquals("01", row.getCardTypeCode());
+        /* 카드는 자산이 아니다 — 잔액을 채우지 않는다. 개별 재조회도 없다(기관 단위로만 긁어온다). */
+        assertNull(row.getBalance());
+        assertFalse(row.isManageable());
+        /* 대출 행과 id 가 겹치면 안 된다 — 화면 키가 깨지고 해제가 엉뚱한 테이블로 간다. */
+        assertEquals(ManagedAccountId.Kind.CARD, ManagedAccountId.kindOf(row.getAccountId()));
+        assertEquals(4L, ManagedAccountId.rawId(row.getAccountId()));
+        assertNotEquals(ManagedAccountId.ofLoan(4L), row.getAccountId());
+    }
+
+    @Test
+    @DisplayName("#467: 카드 해제는 행·거래를 두고 제외 키(마스킹 번호 기반)만 남긴다")
+    void disconnectCardRecordsExclusionWithoutDeleting() {
+        when(cardMapper.findByUser(USER_ID)).thenReturn(List.of(
+                Card.builder().id(4L).userId(USER_ID).institutionCode("0381").institutionName("KB국민카드")
+                        .productName("KB My WE:SH 카드").cardNoMasked("1234-****-****-5678")
+                        .cardTypeCode("01").build()));
+
+        DisconnectResultDto result = service.disconnect(USER_ID, ManagedAccountId.ofCard(4L));
+
+        assertTrue(result.isDisconnected());
+        /* 키는 FinancialSyncServiceImpl 이 건너뛸 때 쓰는 것과 같아야 한다. */
+        verify(mapper).insert(argThat(row ->
+                "MOCK-CARD-1234-****-****-5678".equals(row.getAccountNoEncrypted())
+                        && "CARD".equals(row.getAccountType())));
+        verify(mapper).deactivateByHash(USER_ID, "MOCK-CARD-1234-****-****-5678");
+        /* 조회 말고는 tbl_card 를 건드리지 않는다 — 해제 전 이력은 남긴다. */
+        verify(cardMapper).findByUser(USER_ID);
+        verifyNoMoreInteractions(cardMapper);
+    }
+
+    @Test
+    @DisplayName("#467: 카드 재조회는 NOT_SUPPORTED, 없는 카드 해제는 NOT_FOUND")
+    void cardRowsRejectUnknownDisconnectAndResync() {
+        when(cardMapper.findByUser(USER_ID)).thenReturn(List.of());
+
+        BusinessException notFound = assertThrows(BusinessException.class,
+                () -> service.disconnect(USER_ID, ManagedAccountId.ofCard(99L)));
+        assertEquals("NOT_FOUND", notFound.getCode());
+
+        BusinessException notSupported = assertThrows(BusinessException.class,
+                () -> service.resync(USER_ID, ManagedAccountId.ofCard(4L)));
+        assertEquals("NOT_SUPPORTED", notSupported.getCode());
+        assertTrue(notSupported.getMessage().startsWith("카드"));
+        verify(mapper, never()).findByIdAndUser(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("#467 되돌리기: 예전에 풀었던 대출을 다시 체크하면 제외 그림자 행을 지우고, 페이머니는 되살린다")
+    void linkClearsOldExclusionWhenAutoIncludedRowIsCheckedAgain() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB", "CP_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "CP_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+        /* 둘 다 예전에 풀었거나 해제해 둔 상태 — is_active=0 행이 남아 있다. */
+        when(mapper.findInactiveKeysByUser(USER_ID)).thenReturn(List.of("MOCK-LOAN-11", "MOCK-PAYMONEY-3"));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB", "CP_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+        service.linkableAccounts(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+        linkRequest.setExcludedAccountIds(List.of());   // 이번엔 둘 다 체크한 채로 둔다
+
+        service.link(USER_ID, linkRequest);
+
+        verify(mapper).deleteInactiveByHash(USER_ID, "MOCK-LOAN-11");
+        verify(mapper).reactivate(argThat(row -> "MOCK-PAYMONEY-3".equals(row.getAccountNoEncrypted())));
+        verify(mapper, never()).deactivateByHash(anyLong(), anyString());
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("#467: 없는 대출을 해제하면 NOT_FOUND, 대출 행 재조회는 NOT_SUPPORTED")
+    void loanRowsRejectUnknownDisconnectAndResync() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of());
+
+        BusinessException notFound = assertThrows(BusinessException.class,
+                () -> service.disconnect(USER_ID, -99L));
+        assertEquals("NOT_FOUND", notFound.getCode());
+
+        BusinessException notSupported = assertThrows(BusinessException.class,
+                () -> service.resync(USER_ID, -7L));
+        assertEquals("NOT_SUPPORTED", notSupported.getCode());
+        verify(mapper, never()).findByIdAndUser(anyLong(), anyLong());
     }
 
     @Test
@@ -1016,7 +1199,8 @@ class AccountLinkServiceTest {
         ConnectedAccountListDto result = service.connectedAccounts(USER_ID);
 
         assertEquals(1, result.getAccounts().size());
-        assertEquals(-31L, result.getAccounts().get(0).getAccountId());
+        /* 카드 행과 겹치지 않게 종류를 id 에 실어 보낸다(#467). 예전엔 그냥 `-31` 이었다. */
+        assertEquals(ManagedAccountId.ofLoan(31L), result.getAccounts().get(0).getAccountId());
         assertEquals("CP_KB", result.getAccounts().get(0).getBankCode());
         assertEquals("LN-2025-****-0001", result.getAccounts().get(0).getAccountNoMasked());
         assertFalse(result.getAccounts().get(0).isManageable());

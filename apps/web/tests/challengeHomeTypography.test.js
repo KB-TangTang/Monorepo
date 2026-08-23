@@ -19,8 +19,8 @@ const CARD_FILES = [
     'src/components/challenge/group/GroupTrialStatusCard.vue',
     'src/components/challenge/group/GroupPeacefulCard.vue',
     'src/components/challenge/group/GroupTodoDoneCard.vue',
-    'src/components/challenge/group/GroupTodoSheet.vue',
-    'src/components/challenge/group/GroupTodoItem.vue',
+    'src/components/challenge/group/GroupTrialTodoGrid.vue',
+    'src/components/challenge/group/GroupTrialListSheet.vue',
 ];
 
 function source(path) {

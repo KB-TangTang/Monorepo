@@ -3,6 +3,7 @@ package com.kb.tangtang.transaction.controller;
 import com.kb.tangtang.common.auth.LoginUser;
 import com.kb.tangtang.common.dto.ApiResponse;
 import com.kb.tangtang.transaction.docs.TransactionControllerDocs;
+import com.kb.tangtang.transaction.dto.DailySpendingSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateRequestDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateResultDto;
 import com.kb.tangtang.transaction.dto.TransactionListResponseDto;
@@ -49,5 +50,10 @@ public class TransactionController implements TransactionControllerDocs {
             @LoginUser Long userId,
             @RequestParam(required = false) String yearMonth) {
         return ApiResponse.ok(queryService.getTransactions(userId, yearMonth));
+    }
+
+    @GetMapping("/summary/daily")
+    public ApiResponse<DailySpendingSummaryDto> getDailySpendingSummary(@LoginUser Long userId) {
+        return ApiResponse.ok(queryService.getDailySpendingSummary(userId));
     }
 }

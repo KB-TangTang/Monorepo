@@ -198,7 +198,8 @@ function startDefense() {
                         {{ indictment.exceededAmount.toLocaleString() }}원 초과
                     </span>
                     <span class="violation-page__ratio">
-                        {{ indictment.currentAmount.toLocaleString() }} / {{ indictment.limitAmount.toLocaleString() }}
+                        {{ indictment.currentAmount.toLocaleString() }} /
+                        {{ indictment.limitAmount.toLocaleString() }}원
                     </span>
                 </div>
             </div>

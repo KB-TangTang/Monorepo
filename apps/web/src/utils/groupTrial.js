@@ -210,47 +210,49 @@ export function trialStance(trial) {
  * `action` 은 CTA 가 열 화면이다 — 라우팅은 화면이 안다. 여기서 경로를 만들면
  * 그룹 상세와 지방법원 홈이 서로 다른 되돌아갈 곳을 갖게 된다.
  *
- * `badge` 는 **재판이 지금 어느 단계인가**만 말한다. 명령형(「변론 필요」)은 바로 옆의
- * 제목(「내 변론이 필요해요」)과 같은 말이라 뺐다 — 급함은 `tone`(색)이 맡는다.
+ * `icon` 은 접힌 줄 왼쪽 앵커다. **글자 뱃지를 대신한다.**
+ * 한때 「변론 중 / 투표 중」 두 낱말로 6가지 입장을 눌러 담고 `tone`(색)으로만 갈랐는데,
+ * 그러면 「내가 변론을 냈다」와 「남이 변론을 쓰는 중」이 화면에서 똑같아진다 — 회색 「변론 중」 둘.
+ * 모양이 다르면 색을 못 보는 사람도 갈라 읽는다.
  */
 const STANCE = {
     DEFENSE_NEEDED: {
-        badge: '변론 중',
+        icon: 'gavel',
         tone: 'danger',
         actionable: true,
         cta: '변론 작성하기',
         action: 'defend',
     },
     DEFENSE_SUBMITTED: {
-        badge: '변론 중',
+        icon: 'clock',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     ON_TRIAL: {
-        badge: '투표 중',
+        icon: 'scale',
         tone: 'danger',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     DEFENSE_WAITING: {
-        badge: '변론 중',
+        icon: 'clock',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
         action: 'trial',
     },
     VOTE_NEEDED: {
-        badge: '투표 중',
+        icon: 'ballot',
         tone: 'primary',
         actionable: true,
         cta: '변론 확인하고 투표하기',
         action: 'vote',
     },
     VOTE_DONE: {
-        badge: '투표 중',
+        icon: 'ballot',
         tone: 'muted',
         actionable: false,
         cta: '재판 현황 보기',
@@ -258,22 +260,60 @@ const STANCE = {
     },
 };
 
-/** 접힌 줄에 한 줄로 뜨는 제목. 남의 재판은 피고 닉네임이 들어간다. */
-function stanceTitle(stance, nickname) {
-    switch (stance) {
-        case 'DEFENSE_NEEDED':
-            return '내 변론이 필요해요';
-        case 'DEFENSE_SUBMITTED':
-            return '내 변론을 제출했어요';
-        case 'ON_TRIAL':
-            return '내 재판이 심판받는 중이에요';
-        case 'DEFENSE_WAITING':
-            return `${nickname}님이 변론을 쓰는 중이에요`;
-        case 'VOTE_NEEDED':
-            return `${nickname}님 재판에 투표해주세요`;
-        default:
-            return `${nickname}님 재판에 투표했어요`;
+/**
+ * 접힌 줄 첫째 줄 — **내가 무엇을 하는가**. 문장이 아니라 라벨이다.
+ *
+ * 예전에는 여기가 「{닉}님 재판에 투표해주세요」 같은 완결된 문장이었다. 한국어는 술어가 뒤에
+ * 오는데 말줄임은 뒤를 자른다 — 360px 에서 제목에 남는 폭이 152px 뿐이라 11자에서 잘렸고,
+ * 「…투표해주세요」와 「…투표했어요」가 **화면에서 완전히 같은 줄**이 됐다.
+ * 구분점을 앞으로 당기고, 잘려도 되는 맥락(누구의·어느 그룹)은 둘째 줄로 내린다.
+ */
+const STANCE_LABEL = {
+    DEFENSE_NEEDED: '변론 쓰기',
+    DEFENSE_SUBMITTED: '변론 제출함',
+    ON_TRIAL: '심판받는 중',
+    DEFENSE_WAITING: '변론 기다리는 중',
+    VOTE_NEEDED: '투표하기',
+    VOTE_DONE: '개표 기다리는 중',
+};
+
+/** 접힌 줄 둘째 줄 앞머리 — **누구의 재판인가**. 잘려도 되는 자리다. */
+function stanceSubject(trial) {
+    return trial.isMine ? '내 재판' : `${trial.nickname}님 재판`;
+}
+
+/**
+ * 점이 아니라 숫자로 떨어뜨릴 정원. 이보다 많으면 점이 줄을 밀어낸다.
+ * 그룹 정원은 보통 5명 이하라 실사용에서 거의 걸리지 않는다.
+ */
+const VOTE_DOT_LIMIT = 6;
+
+/**
+ * 투표 현황을 **모양**으로 그리기 위한 칸 배열. 없으면 `null` 이고 화면이 숫자로 떨어뜨린다.
+ *
+ * 「나는 던졌는데 남들이 아직」과 「나도 아직」은 사용자가 가장 자주 헷갈리는 두 상태인데,
+ * 예전에는 둘 다 「투표 중」 뱃지에 색만 달랐다. 여기서 **내 칸을 맨 앞에 따로 두어**
+ * 색을 못 봐도 갈리게 한다.
+ *
+ * 피고에게는 내 칸을 만들지 않는다 — 자기 재판의 배심원이 아니라서(`canVote` 와 같은 규칙),
+ * 칸을 만들면 남의 표를 내 것처럼 그리게 된다.
+ */
+function buildVoteDots(trial, voting) {
+    if (!voting) return null;
+    const total = trial.totalVoters ?? 0;
+    if (total <= 0 || total > VOTE_DOT_LIMIT) return null;
+
+    const dots = [];
+    if (!trial.isMine) dots.push(trial.myVote ? 'mine-done' : 'mine-todo');
+
+    /* 내 표는 `voteCount` 에 이미 들어 있다. 빼지 않으면 내 칸과 남의 칸에 두 번 그려진다 */
+    const others = Math.max(0, (trial.voteCount ?? 0) - (dots[0] === 'mine-done' ? 1 : 0));
+    /* 남은 칸 수를 미리 잡는다 — 조건에서 `dots.length` 를 읽으면 push 할 때마다 목표가 줄어 절반만 찬다 */
+    const rest = total - dots.length;
+    for (let i = 0; i < rest; i += 1) {
+        dots.push(i < others ? 'done' : 'todo');
     }
+    return dots;
 }
 
 /**
@@ -296,12 +336,15 @@ export function toTrialStatusCard(trial) {
         ...trial,
         stance,
         ...meta,
-        title: stanceTitle(stance, trial.nickname),
+        /** 첫째 줄 — 내가 무엇을 하는가. 4~9자라 말줄임에 걸리지 않는다 */
+        title: STANCE_LABEL[stance],
+        /** 둘째 줄 앞머리 — 누구의 재판인가. 화면이 그룹명과 이어 붙인다 */
+        subject: stanceSubject(trial),
         /* 투표는 변론이 끝나야 열린다. 변론 대기 중에 0/5 를 그리면 아무도 안 던진 것처럼 보인다. */
         showVote: voting,
+        voteDots: buildVoteDots(trial, voting),
         voteCount,
         totalVoters,
-        votePercent: totalVoters > 0 ? Math.round((voteCount / totalVoters) * 100) : 0,
         /* 스테퍼에서 지금 칸. 앞 칸은 지난 것, 뒤 칸은 아직 오지 않은 것으로 그린다. */
         stepIndex: voting ? 2 : 1,
         deadlineLabel: formatDeadlineLabel(trial.deadline),

@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
+import { clockLabel } from '@/utils/groupChat';
 
 /*
  * message 는 api/groupChatAdapter.js 가 정규화한 모양이다
@@ -33,11 +34,8 @@ const props = defineProps({
     senderName: { type: String, default: null },
 });
 
-const timeLabel = computed(() => {
-    const d = props.message.sentAt;
-    if (!d) return '';
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-});
+/* 재판 알림 필도 같은 자리에 같은 모양으로 시각을 찍는다 — 사본을 두지 않는다 */
+const timeLabel = computed(() => clockLabel(props.message.sentAt));
 
 /* 닉네임 온보딩 전(서버가 senderNickname: null)이면 빈 문자열이 온다 */
 const displayName = computed(() => props.senderName || props.message.senderName || '익명');

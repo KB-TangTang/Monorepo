@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { isGroupedMessage, shouldShowTime } from '@/utils/groupChat';
+import { clockLabel, isGroupedMessage, shouldShowTime } from '@/utils/groupChat';
 
 /*
  * 같은 사람이 연달아 보낸 메시지에 시간이 매 줄 찍히던 것을 고쳤다.
@@ -69,6 +69,32 @@ test('다음이 시스템 메시지면 시간을 남긴다 — 묶음이 거기�
     assert.equal(shouldShowTime(mine, system), true);
 });
 
+test('시스템 다음이 참여자 메시지여도 시간을 남긴다 — 정렬이 다른 줄끼리는 안 묶는다', () => {
+    const system = msg({ messageId: 1, isSystem: true });
+    const mine = msg({ messageId: 2, sentAt: at('2026-08-17T10:00:30') });
+
+    assert.equal(shouldShowTime(system, mine), true);
+});
+
+/*
+ * 기소 한 건이 적발·개시로 같은 초에 두 줄 떨어진다(ChatSystemMessageListener 가 두 이벤트를
+ * 잇달아 쏜다). 필도 말풍선과 같은 규칙을 타야 같은 숫자가 연달아 찍히지 않는다.
+ */
+test('재판 알림이 같은 분에 이어지면 마지막 필에만 시각이 남는다', () => {
+    const detected = msg({ messageId: 1, isSystem: true, sentAt: at('2026-08-17T10:00:10') });
+    const opened = msg({ messageId: 2, isSystem: true, sentAt: at('2026-08-17T10:00:10') });
+
+    assert.equal(shouldShowTime(detected, opened), false, '앞 필의 시각은 숨긴다');
+    assert.equal(shouldShowTime(opened, null), true, '마지막 필에는 남긴다');
+});
+
+test('재판 알림도 분이 바뀌면 다시 시각을 보여준다', () => {
+    const opened = msg({ messageId: 1, isSystem: true, sentAt: at('2026-08-17T10:00:59') });
+    const defense = msg({ messageId: 2, isSystem: true, sentAt: at('2026-08-17T10:01:02') });
+
+    assert.equal(shouldShowTime(opened, defense), true);
+});
+
 test('다음 메시지가 없으면(목록의 마지막) 시간을 남긴다', () => {
     assert.equal(shouldShowTime(msg(), null), true);
 });
@@ -89,6 +115,23 @@ test('날짜가 다르면 시·분이 같아도 다른 묶음이다', () => {
     const today = msg({ messageId: 2, sentAt: at('2026-08-17T10:00:10') });
 
     assert.equal(shouldShowTime(yesterday, today), true);
+});
+
+/* ── 시각 문자열 ───────────────────────────────────────────────────── */
+
+/*
+ * 말풍선과 재판 알림 필이 같은 함수를 쓴다. 사본을 두면 한쪽만 12시간제가 되거나
+ * 한쪽만 0 을 안 채우는 식으로 조용히 갈라진다.
+ */
+test('시각은 0 을 채운 24시간제다', () => {
+    assert.equal(clockLabel(at('2026-08-17T09:05:00')), '09:05');
+    assert.equal(clockLabel(at('2026-08-17T23:59:00')), '23:59');
+    assert.equal(clockLabel(at('2026-08-17T00:00:00')), '00:00', '자정을 12:00 으로 적지 않는다');
+});
+
+test('시각이 없으면 빈 문자열이다 — NaN:NaN 을 그리지 않는다', () => {
+    assert.equal(clockLabel(null), '');
+    assert.equal(clockLabel(undefined), '');
 });
 
 /* ── 화면 연결 계약 (렌더링 하네스가 없어 소스 텍스트로 확인한다) ───── */
@@ -118,7 +161,11 @@ test('화면은 다음 메시지를 보고 showTime 을 넘긴다', () => {
     const src = read('../src/views/challenge/group/GroupChatView.vue');
 
     assert.match(src, /shouldShowTime/, 'GroupChatView 가 shouldShowTime 판정을 써야 한다');
-    assert.match(src, /:show-time="item\.showTime"/, 'GroupChatBubble 에 show-time 을 넘겨야 한다');
+    assert.equal(
+        (src.match(/:show-time="item\.showTime"/g) ?? []).length,
+        2,
+        '말풍선과 재판 알림 필 <b>둘 다</b> 같은 판정을 받아야 한다',
+    );
     assert.ok(
         !/function isGrouped\(/.test(src),
         '묶기 규칙은 utils/groupChat.js 한 곳에 둔다 — 화면에 사본을 남기지 않는다',

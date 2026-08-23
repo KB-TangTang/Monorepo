@@ -17,17 +17,11 @@ import AccountSelectRow from '@/components/account/AccountSelectRow.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import LinkStepHeader from '@/components/account/LinkStepHeader.vue';
 import { useAccountStore } from '@/stores/account';
-import { isSoleSelectableAccount, linkStepPosition } from '@/utils/account';
+import { isSoleSelectableAccount, linkStepPosition, resolveSelectCta } from '@/utils/account';
 
 const store = useAccountStore();
-const {
-    linkableGroups,
-    loading,
-    error,
-    selectedAccountCount,
-    linkableAccountCount,
-    selectableAccountCount,
-} = storeToRefs(store);
+const { linkableGroups, loading, error, selectedAccountCount, linkableAccountCount } =
+    storeToRefs(store);
 
 const position = linkStepPosition('select');
 
@@ -38,6 +32,12 @@ const position = linkStepPosition('select');
 const hasAutoIncludedGroups = computed(() =>
     linkableGroups.value.some((group) => group.autoIncluded),
 );
+
+/*
+ * 하단 CTA. selectableAccountCount 만 보면 자동 연동 그룹이 0 으로 잡혀 「다른 기관 선택」만 남는다 —
+ * 카드·대출·페이머니만 고른 사용자가 완료 버튼을 영영 못 보는 결함이었다(#460). 판정은 순수 함수에 둔다.
+ */
+const selectCta = computed(() => resolveSelectCta(linkableGroups.value));
 
 onMounted(() => {
     store.loadLinkableAccounts().catch(() => {});
@@ -98,19 +98,27 @@ async function onSubmit() {
                     />
                     {{ group.bankName }}
                 </h2>
-                <!-- 대출·페이머니·카드는 최초 동기화가 자동으로 연동한다. -->
+                <!-- 대출·페이머니·카드는 최초 동기화가 자동으로 연동한다. 빼고 싶은 상품만 체크를 푼다(#467). -->
                 <p v-if="group.autoIncluded" class="account-select__auto-notice">
-                    선택한 기관이라 자동으로 연동돼요. 계좌를 따로 고를 필요는 없어요.
+                    선택한 기관의 상품은 자동으로 연동돼요. 빼고 싶은 것만 체크를 풀어 주세요.
                 </p>
                 <div class="account-select__card">
                     <AccountSelectRow
                         v-for="account in group.accounts"
                         :key="account.accountId"
                         :account="account"
-                        :selected="store.isAccountSelected(account.accountId)"
+                        :selected="
+                            group.autoIncluded
+                                ? !store.isAutoAccountExcluded(account.accountId)
+                                : store.isAccountSelected(account.accountId)
+                        "
                         :auto-included="group.autoIncluded"
                         :sole-selectable="isSoleSelectableAccount(group, account)"
-                        @toggle="store.toggleAccount"
+                        @toggle="
+                            group.autoIncluded
+                                ? store.toggleAutoAccount($event)
+                                : store.toggleAccount($event)
+                        "
                     />
                 </div>
             </section>
@@ -125,10 +133,10 @@ async function onSubmit() {
             <p v-if="error" class="account-select__error" role="alert">{{ error }}</p>
 
             <!--
-              조회는 됐는데 전부 이미 연결된 계좌인 경우.
+              조회는 됐는데 전부 이미 연결된 계좌이고 자동 연동 그룹도 없는 경우.
               비활성 버튼만 남으면 사용자가 할 수 있는 일이 없다 — 다음 행동을 준다.
             -->
-            <template v-if="!selectableAccountCount">
+            <template v-if="selectCta === 'restart'">
                 <p class="account-select__notice">
                     이 기관의 계좌는 모두 연결돼 있어요. 다른 기관을 골라주세요.
                 </p>

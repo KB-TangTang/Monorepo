@@ -43,6 +43,13 @@ public interface ConnectedAccountMapper {
      */
     int deactivateByHash(@Param("userId") long userId, @Param("accountNoEncrypted") String accountNoEncrypted);
 
+    /**
+     * 대출·카드 제외 그림자 행 제거(#467). 체크를 풀었던 상품을 다시 연동할 때 부른다 —
+     * 이 행이 남아 있으면 동기화가 그 상품을 영원히 건너뛴다. is_active=0 인 행만 지우므로
+     * 실제 연결 행(페이머니 등)은 건드리지 않는다.
+     */
+    int deleteInactiveByHash(@Param("userId") long userId, @Param("accountNoEncrypted") String accountNoEncrypted);
+
     /** 사용자의 모든 연결 해제. 금융정보 동의 철회 시 쓴다 (이슈 #13 TODO(#12)) */
     int deactivateAllByUser(@Param("userId") long userId);
 

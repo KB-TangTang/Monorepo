@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     INSTITUTION_GROUPS,
+    LINK_DONE_ANIMATION_HOLD_MS,
     LINK_EXIT_ROUTE,
     LINK_STEPS,
     calcLinkProgress,
     canEnterLinkStep,
     connectedAccountsForDone,
+    connectedRowFigure,
     consentExpiryLabel,
     formatAmount,
     formatBirthDate,
@@ -26,9 +28,138 @@ import {
     resolveInstitutionTone,
     resolveLinkEntryRoute,
     resolveProgressRow,
+    resolveSelectCta,
     resolveSyncBadge,
+    showsResyncAction,
+    showsLinkDoneAnimation,
     validateSimpleAuthForm,
+    withToggledId,
 } from '../src/utils/account.js';
+import { readFileSync } from 'node:fs';
+
+test('완료 애니메이션은 동기화가 일찍 끝나도 한 바퀴는 돈다 (#465)', () => {
+    /* 목서버 동기화는 1초 안에 끝난다. 홀드가 안 풀렸으면 syncing 이 꺼져도 계속 그린다. */
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: false, holdElapsed: false }),
+        true,
+    );
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: true, holdElapsed: false }),
+        true,
+    );
+});
+
+test('홀드가 풀린 뒤에는 동기화 중일 때만 돈다 — 820c2d6 의 의도 유지', () => {
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: true, holdElapsed: true }),
+        true,
+    );
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: false, holdElapsed: true }),
+        false,
+    );
+});
+
+test('reduced-motion 이면 홀드 중이든 동기화 중이든 그리지 않는다', () => {
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: false, syncing: true, holdElapsed: false }),
+        false,
+    );
+});
+
+test('홀드 길이는 SVG 한 바퀴(dur="2s")와 같다', () => {
+    const svg = readFileSync(
+        new URL('../src/assets/images/link-success.svg', import.meta.url),
+        'utf8',
+    );
+    const durations = [...svg.matchAll(/dur="([\d.]+)s"/g)].map((m) => Number(m[1]) * 1000);
+    assert.equal(Math.max(...durations), LINK_DONE_ANIMATION_HOLD_MS);
+});
+
+test('자동 연동 행의 제외 목록은 넣고 빼기를 되풀이해도 원본을 바꾸지 않는다 (#467)', () => {
+    const base = [-1];
+    const added = withToggledId(base, -2);
+    assert.deepEqual(added, [-1, -2]);
+    assert.deepEqual(base, [-1]);
+    assert.deepEqual(withToggledId(added, -1), [-2]);
+    assert.deepEqual(withToggledId(null, 5), [5]);
+});
+
+test('카드 행은 잔액 대신 카드 종류를 쓴다 (#467)', () => {
+    /* 카드는 자산이 아니라 거래 출처다. 0원을 그리면 "잔액 0원인 자산"으로 읽힌다. */
+    assert.equal(connectedRowFigure({ accountType: 'CARD', cardTypeCode: '01' }), '신용카드');
+    assert.equal(connectedRowFigure({ accountType: 'CARD', cardTypeCode: '02' }), '체크카드');
+    /* 판정 규칙은 백엔드 PaymentMethodLabels 와 같다 — 01 이 아니면 체크다. */
+    assert.equal(connectedRowFigure({ accountType: 'CARD' }), '체크카드');
+});
+
+test('카드가 아닌 행은 그대로 잔액을 쓴다', () => {
+    assert.equal(
+        connectedRowFigure({ accountType: 'DEMAND_DEPOSIT', balance: 3586900 }),
+        '3,586,900원',
+    );
+    assert.equal(connectedRowFigure({ accountType: 'LOAN', balance: 14200000 }), '14,200,000원');
+    assert.equal(connectedRowFigure(null), '0원');
+});
+
+test('대출 표시 행(manageable=false)에는 「지금 동기화」를 그리지 않는다 (#467)', () => {
+    /* 예전엔 이 항목이 보여 누르면 resync(-id) → 400 이었다. */
+    assert.equal(showsResyncAction({ accountId: -7, manageable: false }), false);
+    assert.equal(showsResyncAction({ accountId: 332, manageable: true }), true);
+    /* 플래그가 없는 옛 응답은 관리 가능으로 본다. */
+    assert.equal(showsResyncAction({ accountId: 332 }), true);
+    assert.equal(showsResyncAction(null), true);
+});
+
+test('자동 연동 기관만 골라도 완료 버튼을 그린다 (#460)', () => {
+    /* 카드·대출·페이머니만 고른 경우. 체크할 계좌는 0 이지만 연동을 끝낼 수 있어야 한다.
+     * 2026-08-23 배포본에서 이 조합이 「다른 기관 선택」만 남겨 아무것도 저장되지 않았다. */
+    const groups = [
+        {
+            bankCode: '0381',
+            autoIncluded: true,
+            accounts: [{ accountId: -1, accountName: 'KB 신용카드', alreadyLinked: false }],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
+
+test('고를 계좌가 있으면 완료 버튼을 그린다', () => {
+    const groups = [
+        {
+            bankCode: '0004',
+            accounts: [
+                { accountId: 1, alreadyLinked: true },
+                { accountId: 2, alreadyLinked: false },
+            ],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
+
+test('전부 이미 연결된 계좌뿐이고 자동 연동 그룹도 없으면 다른 기관 선택으로 보낸다', () => {
+    const groups = [
+        {
+            bankCode: '0004',
+            accounts: [
+                { accountId: 1, alreadyLinked: true },
+                { accountId: 2, alreadyLinked: true },
+            ],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'restart');
+    assert.equal(resolveSelectCta([]), 'restart');
+    assert.equal(resolveSelectCta(null), 'restart');
+});
+
+test('이미 연결된 은행 계좌와 자동 연동 그룹이 섞여 있어도 완료 버튼을 그린다', () => {
+    /* 은행은 전부 연결됐고 카드만 새로 고른 경우 — 카드 연동은 끝낼 수 있어야 한다. */
+    const groups = [
+        { bankCode: '0004', accounts: [{ accountId: 1, alreadyLinked: true }] },
+        { bankCode: '0381', autoIncluded: true, accounts: [{ accountId: -1 }] },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
 
 test('완료 화면에는 선택 계좌와 자동 연동 대출을 함께 표시한다', () => {
     const accounts = connectedAccountsForDone(
@@ -348,11 +479,11 @@ test('만료일이 없으면 안내하지 않는다', () => {
     assert.equal(consentExpiryLabel('말이 안 되는 값'), null);
 });
 
-test('금액에 천 단위 구분을 넣는다', () => {
-    /* 참고화면은 단위 '원' 없이 모노 숫자만 쓴다 (0-5 연결계좌선택). */
-    assert.equal(formatAmount(8340000), '8,340,000');
-    assert.equal(formatAmount(0), '0');
-    assert.equal(formatAmount(null), '0');
+test('금액에 천 단위 구분과 원 단위를 붙인다 (#462)', () => {
+    /* 참고화면(0-5)은 단위를 뺐지만 자산 화면(#454·#456)과 맞춰 앱 전체가 "원"을 붙인다. */
+    assert.equal(formatAmount(8340000), '8,340,000원');
+    assert.equal(formatAmount(0), '0원');
+    assert.equal(formatAmount(null), '0원');
 });
 
 test('기관마다 로고 색조가 다르다 (Figma 확정본)', () => {

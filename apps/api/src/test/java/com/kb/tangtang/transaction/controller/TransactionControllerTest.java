@@ -1,6 +1,7 @@
 package com.kb.tangtang.transaction.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kb.tangtang.transaction.dto.DailySpendingSummaryDto;
 import com.kb.tangtang.transaction.dto.LedgerSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateResultDto;
 import com.kb.tangtang.transaction.dto.TransactionListResponseDto;
@@ -23,6 +24,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -127,5 +129,45 @@ class TransactionControllerTest {
         mockMvc().perform(get("/api/transactions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.period").doesNotExist());
+    }
+
+    @Test
+    void getDailySpendingSummaryReturnsHomeCardFields() throws Exception {
+        when(queryService.getDailySpendingSummary(USER_ID)).thenReturn(DailySpendingSummaryDto.builder()
+                .date("2026-08-15")
+                .todayAmount(BigDecimal.valueOf(32000))
+                .monthAmount(BigDecimal.valueOf(486300))
+                .changeRate(new BigDecimal("-20.00"))
+                .build());
+
+        mockMvc().perform(get("/api/transactions/summary/daily"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.date").value("2026-08-15"))
+                .andExpect(jsonPath("$.data.todayAmount").value(32000))
+                .andExpect(jsonPath("$.data.monthAmount").value(486300))
+                .andExpect(jsonPath("$.data.changeRate").value(-20.00));
+
+        verify(queryService).getDailySpendingSummary(USER_ID);
+    }
+
+    @Test
+    void getDailySpendingSummaryKeepsNullChangeRateOnTheWire() throws Exception {
+        /*
+         * ApiResponse 의 NON_NULL 은 래퍼 필드(code/message)에만 걸린다 — data 안의 null 은 그대로
+         * 실려야 한다. 키가 통째로 빠지면 프론트가 undefined 를 받아 「어제와 비슷하게」로 오독할 여지가 생긴다.
+         */
+        when(queryService.getDailySpendingSummary(USER_ID)).thenReturn(DailySpendingSummaryDto.builder()
+                .date("2026-08-15")
+                .todayAmount(BigDecimal.ZERO)
+                .monthAmount(BigDecimal.ZERO)
+                .changeRate(null)
+                .build());
+
+        String body = mockMvc().perform(get("/api/transactions/summary/daily"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("\"changeRate\":null"), "changeRate 는 null 로 실려 나가야 한다: " + body);
     }
 }

@@ -14,7 +14,7 @@
 import { computed } from 'vue';
 import AccountSyncBadge from '@/components/account/AccountSyncBadge.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
-import { consentExpiryLabel, formatAmount, needsReconnect } from '@/utils/account';
+import { connectedRowFigure, consentExpiryLabel, needsReconnect } from '@/utils/account';
 
 const props = defineProps({
     account: { type: Object, required: true },
@@ -36,7 +36,8 @@ const alert = computed(() => needsReconnect(props.account.syncStatus));
         </div>
 
         <div class="connected-row__figures">
-            <p class="connected-row__amount">{{ formatAmount(account.balance) }}</p>
+            <!-- 카드는 잔액이 아니라 종류를 쓴다(#467) — 자산이 아니라 거래 출처라서다. -->
+            <p class="connected-row__amount">{{ connectedRowFigure(account) }}</p>
             <AccountSyncBadge :sync-status="account.syncStatus" />
             <span v-if="expiryLabel" class="connected-row__expiry">{{ expiryLabel }}</span>
         </div>
@@ -44,7 +45,7 @@ const alert = computed(() => needsReconnect(props.account.syncStatus));
         <button
             class="connected-row__more"
             type="button"
-            :aria-label="`${account.bankName} 계좌 관리`"
+            :aria-label="`${account.bankName} ${account.accountType === 'CARD' ? '카드' : '계좌'} 관리`"
             @click="$emit('more', account)"
         >
             ⋮

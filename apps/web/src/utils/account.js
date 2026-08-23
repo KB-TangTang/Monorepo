@@ -104,6 +104,86 @@ export function isSoleSelectableAccount(group, account) {
     return selectable.length === 1;
 }
 
+/**
+ * 완료 화면 성공 애니메이션(`assets/images/link-success.svg`)의 한 바퀴 길이.
+ * SVG 의 SMIL `dur="2s"` 와 같아야 한다 — 짧으면 중간에 끊기고, 길면 동기화가 끝났는데 계속 돈다.
+ */
+export const LINK_DONE_ANIMATION_HOLD_MS = 2000;
+
+/**
+ * 완료 화면에서 성공 애니메이션을 그릴지 (#465).
+ *
+ * `820c2d6`(#334) 이 "동기화가 끝나도 계속 돈다"는 지적에 `syncing` 과 묶었는데, 목서버 환경은
+ * 동기화가 1초 안에 끝나 **한 바퀴도 못 돌고** 정적 체크로 바뀌었다. 그래서 마운트 뒤
+ * `LINK_DONE_ANIMATION_HOLD_MS` 동안은 동기화가 끝났어도 재생을 이어 가고, 홀드가 풀린 뒤에는
+ * 예전처럼 `syncing` 만 본다. reduced-motion 이면 처음부터 그리지 않는다.
+ *
+ * @param {{playsAnimation: boolean, syncing: boolean, holdElapsed: boolean}} state
+ */
+export function showsLinkDoneAnimation({ playsAnimation, syncing, holdElapsed }) {
+    if (!playsAnimation) {
+        return false;
+    }
+    return Boolean(syncing) || !holdElapsed;
+}
+
+/**
+ * 계좌 선택 화면(4/5)의 하단 CTA 를 정한다 (#460).
+ *
+ * - 'submit'  : 체크할 계좌가 있거나, 자동 연동 그룹(카드·대출·페이머니, #334)이 있다 → 「선택한 계좌 연결」
+ * - 'restart' : 둘 다 없다 — 조회는 됐는데 전부 이미 연결된 계좌뿐 → 「다른 기관 선택」
+ *
+ * 자동 연동 그룹은 체크 대상이 아니라 selectable 집계에 0 으로 잡힌다. 그 수만 보고 'restart' 로
+ * 떨어뜨리면 카드·대출·페이머니만 고른 사용자는 인증까지 마치고도 완료 버튼을 못 본다(#460 의 결함).
+ */
+export function resolveSelectCta(groups) {
+    const list = Array.isArray(groups) ? groups : [];
+    const hasAutoIncluded = list.some((group) => group && group.autoIncluded);
+    const hasSelectable = list.some(
+        (group) =>
+            group &&
+            !group.autoIncluded &&
+            (Array.isArray(group.accounts) ? group.accounts : []).some(
+                (account) => account && !account.alreadyLinked,
+            ),
+    );
+    return hasSelectable || hasAutoIncluded ? 'submit' : 'restart';
+}
+
+/**
+ * id 목록에서 하나를 넣거나 뺀다. 계좌 선택의 은행 계좌 체크와 자동 연동 행 제외(#467)가 같이 쓴다.
+ * 원본을 바꾸지 않고 새 배열을 돌려준다 — Pinia ref 에 그대로 대입한다.
+ */
+export function withToggledId(ids, id) {
+    const list = Array.isArray(ids) ? ids : [];
+    return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+}
+
+/**
+ * 연결 계좌 관리 행의 오른쪽 숫자 자리에 무엇을 쓸지 (#467).
+ *
+ * 카드는 잔액이 없다 — 자산이 아니라 **거래의 출처**라 이 목록에만 나온다. 0원을 그리면 "잔액 0원인 자산"으로
+ * 읽히므로 카드 종류를 대신 쓴다. 종류 판정은 백엔드 `PaymentMethodLabels`·동기화와 **같은 규칙**이다
+ * (`01`=신용, 나머지=체크) — 장부의 "KB국민카드 체크카드" 와 이 화면이 같은 카드를 다르게 부르면 안 된다.
+ */
+export function connectedRowFigure(account) {
+    if (account && account.accountType === 'CARD') {
+        return account.cardTypeCode === '01' ? '신용카드' : '체크카드';
+    }
+    return formatAmount(account ? account.balance : 0);
+}
+
+/**
+ * 연결 계좌 관리의 더보기 시트에 「지금 동기화」를 그릴지 (#467).
+ *
+ * 대출 표시 행은 서버가 `manageable: false` 로 내린다 — tbl_loan 을 `-id` 로 꾸민 행이라 개별 재조회가
+ * 없다(기관 단위로만 다시 긁어온다). 예전엔 프론트가 이 플래그를 읽지 않아 누르면 400 이었다.
+ * 플래그가 없는 옛 응답은 관리 가능으로 본다.
+ */
+export function showsResyncAction(account) {
+    return !account || account.manageable !== false;
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);
@@ -488,16 +568,16 @@ export function consentExpiryLabel(expiresAt, now = new Date()) {
 }
 
 /**
- * 금액 표기.
+ * 금액 표기 — `8,340,000원`.
  *
- * 참고화면(`doc/개발참고화면/탕탕/0-4[계좌관리]조회`, `0-5[계좌연결]연결계좌선택`)은
- * 계좌 금액을 **모노스페이스 숫자로만** 쓴다 — `8,340,000` 처럼 단위 '원'을 붙이지 않는다.
- * 통화가 KRW 하나뿐이라 단위가 반복 정보이고, 모노 숫자는 자릿수가 세로로 정렬돼 비교하기 쉽다.
+ * 참고화면(`doc/개발참고화면/탕탕/0-4[계좌관리]조회`, `0-5[계좌연결]연결계좌선택`)은 단위 '원' 없이
+ * 모노 숫자만 썼지만, 자산 홈(#454)·순자산(#456)이 원 단위 전체 표기로 바뀌면서 계좌 연동 3화면만
+ * 단위가 빠진 채 남았다(#462). 앱 전체가 "원"을 붙이므로 여기도 맞춘다.
  *
  * 글꼴(`--tt-font-mono`)은 화면이 지정한다. 표기 규칙만 여기서 정한다.
  */
 export function formatAmount(value) {
-    return Number(value ?? 0).toLocaleString('ko-KR');
+    return `${Number(value ?? 0).toLocaleString('ko-KR')}원`;
 }
 
 /**
