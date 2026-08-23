@@ -499,11 +499,18 @@ function goToChat(challenge) {
               기다리는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
               할 일은 아니어도 이 화면에서 가장 궁금한 것이기 때문이다.
               마감이 6시간 안쪽인 게 섞여 있으면 접힌 채로도 그것만 밖으로 알린다.
+
+              **0건이어도 줄을 지우지 않는다.** 투표를 마치고 결과를 기다리는 동안 여기를
+              들여다보게 되는데, 줄이 통째로 사라지면 「어디서 보던 거였지」를 매번 다시
+              찾아야 한다. 자리는 남기고 격자의 0건 칸과 **같은 방식**으로 물러나게 한다 —
+              흐리게 + `disabled`(`GroupTrialTodoGrid` 의 `todo-grid__tile--empty`).
+              화살표는 뗀다. `›` 는 「눌러서 갈 곳이 있다」는 약속이라 못 누르는 줄에 남기면 거짓말이다.
             -->
             <button
-                v-if="watchingTrials.length"
                 type="button"
                 class="gc-watching"
+                :class="{ 'gc-watching--empty': !watchingTrials.length }"
+                :disabled="!watchingTrials.length"
                 @click="openSheet = 'watching'"
             >
                 <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 기다림의 대표 상태다 -->
@@ -512,7 +519,9 @@ function goToChat(challenge) {
                     기다리는 재판 {{ watchingTrials.length }}건
                 </span>
                 <span v-if="watchingUrgent" class="gc-watching__urgent">마감 임박</span>
-                <span class="gc-watching__arrow" aria-hidden="true">›</span>
+                <span v-if="watchingTrials.length" class="gc-watching__arrow" aria-hidden="true">
+                    ›
+                </span>
             </button>
 
             <!--
@@ -520,6 +529,13 @@ function goToChat(challenge) {
               둘 다 「내 할 일은 아니지만 궁금한 것」이라 같은 어휘가 맞다.
               시트를 새로 만들지 않고 기록 화면으로 나간다. 시트를 또 만들면
               같은 목록이 두 자리에 생겨 한쪽만 고쳐지는 날이 온다.
+
+              **라벨은 「지난 재판」이 아니라 「재판 기록」이다.** 앞의 줄과 모양이 같은데
+              끝이 둘 다 「…재판 N건」이면 두 줄이 한 낱말 차이로만 갈린다. 게다가 위 줄은
+              기다리는 재판이 0건이면 통째로 사라져서, 이 줄이 그 자리로 올라와 「기다리는
+              재판이 지난 재판으로 바뀐 것」처럼 읽힌다(실제로 그렇게 읽혔다).
+              목적지 화면의 제목이 「재판 기록」이므로 진입 이름을 거기에 맞춘다 —
+              이 작업 자체가 「이름과 목적지가 어긋나 있다」에서 출발했다.
             -->
             <button
                 v-if="recordCount"
@@ -529,7 +545,7 @@ function goToChat(challenge) {
             >
                 <!-- 판결이 끝난 재판이라 투표함이 아니라 판사봉이다 -->
                 <img class="gc-watching__art" :src="objDefenseImage" alt="" />
-                <span class="gc-watching__label">지난 재판 {{ recordCount }}건</span>
+                <span class="gc-watching__label">재판 기록 {{ recordCount }}건</span>
                 <span class="gc-watching__arrow" aria-hidden="true">›</span>
             </button>
 
@@ -739,8 +755,26 @@ function goToChat(challenge) {
     transition: background 0.15s ease;
 }
 
-.gc-watching:active {
+/* 0건일 때는 눌리는 느낌을 주지 않는다 — disabled 라 실제로 열리지도 않는다 */
+.gc-watching:not(:disabled):active {
     background: var(--tt-bg-fill);
+}
+
+/*
+ * 0건 줄. 격자의 빈 칸(`todo-grid__tile--empty`)과 같은 어휘를 쓴다 —
+ * 면은 한 단계 내리고, 그림은 래스터라 색을 못 바꾸니 `grayscale` 로 톤만 뺀다.
+ * 줄 전체에 `opacity` 를 걸지 않는 것도 같은 이유다. 그러면 「고장 난 줄」로 보인다.
+ */
+.gc-watching--empty {
+    background: var(--tt-bg-subtle);
+    cursor: default;
+}
+.gc-watching--empty .gc-watching__art {
+    filter: grayscale(1);
+    opacity: 0.4;
+}
+.gc-watching--empty .gc-watching__label {
+    color: var(--tt-text-hint);
 }
 
 /*

@@ -280,7 +280,7 @@ function withMockTrialDeadlines(item) {
 }
 
 /**
- * 지방법원 홈 「지난 재판」 — 내가 속한 그룹의 **확정된 재판 전부**.
+ * 지방법원 홈 「재판 기록」 — 내가 속한 그룹의 **확정된 재판 전부**.
  *
  * 위 `fetchAllMyTrials` 의 반대편이다. 저쪽은 진행 중(DEFENSE_WAIT·VOTING)만,
  * 여기는 확정(GUILTY·INNOCENT)만 준다. 확정된 재판은 그동안 전적 숫자로만 남아 있어

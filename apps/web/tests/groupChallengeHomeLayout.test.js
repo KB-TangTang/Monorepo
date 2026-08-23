@@ -199,8 +199,37 @@ test('기다리는 재판은 지우지 않고 한 줄로 접는다', () => {
      * 격자에 세 번째 칸으로 넣지도 않는다 — 기다리는 것은 할 일이 아니다.
      */
     const src = source(HOME);
-    assert.match(src, /v-if="watchingTrials\.length"[\s\S]*?openSheet = 'watching'/);
     assert.match(src, /기다리는 재판 \{\{ watchingTrials\.length \}\}건/);
+    assert.match(src, /openSheet = 'watching'/);
+});
+
+/*
+ * 0건에도 줄을 남긴다. 투표를 마치고 **결과를 기다리는 동안** 들여다보는 자리라,
+ * 사라졌다 나타나면 매번 「어디서 보던 거였지」를 다시 찾아야 한다.
+ * 대신 격자의 빈 칸(`todo-grid__tile--empty`)과 같은 방식으로 물러난다.
+ */
+test('기다리는 재판 줄은 0건이어도 자리를 지키고, 대신 못 누른다', () => {
+    const src = source(HOME);
+    const row = src.match(/<button[^>]*class="gc-watching"[\s\S]*?<\/button>/)[0];
+
+    /* 줄 자체에 v-if 가 붙으면 0건에 통째로 사라진다 */
+    assert.doesNotMatch(row, /<button[^>]*\sv-if=/, '줄에 v-if 가 다시 붙었다');
+    assert.match(row, /:disabled="!watchingTrials\.length"/, '0건인데 눌린다');
+    assert.match(row, /'gc-watching--empty': !watchingTrials\.length/);
+
+    /* `›` 는 「눌러서 갈 곳이 있다」는 약속이라 못 누르는 줄에 남기면 거짓말이다 */
+    assert.match(row, /v-if="watchingTrials\.length"[\s\S]*?gc-watching__arrow/);
+
+    /* 물러나는 방식은 격자와 같아야 한다 — 면을 내리고 그림은 grayscale */
+    const empty = src.match(/\.gc-watching--empty \{[^}]*\}/)[0];
+    assert.match(empty, /background: var\(--tt-bg-subtle\)/);
+    assert.match(src, /\.gc-watching--empty \.gc-watching__art \{[^}]*grayscale\(1\)/);
+
+    /* 줄 전체 opacity 는 금지 — 「고장 난 줄」로 보인다 (격자 주석과 같은 이유) */
+    assert.doesNotMatch(empty, /opacity/);
+
+    /* 눌리는 느낌도 0건에는 주지 않는다 */
+    assert.match(src, /\.gc-watching:not\(:disabled\):active/);
 });
 
 test('접힌 줄은 격자와 같은 낱말을 쓰지 않는다', () => {
