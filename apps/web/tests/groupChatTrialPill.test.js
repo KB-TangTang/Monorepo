@@ -336,7 +336,7 @@ function pillSource() {
 test('필은 표시 규칙을 utils 에서 가져다 쓴다', () => {
     const src = pillSource();
 
-    assert.match(src, /import \{ trialPillView \} from '@\/utils\/groupChat'/);
+    assert.match(src, /import \{[^}]*\btrialPillView\b[^}]*\} from '@\/utils\/groupChat'/);
     assert.doesNotMatch(
         src,
         /content\s*\.\s*(includes|indexOf|match|split)/,
@@ -363,6 +363,10 @@ test('문구 칸은 두 줄까지 줄어들고 아바타·버튼은 줄어들지
     assert.match(lead, /min-width:\s*0/, 'min-width:0 이 없으면 아예 줄어들지 않는다');
     assert.match(lead, /-webkit-line-clamp:\s*2/, '한 줄로 고정하면 대부분의 문구가 잘린다');
     assert.match(lead, /overflow:\s*hidden/);
+
+    /* systemType 을 모르는 옛 메시지는 문구 모양을 알 수 없다. 공백 없는 긴 문자열이 오면
+       끊을 자리가 없어 필이 통째로 화면 밖으로 나간다 — 합치기 전 폴백 pill 에도 있던 규칙이다 */
+    assert.match(lead, /overflow-wrap:\s*break-word/, '끊을 자리가 없는 문구가 필을 밀어낸다');
 
     for (const cls of ['avatar', 'cta']) {
         assert.match(
@@ -441,15 +445,83 @@ test('도장 그림은 문구가 아니라 stamp 가 고른다', () => {
 });
 
 /*
- * 도장이 말하는 「유죄」·「무죄」는 바로 옆 문구가 이미 말하고 있다. alt 를 채우면 읽어 주는 쪽에
- * 같은 말이 두 번 들린다 — 보는 쪽에만 더해지는 정보라 alt 는 빈 문자열로 둔다.
+ * 도장에는 alt 가 있어야 한다. 옆 문구가 「유죄예요」를 이미 말하니 중복처럼 보이지만 그 문구는
+ * 서버가 만드는 값이고(GroupVerdictTransitionService), 문장이 바뀌면 결과가 그림에만 남는다.
+ * 합치기 전 GroupChatVerdictCard 가 쓰던 값을 그대로 가져왔다.
  */
-test('도장에는 alt 를 붙이지 않는다 — 문구가 같은 말을 이미 한다', () => {
-    assert.match(pillSource(), /STAMPS\[view\.value\.stamp\], alt: ''/);
+test('도장에 alt 가 있다 — 결과를 그림으로만 말하지 않는다', () => {
+    const src = pillSource();
+
+    assert.match(src, /alt:\s*'유죄 판결 인장'/);
+    assert.match(src, /alt:\s*'무죄 판결 인장'/);
+    assert.doesNotMatch(
+        src,
+        /guiltyStamp,\s*alt:\s*''/,
+        '도장 alt 를 비우면 판결 결과를 색과 그림으로만 말하게 된다',
+    );
 });
 
-test('색은 HEX 가 아니라 디자인 토큰으로 쓴다', () => {
-    const styles = pillSource().split('<style')[1];
+function pillStyles() {
+    return pillSource().split('<style')[1];
+}
 
-    assert.doesNotMatch(styles, /#[0-9a-fA-F]{3,8}\b/, '토큰을 두고 HEX 를 박으면 테마가 갈라진다');
+/* 주석에는 「이래서 안 쓴다」는 설명으로 금지 값이 등장한다. 규칙은 실제 선언에만 걸어야 한다 */
+function pillDeclarations() {
+    return pillStyles().replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+test('색은 HEX 가 아니라 디자인 토큰으로 쓴다', () => {
+    assert.doesNotMatch(
+        pillDeclarations(),
+        /#[0-9a-fA-F]{3,8}\b/,
+        '토큰을 두고 HEX 를 박으면 테마가 갈라진다',
+    );
+});
+
+/*
+ * 문구를 투명도로 흐리지 않는다. 필 색이 다섯 종이라 같은 opacity 라도 배경마다 대비가 다르게
+ * 깎인다 — 0.78 을 얹었을 때 gold 4.56 → 3.06, danger 4.11 → 2.97 로 12px 본문의 AA 기준
+ * (4.5)을 크게 밑돌았다. --tt-accent-warn 처럼 「이 배경 위에서 쓰라」고 잡아 둔 토큰의 짝이
+ * 통째로 깨진다. 강약은 굵기(--tt-fw-black vs semibold)로만 준다.
+ */
+test('문구를 투명도로 흐리지 않는다 — 필 색마다 대비가 다르게 깎인다', () => {
+    /* 등장 애니메이션의 opacity: 0 은 대상이 아니다. 여기서 막는 것은 화면에 남는 반투명 글자다 */
+    assert.doesNotMatch(
+        pillDeclarations(),
+        /opacity:\s*0?\.\d/,
+        '연한 글자가 필요하면 투명도가 아니라 토큰으로 색을 정한다',
+    );
+});
+
+/*
+ * 시각은 합치기 전 기록·판결 카드에 있었는데 필로 옮기면서 통째로 빠졌었다. 시스템 메시지는
+ * GroupChatBubble 이 아니라 이 컴포넌트로 가므로 화면이 넘기는 show-time 이 닿지 않는다 —
+ * 여기서 직접 그려야 방 안의 재판 알림만 시각 없는 줄로 남지 않는다.
+ */
+test('필도 시각을 그린다 — 재판 알림만 시각 없는 줄로 남지 않는다', () => {
+    const src = pillSource();
+
+    assert.match(src, /clockLabel\(props\.message\.sentAt\)/, '시각 포맷은 utils 것을 쓴다');
+    assert.match(src, /v-if="timeLabel"/, 'sentAt 이 없으면 빈 자리를 만들지 않는다');
+    assert.match(
+        rule('.sys-pill__time'),
+        /font-size:\s*var\(--tt-fs-overline\)/,
+        '말풍선의 시각(.bubble-row__time)과 같은 크기여야 한 화면에서 따로 놀지 않는다',
+    );
+});
+
+/*
+ * 등장 애니메이션과 그 예외. 합치기 전 두 카드 모두 갖고 있던 쌍이라 한쪽만 되살리면
+ * 「어지러움 설정을 켰는데도 움직이는 화면」이 된다.
+ */
+test('등장 애니메이션에는 prefers-reduced-motion 예외가 따라온다', () => {
+    const styles = pillStyles();
+
+    assert.match(styles, /animation:\s*sys-pill-enter/);
+    assert.match(styles, /@keyframes sys-pill-enter/);
+    assert.match(
+        styles,
+        /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation:\s*none/,
+        '움직임을 끈 사용자에게도 도는 애니메이션은 접근성 회귀다',
+    );
 });

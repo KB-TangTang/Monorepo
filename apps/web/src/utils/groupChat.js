@@ -38,6 +38,20 @@ export function shouldShowTime(msg, next) {
     return !isSameMinute(msg.sentAt, next.sentAt);
 }
 
+/**
+ * 말풍선·재판 알림 필 옆에 찍는 시각. 24시간제 `HH:MM` 이다.
+ *
+ * 서버가 시각을 안 줬거나 파싱에 실패하면(`sentAt: null`) 빈 문자열을 돌려준다 —
+ * 화면이 빈 자리를 만들거나 `NaN:NaN` 을 그리지 않는다.
+ */
+export function clockLabel(date) {
+    if (!date) return '';
+
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
 function isSameMinute(a, b) {
     return (
         a.getFullYear() === b.getFullYear() &&

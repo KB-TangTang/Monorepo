@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { trialPillView } from '@/utils/groupChat';
+import { clockLabel, trialPillView } from '@/utils/groupChat';
 import judgingImg from '@/assets/images/emotions/48_judging.png';
 import verdictImg from '@/assets/images/emotions/49_verdict.png';
 import guiltyStamp from '@/assets/images/judgment/guilty_stamp.png';
@@ -32,19 +32,25 @@ const view = computed(() => trialPillView(props.message));
 /*
  * 왼쪽 원. 판결이 나면 탕이 얼굴 대신 결과 도장이 들어간다.
  *
- * 도장을 띄울 때 alt 를 비우는 것은 도장이 말하는 「유죄·무죄」를 바로 옆 문구가 이미 말하고
- * 있어서다 — 읽어 주는 쪽에는 같은 말이 두 번 들린다. 보는 쪽에는 색·문구·도장 세 겹이라
- * 색만으로 결과를 가려내지 않아도 된다.
+ * alt 를 비우지 않는다. 옆 문구가 「유죄예요」를 이미 말하고 있으니 중복처럼 보이지만,
+ * 그 문구는 서버가 만드는 값이라 문장이 바뀌면 도장만 남는다 — 결과를 그림으로만 말하게 된다.
+ * (원래 GroupChatVerdictCard 가 쓰던 값 그대로다)
  */
-const STAMPS = { GUILTY: guiltyStamp, INNOCENT: innocentStamp };
+const STAMPS = {
+    GUILTY: { src: guiltyStamp, alt: '유죄 판결 인장' },
+    INNOCENT: { src: innocentStamp, alt: '무죄 판결 인장' },
+};
 
 const avatar = computed(() => {
-    if (view.value.stamp) return { src: STAMPS[view.value.stamp], alt: '' };
+    if (view.value.stamp) return STAMPS[view.value.stamp];
 
     return props.message.systemType === 'VERDICT_CONFIRMED'
         ? { src: verdictImg, alt: '판사 탕이' }
         : { src: judgingImg, alt: '판사 탕이' };
 });
+
+/* 말풍선과 같은 자리·같은 모양(utils/groupChat 의 clockLabel). sentAt 이 없으면 빈 문자열이다 */
+const timeLabel = computed(() => clockLabel(props.message.sentAt));
 
 function openCta() {
     router.push(view.value.ctaTo);
@@ -71,7 +77,7 @@ function openCta() {
             -->
             <span class="sys-pill__lead"
                 ><b v-if="view.leadName" class="sys-pill__name">{{ view.leadName }}</b
-                ><span class="sys-pill__rest">{{ view.lead }}</span></span
+                >{{ view.lead }}</span
             >
 
             <!-- 화살표는 장식이다. 스크린리더가 「단일 오른쪽 홑화살괄호」를 읽지 않게 숨긴다 -->
@@ -84,14 +90,51 @@ function openCta() {
                 {{ view.ctaLabel }}<span v-if="view.ctaQuiet" aria-hidden="true"> ›</span>
             </button>
         </div>
+
+        <!--
+          시각은 필 바깥 오른쪽 아래다 — 말풍선과 같은 자리라 눈이 시간을 찾는 곳이 하나로 남는다.
+          필 안에 넣으면 좁은 한 줄에서 문구가 그만큼 더 잘린다.
+        -->
+        <span v-if="timeLabel" class="sys-pill__time">{{ timeLabel }}</span>
     </div>
 </template>
 
 <style scoped>
+/*
+ * 등장 애니메이션은 합치기 전 기록·판결 카드가 쓰던 것을 그대로 가져왔다 — 재판 알림은 내가
+ * 보낸 것이 아닌데 대화 중간에 끼어들므로, 아래에서 밀려 올라오면 「방금 도착했다」가 읽힌다.
+ * `both` 라 끝난 뒤 마지막 프레임에 머문다. 마운트될 때 한 번만 돈다.
+ */
 .sys-pill-wrap {
     display: flex;
+    align-items: flex-end;
     justify-content: center;
+    gap: var(--tt-space-1);
     padding: var(--tt-space-1) 0;
+    animation: sys-pill-enter 0.28s ease-out both;
+}
+
+@keyframes sys-pill-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+/* 움직임에 어지러움을 느끼는 사용자가 있다. 시스템 설정을 켜 두면 결과 프레임만 남긴다 */
+@media (prefers-reduced-motion: reduce) {
+    .sys-pill-wrap {
+        animation: none;
+    }
+}
+
+/* 말풍선의 시각과 같은 크기·색이다 (GroupChatBubble 의 .bubble-row__time) */
+.sys-pill__time {
+    flex: none;
+    white-space: nowrap;
+    padding-bottom: 2px;
+    color: var(--tt-text-hint);
+    font-size: var(--tt-fs-overline);
 }
 
 /*
@@ -147,6 +190,7 @@ function openCta() {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: break-word;
     color: var(--pill-text);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-semibold);
@@ -156,6 +200,12 @@ function openCta() {
 /*
  * 닉네임. inline-block + max-width:100% 라 한 줄을 다 쓰면 자기 자리에서 ellipsis 로 줄고,
  * 뒤에 오는 문장은 잘리지 않는다.
+ *
+ * 닉네임과 문장을 가르는 것은 <b>굵기뿐</b>이다. 한때 뒷문장에 `opacity: 0.78` 을 걸었다가
+ * 되돌렸다 — 필 색이 다섯 종이라 배경마다 대비가 다르게 깎인다. gold 는 4.56 → 3.06,
+ * danger 는 4.11 → 2.97 로 12px 본문의 AA 기준(4.5)을 크게 밑돌았다.
+ * --tt-accent-warn 은 주석부터가 「골드소프트 배경 위 경고 텍스트」라 그 배경에 맞춰 잡아 둔
+ * 값인데, 투명도를 얹는 순간 디자인시스템이 계산해 둔 짝이 깨진다.
  */
 .sys-pill__name {
     display: inline-block;
@@ -165,15 +215,6 @@ function openCta() {
     text-overflow: ellipsis;
     vertical-align: bottom;
     font-weight: var(--tt-fw-black);
-}
-
-/*
- * 나머지 문장은 한 단계 낮춘다. 색 토큰을 새로 만들지 않고 투명도로 낮추는 이유는
- * 필 색이 다섯 종(ink·gold·danger·success·muted)이라 각각의 「연한 글자색」을 따로 두면
- * 토큰이 다섯 개 늘기 때문이다. 대비는 어느 배경에서든 같은 비율로 유지된다.
- */
-.sys-pill__rest {
-    opacity: 0.78;
 }
 
 /*

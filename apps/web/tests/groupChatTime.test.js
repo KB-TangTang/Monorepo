@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { isGroupedMessage, shouldShowTime } from '@/utils/groupChat';
+import { clockLabel, isGroupedMessage, shouldShowTime } from '@/utils/groupChat';
 
 /*
  * 같은 사람이 연달아 보낸 메시지에 시간이 매 줄 찍히던 것을 고쳤다.
@@ -89,6 +89,23 @@ test('날짜가 다르면 시·분이 같아도 다른 묶음이다', () => {
     const today = msg({ messageId: 2, sentAt: at('2026-08-17T10:00:10') });
 
     assert.equal(shouldShowTime(yesterday, today), true);
+});
+
+/* ── 시각 문자열 ───────────────────────────────────────────────────── */
+
+/*
+ * 말풍선과 재판 알림 필이 같은 함수를 쓴다. 사본을 두면 한쪽만 12시간제가 되거나
+ * 한쪽만 0 을 안 채우는 식으로 조용히 갈라진다.
+ */
+test('시각은 0 을 채운 24시간제다', () => {
+    assert.equal(clockLabel(at('2026-08-17T09:05:00')), '09:05');
+    assert.equal(clockLabel(at('2026-08-17T23:59:00')), '23:59');
+    assert.equal(clockLabel(at('2026-08-17T00:00:00')), '00:00', '자정을 12:00 으로 적지 않는다');
+});
+
+test('시각이 없으면 빈 문자열이다 — NaN:NaN 을 그리지 않는다', () => {
+    assert.equal(clockLabel(null), '');
+    assert.equal(clockLabel(undefined), '');
 });
 
 /* ── 화면 연결 계약 (렌더링 하네스가 없어 소스 텍스트로 확인한다) ───── */
