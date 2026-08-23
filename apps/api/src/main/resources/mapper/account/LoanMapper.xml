@@ -54,4 +54,11 @@
         WHERE user_id = #{userId}
     </select>
 
+    <!-- 연결 해제(#467). user_id 를 같이 걸어 남의 대출을 못 지우게 한다. -->
+    <delete id="deleteByIdAndUser">
+        DELETE FROM tbl_loan
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </delete>
+
 </mapper>

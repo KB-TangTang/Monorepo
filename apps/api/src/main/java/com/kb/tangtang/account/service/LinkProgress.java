@@ -33,6 +33,30 @@ public class LinkProgress {
     /** 조회에 성공한 계좌. 계좌 선택 화면이 이 목록을 읽는다. */
     private final List<FinancialAccountDto> accounts = new ArrayList<>();
 
+    /**
+     * 자동 연동 미리보기 행(대출·페이머니·카드, #334)의 **음수 accountId → 원본 키**(#467).
+     *
+     * 미리보기 id 는 화면에 보여줄 때 `-1, -2, …` 로 매번 새로 매기는 임시값이라 DB 에 없다.
+     * 사용자가 그 행의 체크를 풀면 link() 가 이 맵으로 원본 키(`MOCK-LOAN-{id}` 등)를 되찾아
+     * 제외 행을 남긴다. 키 형식은 FinancialSyncServiceImpl 이 저장할 때 쓰는 것과 같아야 한다 —
+     * 그래야 동기화가 `inactiveKeys` 로 같은 상품을 알아보고 건너뛴다.
+     */
+    private final Map<Long, PreviewEntry> previews = new LinkedHashMap<>();
+
+    /** 제외 행을 만들 때 필요한 최소 정보. 키가 곧 동기화 쪽 자연키다. */
+    public record PreviewEntry(String key, String bankCode, String bankName, String accountName,
+                               String accountType) {
+    }
+
+    public synchronized void registerPreview(long accountId, PreviewEntry entry) {
+        previews.put(accountId, entry);
+    }
+
+    /** 없으면 null — 모르는 id 는 link() 가 조용히 무시한다(화면이 지어낸 값일 수 있다). */
+    public synchronized PreviewEntry previewOf(long accountId) {
+        return previews.get(accountId);
+    }
+
     public LinkProgress(long userId, String connectionId, Map<String, String> organizations,
                         Instant createdAt) {
         this.userId = userId;

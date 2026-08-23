@@ -14,4 +14,10 @@ public class LinkRequestDto {
     private String connectionId;
 
     private java.util.List<Long> accountIds;
+
+    /**
+     * 체크를 푼 자동 연동 미리보기 행의 음수 accountId (#467). 없으면 기존과 같다 —
+     * 고른 기관의 대출·페이머니·카드가 전부 연동된다.
+     */
+    private java.util.List<Long> excludedAccountIds;
 }
