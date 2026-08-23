@@ -106,6 +106,8 @@ const rows = computed(() => [
 }
 
 .trial__headline {
+    /* 아래 줄들은 36px 아이콘이 시선을 왼쪽으로 당겨서, 제목만 4px 밀어야 광학적으로 맞는다 */
+    padding-left: var(--tt-space-1);
     padding-right: 72px;
     font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
