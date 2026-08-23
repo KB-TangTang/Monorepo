@@ -66,6 +66,14 @@ test('formatAssetHomeWon 은 천만원 이상 금액을 만원/억 단위로 줄
     assert.equal(formatAssetHomeWon(-150000000), '-1억5000만원');
 });
 
+test('자산 홈 순자산은 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
+    const netWorthCard = source('src/components/asset/AssetNetWorthCard.vue');
+
+    assert.match(netWorthCard, /formatWon\(netWorth\)/);
+    assert.doesNotMatch(netWorthCard, /formatAssetHomeWon\(netWorth\)/);
+    assert.equal(formatWon(15850000), '15,850,000원');
+});
+
 test('자산 홈 계좌 목록은 잔액을 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
     const accountList = source('src/components/asset/AssetAccountList.vue');
 
