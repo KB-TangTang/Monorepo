@@ -6,14 +6,7 @@
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import {
-    formatAssetHomeWon,
-    formatCompactWon,
-    formatWon,
-    getCompositionRatios,
-    getCompositionTotal,
-    toneColor,
-} from '@/utils/asset';
+import { formatAssetHomeWon, formatWon, getCompositionRatios, toneColor } from '@/utils/asset';
 
 const props = defineProps({
     /* fetchAssetSummary() 의 결과. 계좌 연동 전이거나 조회 실패면 null. */
@@ -23,7 +16,6 @@ const props = defineProps({
 defineEmits(['open']);
 
 const composition = computed(() => props.summary?.composition ?? []);
-const total = computed(() => getCompositionTotal(composition.value));
 const segments = computed(() =>
     getCompositionRatios(composition.value).filter((item) => item.ratio > 0),
 );
@@ -57,10 +49,8 @@ const donutStyle = computed(() => {
 
         <div v-if="summary" class="asset__body">
             <div class="asset__donut" :style="donutStyle">
-                <span class="asset__donut-hole">
-                    <small>총 자산</small>
-                    <strong>{{ formatCompactWon(total) }}</strong>
-                </span>
+                <span class="asset__donut-hole"></span>
+                <b class="asset__donut-label">총자산</b>
             </div>
 
             <ul class="asset__legend">
@@ -127,26 +117,32 @@ const donutStyle = computed(() => {
     border-radius: var(--tt-radius-full);
 }
 
+/*
+ * inset 이 곧 고리 굵기다(96px 도넛에 구멍 56px).
+ * 더 키우면 구멍이 닫혀 파이차트로 읽히니 20px 언저리가 끝이다.
+ */
 .asset__donut-hole {
     position: absolute;
-    inset: 11px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    inset: 20px;
     border-radius: var(--tt-radius-full);
     background: var(--tt-bg);
 }
 
-.asset__donut-hole small {
+/*
+ * 가운데에는 라벨만 두고 금액은 넣지 않는다. 예전에는 금액까지 적었는데
+ * 바로 위 「순자산」 줄과 읽는 사람 눈에는 같은 말이라, 한 카드가 같은 숫자를
+ * 두 번 말하는 꼴이었다. 금액은 위 한 줄에서만 말한다.
+ * 자산탭 AssetCompositionCard 의 도넛과 같은 표기·같은 톤을 쓴다 — 두 화면이 갈라지면
+ * 같은 그림이 화면마다 다른 말을 하는 것처럼 보인다.
+ */
+.asset__donut-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
     font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-bold);
+    font-weight: var(--tt-fw-medium);
     color: var(--tt-text-muted);
-}
-
-.asset__donut-hole strong {
-    font-size: var(--tt-fs-body);
-    font-weight: var(--tt-fw-black);
 }
 
 .asset__legend {

@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-    INK_TOP_ROUTES,
     THEME_COLOR_COURT_DISTRICT,
     THEME_COLOR_COURT_SUPREME,
+    THEME_COLOR_HOME_SKY,
     THEME_COLOR_INK,
     THEME_COLOR_PAPER,
+    TINTED_TOP_ROUTES,
     applyThemeColor,
     resolveThemeColor,
 } from '../src/utils/themeColor.js';
@@ -26,19 +27,26 @@ function source(path) {
     return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('어두운 헤더 화면은 각자의 상단 색, 나머지는 종이색을 쓴다', () => {
+test('상단이 종이색이 아닌 화면은 각자의 색, 나머지는 종이색을 쓴다', () => {
     assert.equal(resolveThemeColor('login'), THEME_COLOR_INK);
     assert.equal(resolveThemeColor('personalMissionChallenge'), THEME_COLOR_COURT_SUPREME);
     assert.equal(resolveThemeColor('groupChallenge'), THEME_COLOR_COURT_DISTRICT);
+    /* 홈은 풍경 헤더가 들어오면서 상단이 하늘색이 됐다 — 종이색이면 흰 띠가 뜬다 */
+    assert.equal(resolveThemeColor('home'), THEME_COLOR_HOME_SKY);
 
-    for (const name of ['home', 'asset', 'ledger', 'myPage', 'assetChecking']) {
+    for (const name of ['asset', 'ledger', 'myPage', 'assetChecking']) {
         assert.equal(resolveThemeColor(name), THEME_COLOR_PAPER, `${name} 은 종이색이어야 한다`);
     }
 });
 
-test('INK_TOP_ROUTES 는 어두운 상단 라우트를 빠짐없이 담는다', () => {
-    assert.deepEqual(INK_TOP_ROUTES, ['login', 'personalMissionChallenge', 'groupChallenge']);
-    for (const name of INK_TOP_ROUTES) {
+test('TINTED_TOP_ROUTES 는 상단이 종이색이 아닌 라우트를 빠짐없이 담는다', () => {
+    assert.deepEqual(TINTED_TOP_ROUTES, [
+        'login',
+        'personalMissionChallenge',
+        'groupChallenge',
+        'home',
+    ]);
+    for (const name of TINTED_TOP_ROUTES) {
         assert.notEqual(
             resolveThemeColor(name),
             THEME_COLOR_PAPER,
@@ -131,6 +139,17 @@ test('tokens.css 의 --tt-neutral-paper 와 종이색 상수가 같다', () => {
     assert.equal(match[1].toLowerCase(), THEME_COLOR_PAPER);
 });
 
+/* 법원 헤더와 같은 이유 — CSS 변수를 JS 에서 읽을 수 없어 값이 두 곳에 있다 */
+test('tokens.css 의 홈 하늘 맨 위 색과 상태바 색 상수가 같다', () => {
+    const match = source('src/assets/tokens.css').match(/--tt-scene-sky-top:\s*(#[0-9a-fA-F]{6});/);
+    assert.ok(match, '--tt-scene-sky-top 토큰이 tokens.css 에 있어야 한다');
+    assert.equal(
+        match[1].toLowerCase(),
+        THEME_COLOR_HOME_SKY,
+        '어긋나면 홈에서 상태바만 다른 색 띠로 뜬다',
+    );
+});
+
 test('manifest 의 배경·테마색이 종이색과 같다', () => {
     const manifest = JSON.parse(source('public/manifest.webmanifest'));
     assert.equal(manifest.theme_color.toLowerCase(), THEME_COLOR_PAPER);
@@ -144,10 +163,10 @@ test('index.html 기본 theme-color 가 종이색과 같다', () => {
     assert.equal(match[1].toLowerCase(), THEME_COLOR_PAPER);
 });
 
-test('INK_TOP_ROUTES 에 적힌 라우트가 실제로 존재한다', () => {
+test('TINTED_TOP_ROUTES 에 적힌 라우트가 실제로 존재한다', () => {
     const routerSrc =
         source('src/router/index.js') + source('src/router/personalMissionChallengeRoutes.js');
-    for (const name of INK_TOP_ROUTES) {
+    for (const name of TINTED_TOP_ROUTES) {
         assert.match(
             routerSrc,
             new RegExp(`name:\\s*'${name}'`),

@@ -1,0 +1,610 @@
+/*
+ * 홈 히어로 헤더 — 하늘 → 잔디 풍경.
+ *
+ * 좌표 규칙 — 이 파일에서 가장 중요한 것.
+ * 값은 전부 디자인 원본(390x500)의 px 를 **그대로** 옮긴 것이다. % 로 환산하지 않았다.
+ * 풍경 요소가 좌우 가장자리(나무·수풀)와 중앙(탕이)에 나뉘어 붙어 있어서,
+ * 폭이 달라지면 가운데 하늘만 넓어지고 배치는 그대로 유지되는 편이 낫기 때문이다.
+ * 높이를 aspect-ratio 로 잡으면 430px 기기에서 헤더가 551px 이 되어 본문이 다 밀린다.
+ *
+ * 좌표계는 __stage(500px) 다. 밖의 __scene 은 그 위 40px 을 잘라내는 창일 뿐이다 —
+ * 아래 .home-hero__scene 주석 참고. 그래서 아래 값들은 전부 원본 그대로 읽으면 된다.
+ *
+ * 참고 원본: docs.local/reference/design/home/메인_홈_애니메이션_ver.html
+ */
+.home-hero {
+    /* 이미지가 다 뜨기 전에도 상단 띠가 하늘색이라 흰 줄이 깜빡이지 않는다 */
+    background: var(--tt-home-hero-sky-top);
+}
+
+/*
+ * 설치형에서 시계 줄이 올라앉는 자리. 원본 목업의 `9:41` 46px 줄은 가짜 크롬이라
+ * 그리지 않고, 하늘 맨 위 색으로만 채운다. 브라우저·안드로이드에서는 0px 이다.
+ * (재판탭 ChallengeCourtHeader 와 같은 방식)
+ */
+.home-hero__statusbar {
+    height: env(safe-area-inset-top, 0px);
+    background: var(--tt-home-hero-sky-top);
+}
+
+/*
+ * 보이는 창. 원본 씬(__stage, 500px)에서 위 40px 을 잘라낸 높이다.
+ *
+ * 자르는 이유 — 목업의 맨 위 40px 남짓은 가짜 `9:41` 상태바 줄이 하늘 위에 겹쳐
+ * 덮고 있던 띠다. 그 줄을 그리지 않기로 했으니 그대로 두면 브라우저에서 빈 하늘로 남는다.
+ * 설치형에서는 위 __statusbar 가 safe-area 만큼 그 자리를 도로 채운다.
+ *
+ * 좌표를 하나씩 40px 빼지 않고 창으로 자르는 이유 — 그렇게 하면 하늘 그라데이션
+ * 정지점(42%·66%·71%)까지 전부 다시 계산해야 해서 지평선이 소품과 어긋난다.
+ * 잘라낼 양을 여기 한 숫자로 두면 원본 좌표는 전부 그대로 살아 있다.
+ */
+.home-hero__scene {
+    position: relative;
+    height: 460px;
+    overflow: hidden;
+}
+
+/* 원본 좌표계 그 자체(390x500 기준). 바닥을 맞춰 걸어서 잘리는 쪽이 늘 위가 되게 한다 */
+.home-hero__stage {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 500px;
+    background: linear-gradient(
+        180deg,
+        var(--tt-home-hero-sky-top) 0%,
+        var(--tt-home-hero-sky-mid) 42%,
+        var(--tt-home-hero-sky-low) 66%,
+        var(--tt-home-hero-field-far) 71%,
+        var(--tt-home-hero-field) 100%
+    );
+}
+
+/* ── 하늘 ──────────────────────────────────────── */
+.home-hero__sun {
+    position: absolute;
+    top: 40px;
+    right: 44px;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle,
+        var(--tt-home-hero-sun) 0%,
+        var(--tt-home-hero-sun-out) 70%
+    );
+}
+
+/* ── 잔디 ──────────────────────────────────────── */
+/* 아래 끝이 본문 배경색이라 헤더와 본문이 한 면으로 이어진다 */
+.home-hero__field {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 104px;
+    background: linear-gradient(
+        180deg,
+        var(--tt-home-hero-field),
+        var(--tt-home-hero-field-deep) 55%,
+        var(--tt-home-hero-fade)
+    );
+}
+
+/* 탕이가 걷는 길. 좌우로 12px 씩 빼서 양 끝이 화면 밖에서 끝나게 한다 */
+.home-hero__path {
+    position: absolute;
+    right: -12px;
+    bottom: 44px;
+    left: -12px;
+    height: 14px;
+    border-radius: var(--tt-radius-full);
+    background: var(--tt-home-hero-path);
+}
+
+/* ── 구름 ──────────────────────────────────────── */
+/*
+ * 구름 한 장 = 트랙 하나. 트랙은 좌우를 0 으로 붙여 **씬과 폭이 같고**, 그래서
+ * translateX 의 100% 가 곧 화면 한 폭이다. -100% → 100% 면 어떤 기기 폭에서도
+ * 「완전히 왼쪽 밖 → 완전히 오른쪽 밖」이 되어 잘린 구름이 나올 수 없다.
+ *
+ * 예전에는 넓은 상자에 구름 두 장을 담고 px 로 밀었는데, 구름 간격(402px)과
+ * 이동량(400px)이 어긋나 루프마다 튀었고 480px 화면에서는 오른쪽 구름이 반쯤 잘렸다.
+ *
+ * 각 트랙의 transform 은 **애니메이션이 꺼졌을 때의 정지 배치**다.
+ * 켜져 있으면 keyframes 가 덮어쓴다. 값은 delay/duration 비율과 맞춰 뒀다.
+ */
+.home-hero__cloud-track {
+    position: absolute;
+    right: 0;
+    left: 0;
+    height: 0;
+    animation-name: tt-cloud-drift;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+}
+
+/* 오른쪽 밖 → 왼쪽 밖. 잎이 흩날리는 방향(왼쪽)과 같아야 바람이 한 방향으로 읽힌다 */
+@keyframes tt-cloud-drift {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+.home-hero__cloud-track--1 {
+    top: 146px;
+    transform: translateX(6%);
+    animation-duration: 62s;
+    animation-delay: -29s;
+}
+
+.home-hero__cloud-track--2 {
+    top: 214px;
+    transform: translateX(62%);
+    animation-duration: 74s;
+    animation-delay: -14s;
+}
+
+.home-hero__cloud-track--3 {
+    top: 172px;
+    transform: translateX(52%);
+    animation-duration: 96s;
+    animation-delay: -23s;
+}
+
+.home-hero__cloud-track--4 {
+    top: 252px;
+    transform: translateX(23%);
+    animation-duration: 112s;
+    animation-delay: -43s;
+}
+
+.home-hero__cloud {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.home-hero__cloud--1 {
+    width: 104px;
+    opacity: 0.98;
+}
+
+.home-hero__cloud--2 {
+    width: 78px;
+    opacity: 0.92;
+}
+
+/* 뒤쪽 구름은 흐리게 깔아 거리감을 준다 */
+.home-hero__cloud--3 {
+    width: 52px;
+    opacity: 0.65;
+    filter: blur(0.6px);
+}
+
+.home-hero__cloud--4 {
+    width: 40px;
+    opacity: 0.6;
+    filter: blur(0.6px);
+}
+
+/* ── 나무 · 수풀 · 소품 ────────────────────────── */
+/*
+ * 겹침 순서는 마크업 순서가 정한다(z-index 없음).
+ * 뒤 → 앞: 먼 나무 · 왼쪽 나무 · 오른쪽 나무 · 수풀 · 벤치 · 풀 · 꽃
+ */
+.home-hero__prop {
+    position: absolute;
+}
+
+.home-hero__tree-sm {
+    bottom: 128px;
+    left: 132px;
+    width: 90px;
+    opacity: 0.85;
+}
+
+.home-hero__tree-md {
+    bottom: 108px;
+    left: -22px;
+    width: 108px;
+    filter: blur(0.6px);
+}
+
+/* 바람에 흔들리는 큰 나무. 밑동(50% 100%)을 축으로 삼아야 뿌리가 안 뜬다 */
+.home-hero__tree-lg {
+    right: -26px;
+    bottom: 96px;
+    width: 184px;
+    transform-origin: 50% 100%;
+    animation: tt-tree-sway 8s ease-in-out infinite;
+}
+
+@keyframes tt-tree-sway {
+    0%,
+    100% {
+        transform: rotate(-1.6deg);
+    }
+    50% {
+        transform: rotate(1.6deg);
+    }
+}
+
+.home-hero__bush-lg {
+    right: 132px;
+    bottom: 98px;
+    width: 88px;
+}
+
+.home-hero__bush-sm {
+    bottom: 94px;
+    left: 8px;
+    width: 54px;
+}
+
+.home-hero__bench {
+    bottom: 114px;
+    left: 38px;
+    width: 110px;
+}
+
+.home-hero__grass {
+    bottom: 92px;
+    left: 164px;
+    width: 28px;
+}
+
+.home-hero__flower-lg {
+    bottom: 84px;
+    left: 134px;
+    width: 17px;
+}
+
+.home-hero__flower-sm {
+    right: 112px;
+    bottom: 84px;
+    width: 14px;
+}
+
+/* ── 떨어지는 잎 ───────────────────────────────── */
+/*
+ * 시작 상태가 opacity 0 이라 지연이 걸린 잎은 첫 낙하 전까지 보이지 않는다.
+ * 주기·지연을 서로 소수로 어긋나게 줘서 다섯 장이 같이 떨어지는 순간이 오지 않게 했다.
+ *
+ * top 은 **반드시 잎갈래 안**이어야 한다. 잎은 나무에서 떨어지는 것이지 하늘에서
+ * 생겨나는 게 아니다. 예전 값(134~160px)은 잎갈래보다 50~75px 위여서 빈 하늘에
+ * 잎 조각이 툭 나타났다. 지금 스프라이트 기준 잎갈래 상자는 이렇다(stage 500px, 폭 480 기준):
+ *   tree-lg  y 209~330  x 322~480  (오른쪽 끝, 화면 밖으로 26px 넘어감)
+ *   tree-md  y 269~340  x -22~86
+ *   tree-sm  y 277~335  x 132~222
+ * 소품 폭을 바꾸면 높이도 같이 변하니 이 표를 다시 계산해야 한다.
+ */
+.home-hero__fall {
+    opacity: 0;
+}
+
+.home-hero__fall--1 {
+    top: 246px;
+    right: 66px;
+    width: 16px;
+    animation: tt-leaf-fall-a 10s linear infinite;
+}
+
+.home-hero__fall--2 {
+    top: 264px;
+    right: 118px;
+    width: 13px;
+    animation: tt-leaf-fall-b 13s linear 2.5s infinite;
+}
+
+.home-hero__fall--3 {
+    top: 236px;
+    right: 40px;
+    width: 15px;
+    animation: tt-leaf-fall-a 12s linear 5.2s infinite;
+}
+
+.home-hero__fall--4 {
+    top: 288px;
+    left: 24px;
+    width: 13px;
+    animation: tt-leaf-fall-b 14s linear 3.8s infinite;
+}
+
+.home-hero__fall--5 {
+    top: 288px;
+    left: 158px;
+    width: 13px;
+    animation: tt-leaf-fall-a 11s linear 7.4s infinite;
+}
+
+/*
+ * 왼쪽으로 흩날리며 시계방향으로 도는 낙하.
+ * 낙하 거리 160px 은 잎갈래에서 잔디(stage y 396)까지의 거리다. 더 늘리면 잎이
+ * 잔디를 지나쳐 본문 경계까지 내려가 「땅에 닿는」 느낌이 사라진다.
+ */
+@keyframes tt-leaf-fall-a {
+    0% {
+        transform: translate(0, -20px) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    30% {
+        transform: translate(-16px, 46px) rotate(95deg);
+    }
+    60% {
+        transform: translate(10px, 100px) rotate(200deg);
+        opacity: 1;
+    }
+    85% {
+        opacity: 0.85;
+    }
+    100% {
+        transform: translate(-12px, 160px) rotate(310deg);
+        opacity: 0;
+    }
+}
+
+/* 반대로 도는 낙하. 두 개를 섞어야 잎이 한 방향으로만 돌지 않는다 */
+@keyframes tt-leaf-fall-b {
+    0% {
+        transform: translate(0, -20px) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    35% {
+        transform: translate(15px, 50px) rotate(-110deg);
+    }
+    65% {
+        transform: translate(-10px, 108px) rotate(-215deg);
+        opacity: 1;
+    }
+    85% {
+        opacity: 0.85;
+    }
+    100% {
+        transform: translate(8px, 158px) rotate(-330deg);
+        opacity: 0;
+    }
+}
+
+/* ── 잔디에 떨어져 있는 잎 ─────────────────────── */
+.home-hero__leaf--1 {
+    right: 48px;
+    bottom: 80px;
+    width: 15px;
+    opacity: 0.8;
+    transform: rotate(24deg);
+}
+
+.home-hero__leaf--2 {
+    right: 88px;
+    bottom: 72px;
+    width: 13px;
+    opacity: 0.75;
+    transform: rotate(-12deg);
+}
+
+.home-hero__leaf--3 {
+    right: 180px;
+    bottom: 86px;
+    width: 12px;
+    opacity: 0.7;
+    transform: rotate(40deg);
+}
+
+.home-hero__leaf--4 {
+    bottom: 88px;
+    left: 70px;
+    width: 13px;
+    opacity: 0.75;
+    transform: rotate(70deg);
+}
+
+.home-hero__leaf--5 {
+    bottom: 76px;
+    left: 124px;
+    width: 12px;
+    opacity: 0.7;
+    transform: rotate(-30deg);
+}
+
+/*
+ * 잔디 맨 아래를 본문 배경으로 녹인다. 소품보다 뒤(마크업상 아래)에 와서
+ * 잔디에 붙은 잎의 밑동까지 같이 덮어야 헤더가 끊긴 느낌 없이 본문으로 넘어간다.
+ * 탕이보다는 앞(위)에 오면 안 된다 — 발이 지워진다.
+ */
+.home-hero__fade {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 44px;
+    background: linear-gradient(180deg, var(--tt-home-hero-fade-out), var(--tt-home-hero-fade));
+}
+
+/* ── 걷는 탕이 ─────────────────────────────────── */
+/*
+ * 겹을 나눈 이유 — transform 은 하나뿐이라 왕복(pace)과 걸음(step)을 한 요소에
+ * 같이 걸면 뒤엣것이 앞엣것을 통째로 덮어쓴다. 그래서
+ *   __walk       화면 중앙 기준점 (폭 0)
+ *   __walk-pace  좌우 왕복 + 끝에서 좌우 반전
+ *   __tangi      통통 튀는 걸음
+ * 세 겹으로 나눴다.
+ */
+.home-hero__walk {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    width: 0;
+}
+
+.home-hero__walk-pace {
+    animation: tt-tangi-pace 16s linear infinite;
+}
+
+/* 왕복 폭 92px. 47~53% 구간에서 scaleX 를 뒤집어 「돌아서는」 동작을 만든다 */
+@keyframes tt-tangi-pace {
+    0% {
+        transform: translateX(-92px) scaleX(1);
+    }
+    47% {
+        transform: translateX(92px) scaleX(1);
+    }
+    53% {
+        transform: translateX(92px) scaleX(-1);
+    }
+    97% {
+        transform: translateX(-92px) scaleX(-1);
+    }
+    100% {
+        transform: translateX(-92px) scaleX(1);
+    }
+}
+
+/* 발밑 그림자. 탕이가 뜰 때 같이 좁아지고 옅어져야 뛰는 것처럼 보인다 */
+.home-hero__walk-shadow {
+    position: absolute;
+    bottom: 2px;
+    left: -38px;
+    width: 76px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--tt-home-hero-tangi-shade);
+    animation: tt-tangi-shadow 0.58s ease-in-out infinite;
+}
+
+@keyframes tt-tangi-shadow {
+    0%,
+    100% {
+        transform: scaleX(1);
+        opacity: 0.22;
+    }
+    50% {
+        transform: scaleX(0.78);
+        opacity: 0.13;
+    }
+}
+
+.home-hero__tangi {
+    position: absolute;
+    bottom: 7px;
+    left: -64px;
+    width: 128px;
+    height: 128px;
+    /*
+     * base.css 의 전역 `img { max-width: 100% }` 를 반드시 풀어야 한다.
+     * 여기서 100% 는 컨테이닝 블록인 __walk-pace 의 폭인데, 그게 0 이라
+     * max-width:0 이 돼 탕이가 통째로 사라진다(그림자만 남는다).
+     */
+    max-width: none;
+    object-fit: contain;
+    /* PNG 라 box-shadow 가 아니라 drop-shadow() 로 건다 — 사각형 그림자가 지면 안 된다 */
+    filter: drop-shadow(var(--tt-elevation-home-tangi));
+    animation: tt-tangi-step 0.58s ease-in-out infinite;
+}
+
+/* 그림자와 주기가 같아야(0.58s) 발이 땅에 닿는 순간이 맞는다 */
+@keyframes tt-tangi-step {
+    0%,
+    100% {
+        transform: translateY(0) rotate(-2.5deg);
+    }
+    50% {
+        transform: translateY(-7px) rotate(2.5deg);
+    }
+}
+
+/* ── 인사말 + 알림 벨 ──────────────────────────── */
+/*
+ * 헤더에서 유일하게 정보를 담는 줄이다. 좌우는 본문 카드와 같은 --tt-screen-padding
+ * 이어야 인사말 왼쪽 끝과 아래 카드 왼쪽 끝이 한 줄로 떨어진다.
+ */
+.home-hero__greeting {
+    position: absolute;
+    top: 64px;
+    right: var(--tt-screen-padding);
+    left: var(--tt-screen-padding);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.home-hero__hello {
+    margin: 0;
+    font-size: var(--tt-fs-body);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-home-hero-greet);
+}
+
+.home-hero__slogan {
+    margin: 7px 0 0;
+    font-size: var(--tt-fs-subtitle);
+    font-weight: var(--tt-fw-black);
+    letter-spacing: -0.01em;
+    color: var(--tt-home-hero-greet-strong);
+}
+
+/* TheNotificationBell 은 다른 화면도 쓰는 공용이라 고치지 않는다. 여기서만 덮어쓴다 */
+.home-hero__bell {
+    flex: none;
+}
+
+.home-hero__bell :deep(.tt-bell) {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--tt-radius-sm);
+    background: var(--tt-home-hero-bell-bg);
+    color: var(--tt-home-hero-bell-fg);
+    box-shadow: var(--tt-elevation-home-bell);
+}
+
+.home-hero__bell :deep(.tt-bell svg) {
+    width: 19px;
+    height: 19px;
+}
+
+.home-hero__bell :deep(.tt-bell__badge) {
+    top: -5px;
+    right: -5px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 var(--tt-space-1);
+    font-size: var(--tt-fs-overline);
+    font-weight: var(--tt-fw-black);
+    line-height: 17px;
+}
+
+/* 좁은 화면에서 본문(.home__body)이 여백을 16px 로 줄인다. 인사말도 같이 줄여야 줄이 맞는다 */
+@media (max-width: 380px) {
+    .home-hero__greeting {
+        right: var(--tt-space-4);
+        left: var(--tt-space-4);
+    }
+}
+
+/*
+ * 움직이는 요소가 여덟 갈래라 모션에 민감한 사용자에게는 부담이 크다.
+ * 풍경 자체는 그대로 두고 움직임만 멈춘다 — 잎은 안 보이는 게 정상 상태라 남겨둔다.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .home-hero__cloud-track,
+    .home-hero__tree-lg,
+    .home-hero__walk-pace,
+    .home-hero__walk-shadow,
+    .home-hero__tangi {
+        animation: none;
+    }
+}
