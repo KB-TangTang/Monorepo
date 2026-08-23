@@ -2128,3 +2128,37 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
   데이터가 있는 전체 월을 합쳐서 반환한다(검색 화면 전용).
 - `yearMonth`가 `YYYY-MM` 형식이 아니면 `400 INVALID_REQUEST`, 데이터가 있는 가장 이른 달보다
   이전이면 `400 LEDGER_NOT_AVAILABLE`.
+
+## 오늘 쓴 돈 요약 (홈 카드)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/transactions/summary/daily` | Bearer | `{ date, todayAmount, monthAmount, changeRate }` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "date": "2026-08-23",
+    "todayAmount": 32000,
+    "monthAmount": 486300,
+    "changeRate": -20.00
+  }
+}
+```
+- 홈 최상단 「오늘 쓴 돈」 카드 전용이다. 필드명이 프론트 `HomeSpendingCard` 의 props 와 1:1로 맞춰져 있다.
+- 구간은 **서버 KST**(`transaction.ledger.zone`, 기본 `Asia/Seoul`) 기준 반개구간이다.
+  오늘 `[오늘, 내일)` · 어제 `[어제, 오늘)` · 이번 달 `[1일, 다음 달 1일)`.
+- `date`: 서버가 판단한 "오늘"(`yyyy-MM-dd`). 자정 넘김·서버 타임존 사고를 프론트에서 확인할 유일한 단서다.
+- **`monthAmount`는 month-to-date가 아니라 월 전체다.** 장부 월 요약(`GET /api/transactions?yearMonth=`)의
+  `summary.totalSpent`와 **같은 값이어야 한다** — 카드에 「거래내역」 입구가 붙어 있어 사용자가 한 탭 만에
+  두 숫자를 대조한다. 미래 날짜 거래가 한 행이라도 생기면 month-to-date 로 자른 순간 두 값이 갈린다.
+- 환불은 지출을 상계하므로 **금액이 음수일 수 있다.** 0으로 자르지 않고 그대로 내려준다(장부와 같은 규칙).
+- 금액 두 개는 데이터가 없어도 `null`이 아니라 `0`이다. 카드의 「—」·「집계 중」 자리는 **API 호출 실패 전용**이라
+  0원 쓴 날에 `null`을 주면 정상이 장애처럼 보인다.
+- `changeRate`: 어제 대비 증감률(%, scale 2). 음수면 덜 쓴 것이다. **어제 순지출이 0 이하면 `null`이다** —
+  비율을 낼 수 없고, 음수를 분모로 쓰면 부호가 뒤집혀 "더 썼는데 적게 쓰는 중"이 뜬다.
+  장부의 `monthOverMonthRate`는 같은 상황에서 `0`을 주므로 **계약이 다르다.** 혼동하지 말 것.
+- 집계 기준은 장부·월간 리포트와 같다(`classification='CONSUMPTION'` + `is_excluded_from_summary=0`).
+  > ⚠ **미션·그룹챌린지 집계는 여기에 `direction='OUT'`을 더 건다.** 페이머니 소비(`direction`이 `NULL`)가
+  > 빠지므로 같은 사용자·같은 기간이라도 값이 다를 수 있다. 기존 시스템의 알려진 불일치이고 아직 통일하지 않았다.

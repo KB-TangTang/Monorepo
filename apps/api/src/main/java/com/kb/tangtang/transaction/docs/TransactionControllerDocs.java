@@ -2,6 +2,7 @@ package com.kb.tangtang.transaction.docs;
 
 import com.kb.tangtang.common.docs.SwaggerTags;
 import com.kb.tangtang.common.dto.ApiResponse;
+import com.kb.tangtang.transaction.dto.DailySpendingSummaryDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateRequestDto;
 import com.kb.tangtang.transaction.dto.TransactionCategoryUpdateResultDto;
 import com.kb.tangtang.transaction.dto.TransactionListResponseDto;
@@ -43,4 +44,16 @@ public interface TransactionControllerDocs {
     ApiResponse<TransactionListResponseDto> getTransactions(
             @ApiIgnore Long userId,
             @ApiParam(value = "조회월 YYYY-MM. 생략 시 전체 월 검색용 목록", example = "2026-07") String yearMonth);
+
+    @ApiOperation(value = "오늘 쓴 돈 요약(홈)",
+            notes = "홈 최상단 「오늘 쓴 돈」 카드용. 오늘 순소비(todayAmount) · 이번 달 순소비(monthAmount) · "
+                    + "어제 대비 증감률(changeRate)을 준다. date는 서버가 판단한 KST 기준 '오늘'(yyyy-MM-dd)이다. "
+                    + "이번 달은 month-to-date가 아니라 월 전체(1일~말일)라 월별 거래내역 조회의 "
+                    + "summary.totalSpent와 같은 값이다. "
+                    + "환불은 지출을 상계하므로 금액이 음수일 수 있다 — 그대로 내려준다. "
+                    + "어제 순지출이 0 이하면 비율을 낼 수 없어 changeRate는 null이다(음수면 부호가 뒤집히므로 함께 막는다). "
+                    + "금액 두 개는 데이터가 없어도 null이 아니라 0이다. "
+                    + "집계 기준은 장부·월간 리포트와 같다(CONSUMPTION + 집계 제외분 제외). "
+                    + "미션·그룹챌린지 집계는 여기에 direction='OUT'을 더 걸어 페이머니 소비가 빠지므로 값이 다를 수 있다.")
+    ApiResponse<DailySpendingSummaryDto> getDailySpendingSummary(@ApiIgnore Long userId);
 }

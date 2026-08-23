@@ -16,6 +16,12 @@ export async function fetchLedgerSearchTransactions() {
     return result.transactions;
 }
 
+/* 홈 「오늘 쓴 돈」 카드용. 오늘·이번 달 순소비와 어제 대비 증감률을 한 번에 받는다.
+ * monthAmount 는 월 전체 집계라 fetchLedgerPeriod(이번 달)의 summary.totalSpent 와 같은 값이다. */
+export async function fetchHomeSpendingSummary() {
+    return http.get('/transactions/summary/daily');
+}
+
 /* 거래 한 건의 카테고리를 사용자 지정으로 바꾼다. applyToMerchant=true면 같은 가맹점명의
  * 이후 거래에도 최우선 적용되지만, 이미 표시된 다른 거래는 소급 반영되지 않는다. */
 export async function updateTransactionCategory(transactionId, { categoryId, applyToMerchant }) {
