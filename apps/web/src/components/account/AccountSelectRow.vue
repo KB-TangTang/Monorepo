@@ -7,14 +7,16 @@
   (명세 AC_01_03: 중복 계좌는 재등록하지 않는다). 계좌번호는 서버에서 마스킹된 값이 온다.
 -->
 <script setup>
+import { computed } from 'vue';
 import { formatAmount } from '@/utils/account';
 
 const props = defineProps({
     account: { type: Object, required: true },
     selected: { type: Boolean, default: false },
     /**
-     * 대출·페이머니 미리보기 행(#334). alreadyLinked 와 똑같이 잠근 채 체크로 보여주지만
-     * 라벨은 다르다 — "이미 연결됨"은 사실이 아니다(아직 저장 전이고, 최초 동기화가 실제로 만든다).
+     * 대출·페이머니·카드 미리보기 행(#334). 기본은 체크된 상태이고, #467 부터는 은행 계좌처럼 체크를
+     * 풀 수 있다 — 풀면 link() 가 제외 행을 남겨 최초 동기화가 그 상품을 건너뛴다. 라벨은 "이미 연결됨"이
+     * 아니다(아직 저장 전이고, 최초 동기화가 실제로 만든다).
      */
     autoIncluded: { type: Boolean, default: false },
     /**
@@ -26,8 +28,12 @@ const props = defineProps({
 
 const emit = defineEmits(['toggle']);
 
+/* 잠기는 건 이미 연결된 계좌와 이 기관의 유일한 선택지(#396)뿐이다. 자동 연동 행은 풀 수 있다(#467). */
+const locked = computed(() => props.account.alreadyLinked || props.soleSelectable);
+const checked = computed(() => locked.value || props.selected);
+
 function onClick() {
-    if (props.account.alreadyLinked || props.autoIncluded || props.soleSelectable) {
+    if (locked.value) {
         return;
     }
     emit('toggle', props.account.accountId);
@@ -37,15 +43,15 @@ function onClick() {
 <template>
     <button
         class="account-row"
-        :class="{ 'account-row--locked': account.alreadyLinked || autoIncluded || soleSelectable }"
+        :class="{ 'account-row--locked': locked }"
         type="button"
-        :disabled="account.alreadyLinked || autoIncluded || soleSelectable"
-        :aria-pressed="account.alreadyLinked || autoIncluded || soleSelectable ? undefined : selected"
+        :disabled="locked"
+        :aria-pressed="locked ? undefined : selected"
         @click="onClick"
     >
         <span
             class="account-row__check"
-            :class="{ 'account-row__check--on': selected || account.alreadyLinked || autoIncluded || soleSelectable }"
+            :class="{ 'account-row__check--on': checked }"
             aria-hidden="true"
         >
             ✓
@@ -55,7 +61,8 @@ function onClick() {
             <span class="account-row__name">{{ account.accountName }}</span>
             <span class="account-row__sub">
                 <template v-if="account.alreadyLinked">이미 연결됨</template>
-                <template v-else-if="autoIncluded">자동으로 연동돼요</template>
+                <template v-else-if="autoIncluded && selected">자동으로 연동돼요</template>
+                <template v-else-if="autoIncluded">연동에서 뺐어요</template>
                 <template v-else>{{ account.accountNoMasked }}</template>
             </span>
         </span>

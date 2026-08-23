@@ -8,11 +8,28 @@
         interest_rate, start_date, maturity_date, monthly_payment, next_payment_date
     </sql>
 
+    <!--
+      해제한 대출 숨김(#467). tbl_loan 에는 is_active 가 없어, 연결 해제는 tbl_connected_account 에
+      같은 키(loan_no_encrypted = account_no_encrypted)의 is_active=0 행을 남기는 것으로 표현한다.
+      행·거래는 그대로 두고(은행 계좌처럼 해제 전 이력은 보존) 읽을 때만 뺀다. 조회·합계·건수가 전부 이 조건을
+      타야 관리 목록·자산 탭·동기화 범위가 같은 대출을 본다. 재연동 때 그 행이 지워지면 그대로 되살아난다.
+    -->
+    <sql id="notHidden">
+        AND NOT EXISTS (
+            SELECT 1
+            FROM tbl_connected_account h
+            WHERE h.user_id = l.user_id
+              AND h.account_no_encrypted = l.loan_no_encrypted
+              AND h.is_active = 0
+        )
+    </sql>
+
     <select id="findByUser" resultType="com.kb.tangtang.account.domain.Loan">
         SELECT <include refid="columns"/>
-        FROM tbl_loan
-        WHERE user_id = #{userId}
-        ORDER BY id
+        FROM tbl_loan l
+        WHERE l.user_id = #{userId}
+        <include refid="notHidden"/>
+        ORDER BY l.id
     </select>
 
     <update id="update" parameterType="com.kb.tangtang.account.domain.Loan">
@@ -43,15 +60,17 @@
     </insert>
 
     <select id="sumBalanceByUser" resultType="java.math.BigDecimal">
-        SELECT COALESCE(SUM(balance), 0)
-        FROM tbl_loan
-        WHERE user_id = #{userId}
+        SELECT COALESCE(SUM(l.balance), 0)
+        FROM tbl_loan l
+        WHERE l.user_id = #{userId}
+        <include refid="notHidden"/>
     </select>
 
     <select id="countByUser" resultType="int">
         SELECT COUNT(*)
-        FROM tbl_loan
-        WHERE user_id = #{userId}
+        FROM tbl_loan l
+        WHERE l.user_id = #{userId}
+        <include refid="notHidden"/>
     </select>
 
 </mapper>

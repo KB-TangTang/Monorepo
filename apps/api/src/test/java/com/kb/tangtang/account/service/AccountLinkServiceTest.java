@@ -361,6 +361,122 @@ class AccountLinkServiceTest {
     }
 
     @Test
+    @DisplayName("#467: 자동 연동 미리보기에서 체크를 푼 상품은 원본 키로 제외 행(is_active=0)을 남긴다")
+    void linkRecordsExclusionForUncheckedAutoIncludedPreview() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB", "CP_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "CP_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB", "CP_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+        List<LinkableGroupDto> groups = service.linkableAccounts(USER_ID, "conn-1");
+        long loanPreviewId = groups.stream()
+                .flatMap(group -> group.getAccounts().stream())
+                .filter(row -> "LOAN".equals(row.getAccountType()))
+                .findFirst().orElseThrow().getAccountId();
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+        linkRequest.setExcludedAccountIds(List.of(loanPreviewId, 999L));   // 999 는 화면이 지어낸 id
+
+        LinkResultDto result = service.link(USER_ID, linkRequest);
+
+        assertTrue(result.isDirectAssetsPending());   // 페이머니는 그대로 연동된다
+        /* 키는 FinancialSyncServiceImpl 이 저장할 때 쓰는 것과 같아야 건너뛴다. */
+        verify(mapper).insert(argThat(row ->
+                "MOCK-LOAN-11".equals(row.getAccountNoEncrypted()) && "LOAN".equals(row.getAccountType())
+                        && "CP_KB".equals(row.getBankCode())));
+        verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-11");
+        verify(mapper, never()).deactivateByHash(eq(USER_ID), argThat(key -> key.startsWith("MOCK-PAYMONEY")));
+    }
+
+    @Test
+    @DisplayName("#467: 관리 목록의 대출 행(-id) 을 해제하면 행은 두고 제외 키(숨김)만 남긴다 — 예전엔 400")
+    void disconnectLoanRecordsExclusionWithoutDeleting() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(
+                Loan.builder().id(7L).userId(USER_ID).loanNoEncrypted("MOCK-LOAN-301")
+                        .bankCode("CP_KB").bankName("KB캐피탈").loanType("KB 신용대출").build()));
+
+        DisconnectResultDto result = service.disconnect(USER_ID, -7L);
+
+        assertTrue(result.isDisconnected());
+        verify(mapper).insert(argThat(row -> "MOCK-LOAN-301".equals(row.getAccountNoEncrypted())));
+        verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-301");
+        /* 은행 계좌와 같은 원칙 — 해제 전까지 모은 이력은 남긴다. 조회 말고는 tbl_loan 을 건드리지 않는다. */
+        verify(loanMapper).findByUser(USER_ID);
+        verifyNoMoreInteractions(loanMapper);
+        verify(mapper, never()).deactivate(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("#467 되돌리기: 예전에 풀었던 대출을 다시 체크하면 제외 그림자 행을 지우고, 페이머니는 되살린다")
+    void linkClearsOldExclusionWhenAutoIncludedRowIsCheckedAgain() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB", "CP_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "CP_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+        /* 둘 다 예전에 풀었거나 해제해 둔 상태 — is_active=0 행이 남아 있다. */
+        when(mapper.findInactiveKeysByUser(USER_ID)).thenReturn(List.of("MOCK-LOAN-11", "MOCK-PAYMONEY-3"));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB", "CP_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+        service.linkableAccounts(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+        linkRequest.setExcludedAccountIds(List.of());   // 이번엔 둘 다 체크한 채로 둔다
+
+        service.link(USER_ID, linkRequest);
+
+        verify(mapper).deleteInactiveByHash(USER_ID, "MOCK-LOAN-11");
+        verify(mapper).reactivate(argThat(row -> "MOCK-PAYMONEY-3".equals(row.getAccountNoEncrypted())));
+        verify(mapper, never()).deactivateByHash(anyLong(), anyString());
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("#467: 없는 대출을 해제하면 NOT_FOUND, 대출 행 재조회는 NOT_SUPPORTED")
+    void loanRowsRejectUnknownDisconnectAndResync() {
+        when(loanMapper.findByUser(USER_ID)).thenReturn(List.of());
+
+        BusinessException notFound = assertThrows(BusinessException.class,
+                () -> service.disconnect(USER_ID, -99L));
+        assertEquals("NOT_FOUND", notFound.getCode());
+
+        BusinessException notSupported = assertThrows(BusinessException.class,
+                () -> service.resync(USER_ID, -7L));
+        assertEquals("NOT_SUPPORTED", notSupported.getCode());
+        verify(mapper, never()).findByIdAndUser(anyLong(), anyLong());
+    }
+
+    @Test
     @DisplayName("대출·페이머니가 하나도 없는데 빈 accountIds 를 보내면 여전히 오류다 — 회귀 방지")
     void linkStillRejectsEmptySelectionWithoutDirectAssets() {
         when(client.createConnection(any())).thenReturn(approvedConnection(List.of("0004")));

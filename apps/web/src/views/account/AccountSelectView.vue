@@ -98,19 +98,27 @@ async function onSubmit() {
                     />
                     {{ group.bankName }}
                 </h2>
-                <!-- 대출·페이머니·카드는 최초 동기화가 자동으로 연동한다. -->
+                <!-- 대출·페이머니·카드는 최초 동기화가 자동으로 연동한다. 빼고 싶은 상품만 체크를 푼다(#467). -->
                 <p v-if="group.autoIncluded" class="account-select__auto-notice">
-                    선택한 기관이라 자동으로 연동돼요. 계좌를 따로 고를 필요는 없어요.
+                    선택한 기관의 상품은 자동으로 연동돼요. 빼고 싶은 것만 체크를 풀어 주세요.
                 </p>
                 <div class="account-select__card">
                     <AccountSelectRow
                         v-for="account in group.accounts"
                         :key="account.accountId"
                         :account="account"
-                        :selected="store.isAccountSelected(account.accountId)"
+                        :selected="
+                            group.autoIncluded
+                                ? !store.isAutoAccountExcluded(account.accountId)
+                                : store.isAccountSelected(account.accountId)
+                        "
                         :auto-included="group.autoIncluded"
                         :sole-selectable="isSoleSelectableAccount(group, account)"
-                        @toggle="store.toggleAccount"
+                        @toggle="
+                            group.autoIncluded
+                                ? store.toggleAutoAccount($event)
+                                : store.toggleAccount($event)
+                        "
                     />
                 </div>
             </section>

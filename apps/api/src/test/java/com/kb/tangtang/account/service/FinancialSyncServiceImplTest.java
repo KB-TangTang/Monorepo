@@ -538,6 +538,32 @@ class FinancialSyncServiceImplTest {
     }
 
     @Test
+    @DisplayName("#467: 제외 키(is_active=0)가 남아 있는 대출·카드는 동기화가 되살리지 않는다")
+    void excludedLoanAndCardAreSkipped() {
+        when(connectedAccountMapper.findInactiveKeysByUser(1L))
+                .thenReturn(List.of("MOCK-LOAN-301", "MOCK-CARD-21"));
+        when(client.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(301L).institutionCode("CP_KB").institutionName("KB캐피탈")
+                        .productName("KB 신용대출").loanNoMasked("LN-2025-****-0001")
+                        .principal(new BigDecimal("15000000")).balance(new BigDecimal("14200000")).build(),
+                LoanSyncDto.builder().loanId(302L).institutionCode("CP_KB").institutionName("KB캐피탈")
+                        .productName("KB 전세대출").loanNoMasked("LN-2025-****-0002")
+                        .principal(new BigDecimal("50000000")).balance(new BigDecimal("48000000")).build()));
+        when(client.getLoanTransactions(eq("1"), anyLong())).thenReturn(List.of());
+        when(client.getCards("1")).thenReturn(List.of(
+                CardSyncDto.builder().cardId(21L).institutionCode("0381").institutionName("KB국민카드")
+                        .productName("KB 신용카드").cardNoMasked("1234-****-****-0021").cardTypeCode("01").build()));
+
+        service.sync(1L);
+
+        verify(loanMapper, never()).insert(argThat(loan -> "MOCK-LOAN-301".equals(loan.getLoanNoEncrypted())));
+        verify(loanMapper, never()).update(argThat(loan -> "MOCK-LOAN-301".equals(loan.getLoanNoEncrypted())));
+        verify(loanMapper).insert(argThat(loan -> "MOCK-LOAN-302".equals(loan.getLoanNoEncrypted())));
+        verify(cardMapper, never()).insert(any());
+        verify(cardMapper, never()).update(any());
+    }
+
+    @Test
     @DisplayName("대출 동기화는 목서버의 기관코드를 tbl_loan.bank_code 에 저장한다 (아이콘 매칭용)")
     void loanSyncPersistsInstitutionCode() {
         when(client.getLoans("1")).thenReturn(List.of(
