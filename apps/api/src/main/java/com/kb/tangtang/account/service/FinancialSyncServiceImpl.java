@@ -576,7 +576,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
         /* CARD: 카드 upsert -> 승인건은 거래로, 청구서는 별도 테이블로. */
         for (CardSyncDto card : bundle.cards) {
-            if (inactiveKeys.contains(cardExclusionKey(card.getCardId()))) {
+            if (inactiveKeys.contains(cardExclusionKey(card.getCardNoMasked()))) {
                 continue;   // 계좌 선택에서 체크를 푼 카드(#467) — 카드도 승인건도 저장하지 않는다
             }
             Long cardId = upsertCard(userId, card, now);
@@ -762,8 +762,15 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return "MOCK-LOAN-" + mockLoanId;
     }
 
-    public static String cardExclusionKey(long mockCardId) {
-        return "MOCK-CARD-" + mockCardId;
+    /**
+     * ⚠ 카드만 목서버 id 가 아니라 **마스킹 카드번호**로 키를 만든다(#467).
+     * 해제는 `tbl_card` 행에서 키를 되찾아야 하는데 그 테이블에 목서버 cardId 가 없다.
+     * `card_no_masked` 는 `UNIQUE(user_id, card_no_masked)` 이고 `CardMapper.update` 의 자연키이며
+     * 동기화 응답(CardSyncDto)에도 그대로 있어, 양쪽에서 같은 키가 나오는 유일한 값이다.
+     * (대출은 `tbl_loan.loan_no_encrypted` 에 목서버 id 기반 키가 저장돼 있어 이 문제가 없다)
+     */
+    public static String cardExclusionKey(String cardNoMasked) {
+        return "MOCK-CARD-" + cardNoMasked;
     }
 
     public static String payMoneyExclusionKey(long mockPayMoneyId) {
