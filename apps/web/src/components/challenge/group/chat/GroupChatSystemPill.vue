@@ -23,6 +23,13 @@ import innocentStamp from '@/assets/images/judgment/innocent_stamp.png';
  */
 const props = defineProps({
     message: { type: Object, required: true },
+
+    /*
+     * 같은 분에 알림이 여러 줄 떨어지면 마지막 줄에만 시각을 남긴다 —
+     * 판정은 화면이 「다음 줄」을 보고 한다(utils/groupChat 의 shouldShowTime).
+     * 기본값이 true 라 이 필을 단독으로 써도 시각이 사라지지 않는다.
+     */
+    showTime: { type: Boolean, default: true },
 });
 
 const router = useRouter();
@@ -92,10 +99,13 @@ function openCta() {
         </div>
 
         <!--
-          시각은 필 바깥 오른쪽 아래다 — 말풍선과 같은 자리라 눈이 시간을 찾는 곳이 하나로 남는다.
-          필 안에 넣으면 좁은 한 줄에서 문구가 그만큼 더 잘린다.
+          시각은 필 <b>아래</b>다. 말풍선처럼 옆에 붙이면 가운데 정렬인 필이 그만큼 한쪽으로
+          밀려 줄마다 중심이 흔들린다. 필 안에 넣는 것도 아니다 — 좁은 한 줄에서 문구가 더 잘린다.
+
+          showTime 이 거짓이면 자리째 없앤다. 적발·개시가 같은 초에 붙어 오므로 줄마다
+          같은 시각을 찍으면 필 아래가 같은 숫자로 두 번 채워진다.
         -->
-        <span v-if="timeLabel" class="sys-pill__time">{{ timeLabel }}</span>
+        <span v-if="showTime && timeLabel" class="sys-pill__time">{{ timeLabel }}</span>
     </div>
 </template>
 
@@ -107,9 +117,9 @@ function openCta() {
  */
 .sys-pill-wrap {
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: var(--tt-space-1);
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
     padding: var(--tt-space-1) 0;
     animation: sys-pill-enter 0.28s ease-out both;
 }
@@ -128,11 +138,14 @@ function openCta() {
     }
 }
 
-/* 말풍선의 시각과 같은 크기·색이다 (GroupChatBubble 의 .bubble-row__time) */
+/*
+ * 크기·색은 말풍선의 시각과 같지만(GroupChatBubble 의 .bubble-row__time) <b>자리가 다르다.</b>
+ * 말풍선은 왼쪽·오른쪽으로 갈려 있어 시각을 옆에 붙이면 누가 보냈는지가 같이 읽히는데,
+ * 재판 알림 필은 가운데 정렬이라 옆에 붙이면 필이 그만큼 한쪽으로 밀린다.
+ */
 .sys-pill__time {
     flex: none;
     white-space: nowrap;
-    padding-bottom: 2px;
     color: var(--tt-text-hint);
     font-size: var(--tt-fs-overline);
 }

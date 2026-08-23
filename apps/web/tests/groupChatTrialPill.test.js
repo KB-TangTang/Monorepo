@@ -494,20 +494,49 @@ test('문구를 투명도로 흐리지 않는다 — 필 색마다 대비가 다
 });
 
 /*
- * 시각은 합치기 전 기록·판결 카드에 있었는데 필로 옮기면서 통째로 빠졌었다. 시스템 메시지는
- * GroupChatBubble 이 아니라 이 컴포넌트로 가므로 화면이 넘기는 show-time 이 닿지 않는다 —
- * 여기서 직접 그려야 방 안의 재판 알림만 시각 없는 줄로 남지 않는다.
+ * 시각은 합치기 전 기록·판결 카드에 있었는데 필로 옮기면서 통째로 빠졌었다.
+ * 시스템 메시지는 GroupChatBubble 이 아니라 이 컴포넌트로 가므로 여기서 직접 그려야
+ * 방 안의 재판 알림만 시각 없는 줄로 남지 않는다.
  */
 test('필도 시각을 그린다 — 재판 알림만 시각 없는 줄로 남지 않는다', () => {
     const src = pillSource();
 
     assert.match(src, /clockLabel\(props\.message\.sentAt\)/, '시각 포맷은 utils 것을 쓴다');
-    assert.match(src, /v-if="timeLabel"/, 'sentAt 이 없으면 빈 자리를 만들지 않는다');
     assert.match(
         rule('.sys-pill__time'),
         /font-size:\s*var\(--tt-fs-overline\)/,
         '말풍선의 시각(.bubble-row__time)과 같은 크기여야 한 화면에서 따로 놀지 않는다',
     );
+});
+
+/*
+ * 적발·개시는 같은 초에 두 줄로 떨어진다. 필이 저 혼자 줄마다 시각을 찍으면 같은 숫자가
+ * 연달아 뜬다 — 말풍선처럼 화면의 판정(shouldShowTime)을 받아 마지막 줄에만 남긴다.
+ */
+test('시각은 화면이 넘기는 show-time 을 따른다 — 같은 분 알림이 시각을 반복하지 않게', () => {
+    const src = pillSource();
+
+    assert.match(
+        src,
+        /showTime:\s*\{\s*type:\s*Boolean,\s*default:\s*true\s*\}/,
+        '단독으로 쓰면 기존처럼 시각이 보이도록 기본값은 true 다',
+    );
+    assert.match(
+        src,
+        /v-if="showTime && timeLabel"/,
+        'sentAt 이 없거나 묶음의 중간이면 빈 자리를 만들지 않는다',
+    );
+});
+
+/*
+ * 시각은 필 옆이 아니라 아래다. 말풍선은 좌·우로 갈려 있어 옆에 붙이는 게 맞지만, 재판 알림 필은
+ * 가운데 정렬이라 옆에 붙이면 시각 폭만큼 필이 한쪽으로 밀려 줄마다 중심이 흔들린다.
+ */
+test('시각은 필 옆이 아니라 아래에 놓인다 — 가운데 정렬이 흔들리지 않게', () => {
+    const wrap = rule('.sys-pill-wrap');
+
+    assert.match(wrap, /flex-direction:\s*column/, '가로로 놓으면 필이 한쪽으로 밀린다');
+    assert.match(wrap, /align-items:\s*center/);
 });
 
 /*

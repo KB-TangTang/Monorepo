@@ -3,7 +3,8 @@
  *
  * 규칙이 두 개인데 기준이 서로 다르다. 한 곳에 모아 둔 이유가 그것이다.
  *   - 이름·아바타 숨김: 같은 사람이 5분 안에 이어 보내면 반복하지 않는다 (isGroupedMessage)
- *   - 시간 숨김:        같은 사람이 같은 "분"에 이어 보내면 마지막 줄에만 남긴다 (shouldShowTime)
+ *   - 시간 숨김:        같은 쪽이 같은 "분"에 이어 보내면 마지막 줄에만 남긴다 (shouldShowTime)
+ *                       — 참여자는 사람 단위, 재판 알림 필은 알림끼리 한 묶음이다
  *
  * 시간까지 5분 창으로 묶으면 10:01 에 보낸 줄의 시간이 사라지고 10:05 만 남아 정보가 준다.
  * 분 단위로 끊으면 연달아 친 줄만 합쳐지고 분이 바뀌면 다시 보인다 — 카카오톡과 같은 방식이다.
@@ -26,20 +27,30 @@ export function isGroupedMessage(prev, msg) {
 /**
  * 이 메시지에 시간을 찍을지 정한다.
  *
- * `next` 는 화면에서 바로 아래에 오는 참여자 메시지다. 사이에 날짜 구분선이나
+ * `next` 는 화면에서 바로 아래에 오는 메시지다. 사이에 날짜 구분선이나
  * "여기부터 새 메시지" 경계가 끼면 호출부가 null 을 넘긴다 — 구분선 위 줄에는 시간을 남긴다.
+ *
+ * 재판 알림 필도 같은 규칙을 탄다. 기소 한 건이 적발·개시로 <b>같은 초에 두 줄</b> 떨어지는데
+ * (ChatSystemMessageListener 가 두 이벤트를 잇달아 쏜다) 줄마다 같은 시각이 찍히면
+ * 시각이 정보가 아니라 반복되는 얼룩이 된다.
  */
 export function shouldShowTime(msg, next) {
     /* 서버가 시각을 안 줬거나 해석에 실패한 메시지다. 빈 자리를 만들지 않는다 */
     if (!msg?.sentAt) return false;
-    if (!next || msg.isSystem || next.isSystem) return true;
-    if (Number(next.senderId) !== Number(msg.senderId)) return true;
+    if (!next) return true;
+
+    /* 필과 말풍선은 서로 묶지 않는다 — 가운데·좌우로 정렬이 달라 한 덩어리로 읽히지 않는다 */
+    if (Boolean(msg.isSystem) !== Boolean(next.isSystem)) return true;
+
+    /* 필에는 보낸 사람이 없다. 재판 알림끼리는 종류가 달라도 「법정」 하나가 말한 것으로 본다 */
+    if (!msg.isSystem && Number(next.senderId) !== Number(msg.senderId)) return true;
+
     if (!next.sentAt) return true;
     return !isSameMinute(msg.sentAt, next.sentAt);
 }
 
 /**
- * 말풍선·재판 알림 필 옆에 찍는 시각. 24시간제 `HH:MM` 이다.
+ * 말풍선 옆·재판 알림 필 아래에 찍는 시각. 24시간제 `HH:MM` 이다.
  *
  * 서버가 시각을 안 줬거나 파싱에 실패하면(`sentAt: null`) 빈 문자열을 돌려준다 —
  * 화면이 빈 자리를 만들거나 `NaN:NaN` 을 그리지 않는다.

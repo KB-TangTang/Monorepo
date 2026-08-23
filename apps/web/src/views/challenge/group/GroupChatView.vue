@@ -65,9 +65,12 @@ const groupedMessages = computed(() => {
     }
 
     /*
-     * 시간 표시는 "다음 줄"을 봐야 정해진다. 바로 아래가 같은 사람의 같은 분 메시지면 이 줄의
+     * 시간 표시는 "다음 줄"을 봐야 정해진다. 바로 아래가 같은 쪽의 같은 분 메시지면 이 줄의
      * 시간은 숨기고 묶음의 마지막 줄에만 남긴다. 사이에 날짜 구분선이나 안 읽은 경계가 끼면
      * next 를 넘기지 않아 구분선 위 줄에는 시간이 남는다.
+     *
+     * 말풍선과 재판 알림 필이 같은 판정을 쓴다 — 필만 줄마다 시각을 찍으면 적발·개시가
+     * 같은 초에 붙어 올 때 같은 숫자가 연달아 뜬다.
      */
     for (let i = 0; i < items.length; i += 1) {
         if (items[i].type !== 'message') continue;
@@ -265,7 +268,11 @@ watch(
                       필의 색과 버튼이 정해진다 — 문구를 파싱하지 않는다(utils/groupChat).
                       systemType 이 없던 시절의 메시지도 이 필로 떨어진다.
                     -->
-                    <GroupChatSystemPill v-else-if="item.data.isSystem" :message="item.data" />
+                    <GroupChatSystemPill
+                        v-else-if="item.data.isSystem"
+                        :message="item.data"
+                        :show-time="item.showTime"
+                    />
 
                     <!-- 참여자 메시지. v-else 라 어떤 type 이든 화면에서 사라지지 않는다 -->
                     <GroupChatBubble
