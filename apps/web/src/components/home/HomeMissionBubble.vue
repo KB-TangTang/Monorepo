@@ -29,13 +29,18 @@ const copy = computed(() => getHomeMissionBubbleCopy(props.mission));
 </template>
 
 <style scoped>
+/*
+  탕이 그림(tang_home.png)은 판사석이 아래에 깔린 가로형 장면이라 아이콘처럼 가운데 띄우면 쪼그라들어 보인다.
+  절대배치로 우측 하단에 붙여 판사석이 카드 밑변에 닿게 하고, 라운드를 넘어가는 부분은 overflow 로 자른다.
+*/
 .mission-bubble {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-3);
     width: 100%;
-    padding: var(--tt-space-3) var(--tt-space-4);
+    min-height: 100px;
+    padding: var(--tt-space-3) 132px var(--tt-space-3) var(--tt-space-4);
     border: 1px solid var(--tt-success-subtle-border);
     border-radius: var(--tt-radius-lg);
     background: var(--tt-success-subtle);
@@ -64,9 +69,11 @@ const copy = computed(() => getHomeMissionBubbleCopy(props.mission));
 }
 
 .mission-bubble__image {
-    flex: none;
-    width: 58px;
-    height: 58px;
-    object-fit: contain;
+    position: absolute;
+    right: -4px;
+    bottom: 0;
+    width: 150px;
+    height: auto;
+    pointer-events: none;
 }
 </style>

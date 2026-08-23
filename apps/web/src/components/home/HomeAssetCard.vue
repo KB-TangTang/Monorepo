@@ -52,18 +52,8 @@ const donutStyle = computed(() => {
             <template v-else>자산 연결이 필요해요</template>
         </p>
 
-        <span class="asset__mark" aria-hidden="true">
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-            >
-                <path d="M12 3v18M7 21h10M4 7h16M4 7l-2 6h6L4 7M20 7l-2 6h6l-2-6" />
-            </svg>
-        </span>
+        <!-- 카드 전체가 자산탭으로 가는 버튼인데 그걸 알려주는 표시가 없었다. 저울 장식 대신 화살표를 둔다. -->
+        <span class="asset__mark" aria-hidden="true">›</span>
 
         <div v-if="summary" class="asset__body">
             <div class="asset__donut" :style="donutStyle">
@@ -107,7 +97,7 @@ const donutStyle = computed(() => {
 
 .asset__net-worth {
     margin-top: var(--tt-space-1);
-    padding-right: 48px;
+    padding-right: var(--tt-space-5);
     font-size: var(--tt-fs-subtitle);
     font-weight: var(--tt-fw-black);
     letter-spacing: -0.01em;
@@ -117,19 +107,9 @@ const donutStyle = computed(() => {
     position: absolute;
     top: var(--tt-space-4);
     right: var(--tt-space-4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-info-subtle);
-    color: var(--tt-info);
-}
-
-.asset__mark svg {
-    width: 20px;
-    height: 20px;
+    color: var(--tt-text-hint);
+    font-size: var(--tt-fs-label);
+    line-height: 1;
 }
 
 .asset__body {

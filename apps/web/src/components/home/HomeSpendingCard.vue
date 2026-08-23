@@ -36,10 +36,9 @@ const change = computed(() => getHomeSpendingChange(props.changeRate));
             오늘 쓴 돈
         </p>
 
-        <div class="spending__headline">
-            <strong class="spending__amount">{{ todayText }}</strong>
-            <span class="spending__chip">{{ monthText }}</span>
-        </div>
+        <span class="spending__chip">{{ monthText }}</span>
+
+        <strong class="spending__amount">{{ todayText }}</strong>
 
         <p v-if="change" class="spending__change" :class="`spending__change--${change.tone}`">
             {{ change.text }}
@@ -58,6 +57,7 @@ const change = computed(() => getHomeSpendingChange(props.changeRate));
 
 <style scoped>
 .spending {
+    position: relative;
     padding: var(--tt-space-4) var(--tt-space-4) 0;
     border-radius: var(--tt-radius-xl);
 }
@@ -85,28 +85,29 @@ const change = computed(() => getHomeSpendingChange(props.changeRate));
     font-weight: var(--tt-fw-black);
 }
 
-.spending__headline {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tt-space-3);
-    margin-top: var(--tt-space-2);
-}
-
 .spending__amount {
+    display: block;
+    margin-top: var(--tt-space-2);
     font-size: var(--tt-fs-stat);
     font-weight: var(--tt-fw-black);
     letter-spacing: -0.02em;
 }
 
+/*
+  이번 달 누계는 오늘 금액의 「곁다리」다. 원래 같은 줄에 진한 파랑 알약으로 놔서 오늘 금액과
+  무게를 다퉜다 — 재판 카드 뱃지와 같은 옅은 파랑 + 살짝 둥근 모서리로 낮추고 우측 상단으로 뺐다.
+*/
 .spending__chip {
-    flex: none;
-    padding: var(--tt-space-2) var(--tt-space-3);
-    border-radius: var(--tt-radius-full);
-    background: var(--tt-info);
-    color: var(--tt-text-inverse);
+    position: absolute;
+    top: var(--tt-space-4);
+    right: var(--tt-space-4);
+    padding: var(--tt-space-1) var(--tt-space-3);
+    border-radius: var(--tt-radius-xs);
+    background: var(--tt-info-subtle);
+    color: var(--tt-info);
     font-size: var(--tt-fs-caption);
     font-weight: var(--tt-fw-black);
+    line-height: var(--tt-lh-normal);
 }
 
 .spending__change {
@@ -144,6 +145,11 @@ const change = computed(() => getHomeSpendingChange(props.changeRate));
     font-size: var(--tt-fs-body);
     font-weight: var(--tt-fw-bold);
     cursor: pointer;
+}
+
+/* 두 입구를 가르는 세로선. 위의 border-top 과 같은 굵기·색으로 맞춘다. */
+.spending__link + .spending__link {
+    border-left: 1px solid var(--tt-border);
 }
 
 .spending__link:active {
