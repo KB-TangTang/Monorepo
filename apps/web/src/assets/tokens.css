@@ -299,4 +299,16 @@
         var(--tt-touch-min) + var(--tt-space-2) + var(--tt-space-2) + var(--tt-space-4)
     );
     --tt-content-max: 480px;
+
+    /* ── 서비스 소개 온보딩 (이슈 #459) ──
+     * 로그인 앞단 5면 소개 화면 전용. 다른 화면에 쓰지 않는다.
+     *
+     * 나머지 색은 전부 기존 토큰과 이미 값이 같아 새로 만들지 않았다
+     * (제목 파랑 = --tt-blue, 본문 = --tt-neutral-body, 버튼 = --tt-ink).
+     * 여기 넷만 대응하는 토큰이 없어서 추가한다. */
+    --tt-onb-bg-top: #edf3fe; /* 배경 그라데이션 맨 위 (옅은 하늘빛) */
+    --tt-onb-bg-mid: #f8fafe; /* 60% 지점 */
+    --tt-onb-bg-bottom: #f7f8fa; /* 맨 아래 — 종이색으로 잦아든다 */
+    --tt-onb-dot-idle: #d6deee; /* 인디케이터 비활성 점 */
+    --tt-onb-sparkle: #9fb8e8; /* 배경에 떠 있는 반짝임 (파랑) */
 }
