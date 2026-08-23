@@ -399,11 +399,11 @@ test('만료일이 없으면 안내하지 않는다', () => {
     assert.equal(consentExpiryLabel('말이 안 되는 값'), null);
 });
 
-test('금액에 천 단위 구분을 넣는다', () => {
-    /* 참고화면은 단위 '원' 없이 모노 숫자만 쓴다 (0-5 연결계좌선택). */
-    assert.equal(formatAmount(8340000), '8,340,000');
-    assert.equal(formatAmount(0), '0');
-    assert.equal(formatAmount(null), '0');
+test('금액에 천 단위 구분과 원 단위를 붙인다 (#462)', () => {
+    /* 참고화면(0-5)은 단위를 뺐지만 자산 화면(#454·#456)과 맞춰 앱 전체가 "원"을 붙인다. */
+    assert.equal(formatAmount(8340000), '8,340,000원');
+    assert.equal(formatAmount(0), '0원');
+    assert.equal(formatAmount(null), '0원');
 });
 
 test('기관마다 로고 색조가 다르다 (Figma 확정본)', () => {
