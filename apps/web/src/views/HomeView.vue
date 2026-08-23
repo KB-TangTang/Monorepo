@@ -137,13 +137,17 @@ function goToPersonalChallenge() {
     router.push({ name: 'personalMissionChallenge' });
 }
 
+/*
+ * 지방법원 줄은 그룹챌린지 「홈」으로 보낸다 — groupChallengeList 는 「재판 전체보기」라 한 단계 안쪽이다.
+ * 위 대법원 줄이 개인챌린지 홈(personalMissionChallenge)으로 가므로 두 줄의 도착지 깊이를 맞춘다.
+ */
 function goToGroupChallenge() {
     if (hasGroupSummaryError.value) {
         loadGroupSummary();
         return;
     }
 
-    router.push({ name: 'groupChallengeList' });
+    router.push({ name: 'groupChallenge' });
 }
 
 function goToAsset() {
