@@ -1,19 +1,3 @@
-import { calculateDday } from '@/utils/fixedExpense';
-
-/**
- * 홈 「다가오는 고정지출」에 띄울 항목을 고른다.
- * 이미 지난 결제일(D+)은 「다가오는」이 아니므로 뺀다. 결제일이 가까운 순으로 limit 건만 남긴다.
- */
-export function pickUpcomingFixedExpenses(items, { limit = 3, referenceDate = new Date() } = {}) {
-    return (items ?? [])
-        .filter((item) => item?.nextPaymentDate)
-        .map((item) => ({ item, dday: calculateDday(item.nextPaymentDate, referenceDate) }))
-        .filter((entry) => entry.dday >= 0)
-        .sort((a, b) => a.dday - b.dday)
-        .slice(0, limit)
-        .map((entry) => entry.item);
-}
-
 export function clampHomeProgress(value) {
     const progress = Number(value ?? 0);
 
@@ -130,40 +114,19 @@ export function getHomeMissionBubbleCopy(mission) {
 }
 
 /**
- * 홈 「이번 주 판결」 집계. GET /api/missions/streak 의 weeklyResults 를 받는다.
- * 원장(tbl_user_mission_info.result)은 SUCCESS/FAIL/PENDING 셋뿐이고
- * PENDING 은 아직 판정 전이라 무죄에도 유죄에도 넣지 않는다.
+ * 재판 카드 대법원(개인) 줄. 연속 무죄 일수(GET /api/missions/streak 의 streakCount)만 받는다.
+ *
+ * #450 수정 — 원래는 오늘 미션의 남은 한도를 띄웠는데 바로 위 초록 말풍선이 같은 값을 이미 말한다.
+ * 한 화면에 같은 문장이 두 번 뜨는 게 이상해 연속 무죄로 바꿨다. 미션은 말풍선, 누적은 이 줄.
  */
-export function getHomeWeeklyVerdicts(weeklyResults) {
-    const rows = weeklyResults ?? [];
-
-    return {
-        innocent: rows.filter((row) => row?.result === 'SUCCESS').length,
-        guilty: rows.filter((row) => row?.result === 'FAIL').length,
-    };
-}
-
-/**
- * 「진행 중인 재판」 대법원(개인) 줄. toHomeMission() 결과와 연속 무죄 일수를 받는다.
- * 말풍선(getHomeMissionBubbleCopy)과 달리 같은 줄에 카테고리를 붙여 한 줄로 읽히게 한다.
- */
-export function getHomePersonalTrialRow(mission, streakDays) {
+export function getHomePersonalTrialRow(streakDays) {
     const streak = Number(streakDays);
-    const badge = Number.isFinite(streak) && streak > 0 ? `연속 ${streak}일` : null;
 
-    if (!mission) {
-        return { text: '오늘 배정된 미션이 없어요', badge };
+    if (!Number.isFinite(streak) || streak <= 0) {
+        return { text: '아직 연속 무죄 기록이 없어요', badge: null };
     }
 
-    const prefix = mission.categoryName ? `${mission.categoryName} ` : '';
-
-    if (mission.isAbsoluteMission) {
-        return { text: `${prefix}${mission.spentAmount > 0 ? '위반 있음' : '위반 없음'}`, badge };
-    }
-    if (mission.remainingAmount <= 0) {
-        return { text: `${prefix}한도 초과`, badge };
-    }
-    return { text: `${prefix}${formatHomeAmount(mission.remainingAmount)}원 남음`, badge };
+    return { text: `연속 무죄 ${streak}일째`, badge: null };
 }
 
 /**

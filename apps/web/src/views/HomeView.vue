@@ -1,6 +1,6 @@
 <!--
-  용도: 홈 탭. 「오늘 쓴 돈 → 오늘의 미션 → 진행 중인 재판 → 나의 기록 → 자산 → 명예의 전당 →
-        다가오는 고정지출」 순으로 오늘 확인할 것을 위에서 아래로 늘어놓는다 (이슈 #450).
+  용도: 홈 탭. 「오늘 쓴 돈 → 오늘의 미션 → 재판 → 소비습관 변화 → 자산 → 명예의 전당」 순으로
+        오늘 확인할 것을 위에서 아래로 늘어놓는다 (이슈 #450).
   이 파일은 데이터를 모아 컴포넌트에 넘기고 이동만 시킨다 — 표시 규칙은 components/home/* 과
   utils/home.js 에 있다.
 -->
@@ -9,7 +9,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { fetchAssetSummary } from '@/api/asset';
 import { fetchChallengeReport, fetchChallengeReportMonths } from '@/api/challengeReport';
-import { fetchFixedExpenseOverview } from '@/api/fixedExpense';
 import { fetchMyGroupChallenges, fetchMyTrials } from '@/api/groupChallenge';
 import { fetchHomeSpendingSummary } from '@/api/ledger';
 import { fetchMissionStreak, fetchTodayMission } from '@/api/personalMission';
@@ -18,18 +17,14 @@ import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
 import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import HomeAssetCard from '@/components/home/HomeAssetCard.vue';
-import HomeFixedExpenseList from '@/components/home/HomeFixedExpenseList.vue';
 import HomeMissionBubble from '@/components/home/HomeMissionBubble.vue';
-import HomeRecordStats from '@/components/home/HomeRecordStats.vue';
+import HomeReportCard from '@/components/home/HomeReportCard.vue';
 import HomeSpendingCard from '@/components/home/HomeSpendingCard.vue';
 import HomeTrialCard from '@/components/home/HomeTrialCard.vue';
 import {
-    formatHomeAmount,
     getCurrentYearMonth,
     getHomeGroupTrialRow,
     getHomePersonalTrialRow,
-    getHomeReportEmptyCopy,
-    getHomeWeeklyVerdicts,
     toHomeMission,
     toHomeReportSummary,
     toHomeSpending,
@@ -43,7 +38,6 @@ const mission = ref(null);
 const spending = ref(toHomeSpending(null));
 const streak = ref(null);
 const assetSummary = ref(null);
-const fixedExpense = ref(null);
 const habitSummary = ref(null);
 const reportStatus = ref('loading');
 const groupTrials = ref([]);
@@ -52,9 +46,7 @@ const hasGroupSummaryError = ref(false);
 
 const currentPeriod = getCurrentYearMonth();
 
-const personalTrialRow = computed(() =>
-    getHomePersonalTrialRow(mission.value, streak.value?.streakCount),
-);
+const personalTrialRow = computed(() => getHomePersonalTrialRow(streak.value?.streakCount));
 const groupTrialRow = computed(() =>
     getHomeGroupTrialRow({
         trials: groupTrials.value,
@@ -62,10 +54,6 @@ const groupTrialRow = computed(() =>
         failed: hasGroupSummaryError.value,
     }),
 );
-const weeklyVerdicts = computed(() =>
-    streak.value ? getHomeWeeklyVerdicts(streak.value.weeklyResults) : null,
-);
-const reportEmptyCopy = computed(() => getHomeReportEmptyCopy(reportStatus.value));
 
 async function loadHome() {
     isLoading.value = true;
@@ -75,12 +63,10 @@ async function loadHome() {
         fetchTodayMission(),
         fetchMissionStreak(),
         fetchAssetSummary(),
-        fetchFixedExpenseOverview(),
         loadLatestReport(),
         fetchHomeSpendingSummary(),
     ]);
-    const [missionResult, streakResult, assetResult, fixedResult, reportResult, spendingResult] =
-        results;
+    const [missionResult, streakResult, assetResult, reportResult, spendingResult] = results;
 
     mission.value =
         missionResult.status === 'fulfilled' ? toHomeMission(missionResult.value) : null;
@@ -90,7 +76,6 @@ async function loadHome() {
     );
     streak.value = streakResult.status === 'fulfilled' ? streakResult.value : null;
     assetSummary.value = assetResult.status === 'fulfilled' ? assetResult.value : null;
-    fixedExpense.value = fixedResult.status === 'fulfilled' ? fixedResult.value : null;
     habitSummary.value = reportResult.status === 'fulfilled' ? reportResult.value.summary : null;
     reportStatus.value = reportResult.status === 'fulfilled' ? reportResult.value.status : 'error';
 
@@ -148,10 +133,6 @@ function goToFixedExpense() {
     router.push({ name: 'fixedExpenseManagement' });
 }
 
-function goToFixedExpenseDetail(id) {
-    router.push({ name: 'fixedExpenseDetail', params: { id } });
-}
-
 function goToPersonalChallenge() {
     router.push({ name: 'personalMissionChallenge' });
 }
@@ -163,10 +144,6 @@ function goToGroupChallenge() {
     }
 
     router.push({ name: 'groupChallengeList' });
-}
-
-function goToTrialRecords() {
-    router.push({ name: 'monthlyConsumptionReport' });
 }
 
 function goToAsset() {
@@ -218,18 +195,13 @@ onMounted(() => {
                 :group="groupTrialRow"
                 @open-personal="goToPersonalChallenge"
                 @open-group="goToGroupChallenge"
-                @open-records="goToTrialRecords"
             />
 
-            <section aria-labelledby="home-record-title">
-                <h2 id="home-record-title" class="home__section-title">나의 기록</h2>
-
-                <HomeRecordStats
-                    :streak-days="streak?.streakCount ?? null"
-                    :weekly="weeklyVerdicts"
-                    :saved-amount="habitSummary?.savedAmount ?? null"
-                />
-            </section>
+            <HomeReportCard
+                :summary="habitSummary"
+                :status="reportStatus"
+                @open="goToChallengeReport"
+            />
 
             <HomeAssetCard :summary="assetSummary" @open="goToAsset" />
 
@@ -238,32 +210,6 @@ onMounted(() => {
                 description="이번 달 절약 랭킹을 확인해 보세요"
                 @open="goToPersonalRanking"
             />
-
-            <HomeFixedExpenseList
-                :items="fixedExpense?.confirmed ?? []"
-                :monthly-amount="fixedExpense?.summary?.expectedMonthlyAmount ?? null"
-                @open-all="goToFixedExpense"
-                @open-item="goToFixedExpenseDetail"
-            />
-
-            <button type="button" class="home-habit-card" @click="goToChallengeReport">
-                <span v-if="habitSummary" class="home-habit-card__content">
-                    <small>{{ habitSummary.month }}월 소비습관 변화</small>
-                    <strong
-                        ><b>{{ formatHomeAmount(habitSummary.savedAmount) }}원</b> 아꼈어요</strong
-                    >
-                    <em v-if="habitSummary.topCategoryName">
-                        {{ habitSummary.topCategoryName }}에서 가장 큰 변화가 있었어요
-                    </em>
-                    <em v-else>확정된 챌린지 결과를 확인해 보세요</em>
-                </span>
-                <span v-else class="home-habit-card__content home-habit-card__content--empty">
-                    <small>소비습관 변화 리포트</small>
-                    <strong>{{ reportEmptyCopy.title }}</strong>
-                    <em>{{ reportEmptyCopy.description }}</em>
-                </span>
-                <span class="home-habit-card__action">자세히 보기</span>
-            </button>
         </div>
     </main>
 </template>
