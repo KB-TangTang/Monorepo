@@ -177,11 +177,28 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupChallengeListView.vue'),
         meta: { title: '재판 전체보기' },
     },
+    /*
+     * ⚠ 리터럴 경로는 반드시 `/group-challenges/:id` **위에** 둔다.
+     * 아래로 내려가면 `trial-records` 가 그룹 id 로 먹혀 상세 화면이 열린다(`/list` 와 같은 이유).
+     */
+    {
+        path: '/group-challenges/trial-records',
+        name: 'groupTrialRecordsAll',
+        component: () => import('@/views/challenge/group/GroupTrialRecordsView.vue'),
+        meta: { title: '재판 기록', hideTabBar: true },
+    },
     {
         path: '/group-challenges/:id',
         name: 'groupChallengeDetail',
         component: () => import('@/views/challenge/group/GroupChallengeDetailView.vue'),
         meta: { title: '그룹 챌린지 상세', hideTabBar: true },
+    },
+    /* 한 그룹의 확정된 재판 목록. 전체 기록(`groupTrialRecordsAll`)과 같은 뷰를 쓴다 */
+    {
+        path: '/group-challenges/:id/trial-records',
+        name: 'groupTrialRecords',
+        component: () => import('@/views/challenge/group/GroupTrialRecordsView.vue'),
+        meta: { title: '재판 기록', hideTabBar: true },
     },
     {
         path: '/group-challenges/:id/ranking',

@@ -19,6 +19,7 @@ import GroupDetailMemberTable from '@/components/challenge/group/GroupDetailMemb
 import GroupDetailTrialCarousel from '@/components/challenge/group/GroupDetailTrialCarousel.vue';
 import GroupDetailPodium from '@/components/challenge/group/GroupDetailPodium.vue';
 import GroupDetailRankingTable from '@/components/challenge/group/GroupDetailRankingTable.vue';
+import GroupHonorCourtEntry from '@/components/challenge/group/GroupHonorCourtEntry.vue';
 
 import { ChevronRightIcon } from '@heroicons/vue/24/solid';
 import mascotChat from '@/assets/images/emotions/57_chat.png';
@@ -139,6 +140,17 @@ function goToList() {
 
 function goToRanking() {
     router.push({ name: 'groupChallengeRanking', params: { id: ch.value.id } });
+}
+
+/*
+ * 「재판 기록」은 명예 법정이 아니다.
+ *
+ * 이 화면의 「재판 기록」 진입 두 곳(종료 화면의 카드 · 진행 중 푸터 버튼)이 둘 다
+ * `goToRanking` 을 부르고 있었다 — 이름은 기록인데 목적지는 순위였고, 그래서 확정된 재판을
+ * 볼 방법이 앱 안에 없었다. 순위 진입은 nav 의 「최종 순위」와 하단 명예 법정 배너가 맡는다.
+ */
+function goToTrialRecords() {
+    router.push({ name: 'groupTrialRecords', params: { id: ch.value.id } });
 }
 
 function goToInvite() {
@@ -323,7 +335,7 @@ async function handleDelete() {
                 <div
                     v-if="ch.trialStats && ch.trialStats.totalTrials > 0"
                     class="gc-detail__trial-link"
-                    @click="goToRanking"
+                    @click="goToTrialRecords"
                 >
                     <div class="gc-detail__trial-link-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor" width="19" height="19">
@@ -341,6 +353,16 @@ async function handleDelete() {
                     </div>
                     <ChevronRightIcon class="gc-detail__trial-link-arrow" />
                 </div>
+
+                <!--
+                     명예 법정은 스크롤 맨 아래다. 「끝나고 나면 어떻게 되나」라
+                     위에 두면 최종 순위표·재판 기록보다 먼저 읽혀 우선순위가 뒤집힌다.
+                -->
+                <GroupHonorCourtEntry
+                    class="gc-detail__honor"
+                    variant="closed"
+                    @open="goToRanking"
+                />
             </template>
 
             <!-- 시작 전 / 진행 중 -->
@@ -412,6 +434,12 @@ async function handleDelete() {
                     :members="ch.dailyMembers"
                     :eval-type="ch.evalType"
                 />
+
+                <GroupHonorCourtEntry
+                    class="gc-detail__honor"
+                    variant="active"
+                    @open="goToRanking"
+                />
             </template>
         </div>
 
@@ -428,7 +456,7 @@ async function handleDelete() {
                 <button
                     v-if="isActive"
                     class="gc-detail__btn gc-detail__btn--primary"
-                    @click="goToRanking"
+                    @click="goToTrialRecords"
                 >
                     재판 기록
                 </button>
@@ -793,6 +821,11 @@ async function handleDelete() {
 }
 
 /* ── 재판 기록 링크 카드 ── */
+/* 본문 마지막 조각. 위 카드들과 한 칸 더 떼어 「여기서 나간다」를 여백으로 말한다 */
+.gc-detail__honor {
+    margin-top: 6px;
+}
+
 .gc-detail__trial-link {
     background: var(--tt-bg);
     border: 1px solid var(--tt-border);

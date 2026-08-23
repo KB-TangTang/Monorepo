@@ -456,3 +456,70 @@ export function toVerdictScreen(trial) {
         },
     };
 }
+
+/*
+ * ─────────────────────────────────────────────────────────────
+ * 확정된 재판 기록 (「재판 기록」 목록 화면)
+ *
+ * 진행 중 카드용 `trialStance` 와 섞지 않는다. 저쪽은 「입력 상태가 DEFENSE_WAIT·VOTING
+ * 둘 중 하나」를 전제로 분기를 짜 두었고, 확정 상태를 흘려 넣으면 진행 중 화면에
+ * 절대 실행되지 않는 죽은 분기가 생긴다. 축 자체가 다르다 — 저쪽은 마감, 이쪽은 확정 시각·개표다.
+ * ─────────────────────────────────────────────────────────────
+ */
+
+/**
+ * 확정 판결의 사유 한 줄.
+ *
+ * `AI_JUDGMENT` 만 서버가 문장을 만들어 내려준다(`aiVerdictReason`).
+ * 나머지 셋은 방식 자체가 사유라 `METHOD_REASON` 의 고정 문구를 쓴다.
+ * `toVerdictScreen` 의 `reason` 계산과 같은 규칙이다 — 두 화면이 다른 말을 하면 안 된다.
+ */
+export function recordReason(record) {
+    if (record.verdictMethod === 'AI_JUDGMENT') return record.aiVerdictReason ?? '';
+    return METHOD_REASON[record.verdictMethod] ?? '';
+}
+
+/** `2026-08-14T09:12:00` → `8월 14일`. 확정 시각은 날짜까지만 읽는다. */
+function formatConfirmedLabel(isoDateTime) {
+    if (!isoDateTime) return '';
+    const at = new Date(isoDateTime);
+    if (Number.isNaN(at.getTime())) return '';
+    return `${at.getMonth() + 1}월 ${at.getDate()}일`;
+}
+
+/**
+ * 확정된 재판 한 건 → 기록 목록 한 줄이 쓰는 모양.
+ *
+ * 입력은 `api/groupChallenge.js` 의 `toTrialRecordViewModel` 을 지난 값이다.
+ * 개표(`guiltyCount`·`innocentCount`)를 가리지 않는다 — 편승 투표를 막으려던 이슈 #171 의
+ * 마스킹은 **투표가 열려 있는 동안에만** 성립한다. 확정된 뒤에는 감출 이유가 없다.
+ *
+ * `routeName` 은 `verdictRouteName` 이 정한다. 그 함수는 `status`·`verdictMethod` 만 보므로
+ * 기록 행이 그대로 통과한다. AI 판결은 동점 안내 화면(`groupVoteTie`)으로 갈라진다 —
+ * 여기서 직접 분기를 다시 쓰면 진입로마다 AI 판결을 모르는 곳이 생긴다.
+ */
+export function toTrialRecordCard(record) {
+    const copy = VERDICT_COPY[record.status] ?? VERDICT_COPY.INNOCENT;
+
+    return {
+        id: record.id,
+        groupId: record.groupId,
+        groupName: record.groupName,
+        nickname: record.nickname,
+        profileImage: record.profileImage ?? null,
+        isMine: Boolean(record.isMine),
+        verdict: record.status,
+        verdictLabel: copy.label,
+        tone: record.status === 'GUILTY' ? 'guilty' : 'innocent',
+        settlementDate: record.settlementDate,
+        confirmedLabel: formatConfirmedLabel(record.confirmedAt),
+        exceededAmount: record.exceededAmount ?? 0,
+        /* 자백·무투표는 표가 0장이다. `?? 0` 이 없으면 「null : null」이 그려진다. */
+        guiltyCount: record.guiltyCount ?? 0,
+        innocentCount: record.innocentCount ?? 0,
+        totalVoters: record.totalVoters ?? 0,
+        myVote: record.myVote ?? null,
+        reason: recordReason(record),
+        routeName: verdictRouteName(record),
+    };
+}

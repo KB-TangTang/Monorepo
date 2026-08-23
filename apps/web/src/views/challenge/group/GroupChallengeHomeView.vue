@@ -12,7 +12,11 @@ import GroupTrialListSheet from '@/components/challenge/group/GroupTrialListShee
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
-import { fetchMyGroupChallenges, fetchAllMyTrials } from '@/api/groupChallenge';
+import {
+    fetchMyGroupChallenges,
+    fetchAllMyTrials,
+    fetchAllMyTrialRecords,
+} from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
@@ -21,6 +25,7 @@ import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
 import objIndictImage from '@/assets/images/judgment/obj_indict.png';
+import objDefenseImage from '@/assets/images/judgment/obj_defense.png';
 import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
 import { toTrialStatusCard } from '@/utils/groupTrial';
 import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
@@ -114,6 +119,27 @@ async function loadMyTrials() {
         /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비면 판사 탕이가 다른 말을 한다. */
         myTrials.value = [];
     }
+}
+
+/*
+ * 끝난 재판 건수.
+ *
+ * **개수만 들고 있는다.** 목록은 기록 화면이 다시 읽는다 — 여기에 목록까지 쥐면
+ * 홈과 기록 화면이 서로 다른 시점의 목록을 그리게 되고, 홈이 무거워진다.
+ * 실패해도 홈은 그대로 그린다(0 이면 줄이 통째로 사라질 뿐이다).
+ */
+const recordCount = ref(0);
+
+async function loadTrialRecordCount() {
+    try {
+        recordCount.value = (await fetchAllMyTrialRecords()).length;
+    } catch {
+        recordCount.value = 0;
+    }
+}
+
+function goToTrialRecords() {
+    router.push({ name: 'groupTrialRecordsAll' });
 }
 
 /*
@@ -233,11 +259,13 @@ onMounted(() => {
     }
     loadMyChallenges();
     loadMyTrials();
+    loadTrialRecordCount();
 });
 
 watch(dataSource, () => {
     loadMyChallenges();
     loadMyTrials();
+    loadTrialRecordCount();
 });
 
 /*
@@ -487,6 +515,24 @@ function goToChat(challenge) {
                 <span class="gc-watching__arrow" aria-hidden="true">›</span>
             </button>
 
+            <!--
+              끝난 재판. 기다리는 재판과 **같은 모양**으로 바로 아래 붙인다 —
+              둘 다 「내 할 일은 아니지만 궁금한 것」이라 같은 어휘가 맞다.
+              시트를 새로 만들지 않고 기록 화면으로 나간다. 시트를 또 만들면
+              같은 목록이 두 자리에 생겨 한쪽만 고쳐지는 날이 온다.
+            -->
+            <button
+                v-if="recordCount"
+                type="button"
+                class="gc-watching gc-watching--record"
+                @click="goToTrialRecords"
+            >
+                <!-- 판결이 끝난 재판이라 투표함이 아니라 판사봉이다 -->
+                <img class="gc-watching__art" :src="objDefenseImage" alt="" />
+                <span class="gc-watching__label">지난 재판 {{ recordCount }}건</span>
+                <span class="gc-watching__arrow" aria-hidden="true">›</span>
+            </button>
+
             <!-- 내 챌린지 — 진행 중과 시작 전을 한 카드에 행으로 쌓는다 -->
             <div class="gc-section">
                 <div class="gc-section-top">
@@ -695,6 +741,16 @@ function goToChat(challenge) {
 
 .gc-watching:active {
     background: var(--tt-bg-fill);
+}
+
+/*
+ * 끝난 재판은 진행 중인 것보다 한 단계 물러난다. 흰 면을 쓰면 위 줄(기다리는 재판)과
+ * 완전히 같아져서, 마감이 걸린 것과 이미 끝난 것이 화면에서 구분되지 않는다.
+ * 위 줄과 붙여 한 묶음으로 읽히게 여백은 좁게 준다.
+ */
+.gc-watching--record {
+    margin-top: 6px;
+    background: var(--tt-bg-subtle);
 }
 
 /*

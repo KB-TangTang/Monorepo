@@ -16,6 +16,7 @@ import {
     MOCK_ENDED_CHALLENGES,
     MOCK_TODO_ITEMS,
     MOCK_TRIAL_STATUS,
+    MOCK_TRIAL_RECORDS,
 } from '@/fixtures/groupChallenge';
 import { MOCK_CHALLENGE_DETAILS, MOCK_CHALLENGE_RANKINGS } from '@/fixtures/groupChallengeDetail';
 import {
@@ -275,6 +276,56 @@ function withMockTrialDeadlines(item) {
         ...item,
         defenseDeadline: at,
         voteDeadline: at,
+    };
+}
+
+/**
+ * 지방법원 홈 「지난 재판」 — 내가 속한 그룹의 **확정된 재판 전부**.
+ *
+ * 위 `fetchAllMyTrials` 의 반대편이다. 저쪽은 진행 중(DEFENSE_WAIT·VOTING)만,
+ * 여기는 확정(GUILTY·INNOCENT)만 준다. 확정된 재판은 그동안 전적 숫자로만 남아 있어
+ * 앱 어디에서도 목록을 볼 수 없었다.
+ *
+ * 정렬은 **최근 확정순**이고 서버가 끝냈다. 여기서 다시 정렬하지 않는다.
+ */
+export async function fetchAllMyTrialRecords() {
+    if (isMockMode.value) {
+        return MOCK_TRIAL_RECORDS.map(toTrialRecordViewModel);
+    }
+    const list = await http.get('/group-challenges/trial-records');
+    return list.map(toTrialRecordViewModel);
+}
+
+/**
+ * 그룹 하나의 재판 기록. 위 전체 목록과 같은 모양이다.
+ *
+ * **그룹원이 아니면 빈 배열이 온다.** 서버가 403 대신 빈 목록을 주므로 여기서
+ * 권한 오류를 따로 분기할 것이 없다.
+ */
+export async function fetchGroupTrialRecords(groupId) {
+    if (isMockMode.value) {
+        return MOCK_TRIAL_RECORDS.filter((item) => item.groupId === Number(groupId)).map(
+            toTrialRecordViewModel,
+        );
+    }
+    const list = await http.get(`/group-challenges/${groupId}/trial-records`);
+    return list.map(toTrialRecordViewModel);
+}
+
+/**
+ * 서버 `GroupClosedTrialDto` → 재판 기록 한 줄이 쓰는 모양.
+ *
+ * 위 `toIndictmentViewModel` 과 **합치지 않는다.** 이름 변환(`mine`→`isMine` 등)은 겹치지만
+ * 나머지 축이 다르다 — 저쪽은 마감을 골라 `deadline` 을 만들고, 여기는 마감이 없는 대신
+ * 확정 시각과 개표를 들고 온다. 하나로 묶으면 상대편에서 항상 undefined 인 필드가 절반씩 생긴다.
+ */
+function toTrialRecordViewModel(item) {
+    return {
+        ...item,
+        profileImage: item.profileImageUrl,
+        isMine: item.mine,
+        hasDefended: item.defended,
+        settlementDate: formatMonthDay(item.settlementDate),
     };
 }
 
