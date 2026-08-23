@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import org.mockito.InOrder;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -416,8 +418,50 @@ class AccountLinkServiceTest {
         assertTrue(result.isDisconnected());
         verify(mapper).insert(argThat(row -> "MOCK-LOAN-301".equals(row.getAccountNoEncrypted())));
         verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-301");
-        verify(loanMapper).deleteByIdAndUser(7L, USER_ID);
+        /* 거래를 먼저 지우고 대출 행을 지운다 — 순서가 바뀌면 FK 가 loan_id 를 NULL 로 만들어 거래가 고아가 된다. */
+        InOrder order = inOrder(loanMapper);
+        order.verify(loanMapper).deleteTransactionsByLoan(USER_ID, 7L);
+        order.verify(loanMapper).deleteByIdAndUser(7L, USER_ID);
         verify(mapper, never()).deactivate(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("#467 되돌리기: 예전에 풀었던 대출을 다시 체크하면 제외 그림자 행을 지우고, 페이머니는 되살린다")
+    void linkClearsOldExclusionWhenAutoIncludedRowIsCheckedAgain() {
+        when(client.createConnection(any())).thenReturn(approvedConnection(List.of("PAY_KB", "CP_KB")));
+        when(client.getAuthStatus("conn-1")).thenReturn(AuthStatus.APPROVED);
+        when(client.fetchAccounts(USER_ID, "conn-1", "PAY_KB")).thenReturn(List.of());
+        when(client.fetchAccounts(USER_ID, "conn-1", "CP_KB")).thenReturn(List.of());
+        when(scenarioKeyProvider.resolve(USER_ID)).thenReturn("1");
+        when(syncClient.getPayMoney("1")).thenReturn(List.of(
+                PayMoneySyncDto.builder().payMoneyId(3L).providerCode("PAY_KB")
+                        .providerName("KB Pay").walletName("KB Pay 지갑")
+                        .balance(new BigDecimal("130000")).build()));
+        when(syncClient.getLoans("1")).thenReturn(List.of(
+                LoanSyncDto.builder().loanId(11L).institutionCode("CP_KB")
+                        .institutionName("KB캐피탈").productName("KB 신용대출")
+                        .loanNoMasked("LN-****-0001").balance(new BigDecimal("14200000")).build()));
+        /* 둘 다 예전에 풀었거나 해제해 둔 상태 — is_active=0 행이 남아 있다. */
+        when(mapper.findInactiveKeysByUser(USER_ID)).thenReturn(List.of("MOCK-LOAN-11", "MOCK-PAYMONEY-3"));
+
+        SimpleAuthRequestDto request = new SimpleAuthRequestDto();
+        request.setProvider("KAKAO");
+        request.setOrganizations(List.of("PAY_KB", "CP_KB"));
+        service.requestSimpleAuth(USER_ID, request);
+        service.progress(USER_ID, "conn-1");
+        service.linkableAccounts(USER_ID, "conn-1");
+
+        LinkRequestDto linkRequest = new LinkRequestDto();
+        linkRequest.setConnectionId("conn-1");
+        linkRequest.setAccountIds(List.of());
+        linkRequest.setExcludedAccountIds(List.of());   // 이번엔 둘 다 체크한 채로 둔다
+
+        service.link(USER_ID, linkRequest);
+
+        verify(mapper).deleteInactiveByHash(USER_ID, "MOCK-LOAN-11");
+        verify(mapper).reactivate(argThat(row -> "MOCK-PAYMONEY-3".equals(row.getAccountNoEncrypted())));
+        verify(mapper, never()).deactivateByHash(anyLong(), anyString());
+        verify(mapper, never()).insert(any());
     }
 
     @Test

@@ -57,6 +57,11 @@ public class LinkProgress {
         return previews.get(accountId);
     }
 
+    /** 미리보기 전체(id → 키). link() 가 "체크를 푼 것"과 "다시 넣은 것"을 가르는 데 쓴다. */
+    public synchronized Map<Long, PreviewEntry> previewEntries() {
+        return new LinkedHashMap<>(previews);
+    }
+
     public LinkProgress(long userId, String connectionId, Map<String, String> organizations,
                         Instant createdAt) {
         this.userId = userId;

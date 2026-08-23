@@ -570,7 +570,27 @@ public class AccountLinkService {
          * 꺼진다 — 체크 해제는 곧 연결 해제다.
          */
         List<Long> excluded = request.getExcludedAccountIds() == null ? List.of() : request.getExcludedAccountIds();
-        for (Long previewId : new LinkedHashSet<>(excluded)) {
+        Set<Long> excludedIds = new LinkedHashSet<>(excluded);
+        /*
+         * 이번에 체크한 채로 둔 상품에 예전 제외 행이 남아 있으면 먼저 걷어낸다(#467 되돌리기).
+         * 예전에 풀었거나 해제했던 상품은 is_active=0 행 때문에 동기화가 영원히 건너뛴다 — 다시 연동하려고
+         * 체크해도 아무 일이 없는 것처럼 보인다. 페이머니는 실제 연결 행이라 되살리고(은행 계좌와 같다),
+         * 대출·카드는 키만 있는 그림자 행이라 지운다(실체는 tbl_loan/tbl_card 에 동기화가 다시 만든다).
+         * excludedSeen 에서도 빼야 아래 제외 루프가 "이미 기록됨"으로 오판하지 않는다.
+         */
+        for (Map.Entry<Long, LinkProgress.PreviewEntry> preview : progress.previewEntries().entrySet()) {
+            LinkProgress.PreviewEntry entry = preview.getValue();
+            if (excludedIds.contains(preview.getKey()) || !excludedSeen.contains(entry.key())) {
+                continue;
+            }
+            if ("PAYMONEY".equals(entry.accountType())) {
+                mapper.reactivate(exclusionRow(userId, progress.getConnectionId(), entry, now));
+            } else {
+                mapper.deleteInactiveByHash(userId, entry.key());
+            }
+            excludedSeen.remove(entry.key());
+        }
+        for (Long previewId : excludedIds) {
             LinkProgress.PreviewEntry entry = previewId == null ? null : progress.previewOf(previewId);
             if (entry == null || !excludedSeen.add(entry.key())) {
                 continue;
@@ -590,7 +610,16 @@ public class AccountLinkService {
      */
     private void recordExclusion(long userId, String connectionId, LinkProgress.PreviewEntry entry,
                                  LocalDateTime now) {
-        ConnectedAccount row = ConnectedAccount.builder()
+        ConnectedAccount row = exclusionRow(userId, connectionId, entry, now);
+        if (mapper.reactivate(row) == 0) {
+            mapper.insert(row);
+        }
+        mapper.deactivateByHash(userId, entry.key());
+    }
+
+    private ConnectedAccount exclusionRow(long userId, String connectionId, LinkProgress.PreviewEntry entry,
+                                          LocalDateTime now) {
+        return ConnectedAccount.builder()
                 .userId(userId)
                 .codefConnectedId(connectionId)
                 .bankCode(entry.bankCode())
@@ -602,10 +631,6 @@ public class AccountLinkService {
                 .syncStatus(SyncStatus.NORMAL.name())
                 .expiresAt(now.plusDays(CONSENT_VALID_DAYS))
                 .build();
-        if (mapper.reactivate(row) == 0) {
-            mapper.insert(row);
-        }
-        mapper.deactivateByHash(userId, entry.key());
     }
 
     /**
@@ -803,6 +828,8 @@ public class AccountLinkService {
                 new LinkProgress.PreviewEntry(loan.getLoanNoEncrypted(), bankCode, loan.getBankName(),
                         loan.getLoanType(), "LOAN"),
                 LocalDateTime.now(clock));
+        /* 거래를 먼저 지운다 — 대출 행이 사라지면 FK 가 loan_id 를 NULL 로 바꿔 더는 찾지 못한다. */
+        loanMapper.deleteTransactionsByLoan(userId, loanId);
         loanMapper.deleteByIdAndUser(loanId, userId);
     }
 
