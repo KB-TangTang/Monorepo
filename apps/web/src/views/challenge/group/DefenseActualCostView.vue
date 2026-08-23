@@ -314,7 +314,7 @@ watch([showOverSheet, showSafeSheet, showAdmitSheet], () => {
                     </div>
                     <span class="cost-page__exceeded-ratio">
                         {{ indictment.currentAmount.toLocaleString() }}
-                        / {{ indictment.limitAmount.toLocaleString() }}
+                        / {{ indictment.limitAmount.toLocaleString() }}원
                     </span>
                 </div>
             </div>
@@ -515,7 +515,7 @@ watch([showOverSheet, showSafeSheet, showAdmitSheet], () => {
                         </div>
                         <span class="over-sheet__info-ratio">
                             {{ adjustedTotal.toLocaleString() }}
-                            / {{ indictment.limitAmount.toLocaleString() }}
+                            / {{ indictment.limitAmount.toLocaleString() }}원
                         </span>
                     </div>
                     <p class="over-sheet__info-desc">
@@ -569,7 +569,7 @@ watch([showOverSheet, showSafeSheet, showAdmitSheet], () => {
                     </div>
                     <span class="safe-sheet__info-ratio">
                         {{ adjustedTotal.toLocaleString() }}
-                        / {{ indictment.limitAmount.toLocaleString() }}
+                        / {{ indictment.limitAmount.toLocaleString() }}원
                     </span>
                 </div>
             </div>
