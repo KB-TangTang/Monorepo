@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { formatAssetHomeWon } from '../src/utils/asset.js';
+import { formatWon } from '../src/utils/asset.js';
 
 /*
  * 이슈 #323 - 2026-08-19 배포본 점검에서 나온 화면 결함 2건.
@@ -59,15 +59,18 @@ test('끝난 챌린지의 빈 방에는 말을 걸라고 권하지 않는다', (
  * 무엇을 세는 숫자인지 알 수 없었다.
  *
  * 홈 v7 개편(#450)으로 이 자리가 HomeAssetCard 로 옮겨갔다. 숫자 span 과 단위 span 을
- * 나눠 붙이던 방식 대신 단위를 항상 포함해 돌려주는 formatAssetHomeWon 을 쓴다 —
+ * 나눠 붙이던 방식 대신 단위를 항상 포함해 돌려주는 formatWon 을 쓴다 —
  * 단위를 빠뜨릴 수 있는 자리 자체가 없어졌다. 지키려는 규칙은 그대로다.
+ *
+ * 천만원을 넘으면 「1585만원」으로 줄이던 formatAssetHomeWon 은 걷어냈다. 끝자리가 사라져
+ * 같은 값이 자산탭과 어긋나 보였다.
  */
-test('홈 순자산 금액에 원 단위를 붙인다', () => {
+test('홈 순자산 금액에 원 단위를 붙이고 자릿수를 줄이지 않는다', () => {
     const assetCard = source('src/components/home/HomeAssetCard.vue');
 
-    assert.match(assetCard, /formatAssetHomeWon\(summary\.netWorth\)/);
-    assert.equal(formatAssetHomeWon(1244200), '1,244,200원');
-    assert.equal(formatAssetHomeWon(15854000), '1585만원');
+    assert.match(assetCard, /formatWon\(summary\.netWorth\)/);
+    assert.equal(formatWon(1244200), '1,244,200원');
+    assert.equal(formatWon(15854000), '15,854,000원');
 });
 
 /* ── 채팅 헤더의 미구현 버튼 (이슈 #331) ─────────────── */

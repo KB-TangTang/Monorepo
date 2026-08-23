@@ -6,7 +6,7 @@
 <script setup>
 import { computed } from 'vue';
 import BaseCard from '@/components/common/BaseCard.vue';
-import { formatAssetHomeWon, formatWon, getCompositionRatios, toneColor } from '@/utils/asset';
+import { formatWon, getCompositionRatios, toneColor } from '@/utils/asset';
 
 const props = defineProps({
     /* fetchAssetSummary() 의 결과. 계좌 연동 전이거나 조회 실패면 null. */
@@ -40,7 +40,7 @@ const donutStyle = computed(() => {
         <p class="asset__label">자산 요약</p>
 
         <p class="asset__net-worth">
-            <template v-if="summary">순자산 {{ formatAssetHomeWon(summary.netWorth) }}</template>
+            <template v-if="summary">순자산 {{ formatWon(summary.netWorth) }}</template>
             <template v-else>자산 연결이 필요해요</template>
         </p>
 

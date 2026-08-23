@@ -1,6 +1,5 @@
 const EOK = 100000000;
 const MAN = 10000;
-const TEN_MILLION = 10000000;
 
 /*
  * v1 디자인 토큰(--tt-gray-*, --tt-accent-700 등)은 tokens.css v2(Ink/Gold 체계)로 교체되며
@@ -45,12 +44,11 @@ function getHoldingAveragePrice(cost, quantity) {
 }
 
 /*
- * 도넛 중앙처럼 폭이 좁은 자리에 쓴다(이슈 #326).
+ * 도넛 중앙처럼 폭이 좁은 자리에 쓴다(이슈 #326). 만 단위에 콤마를 넣지 않는다.
  *
- * 만 단위에 콤마를 넣지 않는다 - formatAssetHomeWon 과 표기를 맞추기 위해서다.
- * 예전에는 같은 1913만이 순자산 카드에서 「1913만원」, 바로 아래 도넛 중앙에서
- * 「1,913만원」으로 갈렸다.
- * 억 단위(`1.9억원`)는 좁은 원 안에 들어가야 해서 축약형을 그대로 둔다.
+ * 자산 화면의 금액은 전부 formatWon 으로 전체 자릿수를 적는다 - 「1585만원」처럼 줄이면
+ * 끝자리가 사라져 다른 화면의 같은 값과 어긋나 보인다. 좁아서 넘칠 때는 단위를 줄이는
+ * 대신 글자 크기를 줄인다(AssetNetWorthCard).
  */
 function formatCompactWon(amount) {
     const sign = amount < 0 ? '-' : '';
@@ -66,26 +64,6 @@ function formatCompactWon(amount) {
         return `${sign}${man}만원`;
     }
     return formatWon(amount);
-}
-
-function formatAssetHomeWon(amount) {
-    const sign = amount < 0 ? '-' : '';
-    const abs = Math.abs(Math.trunc(amount));
-    if (abs < TEN_MILLION) {
-        return formatWon(amount);
-    }
-
-    const totalMan = Math.round(abs / MAN);
-    const eok = Math.floor(totalMan / MAN);
-    const man = totalMan % MAN;
-
-    if (eok > 0 && man > 0) {
-        return `${sign}${eok}억${man}만원`;
-    }
-    if (eok > 0) {
-        return `${sign}${eok}억원`;
-    }
-    return `${sign}${totalMan}만원`;
 }
 
 function getCompositionTotal(composition) {
@@ -157,7 +135,6 @@ export {
     formatSignedWon,
     formatSignedPercent,
     formatCompactWon,
-    formatAssetHomeWon,
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,
