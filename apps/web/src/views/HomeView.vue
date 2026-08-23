@@ -1,6 +1,8 @@
 <!--
-  용도: 홈 탭. 「오늘 쓴 돈 → 오늘의 미션 → 재판 → 소비습관 변화 → 자산 → 명예의 전당」 순으로
-        오늘 확인할 것을 위에서 아래로 늘어놓는다 (이슈 #450).
+  용도: 홈 탭. 맨 위에 풍경 히어로 헤더(HomeHeroHeader)를 깔고, 그 아래로
+        「오늘 쓴 돈 → 오늘의 미션 → 재판 → 소비습관 변화 → 자산 → 명예의 전당」 순으로
+        오늘 확인할 것을 늘어놓는다 (이슈 #450).
+  헤더는 정보를 담지 않는다 — 인사말과 알림 벨뿐이고, 숫자·상태는 전부 아래 카드가 받는다.
   이 파일은 데이터를 모아 컴포넌트에 넘기고 이동만 시킨다 — 표시 규칙은 components/home/* 과
   utils/home.js 에 있다.
 -->
@@ -15,12 +17,13 @@ import { fetchMissionStreak, fetchTodayMission } from '@/api/personalMission';
 import PersonalMissionHonorBanner from '@/components/challenge/personal/PersonalMissionHonorBanner.vue';
 import StateError from '@/components/common/StateError.vue';
 import StateLoading from '@/components/common/StateLoading.vue';
-import TheNotificationBell from '@/components/common/TheNotificationBell.vue';
 import HomeAssetCard from '@/components/home/HomeAssetCard.vue';
+import HomeHeroHeader from '@/components/home/HomeHeroHeader.vue';
 import HomeMissionBubble from '@/components/home/HomeMissionBubble.vue';
 import HomeReportCard from '@/components/home/HomeReportCard.vue';
 import HomeSpendingCard from '@/components/home/HomeSpendingCard.vue';
 import HomeTrialCard from '@/components/home/HomeTrialCard.vue';
+import { useAuthStore } from '@/stores/auth';
 import {
     getCurrentYearMonth,
     getHomeGroupTrialRow,
@@ -29,8 +32,13 @@ import {
     toHomeReportSummary,
     toHomeSpending,
 } from '@/utils/home';
+import { resolveDisplayName } from '@/utils/user';
 
 const router = useRouter();
+const auth = useAuthStore();
+
+/* 인사말에만 쓴다. 이름이 없으면 헤더가 이름 없이 인사하도록 빈 문자열이 넘어간다. */
+const userName = computed(() => resolveDisplayName(auth.user));
 
 const isLoading = ref(true);
 const errorMessage = ref('');
@@ -172,50 +180,52 @@ onMounted(() => {
 </script>
 
 <template>
-    <main class="home">
-        <header class="home__header">
-            <h1 class="home__title">홈</h1>
+    <div class="home">
+        <HomeHeroHeader :user-name="userName" />
 
-            <TheNotificationBell />
-        </header>
+        <!--
+          헤더는 화면 폭 전체를 쓰고 좌우 여백은 본문이 잡는다.
+          로딩·실패 상태도 본문 안에서 처리한다 — 헤더까지 사라지면 화면이 통째로 비어 보인다.
+        -->
+        <main class="home__body">
+            <StateLoading v-if="isLoading" message="홈 정보를 불러오는 중" />
 
-        <StateLoading v-if="isLoading" message="홈 정보를 불러오는 중" />
+            <StateError v-else-if="errorMessage" :message="errorMessage" @retry="loadHome" />
 
-        <StateError v-else-if="errorMessage" :message="errorMessage" @retry="loadHome" />
+            <div v-else class="home__stack">
+                <HomeSpendingCard
+                    :today-amount="spending.todayAmount"
+                    :month-amount="spending.monthAmount"
+                    :change-rate="spending.changeRate"
+                    @open-ledger="goToLedger"
+                    @open-fixed-expense="goToFixedExpense"
+                />
 
-        <div v-else class="home__stack">
-            <HomeSpendingCard
-                :today-amount="spending.todayAmount"
-                :month-amount="spending.monthAmount"
-                :change-rate="spending.changeRate"
-                @open-ledger="goToLedger"
-                @open-fixed-expense="goToFixedExpense"
-            />
+                <HomeMissionBubble :mission="mission" @open="goToPersonalChallenge" />
 
-            <HomeMissionBubble :mission="mission" @open="goToPersonalChallenge" />
+                <HomeTrialCard
+                    :personal="personalTrialRow"
+                    :group="groupTrialRow"
+                    @open-personal="goToPersonalChallenge"
+                    @open-group="goToGroupChallenge"
+                />
 
-            <HomeTrialCard
-                :personal="personalTrialRow"
-                :group="groupTrialRow"
-                @open-personal="goToPersonalChallenge"
-                @open-group="goToGroupChallenge"
-            />
+                <HomeReportCard
+                    :summary="habitSummary"
+                    :status="reportStatus"
+                    @open="goToChallengeReport"
+                />
 
-            <HomeReportCard
-                :summary="habitSummary"
-                :status="reportStatus"
-                @open="goToChallengeReport"
-            />
+                <HomeAssetCard :summary="assetSummary" @open="goToAsset" />
 
-            <HomeAssetCard :summary="assetSummary" @open="goToAsset" />
-
-            <PersonalMissionHonorBanner
-                title="명예의 전당"
-                description="이번 달 절약 랭킹을 확인해 보세요"
-                @open="goToPersonalRanking"
-            />
-        </div>
-    </main>
+                <PersonalMissionHonorBanner
+                    title="명예의 전당"
+                    description="이번 달 절약 랭킹을 확인해 보세요"
+                    @open="goToPersonalRanking"
+                />
+            </div>
+        </main>
+    </div>
 </template>
 
 <style scoped src="./HomeView.css"></style>

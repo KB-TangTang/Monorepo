@@ -1,22 +1,24 @@
+/*
+ * 홈은 「풍경 헤더 + 스크롤되는 카드」 두 덩어리다.
+ * 좌우 여백은 본문(.home__body)만 잡는다 — 헤더는 화면 폭을 꽉 채우는 풀블리드라
+ * .home 에 padding 을 주면 하늘 좌우에 배경색 띠가 생긴다.
+ */
 .home {
     min-height: 100%;
-    padding: var(--tt-space-5) var(--tt-screen-padding) var(--tt-space-12);
     overflow-x: hidden;
+    /*
+     * HomeHeroHeader 잔디 아래 페이드가 이 색으로 끝난다(--tt-home-hero-fade).
+     * 여기를 바꾸면 헤더 끝에 다른 색 띠가 드러나므로 토큰 쪽도 같이 봐야 한다.
+     */
     background: var(--tt-bg-subtle);
 }
 
-.home__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: var(--tt-space-4);
-}
-
-.home__title {
-    font-size: var(--tt-fs-title);
-    font-weight: var(--tt-fw-black);
-    letter-spacing: -0.02em;
-    color: var(--tt-text);
+/*
+ * 헤더 잔디가 이미 아래로 44px 페이드되며 끝나 있어서 위 여백을 크게 줄 필요가 없다.
+ * 원본 디자인도 헤더 바로 아래 8px 에서 첫 카드가 시작한다.
+ */
+.home__body {
+    padding: var(--tt-space-2) var(--tt-screen-padding) var(--tt-space-12);
 }
 
 /* 섹션 사이 간격을 여기 한 곳에서 준다. 각 카드는 자기 바깥 여백을 모른다. */
@@ -27,7 +29,7 @@
 }
 
 @media (max-width: 380px) {
-    .home {
+    .home__body {
         padding-right: var(--tt-space-4);
         padding-left: var(--tt-space-4);
     }
