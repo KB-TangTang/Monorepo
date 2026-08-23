@@ -145,8 +145,6 @@ const LIVE_CHAT_FILES = [
     '../src/components/challenge/group/chat/GroupChatHeader.vue',
     '../src/components/challenge/group/chat/GroupChatBubble.vue',
     '../src/components/challenge/group/chat/GroupChatSystemPill.vue',
-    '../src/components/challenge/group/chat/GroupChatRecordCard.vue',
-    '../src/components/challenge/group/chat/GroupChatVerdictCard.vue',
 ];
 
 test('화면에 목업 전용 필드가 남아 있지 않다', () => {

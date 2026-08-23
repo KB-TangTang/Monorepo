@@ -9,9 +9,6 @@ import GroupChatHeader from '@/components/challenge/group/chat/GroupChatHeader.v
 import GroupChatDateDivider from '@/components/challenge/group/chat/GroupChatDateDivider.vue';
 import GroupChatUnreadDivider from '@/components/challenge/group/chat/GroupChatUnreadDivider.vue';
 import GroupChatBubble from '@/components/challenge/group/chat/GroupChatBubble.vue';
-import GroupChatSystemLabel from '@/components/challenge/group/chat/GroupChatSystemLabel.vue';
-import GroupChatRecordCard from '@/components/challenge/group/chat/GroupChatRecordCard.vue';
-import GroupChatVerdictCard from '@/components/challenge/group/chat/GroupChatVerdictCard.vue';
 import GroupChatSystemPill from '@/components/challenge/group/chat/GroupChatSystemPill.vue';
 import GroupChatInput from '@/components/challenge/group/chat/GroupChatInput.vue';
 import GroupChatToast from '@/components/challenge/group/chat/GroupChatToast.vue';
@@ -32,25 +29,6 @@ let toastTimer = null;
 let isLoadingOlder = false; // 스크롤-업 페이징 중 scrollToBottom 방지용
 let socket = null;
 let unmounted = false; // enterRoom 대기 중 라우트 이탈 시 소켓을 만들지 않기 위한 가드
-
-/* ── 시스템 메시지 카드 선택 ───────────────────────────── */
-/*
- * 서버가 systemType 을 준다(ChatMessageDto). 문구를 파싱해 카드를 고르지 않는다 — 문구가 한 글자만
- * 바뀌어도 화면이 조용히 깨지던 방식이다. systemType 이 없는 메시지(이 필드가 생기기 전에 저장된 것)는
- * 문구만 있는 pill 로 떨어진다.
- */
-const RECORD_TYPES = ['VIOLATION_DETECTED', 'TRIAL_OPENED', 'DEFENSE_REGISTERED'];
-
-function systemView(msg) {
-    if (msg.systemType === 'VERDICT_CONFIRMED') return 'verdict';
-    if (RECORD_TYPES.includes(msg.systemType)) return 'record';
-    return 'pill';
-}
-
-/* 라벨을 붙일 대상은 "카드로 그려지는" 시스템 메시지다. 폴백 pill 은 라벨 없이 조용히 흐른다 */
-function isRecordCard(msg) {
-    return Boolean(msg?.isSystem) && systemView(msg) !== 'pill';
-}
 
 /* ── 메시지 그룹핑 (날짜 · 안 읽은 경계 · 연속 발화) ───── */
 /* msg.sentAt 은 어댑터(api/groupChatAdapter.js)가 만든 Date 다. 해석 못 한 값은 null 이라
@@ -82,8 +60,6 @@ const groupedMessages = computed(() => {
             data: msg,
             key: msg.messageId,
             grouped: isGroupedMessage(prev, msg),
-            /* 재판 기록이 잇달아 오면 "재판 시스템" 라벨은 첫 장에만 붙인다 */
-            showSystemLabel: isRecordCard(msg) && !isRecordCard(prev),
         });
         prev = msg;
     }
@@ -284,19 +260,11 @@ watch(
                         :count="unreadCount"
                     />
 
-                    <!-- 재판 기록 (적발 · 개시 · 변론) -->
-                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'record'">
-                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
-                        <GroupChatRecordCard :message="item.data" />
-                    </template>
-
-                    <!-- 판결 확정 -->
-                    <template v-else-if="item.data.isSystem && systemView(item.data) === 'verdict'">
-                        <GroupChatSystemLabel v-if="item.showSystemLabel" />
-                        <GroupChatVerdictCard :message="item.data" />
-                    </template>
-
-                    <!-- systemType 이 없는 옛 시스템 메시지 -->
+                    <!--
+                      재판 알림 (적발 · 개시 · 변론 · 판결). 서버가 주는 systemType 으로
+                      필의 색과 버튼이 정해진다 — 문구를 파싱하지 않는다(utils/groupChat).
+                      systemType 이 없던 시절의 메시지도 이 필로 떨어진다.
+                    -->
                     <GroupChatSystemPill v-else-if="item.data.isSystem" :message="item.data" />
 
                     <!-- 참여자 메시지. v-else 라 어떤 type 이든 화면에서 사라지지 않는다 -->
