@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     INSTITUTION_GROUPS,
+    LINK_DONE_ANIMATION_HOLD_MS,
     LINK_EXIT_ROUTE,
     LINK_STEPS,
     calcLinkProgress,
@@ -28,8 +29,49 @@ import {
     resolveProgressRow,
     resolveSelectCta,
     resolveSyncBadge,
+    showsLinkDoneAnimation,
     validateSimpleAuthForm,
 } from '../src/utils/account.js';
+import { readFileSync } from 'node:fs';
+
+test('완료 애니메이션은 동기화가 일찍 끝나도 한 바퀴는 돈다 (#465)', () => {
+    /* 목서버 동기화는 1초 안에 끝난다. 홀드가 안 풀렸으면 syncing 이 꺼져도 계속 그린다. */
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: false, holdElapsed: false }),
+        true,
+    );
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: true, holdElapsed: false }),
+        true,
+    );
+});
+
+test('홀드가 풀린 뒤에는 동기화 중일 때만 돈다 — 820c2d6 의 의도 유지', () => {
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: true, holdElapsed: true }),
+        true,
+    );
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: true, syncing: false, holdElapsed: true }),
+        false,
+    );
+});
+
+test('reduced-motion 이면 홀드 중이든 동기화 중이든 그리지 않는다', () => {
+    assert.equal(
+        showsLinkDoneAnimation({ playsAnimation: false, syncing: true, holdElapsed: false }),
+        false,
+    );
+});
+
+test('홀드 길이는 SVG 한 바퀴(dur="2s")와 같다', () => {
+    const svg = readFileSync(
+        new URL('../src/assets/images/link-success.svg', import.meta.url),
+        'utf8',
+    );
+    const durations = [...svg.matchAll(/dur="([\d.]+)s"/g)].map((m) => Number(m[1]) * 1000);
+    assert.equal(Math.max(...durations), LINK_DONE_ANIMATION_HOLD_MS);
+});
 
 test('자동 연동 기관만 골라도 완료 버튼을 그린다 (#460)', () => {
     /* 카드·대출·페이머니만 고른 경우. 체크할 계좌는 0 이지만 연동을 끝낼 수 있어야 한다.
