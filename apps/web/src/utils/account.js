@@ -104,6 +104,29 @@ export function isSoleSelectableAccount(group, account) {
     return selectable.length === 1;
 }
 
+/**
+ * 완료 화면 성공 애니메이션(`assets/images/link-success.svg`)의 한 바퀴 길이.
+ * SVG 의 SMIL `dur="2s"` 와 같아야 한다 — 짧으면 중간에 끊기고, 길면 동기화가 끝났는데 계속 돈다.
+ */
+export const LINK_DONE_ANIMATION_HOLD_MS = 2000;
+
+/**
+ * 완료 화면에서 성공 애니메이션을 그릴지 (#465).
+ *
+ * `820c2d6`(#334) 이 "동기화가 끝나도 계속 돈다"는 지적에 `syncing` 과 묶었는데, 목서버 환경은
+ * 동기화가 1초 안에 끝나 **한 바퀴도 못 돌고** 정적 체크로 바뀌었다. 그래서 마운트 뒤
+ * `LINK_DONE_ANIMATION_HOLD_MS` 동안은 동기화가 끝났어도 재생을 이어 가고, 홀드가 풀린 뒤에는
+ * 예전처럼 `syncing` 만 본다. reduced-motion 이면 처음부터 그리지 않는다.
+ *
+ * @param {{playsAnimation: boolean, syncing: boolean, holdElapsed: boolean}} state
+ */
+export function showsLinkDoneAnimation({ playsAnimation, syncing, holdElapsed }) {
+    if (!playsAnimation) {
+        return false;
+    }
+    return Boolean(syncing) || !holdElapsed;
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);
