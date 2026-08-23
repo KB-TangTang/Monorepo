@@ -74,6 +74,15 @@ test('자산 홈 순자산은 축약하지 않고 원 단위 전체 금액으로
     assert.equal(formatWon(15850000), '15,850,000원');
 });
 
+test('자산 홈 계좌 목록은 잔액을 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
+    const accountList = source('src/components/asset/AssetAccountList.vue');
+
+    assert.match(accountList, /formatWon\(account\.amount\)/);
+    assert.doesNotMatch(accountList, /formatAssetHomeWon\(account\.amount\)/);
+    assert.equal(formatWon(15850000), '15,850,000원');
+    assert.equal(formatWon(-25000000), '-25,000,000원');
+});
+
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {
     const composition = [
         { code: 'a', amount: 100 },
