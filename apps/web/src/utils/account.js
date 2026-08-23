@@ -127,6 +127,29 @@ export function showsLinkDoneAnimation({ playsAnimation, syncing, holdElapsed })
     return Boolean(syncing) || !holdElapsed;
 }
 
+/**
+ * 계좌 선택 화면(4/5)의 하단 CTA 를 정한다 (#460).
+ *
+ * - 'submit'  : 체크할 계좌가 있거나, 자동 연동 그룹(카드·대출·페이머니, #334)이 있다 → 「선택한 계좌 연결」
+ * - 'restart' : 둘 다 없다 — 조회는 됐는데 전부 이미 연결된 계좌뿐 → 「다른 기관 선택」
+ *
+ * 자동 연동 그룹은 체크 대상이 아니라 selectable 집계에 0 으로 잡힌다. 그 수만 보고 'restart' 로
+ * 떨어뜨리면 카드·대출·페이머니만 고른 사용자는 인증까지 마치고도 완료 버튼을 못 본다(#460 의 결함).
+ */
+export function resolveSelectCta(groups) {
+    const list = Array.isArray(groups) ? groups : [];
+    const hasAutoIncluded = list.some((group) => group && group.autoIncluded);
+    const hasSelectable = list.some(
+        (group) =>
+            group &&
+            !group.autoIncluded &&
+            (Array.isArray(group.accounts) ? group.accounts : []).some(
+                (account) => account && !account.alreadyLinked,
+            ),
+    );
+    return hasSelectable || hasAutoIncluded ? 'submit' : 'restart';
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);
@@ -511,16 +534,16 @@ export function consentExpiryLabel(expiresAt, now = new Date()) {
 }
 
 /**
- * 금액 표기.
+ * 금액 표기 — `8,340,000원`.
  *
- * 참고화면(`doc/개발참고화면/탕탕/0-4[계좌관리]조회`, `0-5[계좌연결]연결계좌선택`)은
- * 계좌 금액을 **모노스페이스 숫자로만** 쓴다 — `8,340,000` 처럼 단위 '원'을 붙이지 않는다.
- * 통화가 KRW 하나뿐이라 단위가 반복 정보이고, 모노 숫자는 자릿수가 세로로 정렬돼 비교하기 쉽다.
+ * 참고화면(`doc/개발참고화면/탕탕/0-4[계좌관리]조회`, `0-5[계좌연결]연결계좌선택`)은 단위 '원' 없이
+ * 모노 숫자만 썼지만, 자산 홈(#454)·순자산(#456)이 원 단위 전체 표기로 바뀌면서 계좌 연동 3화면만
+ * 단위가 빠진 채 남았다(#462). 앱 전체가 "원"을 붙이므로 여기도 맞춘다.
  *
  * 글꼴(`--tt-font-mono`)은 화면이 지정한다. 표기 규칙만 여기서 정한다.
  */
 export function formatAmount(value) {
-    return Number(value ?? 0).toLocaleString('ko-KR');
+    return `${Number(value ?? 0).toLocaleString('ko-KR')}원`;
 }
 
 /**
