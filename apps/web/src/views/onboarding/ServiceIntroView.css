@@ -1,0 +1,200 @@
+/*
+ * 서비스 소개 온보딩 5면 (이슈 #459).
+ * 일러스트 좌표는 여기가 아니라 ServiceIntroSlide.vue 에 있다 (원본 캔버스 기준 % 라 컴포넌트와 붙여 뒀다).
+ */
+
+.intro {
+    display: flex;
+    min-height: 100vh;
+    /* 모바일 주소창 때문에 100vh 가 실제 화면보다 커서 늘 스크롤이 생긴다. dvh 로 실제 높이를 쓴다 */
+    min-height: 100dvh;
+    flex-direction: column;
+    /*
+     * 1면의 법원 일러스트가 화면 폭보다 넓다(123%). 넘치는 쪽을 잘라내지 않으면
+     * 가로 스크롤이 생겨 스와이프가 페이지 스크롤과 싸운다.
+     */
+    overflow: hidden;
+    background: linear-gradient(
+        180deg,
+        var(--tt-onb-bg-top) 0%,
+        var(--tt-onb-bg-mid) 60%,
+        var(--tt-onb-bg-bottom) 100%
+    );
+}
+
+/* ── 상단 바 ─────────────────────────────────────── */
+/*
+ * 「건너뛰기」 한 개만 오른쪽 끝에 둔다.
+ * 노치 아래로 내리되 상단 여백까지 안전영역에 맡기면 노치 없는 기기에서 너무 붙는다 —
+ * 기본 여백에 안전영역을 **더한다**.
+ */
+.intro__topbar {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    padding-top: calc(var(--tt-space-3) + env(safe-area-inset-top));
+    padding-inline: var(--tt-space-5);
+}
+
+.intro__skip {
+    display: inline-flex;
+    /* 글자만으로는 터치 목표가 13px 밖에 안 된다. 최소 44px 을 세로로 확보한다 */
+    min-height: var(--tt-touch-min);
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tt-text-muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: var(--tt-fw-bold);
+    cursor: pointer;
+}
+
+/* 자리는 남기고 보이지만 않게 한다 (이유는 템플릿 주석) */
+.intro__skip--hidden {
+    visibility: hidden;
+}
+
+/* ── 슬라이드 트랙 ───────────────────────────────── */
+/*
+ * ⚠ display:flex 가 **높이를 만드는 장치**다. 장식이 아니다.
+ *
+ * 이 자리는 원래 `.intro__track { height: 100% }` 였는데 그게 통째로 auto 로 떨어졌다.
+ * 이 요소의 높이는 `flex: 1` 로 **계산돼서** 나온 값이라 computed height 는 여전히 `auto` 고,
+ * 자식의 퍼센트 높이는 auto 를 기준으로 잡지 못한다. 그 결과 트랙 → 슬라이드 → 무대가
+ * 줄줄이 무너져 무대 높이가 **0** 이 됐고, `bottom: 0` 으로 세운 탕이가 높이 0 의 바닥,
+ * 즉 화면 위쪽 바깥(y = −194)으로 솟아 잘렸다.
+ *
+ * 그래서 퍼센트를 쓰지 않는다. 여기를 flex 컨테이너로 만들면 트랙이 `align-items: stretch`
+ * 기본값으로 세로를 꽉 채우고, 그 아래로는 전부 flex 로 높이가 전달된다.
+ */
+.intro__viewport {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    /* 5면이 가로로 500% 라 여기서 자른다. 없으면 트랙이 뷰포트를 밀어 넓힌다 */
+    overflow: hidden;
+    /*
+     * 세로 스크롤(pan-y)은 브라우저에 넘기고 가로만 우리가 받는다.
+     * 이게 없으면 안드로이드 크롬이 가로 제스처를 뒤로가기로 채 간다.
+     */
+    touch-action: pan-y;
+}
+
+.intro__track {
+    display: flex;
+    width: 100%;
+    /* 높이는 stretch 가 채운다. 줄어들면 안 되니 flex-shrink 를 끈다 */
+    flex: none;
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+}
+
+/* 끄는 동안은 손가락을 그대로 따라와야 한다 — 전환 애니메이션이 있으면 늦게 붙는다 */
+.intro__track--dragging {
+    transition: none;
+}
+
+/* ── 하단 ────────────────────────────────────────── */
+/*
+ * 좌우 여백은 상단 바와 같은 값을 쓴다. 예전엔 하단만 space-6 이었는데,
+ * 그러면 마지막 면에서 Ink 버튼(space-5)과 그 아래 「이전」의 시작점이 어긋나고
+ * 4면 → 5면으로 넘길 때 「이전」이 4px 옆으로 튄다.
+ */
+.intro__footer {
+    flex: none;
+    padding-inline: var(--tt-space-5);
+    /* 아이폰 홈 인디케이터에 버튼이 깔리지 않게 확보한다 */
+    padding-bottom: calc(var(--tt-space-5) + env(safe-area-inset-bottom));
+}
+
+.intro__primary {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: 0;
+    border-radius: var(--tt-radius-md);
+    background: var(--tt-primary);
+    box-shadow: 0 10px 24px -12px rgb(35 40 66 / 60%);
+    color: var(--tt-text-inverse);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: var(--tt-fw-black);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.intro__primary:active {
+    background: var(--tt-primary-hover);
+}
+
+/*
+ * `이전 · 인디케이터 · 다음` 한 줄. 마지막 면에서는 위에 Ink 버튼이 한 줄 더 얹힐 뿐
+ * 이 줄은 그대로다.
+ *
+ * 별도 margin 을 주지 않는다 — 양옆 버튼의 최소 터치 영역(44px)이 이미 위아래로
+ * 18px 남짓의 여백을 만든다. 여기에 margin 을 더하면 Ink 버튼과 점 사이만 벌어진다.
+ */
+.intro__nav-row {
+    display: flex;
+    align-items: center;
+}
+
+/*
+ * 인디케이터는 「이전」과 「다음」의 글자 길이가 달라도 화면 정중앙에 있어야 한다.
+ * 양옆 버튼에 같은 flex 몫을 주면 남는 폭을 똑같이 나눠 가져 가운데가 저절로 맞는다
+ * (절대배치로 맞추면 하단 안전영역 패딩까지 기준에 들어가 아래로 밀린다).
+ */
+.intro__dots {
+    flex: none;
+}
+
+.intro__nav {
+    display: inline-flex;
+    /* 글자만으로는 터치 목표가 13px 밖에 안 된다. 최소 44px 을 세로로 확보한다 */
+    min-height: var(--tt-touch-min);
+    flex: 1;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+/*
+ * 「다음」이 앞으로 가는 주 동작이라 파란색·굵게, 「이전」은 한 단계 낮춘다.
+ * 둘을 같은 무게로 두면 어느 쪽이 진행 방향인지 매 면마다 읽어서 판단해야 한다.
+ */
+.intro__nav--prev {
+    justify-content: flex-start;
+    color: var(--tt-text-muted);
+    font-size: 13px;
+    font-weight: var(--tt-fw-bold);
+}
+
+.intro__nav--next {
+    justify-content: flex-end;
+    color: var(--tt-blue);
+    font-size: 13.5px;
+    font-weight: var(--tt-fw-black);
+}
+
+/* 자리는 남기고 보이지만 않게 한다 (이유는 템플릿 주석) */
+.intro__nav--hidden {
+    visibility: hidden;
+}
+
+.intro__nav svg {
+    width: 6px;
+    height: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .intro__track,
+    .intro__primary {
+        transition: none;
+    }
+}
