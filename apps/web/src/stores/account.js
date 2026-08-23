@@ -22,6 +22,7 @@ import {
     nextLinkStep,
     prevLinkDestination,
     resolveAuthView,
+    withToggledId,
 } from '@/utils/account';
 import { useAuthStore } from '@/stores/auth';
 import { syncFinancialAssets } from '@/api/financialSync';
@@ -44,6 +45,8 @@ export const useAccountStore = defineStore('account', () => {
     const extraAuthType = ref(null);
     const linkableGroups = ref([]);
     const selectedAccountIds = ref([]);
+    /** 체크를 푼 자동 연동 행(대출·페이머니·카드)의 음수 미리보기 id (#467). 기본은 빈 목록 = 전부 연동. */
+    const excludedAutoAccountIds = ref([]);
     const linkedCount = ref(0);
     /** 은행 계좌 없이 대출·페이머니만 골랐을 때 true(#334) — canEnterLinkStep('done') 이 함께 본다. */
     const directAssetsPending = ref(false);
@@ -302,8 +305,22 @@ export const useAccountStore = defineStore('account', () => {
                 .flatMap((group) => group.accounts)
                 .filter((account) => !account.alreadyLinked)
                 .map((account) => account.accountId);
+            /* 자동 연동 행은 기본이 "전부 연동"이다. 목록을 새로 받으면 풀어 둔 것도 초기화한다(#467). */
+            excludedAutoAccountIds.value = [];
             return linkableGroups.value;
         });
+    }
+
+    /**
+     * 자동 연동 행(대출·페이머니·카드)의 체크를 풀거나 되돌린다(#467).
+     * 은행 계좌와 달리 "고른 것"이 아니라 "뺀 것"을 기억한다 — 기본값이 전부 연동이기 때문이다.
+     */
+    function toggleAutoAccount(accountId) {
+        excludedAutoAccountIds.value = withToggledId(excludedAutoAccountIds.value, accountId);
+    }
+
+    function isAutoAccountExcluded(accountId) {
+        return excludedAutoAccountIds.value.includes(accountId);
     }
 
     function toggleAccount(accountId) {
@@ -329,7 +346,11 @@ export const useAccountStore = defineStore('account', () => {
      */
     async function submitLink() {
         return run(async () => {
-            const result = await linkAccounts(connectionId.value, selectedAccountIds.value);
+            const result = await linkAccounts(
+                connectionId.value,
+                selectedAccountIds.value,
+                excludedAutoAccountIds.value,
+            );
             linkedCount.value = result.linkedCount;
             directAssetsPending.value = result.directAssetsPending ?? false;
             useAuthStore().applyOnboardingFlags({ needsAccountLink: false });
@@ -412,6 +433,7 @@ export const useAccountStore = defineStore('account', () => {
         extraAuthType.value = null;
         linkableGroups.value = [];
         selectedAccountIds.value = [];
+        excludedAutoAccountIds.value = [];
         linkedCount.value = 0;
         directAssetsPending.value = false;
         authMethods.value = [];
@@ -429,6 +451,7 @@ export const useAccountStore = defineStore('account', () => {
         extraAuthType,
         linkableGroups,
         selectedAccountIds,
+        excludedAutoAccountIds,
         linkedCount,
         directAssetsPending,
         authMethods,
@@ -467,6 +490,8 @@ export const useAccountStore = defineStore('account', () => {
         loadLinkableAccounts,
         toggleAccount,
         isAccountSelected,
+        toggleAutoAccount,
+        isAutoAccountExcluded,
         submitLink,
         loadConnectedAccounts,
         disconnect,

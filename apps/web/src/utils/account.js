@@ -127,6 +127,26 @@ export function resolveSelectCta(groups) {
     return hasSelectable || hasAutoIncluded ? 'submit' : 'restart';
 }
 
+/**
+ * id 목록에서 하나를 넣거나 뺀다. 계좌 선택의 은행 계좌 체크와 자동 연동 행 제외(#467)가 같이 쓴다.
+ * 원본을 바꾸지 않고 새 배열을 돌려준다 — Pinia ref 에 그대로 대입한다.
+ */
+export function withToggledId(ids, id) {
+    const list = Array.isArray(ids) ? ids : [];
+    return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+}
+
+/**
+ * 연결 계좌 관리의 더보기 시트에 「지금 동기화」를 그릴지 (#467).
+ *
+ * 대출 표시 행은 서버가 `manageable: false` 로 내린다 — tbl_loan 을 `-id` 로 꾸민 행이라 개별 재조회가
+ * 없다(기관 단위로만 다시 긁어온다). 예전엔 프론트가 이 플래그를 읽지 않아 누르면 400 이었다.
+ * 플래그가 없는 옛 응답은 관리 가능으로 본다.
+ */
+export function showsResyncAction(account) {
+    return !account || account.manageable !== false;
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);

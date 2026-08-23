@@ -28,8 +28,28 @@ import {
     resolveProgressRow,
     resolveSelectCta,
     resolveSyncBadge,
+    showsResyncAction,
     validateSimpleAuthForm,
+    withToggledId,
 } from '../src/utils/account.js';
+
+test('자동 연동 행의 제외 목록은 넣고 빼기를 되풀이해도 원본을 바꾸지 않는다 (#467)', () => {
+    const base = [-1];
+    const added = withToggledId(base, -2);
+    assert.deepEqual(added, [-1, -2]);
+    assert.deepEqual(base, [-1]);
+    assert.deepEqual(withToggledId(added, -1), [-2]);
+    assert.deepEqual(withToggledId(null, 5), [5]);
+});
+
+test('대출 표시 행(manageable=false)에는 「지금 동기화」를 그리지 않는다 (#467)', () => {
+    /* 예전엔 이 항목이 보여 누르면 resync(-id) → 400 이었다. */
+    assert.equal(showsResyncAction({ accountId: -7, manageable: false }), false);
+    assert.equal(showsResyncAction({ accountId: 332, manageable: true }), true);
+    /* 플래그가 없는 옛 응답은 관리 가능으로 본다. */
+    assert.equal(showsResyncAction({ accountId: 332 }), true);
+    assert.equal(showsResyncAction(null), true);
+});
 
 test('자동 연동 기관만 골라도 완료 버튼을 그린다 (#460)', () => {
     /* 카드·대출·페이머니만 고른 경우. 체크할 계좌는 0 이지만 연동을 끝낼 수 있어야 한다.

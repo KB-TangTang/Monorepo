@@ -77,8 +77,9 @@ export function fetchLinkableAccounts(connectionId) {
 }
 
 /** 선택한 계좌를 실제로 연결한다 (AC_01_03 → 완료). */
-export function linkAccounts(connectionId, accountIds) {
-    return http.post('/accounts', { connectionId, accountIds });
+export function linkAccounts(connectionId, accountIds, excludedAccountIds = []) {
+    /* excludedAccountIds: 체크를 푼 자동 연동 행(대출·페이머니·카드)의 음수 id (#467). 비면 전부 연동된다. */
+    return http.post('/accounts', { connectionId, accountIds, excludedAccountIds });
 }
 
 /** 연결 계좌 관리 목록 (AC_01_04). */
