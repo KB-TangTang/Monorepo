@@ -17,17 +17,11 @@ import AccountSelectRow from '@/components/account/AccountSelectRow.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import LinkStepHeader from '@/components/account/LinkStepHeader.vue';
 import { useAccountStore } from '@/stores/account';
-import { isSoleSelectableAccount, linkStepPosition } from '@/utils/account';
+import { isSoleSelectableAccount, linkStepPosition, resolveSelectCta } from '@/utils/account';
 
 const store = useAccountStore();
-const {
-    linkableGroups,
-    loading,
-    error,
-    selectedAccountCount,
-    linkableAccountCount,
-    selectableAccountCount,
-} = storeToRefs(store);
+const { linkableGroups, loading, error, selectedAccountCount, linkableAccountCount } =
+    storeToRefs(store);
 
 const position = linkStepPosition('select');
 
@@ -38,6 +32,12 @@ const position = linkStepPosition('select');
 const hasAutoIncludedGroups = computed(() =>
     linkableGroups.value.some((group) => group.autoIncluded),
 );
+
+/*
+ * 하단 CTA. selectableAccountCount 만 보면 자동 연동 그룹이 0 으로 잡혀 「다른 기관 선택」만 남는다 —
+ * 카드·대출·페이머니만 고른 사용자가 완료 버튼을 영영 못 보는 결함이었다(#460). 판정은 순수 함수에 둔다.
+ */
+const selectCta = computed(() => resolveSelectCta(linkableGroups.value));
 
 onMounted(() => {
     store.loadLinkableAccounts().catch(() => {});
@@ -125,10 +125,10 @@ async function onSubmit() {
             <p v-if="error" class="account-select__error" role="alert">{{ error }}</p>
 
             <!--
-              조회는 됐는데 전부 이미 연결된 계좌인 경우.
+              조회는 됐는데 전부 이미 연결된 계좌이고 자동 연동 그룹도 없는 경우.
               비활성 버튼만 남으면 사용자가 할 수 있는 일이 없다 — 다음 행동을 준다.
             -->
-            <template v-if="!selectableAccountCount">
+            <template v-if="selectCta === 'restart'">
                 <p class="account-select__notice">
                     이 기관의 계좌는 모두 연결돼 있어요. 다른 기관을 골라주세요.
                 </p>

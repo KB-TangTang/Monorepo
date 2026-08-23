@@ -104,6 +104,29 @@ export function isSoleSelectableAccount(group, account) {
     return selectable.length === 1;
 }
 
+/**
+ * 계좌 선택 화면(4/5)의 하단 CTA 를 정한다 (#460).
+ *
+ * - 'submit'  : 체크할 계좌가 있거나, 자동 연동 그룹(카드·대출·페이머니, #334)이 있다 → 「선택한 계좌 연결」
+ * - 'restart' : 둘 다 없다 — 조회는 됐는데 전부 이미 연결된 계좌뿐 → 「다른 기관 선택」
+ *
+ * 자동 연동 그룹은 체크 대상이 아니라 selectable 집계에 0 으로 잡힌다. 그 수만 보고 'restart' 로
+ * 떨어뜨리면 카드·대출·페이머니만 고른 사용자는 인증까지 마치고도 완료 버튼을 못 본다(#460 의 결함).
+ */
+export function resolveSelectCta(groups) {
+    const list = Array.isArray(groups) ? groups : [];
+    const hasAutoIncluded = list.some((group) => group && group.autoIncluded);
+    const hasSelectable = list.some(
+        (group) =>
+            group &&
+            !group.autoIncluded &&
+            (Array.isArray(group.accounts) ? group.accounts : []).some(
+                (account) => account && !account.alreadyLinked,
+            ),
+    );
+    return hasSelectable || hasAutoIncluded ? 'submit' : 'restart';
+}
+
 /** 다음 단계. 마지막 단계면 null 을 돌려준다. */
 export function nextLinkStep(current) {
     const index = LINK_STEPS.indexOf(current);

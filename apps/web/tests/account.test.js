@@ -26,9 +26,60 @@ import {
     resolveInstitutionTone,
     resolveLinkEntryRoute,
     resolveProgressRow,
+    resolveSelectCta,
     resolveSyncBadge,
     validateSimpleAuthForm,
 } from '../src/utils/account.js';
+
+test('자동 연동 기관만 골라도 완료 버튼을 그린다 (#460)', () => {
+    /* 카드·대출·페이머니만 고른 경우. 체크할 계좌는 0 이지만 연동을 끝낼 수 있어야 한다.
+     * 2026-08-23 배포본에서 이 조합이 「다른 기관 선택」만 남겨 아무것도 저장되지 않았다. */
+    const groups = [
+        {
+            bankCode: '0381',
+            autoIncluded: true,
+            accounts: [{ accountId: -1, accountName: 'KB 신용카드', alreadyLinked: false }],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
+
+test('고를 계좌가 있으면 완료 버튼을 그린다', () => {
+    const groups = [
+        {
+            bankCode: '0004',
+            accounts: [
+                { accountId: 1, alreadyLinked: true },
+                { accountId: 2, alreadyLinked: false },
+            ],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
+
+test('전부 이미 연결된 계좌뿐이고 자동 연동 그룹도 없으면 다른 기관 선택으로 보낸다', () => {
+    const groups = [
+        {
+            bankCode: '0004',
+            accounts: [
+                { accountId: 1, alreadyLinked: true },
+                { accountId: 2, alreadyLinked: true },
+            ],
+        },
+    ];
+    assert.equal(resolveSelectCta(groups), 'restart');
+    assert.equal(resolveSelectCta([]), 'restart');
+    assert.equal(resolveSelectCta(null), 'restart');
+});
+
+test('이미 연결된 은행 계좌와 자동 연동 그룹이 섞여 있어도 완료 버튼을 그린다', () => {
+    /* 은행은 전부 연결됐고 카드만 새로 고른 경우 — 카드 연동은 끝낼 수 있어야 한다. */
+    const groups = [
+        { bankCode: '0004', accounts: [{ accountId: 1, alreadyLinked: true }] },
+        { bankCode: '0381', autoIncluded: true, accounts: [{ accountId: -1 }] },
+    ];
+    assert.equal(resolveSelectCta(groups), 'submit');
+});
 
 test('완료 화면에는 선택 계좌와 자동 연동 대출을 함께 표시한다', () => {
     const accounts = connectedAccountsForDone(
