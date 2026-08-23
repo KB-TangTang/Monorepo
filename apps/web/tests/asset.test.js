@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
     formatWon,
     formatSignedWon,
@@ -13,6 +14,10 @@ import {
     getHoldingCost,
     getHoldingAveragePrice,
 } from '../src/utils/asset.js';
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('formatWon 은 금액 뒤에 "원"을 붙인다', () => {
     assert.equal(formatWon(12846000), '12,846,000원');
@@ -59,6 +64,15 @@ test('formatAssetHomeWon 은 천만원 이상 금액을 만원/억 단위로 줄
     assert.equal(formatAssetHomeWon(10000000), '1000만원');
     assert.equal(formatAssetHomeWon(21320000000), '213억2000만원');
     assert.equal(formatAssetHomeWon(-150000000), '-1억5000만원');
+});
+
+test('자산 홈 계좌 목록은 잔액을 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
+    const accountList = source('src/components/asset/AssetAccountList.vue');
+
+    assert.match(accountList, /formatWon\(account\.amount\)/);
+    assert.doesNotMatch(accountList, /formatAssetHomeWon\(account\.amount\)/);
+    assert.equal(formatWon(15850000), '15,850,000원');
+    assert.equal(formatWon(-25000000), '-25,000,000원');
 });
 
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {
