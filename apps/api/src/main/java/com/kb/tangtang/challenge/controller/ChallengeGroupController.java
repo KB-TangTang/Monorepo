@@ -5,6 +5,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupClosedTrialDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
@@ -73,6 +74,7 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
      * <p>경로가 {@code /{groupId}} 와 겹쳐 보이지만 Spring 은 리터럴 경로를 변수 경로보다 먼저
      * 매칭한다. 순서를 바꿔도 결과는 같다 — 다만 <b>{@code my-trials} 를 그룹 ID 로 파싱하려다
      * 400 이 나는 것</b>처럼 보이는 사고가 흔해서 여기 적어 둔다.
+     * {@code /trials} · {@code /trial-records} 도 같은 이유로 {@code /{groupId}} 위에 모아 둔다.
      */
     @GetMapping("/my-trials")
     public ApiResponse<List<MyTrialDto>> findMyTrials(@LoginUser Long userId) {
@@ -92,6 +94,18 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
         return ApiResponse.ok(groupTrialService.findAllMyTrials(userId));
     }
 
+    /**
+     * 내가 속한 그룹의 <b>확정된</b> 재판 기록 전부. 지방법원 홈 「지난 재판」.
+     *
+     * <p>위 {@code /trials} 의 반대편이다 — 저쪽은 진행 중(DEFENSE_WAIT · VOTING)만,
+     * 여기는 확정(GUILTY · INNOCENT)만 준다. 확정된 재판은 그동안 전적 숫자로만 남아 있어
+     * 앱 어디에서도 목록을 볼 수 없었다.
+     */
+    @GetMapping("/trial-records")
+    public ApiResponse<List<GroupClosedTrialDto>> findAllMyTrialRecords(@LoginUser Long userId) {
+        return ApiResponse.ok(groupTrialService.findAllMyTrialRecords(userId));
+    }
+
     /** 상세 (GC_01_09). 참여자만 볼 수 있다. */
     @GetMapping("/{groupId}")
     public ApiResponse<ChallengeGroupDto> findDetail(@LoginUser Long userId,
@@ -109,6 +123,18 @@ public class ChallengeGroupController implements ChallengeGroupControllerDocs {
     public ApiResponse<ChallengeGroupDetailDto> findFullDetail(@LoginUser Long userId,
                                                                @PathVariable Long groupId) {
         return ApiResponse.ok(challengeGroupDetailService.findDetail(userId, groupId));
+    }
+
+    /**
+     * 그룹 하나의 재판 기록 — 확정된 재판만, 최근 확정순.
+     *
+     * <p>그룹원이 아니면 빈 배열이다. 매퍼의 참여자 조인이 권한 검사를 겸한다 —
+     * 403 으로 구분하면 그 그룹에 재판이 있다는 사실까지 알려 주는 셈이다.
+     */
+    @GetMapping("/{groupId}/trial-records")
+    public ApiResponse<List<GroupClosedTrialDto>> findGroupTrialRecords(@LoginUser Long userId,
+                                                                        @PathVariable Long groupId) {
+        return ApiResponse.ok(groupTrialService.findGroupTrialRecords(userId, groupId));
     }
 
     /**
