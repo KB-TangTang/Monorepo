@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
-import org.mockito.InOrder;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -407,8 +405,8 @@ class AccountLinkServiceTest {
     }
 
     @Test
-    @DisplayName("#467: 관리 목록의 대출 행(-id) 을 해제하면 tbl_loan 행을 지우고 제외 키를 남긴다 — 예전엔 400")
-    void disconnectLoanDeletesRowAndRecordsExclusion() {
+    @DisplayName("#467: 관리 목록의 대출 행(-id) 을 해제하면 행은 두고 제외 키(숨김)만 남긴다 — 예전엔 400")
+    void disconnectLoanRecordsExclusionWithoutDeleting() {
         when(loanMapper.findByUser(USER_ID)).thenReturn(List.of(
                 Loan.builder().id(7L).userId(USER_ID).loanNoEncrypted("MOCK-LOAN-301")
                         .bankCode("CP_KB").bankName("KB캐피탈").loanType("KB 신용대출").build()));
@@ -418,10 +416,9 @@ class AccountLinkServiceTest {
         assertTrue(result.isDisconnected());
         verify(mapper).insert(argThat(row -> "MOCK-LOAN-301".equals(row.getAccountNoEncrypted())));
         verify(mapper).deactivateByHash(USER_ID, "MOCK-LOAN-301");
-        /* 거래를 먼저 지우고 대출 행을 지운다 — 순서가 바뀌면 FK 가 loan_id 를 NULL 로 만들어 거래가 고아가 된다. */
-        InOrder order = inOrder(loanMapper);
-        order.verify(loanMapper).deleteTransactionsByLoan(USER_ID, 7L);
-        order.verify(loanMapper).deleteByIdAndUser(7L, USER_ID);
+        /* 은행 계좌와 같은 원칙 — 해제 전까지 모은 이력은 남긴다. 조회 말고는 tbl_loan 을 건드리지 않는다. */
+        verify(loanMapper).findByUser(USER_ID);
+        verifyNoMoreInteractions(loanMapper);
         verify(mapper, never()).deactivate(anyLong(), anyLong());
     }
 

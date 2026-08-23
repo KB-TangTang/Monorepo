@@ -815,8 +815,13 @@ public class AccountLinkService {
 
     /**
      * 대출 연결 해제(#467). 관리 목록의 대출 행은 tbl_loan 을 `-id` 로 꾸민 것이라(loanAsConnectedAccount)
-     * tbl_connected_account 를 끌 수 없다 — 예전엔 그래서 400 이었다. tbl_loan 에는 is_active 가 없으니
-     * 행을 지우고, 같은 키의 제외 행을 남겨 다음 동기화가 되살리지 못하게 한다.
+     * tbl_connected_account 를 끌 수 없다 — 예전엔 그래서 400 이었다.
+     *
+     * 은행 계좌와 같은 원칙이다 — **해제 전까지 모은 이력은 남기고 수집만 멈춘다.** tbl_loan 에는 is_active 가
+     * 없으니 행을 지우지 않고, 같은 키의 제외 행(is_active=0)을 "숨김 플래그"로 쓴다. LoanMapper 의 조회
+     * 쿼리가 이 키를 가진 대출을 빼고 읽어(관리 목록·자산 합계·동기화 범위 전부), 동기화는 같은 키로 건너뛴다.
+     * 다시 연동하면 link() 가 제외 행을 지워 행과 거래가 그대로 되살아난다 — 지웠다 다시 받으면 거래가 새
+     * loan id 로 또 들어와 장부에 두 번 보였을 것이다.
      */
     private void disconnectLoan(long userId, long loanId) {
         Loan loan = loanMapper.findByUser(userId).stream()
@@ -828,9 +833,6 @@ public class AccountLinkService {
                 new LinkProgress.PreviewEntry(loan.getLoanNoEncrypted(), bankCode, loan.getBankName(),
                         loan.getLoanType(), "LOAN"),
                 LocalDateTime.now(clock));
-        /* 거래를 먼저 지운다 — 대출 행이 사라지면 FK 가 loan_id 를 NULL 로 바꿔 더는 찾지 못한다. */
-        loanMapper.deleteTransactionsByLoan(userId, loanId);
-        loanMapper.deleteByIdAndUser(loanId, userId);
     }
 
     /**

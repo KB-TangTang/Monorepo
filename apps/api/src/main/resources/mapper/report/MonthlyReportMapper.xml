@@ -95,10 +95,18 @@
           AND is_active = 1
     </select>
 
+    <!-- 해제한 대출은 뺀다(#467) — 조건은 account/LoanMapper.xml 의 notHidden 과 같아야 한다. -->
     <select id="sumLoanBalances" resultType="java.math.BigDecimal">
-        SELECT COALESCE(SUM(balance), 0)
-        FROM tbl_loan
-        WHERE user_id = #{userId}
+        SELECT COALESCE(SUM(l.balance), 0)
+        FROM tbl_loan l
+        WHERE l.user_id = #{userId}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM tbl_connected_account h
+              WHERE h.user_id = l.user_id
+                AND h.account_no_encrypted = l.loan_no_encrypted
+                AND h.is_active = 0
+          )
     </select>
 
     <insert id="upsertPendingAiAnalysisSnapshot">
