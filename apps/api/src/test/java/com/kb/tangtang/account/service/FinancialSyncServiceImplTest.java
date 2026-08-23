@@ -541,7 +541,8 @@ class FinancialSyncServiceImplTest {
     @DisplayName("#467: 제외 키(is_active=0)가 남아 있는 대출·카드는 동기화가 되살리지 않는다")
     void excludedLoanAndCardAreSkipped() {
         when(connectedAccountMapper.findInactiveKeysByUser(1L))
-                .thenReturn(List.of("MOCK-LOAN-301", "MOCK-CARD-21"));
+                /* 카드 키는 목서버 id 가 아니라 마스킹 번호다(#467) — tbl_card 에서 되찾을 수 있는 유일한 값. */
+                .thenReturn(List.of("MOCK-LOAN-301", "MOCK-CARD-1234-****-****-0021"));
         when(client.getLoans("1")).thenReturn(List.of(
                 LoanSyncDto.builder().loanId(301L).institutionCode("CP_KB").institutionName("KB캐피탈")
                         .productName("KB 신용대출").loanNoMasked("LN-2025-****-0001")
