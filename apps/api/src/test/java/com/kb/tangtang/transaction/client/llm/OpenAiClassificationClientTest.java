@@ -209,6 +209,29 @@ class OpenAiClassificationClientTest {
     }
 
     @Test
+    @DisplayName("요청 본문에 merchantCategoryName(MCC 업종명)이 포함된다")
+    void requestBodyIncludesMerchantCategoryName() throws Exception {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andExpect(request -> {
+                    String body = request.getBody().toString();
+                    assertTrue(body.contains("\\\"merchantCategoryName\\\":\\\"편의점\\\""),
+                            "MCC 업종명이 payload 에 실려야 한다: " + body);
+                })
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"{\\\"results\\\":[]}\"}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        Transaction tx = Transaction.builder().id(1L).merchantName("씨유역삼점")
+                .merchantCategoryName("편의점")
+                .amount(new BigDecimal("3000")).description1("결제").build();
+
+        client.classify(List.of(tx),
+                List.of(Category.builder().id(5L).categoryName("편의점").parentId(1L).build()));
+
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("confidence 필드가 아예 없으면 안전하게 분류 불가(null)로 취급한다")
     void dropsCategoryIdWhenConfidenceMissing() {
         mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
