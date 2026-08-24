@@ -1,6 +1,8 @@
 package com.kb.tangtang.report.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotContent;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.domain.MonthlyCategorySpendingRow;
 import com.kb.tangtang.report.domain.MonthlySpendingRow;
 import com.kb.tangtang.report.dto.MonthlyCategoryItemDto;
@@ -17,6 +19,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -29,6 +33,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -43,27 +48,73 @@ public class MonthlyReportService {
     private static final String STATUS_CURRENT = "CURRENT";
 
     private final MonthlyReportMapper monthlyReportMapper;
+    private final MonthlyReportSnapshotReader snapshotReader;
     private final Clock clock;
 
     /** 테스트용 상속과 기존 직접 생성 경로의 KST 기본값을 유지한다. */
     public MonthlyReportService(MonthlyReportMapper monthlyReportMapper) {
-        this(monthlyReportMapper, Clock.system(ZoneId.of("Asia/Seoul")));
+        this(monthlyReportMapper, new MonthlyReportSnapshotReader(new ObjectMapper()),
+                Clock.system(ZoneId.of("Asia/Seoul")));
     }
 
     @Autowired
     public MonthlyReportService(MonthlyReportMapper monthlyReportMapper,
+                                MonthlyReportSnapshotReader snapshotReader,
                                 @Value("${report.monthly.zone:Asia/Seoul}") String zoneId) {
-        this(monthlyReportMapper, Clock.system(ZoneId.of(zoneId)));
+        this(monthlyReportMapper, snapshotReader, Clock.system(ZoneId.of(zoneId)));
     }
 
     MonthlyReportService(MonthlyReportMapper monthlyReportMapper, Clock clock) {
+        this(monthlyReportMapper, new MonthlyReportSnapshotReader(new ObjectMapper()), clock);
+    }
+
+    MonthlyReportService(MonthlyReportMapper monthlyReportMapper,
+                         MonthlyReportSnapshotReader snapshotReader,
+                         Clock clock) {
         this.monthlyReportMapper = monthlyReportMapper;
+        this.snapshotReader = snapshotReader;
         this.clock = clock;
     }
 
     @Transactional(readOnly = true)
     public MonthlySpendingTrendDto getSpendingTrend(long userId, String rawYearMonth) {
+        return requireSnapshotContent(userId, rawYearMonth).getSpendingTrend();
+    }
+
+    @Transactional(readOnly = true)
+    public MonthlySummaryDto getSummary(long userId, String rawYearMonth) {
+        return requireSnapshotContent(userId, rawYearMonth).getSummary();
+    }
+
+    @Transactional(readOnly = true)
+    public MonthlyCategoryReportDto getCategories(long userId, String rawYearMonth) {
+        return requireSnapshotContent(userId, rawYearMonth).getCategoryReport();
+    }
+
+    /** 배치만 원본 거래 데이터를 집계해 화면 전체 스냅샷을 만든다. */
+    MonthlyReportSnapshotContent buildLiveSnapshot(long userId, String rawYearMonth,
+                                                    boolean aiUsageConsented) {
         ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+        return new MonthlyReportSnapshotContent(
+                aiUsageConsented,
+                calculateSummary(userId, period),
+                calculateSpendingTrend(userId, period),
+                calculateCategories(userId, period));
+    }
+
+    MonthlySpendingTrendDto calculateSpendingTrend(long userId, String rawYearMonth) {
+        return calculateSpendingTrend(userId, validateReportPeriod(userId, rawYearMonth));
+    }
+
+    MonthlySummaryDto calculateSummary(long userId, String rawYearMonth) {
+        return calculateSummary(userId, validateReportPeriod(userId, rawYearMonth));
+    }
+
+    MonthlyCategoryReportDto calculateCategories(long userId, String rawYearMonth) {
+        return calculateCategories(userId, validateReportPeriod(userId, rawYearMonth));
+    }
+
+    private MonthlySpendingTrendDto calculateSpendingTrend(long userId, ReportPeriod period) {
         YearMonth startMonth = period.yearMonth.minusMonths(TREND_MONTH_COUNT - 1L);
         List<MonthlySpendingRow> rows = monthlyReportMapper.findMonthlySpending(
                 userId, startMonth.atDay(1), period.yearMonth.plusMonths(1).atDay(1));
@@ -89,9 +140,7 @@ public class MonthlyReportService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public MonthlySummaryDto getSummary(long userId, String rawYearMonth) {
-        ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+    private MonthlySummaryDto calculateSummary(long userId, ReportPeriod period) {
         BigDecimal totalSpent = sumMonth(userId, period.yearMonth);
         YearMonth previousMonth = period.yearMonth.minusMonths(1);
         boolean hasPreviousComparison = !previousMonth.isBefore(period.joinedMonth);
@@ -112,9 +161,7 @@ public class MonthlyReportService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public MonthlyCategoryReportDto getCategories(long userId, String rawYearMonth) {
-        ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+    private MonthlyCategoryReportDto calculateCategories(long userId, ReportPeriod period) {
         YearMonth previousMonth = period.yearMonth.minusMonths(1);
         List<MonthlyCategorySpendingRow> rows = monthlyReportMapper.findMonthlyCategorySpending(
                 userId, previousMonth.atDay(1), period.yearMonth.plusMonths(1).atDay(1));
@@ -198,12 +245,18 @@ public class MonthlyReportService {
     public MonthlyReportMonthsDto getAvailableMonths(long userId) {
         YearMonth joinedMonth = findJoinedMonth(userId);
         YearMonth currentMonth = YearMonth.now(clock);
+        Set<String> snapshotMonths = monthlyReportMapper.findMonthlyReportSnapshots(userId).stream()
+                .filter(row -> snapshotReader.read(row.getCategorySummaryJson()) != null)
+                .map(MonthlyReportSnapshotRow::getYearMonth)
+                .collect(java.util.stream.Collectors.toSet());
         List<MonthlyReportMonthDto> months = new ArrayList<>();
         for (YearMonth month = currentMonth; !month.isBefore(joinedMonth); month = month.minusMonths(1)) {
             boolean completed = month.isBefore(currentMonth);
             String status;
             if (!completed) {
                 status = month.equals(joinedMonth) ? STATUS_ONBOARDING : STATUS_CURRENT;
+            } else if (!snapshotMonths.contains(month.toString())) {
+                continue;
             } else {
                 status = month.equals(joinedMonth) ? STATUS_FIRST_REPORT : STATUS_READY;
             }
@@ -217,6 +270,23 @@ public class MonthlyReportService {
                     .build());
         }
         return MonthlyReportMonthsDto.builder().months(months).build();
+    }
+
+    private MonthlyReportSnapshotContent requireSnapshotContent(long userId, String rawYearMonth) {
+        ReportPeriod period = validateReportPeriod(userId, rawYearMonth);
+        MonthlyReportSnapshotRow row = monthlyReportMapper.findMonthlyReportSnapshot(userId,
+                period.yearMonth.toString());
+        MonthlyReportSnapshotContent content = row == null ? null : snapshotReader.read(row.getCategorySummaryJson());
+        if (content == null
+                || content.getSummary() == null
+                || content.getSpendingTrend() == null
+                || content.getCategoryReport() == null
+                || !period.yearMonth.toString().equals(content.getSummary().getYearMonth())
+                || !period.yearMonth.toString().equals(content.getSpendingTrend().getYearMonth())
+                || !period.yearMonth.toString().equals(content.getCategoryReport().getYearMonth())) {
+            throw new BusinessException("REPORT_NOT_AVAILABLE", "월간 리포트 스냅샷을 찾을 수 없습니다.");
+        }
+        return content;
     }
 
     private ReportPeriod validateReportPeriod(long userId, String rawYearMonth) {

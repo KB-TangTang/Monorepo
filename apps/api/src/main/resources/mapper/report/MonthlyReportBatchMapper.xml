@@ -32,4 +32,22 @@
           )
         ORDER BY u.id
     </select>
+
+    <select id="findForceBatchCandidates"
+            resultType="com.kb.tangtang.report.domain.MonthlyReportForceBatchCandidate">
+        SELECT u.id AS user_id,
+               s.category_summary_json,
+               s.ai_analysis_status
+        FROM tbl_user u
+        LEFT JOIN tbl_asset_snapshot s
+               ON s.user_id = u.id
+              AND s.`year_month` = #{yearMonth}
+        WHERE u.status = 'ACTIVE'
+          AND u.created_at &lt; #{targetMonthEnd}
+          AND u.id IN
+          <foreach collection="targetUserIds" item="userId" open="(" separator="," close=")">
+              #{userId}
+          </foreach>
+        ORDER BY u.id
+    </select>
 </mapper>
