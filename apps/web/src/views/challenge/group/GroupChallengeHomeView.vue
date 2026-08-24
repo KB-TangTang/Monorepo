@@ -12,7 +12,11 @@ import GroupTrialListSheet from '@/components/challenge/group/GroupTrialListShee
 import DevDataSourceFab from '@/components/dev/DevDataSourceFab.vue';
 import DevBatchTriggerFab from '@/components/dev/DevBatchTriggerFab.vue';
 import { hasSeenGroupTutorial, markGroupTutorialSeen } from '@/services/tutorialGuide';
-import { fetchMyGroupChallenges, fetchAllMyTrials } from '@/api/groupChallenge';
+import {
+    fetchMyGroupChallenges,
+    fetchAllMyTrials,
+    fetchAllMyTrialRecords,
+} from '@/api/groupChallenge';
 import { dataSource } from '@/services/devDataSource';
 import { useCountdown } from '@/utils/useCountdown';
 import { ArrowPathIcon } from '@heroicons/vue/24/outline';
@@ -21,6 +25,7 @@ import CategoryIcon from '@/components/common/CategoryIcon.vue';
 import buildingDistrict from '@/assets/images/court/building_district_v2.png';
 import judgeImg from '@/assets/images/emotions/48_judging.png';
 import objIndictImage from '@/assets/images/judgment/obj_indict.png';
+import objDefenseImage from '@/assets/images/judgment/obj_defense.png';
 import { resolveCategoryIcon, resolveCategoryTone } from '@/utils/category';
 import { toTrialStatusCard } from '@/utils/groupTrial';
 import { GROUP_CATEGORY_ALL_LABEL } from '@/utils/groupCategory';
@@ -114,6 +119,27 @@ async function loadMyTrials() {
         /* 위젯 하나 때문에 홈 전체를 막지 않는다. 비면 판사 탕이가 다른 말을 한다. */
         myTrials.value = [];
     }
+}
+
+/*
+ * 끝난 재판 건수.
+ *
+ * **개수만 들고 있는다.** 목록은 기록 화면이 다시 읽는다 — 여기에 목록까지 쥐면
+ * 홈과 기록 화면이 서로 다른 시점의 목록을 그리게 되고, 홈이 무거워진다.
+ * 실패해도 홈은 그대로 그린다(0 이면 줄이 통째로 사라질 뿐이다).
+ */
+const recordCount = ref(0);
+
+async function loadTrialRecordCount() {
+    try {
+        recordCount.value = (await fetchAllMyTrialRecords()).length;
+    } catch {
+        recordCount.value = 0;
+    }
+}
+
+function goToTrialRecords() {
+    router.push({ name: 'groupTrialRecordsAll' });
 }
 
 /*
@@ -233,11 +259,13 @@ onMounted(() => {
     }
     loadMyChallenges();
     loadMyTrials();
+    loadTrialRecordCount();
 });
 
 watch(dataSource, () => {
     loadMyChallenges();
     loadMyTrials();
+    loadTrialRecordCount();
 });
 
 /*
@@ -471,11 +499,18 @@ function goToChat(challenge) {
               기다리는 재판은 한 줄로 접는다. 없애지 않는 이유는 「내 재판이 심판받는 중」이
               할 일은 아니어도 이 화면에서 가장 궁금한 것이기 때문이다.
               마감이 6시간 안쪽인 게 섞여 있으면 접힌 채로도 그것만 밖으로 알린다.
+
+              **0건이어도 줄을 지우지 않는다.** 투표를 마치고 결과를 기다리는 동안 여기를
+              들여다보게 되는데, 줄이 통째로 사라지면 「어디서 보던 거였지」를 매번 다시
+              찾아야 한다. 자리는 남기고 격자의 0건 칸과 **같은 방식**으로 물러나게 한다 —
+              흐리게 + `disabled`(`GroupTrialTodoGrid` 의 `todo-grid__tile--empty`).
+              화살표는 뗀다. `›` 는 「눌러서 갈 곳이 있다」는 약속이라 못 누르는 줄에 남기면 거짓말이다.
             -->
             <button
-                v-if="watchingTrials.length"
                 type="button"
                 class="gc-watching"
+                :class="{ 'gc-watching--empty': !watchingTrials.length }"
+                :disabled="!watchingTrials.length"
                 @click="openSheet = 'watching'"
             >
                 <!-- 기소장 — 「내 재판이 기소돼 심판받는 중」이 기다림의 대표 상태다 -->
@@ -484,6 +519,33 @@ function goToChat(challenge) {
                     기다리는 재판 {{ watchingTrials.length }}건
                 </span>
                 <span v-if="watchingUrgent" class="gc-watching__urgent">마감 임박</span>
+                <span v-if="watchingTrials.length" class="gc-watching__arrow" aria-hidden="true">
+                    ›
+                </span>
+            </button>
+
+            <!--
+              끝난 재판. 기다리는 재판과 **같은 모양**으로 바로 아래 붙인다 —
+              둘 다 「내 할 일은 아니지만 궁금한 것」이라 같은 어휘가 맞다.
+              시트를 새로 만들지 않고 기록 화면으로 나간다. 시트를 또 만들면
+              같은 목록이 두 자리에 생겨 한쪽만 고쳐지는 날이 온다.
+
+              **라벨은 「지난 재판」이 아니라 「재판 기록」이다.** 앞의 줄과 모양이 같은데
+              끝이 둘 다 「…재판 N건」이면 두 줄이 한 낱말 차이로만 갈린다. 게다가 위 줄은
+              기다리는 재판이 0건이면 통째로 사라져서, 이 줄이 그 자리로 올라와 「기다리는
+              재판이 지난 재판으로 바뀐 것」처럼 읽힌다(실제로 그렇게 읽혔다).
+              목적지 화면의 제목이 「재판 기록」이므로 진입 이름을 거기에 맞춘다 —
+              이 작업 자체가 「이름과 목적지가 어긋나 있다」에서 출발했다.
+            -->
+            <button
+                v-if="recordCount"
+                type="button"
+                class="gc-watching gc-watching--record"
+                @click="goToTrialRecords"
+            >
+                <!-- 판결이 끝난 재판이라 투표함이 아니라 판사봉이다 -->
+                <img class="gc-watching__art" :src="objDefenseImage" alt="" />
+                <span class="gc-watching__label">재판 기록 {{ recordCount }}건</span>
                 <span class="gc-watching__arrow" aria-hidden="true">›</span>
             </button>
 
@@ -693,8 +755,36 @@ function goToChat(challenge) {
     transition: background 0.15s ease;
 }
 
-.gc-watching:active {
+/* 0건일 때는 눌리는 느낌을 주지 않는다 — disabled 라 실제로 열리지도 않는다 */
+.gc-watching:not(:disabled):active {
     background: var(--tt-bg-fill);
+}
+
+/*
+ * 0건 줄. 격자의 빈 칸(`todo-grid__tile--empty`)과 같은 어휘를 쓴다 —
+ * 면은 한 단계 내리고, 그림은 래스터라 색을 못 바꾸니 `grayscale` 로 톤만 뺀다.
+ * 줄 전체에 `opacity` 를 걸지 않는 것도 같은 이유다. 그러면 「고장 난 줄」로 보인다.
+ */
+.gc-watching--empty {
+    background: var(--tt-bg-subtle);
+    cursor: default;
+}
+.gc-watching--empty .gc-watching__art {
+    filter: grayscale(1);
+    opacity: 0.4;
+}
+.gc-watching--empty .gc-watching__label {
+    color: var(--tt-text-hint);
+}
+
+/*
+ * 끝난 재판은 진행 중인 것보다 한 단계 물러난다. 흰 면을 쓰면 위 줄(기다리는 재판)과
+ * 완전히 같아져서, 마감이 걸린 것과 이미 끝난 것이 화면에서 구분되지 않는다.
+ * 위 줄과 붙여 한 묶음으로 읽히게 여백은 좁게 준다.
+ */
+.gc-watching--record {
+    margin-top: 6px;
+    background: var(--tt-bg-subtle);
 }
 
 /*

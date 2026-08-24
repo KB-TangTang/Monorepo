@@ -2,12 +2,14 @@ package com.kb.tangtang.challenge.service;
 
 import com.kb.tangtang.challenge.domain.Defense;
 import com.kb.tangtang.challenge.domain.EvalType;
+import com.kb.tangtang.challenge.domain.GroupClosedTrialRow;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
 import com.kb.tangtang.challenge.domain.TrialTransactionRow;
 import com.kb.tangtang.challenge.domain.VoteCommentRow;
+import com.kb.tangtang.challenge.dto.GroupClosedTrialDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -219,6 +221,74 @@ public class GroupTrialService {
                 .thenComparing(GroupTrialService::deadlineOf)
                 .thenComparing(GroupIndictmentDto::getId));
         return cards;
+    }
+
+    /**
+     * 그룹 하나의 재판 기록 — 확정된 재판만, 최근 확정순.
+     *
+     * <p>확정된 재판은 진행 중 목록({@link #findGroupIndictments})에서 잘려 나가고 전적 숫자
+     * 3개({@code findClosedTrialStats})로만 남아 있었다. 여기가 그 목록을 돌려주는 쪽이다.
+     *
+     * <p><b>권한 검사는 매퍼가 겸한다.</b> 참여자 조인이 있어 그룹 밖 사람에게는 빈 목록이 간다.
+     * {@link #findGroupIndictments} 와 달리 호출부가 그룹 접근 권한을 먼저 확인하지 않으므로
+     * (라우트가 상세를 거치지 않고 바로 열린다) SQL 쪽 조인이 유일한 방어선이다.
+     *
+     * <p><b>마감을 계산하지 않는다.</b> 확정된 재판에 남은 마감이 없다. 자바에서 다시 정렬하지도
+     * 않는다 — SQL 의 {@code ORDER BY} 가 이미 최근 확정순으로 끝냈다.
+     */
+    @Transactional(readOnly = true)
+    public List<GroupClosedTrialDto> findGroupTrialRecords(long userId, long groupId) {
+        List<GroupClosedTrialDto> records = new ArrayList<>();
+        for (GroupClosedTrialRow row : indictmentMapper.findClosedByGroupId(groupId, userId)) {
+            records.add(toRecord(row, userId));
+        }
+        return records;
+    }
+
+    /**
+     * 내가 속한 <b>모든</b> 그룹의 재판 기록. 지방법원 홈 「지난 재판」.
+     *
+     * <p>{@link #findAllMyTrials} 의 확정판이다. 저쪽은 마감이 지난 건을 걸러 내지만 여기는
+     * 거르지 않는다 — 기록에서 마감은 이미 의미가 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<GroupClosedTrialDto> findAllMyTrialRecords(long userId) {
+        List<GroupClosedTrialDto> records = new ArrayList<>();
+        for (GroupClosedTrialRow row : indictmentMapper.findClosedByUserId(userId)) {
+            records.add(toRecord(row, userId));
+        }
+        return records;
+    }
+
+    /**
+     * 기록 한 줄 조립. 두 화면이 같은 모양을 쓴다.
+     *
+     * <p><b>개표와 판결 사유를 가리지 않는다.</b> {@link #findTrialDetail} 이 {@link #isCounted} 로
+     * 이 값들을 NULL 로 덮는 것은 투표 중 편승을 막기 위함인데(이슈 #171), 여기 오는 행은
+     * 전부 확정된 재판이라 그 조건이 애초에 성립하지 않는다.
+     */
+    private GroupClosedTrialDto toRecord(GroupClosedTrialRow row, long userId) {
+        return GroupClosedTrialDto.builder()
+                .id(row.getId())
+                .groupId(row.getGroupId())
+                .groupName(row.getGroupName())
+                .userId(row.getUserId())
+                .nickname(row.getNickname())
+                .profileImageUrl(imageStorage.urlOf(row.getProfileImageKey()))
+                .status(row.getStatus())
+                .verdictMethod(row.getVerdictMethod())
+                .aiVerdictReason(row.getAiVerdictReason())
+                .settlementDate(row.getChallengeDate())
+                .exceededAmount(row.getExceededAmount())
+                .mine(row.getUserId() != null && row.getUserId() == userId)
+                .defended(row.isDefended())
+                .myVote(row.getMyVerdict())
+                .guiltyCount(row.getGuiltyCount())
+                .innocentCount(row.getInnocentCount())
+                .totalVoters(row.getTotalVoters())
+                .createdAt(row.getCreatedAt())
+                .confirmedAt(row.getConfirmedAt())
+                .build();
     }
 
     /**

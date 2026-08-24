@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -297,6 +298,8 @@ class ChallengeMapperXmlTest {
         assertTrue(configuration.hasStatement(namespace + ".findOpenByUserId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialSummaryByGroupIds"));
         assertTrue(configuration.hasStatement(namespace + ".findClosedTrialStats"));
+        assertTrue(configuration.hasStatement(namespace + ".findClosedByGroupId"));
+        assertTrue(configuration.hasStatement(namespace + ".findClosedByUserId"));
         assertTrue(configuration.hasStatement(namespace + ".findTrialDetail"));
         assertTrue(configuration.hasStatement(namespace + ".moveToVoting"));
         assertTrue(configuration.hasStatement(namespace + ".confirmConfession"));
@@ -331,6 +334,34 @@ class ChallengeMapperXmlTest {
                 "확정된 재판은 카드가 아니라 전적으로 간다");
         assertTrue(sql.contains("g.group_name"),
                 "여러 그룹이 섞이므로 카드마다 그룹 이름이 필요하다");
+    }
+
+    /**
+     * 재판 기록 조회 두 구문이 <b>확정된 재판만</b> 담고, 권한 조인과 최근순 정렬을 갖췄는지 본다.
+     *
+     * <p>위 {@code findOpenByUserId} 단언과 짝이다 — 진행 중과 확정이 서로의 목록에 새지 않아야 한다.
+     * 상태 조건을 넓히면 진행 중 재판이 「기록」에 섞여 아직 안 끝난 재판의 개표가 그대로 노출된다.
+     *
+     * <p>정렬이 {@code updated_at DESC} 인 것도 못박는다. 서비스가 다시 정렬하지 않으므로
+     * 여기가 유일한 순서 결정 지점이다.
+     */
+    @Test
+    @DisplayName("재판 기록 조회는 확정 상태만, 참여자 조인으로, 최근 확정순으로 가져온다")
+    void closedTrialQueriesScopeToConfirmedRecords() throws Exception {
+        Configuration configuration = parse("mapper/challenge/IndictmentMapper.xml");
+
+        for (String id : List.of("findClosedByGroupId", "findClosedByUserId")) {
+            String sql = sqlOf(configuration, IndictmentMapper.class.getName() + "." + id);
+
+            assertTrue(sql.contains("i.status IN ('GUILTY', 'INNOCENT')"),
+                    id + ": 진행 중인 재판이 기록에 섞이면 끝나지 않은 재판의 개표가 노출된다");
+            assertTrue(sql.contains("JOIN tbl_group_member m ON m.group_id = i.group_id"),
+                    id + ": 참여자 조인이 권한 검사다. 빠지면 남의 그룹 재판 기록이 열린다");
+            assertTrue(sql.contains("ORDER BY i.updated_at DESC"),
+                    id + ": 기록은 최근 확정순이다. 서비스가 다시 정렬하지 않는다");
+            assertTrue(sql.contains("i.verdict_method"),
+                    id + ": verdictMethod 가 없으면 AI 판결이 엉뚱한 화면으로 열린다");
+        }
     }
 
     @Test

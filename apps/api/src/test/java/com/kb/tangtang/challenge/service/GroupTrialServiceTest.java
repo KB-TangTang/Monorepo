@@ -1,10 +1,12 @@
 package com.kb.tangtang.challenge.service;
 
+import com.kb.tangtang.challenge.domain.GroupClosedTrialRow;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.IndictmentStatus;
 import com.kb.tangtang.challenge.domain.TrialTodoRow;
 import com.kb.tangtang.challenge.domain.VerdictMethod;
+import com.kb.tangtang.challenge.dto.GroupClosedTrialDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupTrialDetailDto;
 import com.kb.tangtang.challenge.dto.MyTrialDto;
@@ -29,7 +31,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
@@ -436,5 +440,127 @@ class GroupTrialServiceTest {
 
         assertEquals(3L, card.getGroupId());
         assertEquals("배달 소비 줄이기", card.getGroupName());
+    }
+
+    /* ══ 확정된 재판 기록 ═══════════════════════════════════ */
+
+    private GroupClosedTrialRow closedRow(long id, long defendantId, String status,
+                                          String verdictMethod, LocalDateTime confirmedAt) {
+        GroupClosedTrialRow row = new GroupClosedTrialRow();
+        row.setId(id);
+        row.setGroupId(3L);
+        row.setGroupName("배달 소비 줄이기");
+        row.setUserId(defendantId);
+        row.setNickname("지판");
+        row.setStatus(status);
+        row.setVerdictMethod(verdictMethod);
+        row.setChallengeDate(LocalDate.of(2026, 8, 5));
+        row.setExceededAmount(new BigDecimal("6800"));
+        row.setGuiltyCount(3);
+        row.setInnocentCount(1);
+        row.setTotalVoters(4);
+        row.setCreatedAt(confirmedAt.minusHours(30));
+        row.setConfirmedAt(confirmedAt);
+        return row;
+    }
+
+    /**
+     * 매퍼가 준 순서를 그대로 둔다. SQL 이 {@code updated_at DESC} 로 정렬을 끝냈다.
+     *
+     * <p>진행 중 목록({@code findAllMyTrials})은 자바에서 다시 정렬하는데, 그 습관으로 여기에도
+     * {@code sort} 를 넣으면 <b>기준이 두 곳으로 갈린다.</b> 확정 재판에는 마감이 없어
+     * 저쪽의 비교자를 그대로 쓸 수도 없다 — 마감 필드가 통째로 null 이라 NPE 가 난다.
+     */
+    @Test
+    @DisplayName("재판 기록은 매퍼가 준 순서를 그대로 유지한다")
+    void trialRecordsKeepMapperOrder() {
+        when(indictmentMapper.findClosedByUserId(USER_ID)).thenReturn(List.of(
+                closedRow(30L, 9L, "GUILTY", "VOTE", NOW),
+                closedRow(12L, USER_ID, "INNOCENT", "NO_VOTE", NOW.minusDays(1)),
+                closedRow(41L, 9L, "GUILTY", "CONFESSION", NOW.minusDays(2))));
+
+        List<GroupClosedTrialDto> records = service().findAllMyTrialRecords(USER_ID);
+
+        assertEquals(List.of(30L, 12L, 41L),
+                records.stream().map(GroupClosedTrialDto::getId).toList());
+    }
+
+    /**
+     * <b>개표를 가리지 않는다.</b> {@code findTrialDetail} 이 투표 중에 {@code guiltyCount} 를
+     * null 로 덮는 것(이슈 #171)은 편승 투표를 막기 위함인데, 그 이유는 투표가 열려 있을 때만
+     * 성립한다. 여기 오는 행은 전부 확정된 재판이라 마스킹을 따라 하면 기록 화면의
+     * 개표 표시가 통째로 0 이 된다.
+     */
+    @Test
+    @DisplayName("재판 기록은 개표 결과를 가리지 않는다")
+    void trialRecordsExposeTally() {
+        when(indictmentMapper.findClosedByGroupId(3L, USER_ID))
+                .thenReturn(List.of(closedRow(30L, 9L, "GUILTY", "VOTE", NOW)));
+
+        GroupClosedTrialDto record = service().findGroupTrialRecords(USER_ID, 3L).get(0);
+
+        assertEquals(3, record.getGuiltyCount());
+        assertEquals(1, record.getInnocentCount());
+        assertEquals(4, record.getTotalVoters());
+    }
+
+    /**
+     * 판사 탕이의 사유도 그대로 내려보낸다. 같은 이유다 — 확정 후에는 감출 것이 없다.
+     *
+     * <p>{@code verdictMethod} 를 함께 못박는다. 화면이 이 값으로 이동할 상세를 가르기 때문에
+     * 빠지면 AI 가 판결한 재판이 일반 판결문 화면으로 열린다.
+     */
+    @Test
+    @DisplayName("AI 판결 기록은 판결 방식과 사유를 그대로 담는다")
+    void trialRecordsKeepAiVerdictReason() {
+        GroupClosedTrialRow row = closedRow(30L, 9L, "GUILTY",
+                VerdictMethod.AI_JUDGMENT.name(), NOW);
+        row.setAiVerdictReason("변론에 증빙이 없어 유죄로 판단했다.");
+        when(indictmentMapper.findClosedByUserId(USER_ID)).thenReturn(List.of(row));
+
+        GroupClosedTrialDto record = service().findAllMyTrialRecords(USER_ID).get(0);
+
+        assertEquals(VerdictMethod.AI_JUDGMENT.name(), record.getVerdictMethod());
+        assertEquals("변론에 증빙이 없어 유죄로 판단했다.", record.getAiVerdictReason());
+    }
+
+    /** 내가 피고인 기록에만 {@code mine} 이 선다. 화면이 이걸로 강조선을 그린다. */
+    @Test
+    @DisplayName("내가 피고인 기록만 mine 이 true 다")
+    void trialRecordsMarkMine() {
+        when(indictmentMapper.findClosedByUserId(USER_ID)).thenReturn(List.of(
+                closedRow(30L, USER_ID, "GUILTY", "CONFESSION", NOW),
+                closedRow(31L, 9L, "INNOCENT", "VOTE", NOW.minusDays(1))));
+
+        List<GroupClosedTrialDto> records = service().findAllMyTrialRecords(USER_ID);
+
+        assertTrue(records.get(0).isMine());
+        assertFalse(records.get(1).isMine());
+    }
+
+    /** 프로필은 저장된 키가 아니라 조립된 URL 로 내려간다. 진행 중 카드와 같은 규칙이다. */
+    @Test
+    @DisplayName("재판 기록의 프로필은 URL 로 변환된다")
+    void trialRecordsConvertProfileKeyToUrl() {
+        GroupClosedTrialRow row = closedRow(30L, 9L, "GUILTY", "VOTE", NOW);
+        row.setProfileImageKey("profile/9.png");
+        when(indictmentMapper.findClosedByUserId(USER_ID)).thenReturn(List.of(row));
+        when(imageStorage.urlOf("profile/9.png")).thenReturn("https://cdn/profile/9.png");
+
+        GroupClosedTrialDto record = service().findAllMyTrialRecords(USER_ID).get(0);
+
+        assertEquals("https://cdn/profile/9.png", record.getProfileImageUrl());
+    }
+
+    /**
+     * 확정 재판이 없으면 빈 목록이다. 그룹원이 아닐 때도 매퍼가 빈 목록을 주므로 같은 경로다 —
+     * 예외를 던지면 「기록이 없는 그룹」과 「남의 그룹」이 화면에서 다르게 보여 존재가 새어 나간다.
+     */
+    @Test
+    @DisplayName("확정된 재판이 없으면 빈 목록이다")
+    void trialRecordsAreEmptyWhenNothingConfirmed() {
+        when(indictmentMapper.findClosedByGroupId(3L, USER_ID)).thenReturn(List.of());
+
+        assertTrue(service().findGroupTrialRecords(USER_ID, 3L).isEmpty());
     }
 }
