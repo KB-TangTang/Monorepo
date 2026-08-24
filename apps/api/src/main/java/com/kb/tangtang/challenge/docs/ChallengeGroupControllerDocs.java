@@ -4,6 +4,7 @@ import com.kb.tangtang.challenge.dto.ChallengeGroupCreateRequestDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupCreatedDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDetailDto;
 import com.kb.tangtang.challenge.dto.ChallengeGroupDto;
+import com.kb.tangtang.challenge.dto.GroupClosedTrialDto;
 import com.kb.tangtang.challenge.dto.GroupIndictmentDto;
 import com.kb.tangtang.challenge.dto.GroupRankingDto;
 import com.kb.tangtang.challenge.dto.InviteCodePreviewDto;
@@ -72,6 +73,21 @@ public interface ChallengeGroupControllerDocs {
                     + "`groupId` 로 조인해 채운다.")
     ApiResponse<List<GroupIndictmentDto>> findAllMyTrials(@ApiIgnore Long userId);
 
+    @ApiOperation(value = "내가 속한 그룹의 확정된 재판 기록 전부",
+            notes = "지방법원 홈 「지난 재판」. 위 `/trials` 의 **반대편**이다 — "
+                    + "그쪽은 진행 중(`DEFENSE_WAIT`·`VOTING`)만, 여기는 확정(`GUILTY`·`INNOCENT`)만 준다.\n\n"
+                    + "정렬은 **최근 확정순**이다(진행 중 목록의 「마감 임박순」과 방향이 반대다). "
+                    + "`confirmedAt` 은 확정 시각 전용 컬럼이 아니라 `tbl_indictment.updated_at` 이다 — "
+                    + "상태 전이 UPDATE 가 모두 확정 상태를 제외해 확정 후에는 갱신되지 않는다.\n\n"
+                    + "**개표(`guiltyCount`·`innocentCount`)와 `aiVerdictReason` 을 가리지 않는다.** "
+                    + "재판 상세가 투표 중에 이 값들을 감추는 것은 편승 투표를 막기 위함인데, "
+                    + "여기 오는 건 전부 개표가 끝난 재판이다.\n\n"
+                    + "`verdictMethod` 는 `VOTE`(다수결) · `NO_VOTE`(0표 무죄추정) · "
+                    + "`CONFESSION`(혐의 인정) · `AI_JUDGMENT`(동률 시 판사 탕이) 넷이다. "
+                    + "**화면은 이 값으로 이동할 상세를 가른다** — `AI_JUDGMENT` 만 다른 화면으로 간다. "
+                    + "`aiVerdictReason` 은 `AI_JUDGMENT` 가 아니면 null 이다.")
+    ApiResponse<List<GroupClosedTrialDto>> findAllMyTrialRecords(@ApiIgnore Long userId);
+
     @ApiOperation(value = "그룹 챌린지 상세", notes = "**참여자만 볼 수 있다.** 참여자가 아니면 실패한다.\n\n"
             + "그룹 정보만 준다. 상세 화면을 그리려면 아래 `/detail` 을 쓴다.")
     ApiResponse<ChallengeGroupDto> findDetail(@ApiIgnore Long userId,
@@ -94,6 +110,16 @@ public interface ChallengeGroupControllerDocs {
                     + "`settleTime`·`memoAuthor`·`memoDate`·채팅·`savingsAmount` 는 아직 NULL 이다.")
     ApiResponse<ChallengeGroupDetailDto> findFullDetail(@ApiIgnore Long userId,
                                                         @ApiParam(value = "그룹 ID", required = true) Long groupId);
+
+    @ApiOperation(value = "그룹 하나의 확정된 재판 기록",
+            notes = "위 `/trial-records` 를 그룹 하나로 좁힌 것이다. 응답 모양과 정렬은 같다.\n\n"
+                    + "**그룹원이 아니면 빈 배열이다.** 매퍼의 참여자 조인이 권한 검사를 겸한다 — "
+                    + "403 으로 구분하면 그 그룹에 재판이 있다는 사실까지 알려 주는 셈이라 없는 것으로 취급한다.\n\n"
+                    + "확정 재판이 0건인 그룹도 빈 배열이다. 건수만 필요하면 상세(`/detail`)의 "
+                    + "`trialStats` 를 쓴다 — 그쪽은 `CLOSED` 에서만 채워진다.")
+    ApiResponse<List<GroupClosedTrialDto>> findGroupTrialRecords(
+            @ApiIgnore Long userId,
+            @ApiParam(value = "그룹 ID", required = true) Long groupId);
 
     @ApiOperation(value = "명예 법정 — 생존자 랭킹",
             notes = "**참여자만 볼 수 있다.** 화면 한 벌을 한 번에 내려준다 — 헤더(평가 방식·한도·메모)와 "

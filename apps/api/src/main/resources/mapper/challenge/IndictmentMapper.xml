@@ -248,6 +248,87 @@
     </select>
 
     <!--
+      확정된 재판 기록 한 줄의 컬럼.
+
+      위 findClosedTrialStats 가 숫자 3개만 주는 것과 달리 목록을 그대로 내려보낸다.
+      아래 findClosedByGroupId(그룹 기록)와 findClosedByUserId(내 전체 기록)가 이 조각을 공유한다.
+
+      ⚠ groupIndictmentColumns 를 늘려 쓰지 않는다. 그쪽은 진행 중 카드 두 화면이 공유하는
+        조각이라 컬럼을 더하면 GroupIndictmentRow 를 통해 그 화면들에도 같이 붙는다.
+        재사용은 leaf 조각(fromIndictment · exceededAmount · displayNickname · totalVoters)까지만 —
+        초과액 계산식이 갈라지는 것만 막으면 된다.
+
+      ⚠ 개표(guilty_count · innocent_count)를 가리지 않는다. 가리는 이유(이슈 #171 편승 투표)는
+        투표가 열려 있을 때만 성립한다. 여기 걸리는 건 전부 개표가 끝난 재판이다.
+        idx_vote_indictment (indictment_id, verdict) 커버링이라 두 번 세도 추가 비용이 거의 없다.
+
+      #{userId} 를 쓴다(my_verdict). 두 select 모두 그 이름의 파라미터를 받는다.
+    -->
+    <sql id="closedTrialColumns">
+        i.id     AS id,
+        g.id     AS group_id,
+        g.group_name AS group_name,
+        i.user_id AS user_id,
+        <include refid="displayNickname"/> AS nickname,
+        u.profile_image_key AS profile_image_key,
+        i.status AS status,
+        i.verdict_method    AS verdict_method,
+        i.ai_verdict_reason AS ai_verdict_reason,
+        r.challenge_date    AS challenge_date,
+        <include refid="exceededAmount"/> AS exceeded_amount,
+        EXISTS (SELECT 1 FROM tbl_defense d WHERE d.indictment_id = i.id) AS defended,
+        (SELECT v.verdict FROM tbl_vote v
+          WHERE v.indictment_id = i.id AND v.user_id = #{userId}) AS my_verdict,
+        (SELECT COUNT(*) FROM tbl_vote v
+          WHERE v.indictment_id = i.id AND v.verdict = 'GUILTY')   AS guilty_count,
+        (SELECT COUNT(*) FROM tbl_vote v
+          WHERE v.indictment_id = i.id AND v.verdict = 'INNOCENT') AS innocent_count,
+        <include refid="totalVoters"/> AS total_voters,
+        i.created_at AS created_at,
+        <!--
+          확정 시각 전용 컬럼이 없어 updated_at 을 쓴다. 상태 전이 UPDATE 4개가 모두 WHERE 에서
+          GUILTY·INNOCENT 를 제외하므로 확정된 뒤로는 갱신되지 않는다.
+          ⚠ 확정된 기소를 UPDATE 하는 구문이 새로 생기면 이 전제가 깨진다 (GroupClosedTrialRow 주석).
+        -->
+        i.updated_at AS confirmed_at
+    </sql>
+
+    <!--
+      그룹 하나의 재판 기록. 확정된 기소만.
+
+      ⚠ tbl_group_member 조인이 권한 검사를 겸한다(findVoteTodos:123 과 같은 패턴).
+        지우면 남의 그룹 재판 기록이 그대로 열린다. 그룹원이 아니면 빈 목록이 나간다.
+
+      정렬은 최근 확정순이다 — 기록은 히스토리라 진행 중 목록의 「마감 임박순」과 방향이 반대다.
+      같은 시각이면 id 내림차순으로 고정한다(순서가 요청마다 흔들리면 화면이 이유 없이 재정렬된다).
+    -->
+    <select id="findClosedByGroupId" resultType="com.kb.tangtang.challenge.domain.GroupClosedTrialRow">
+        SELECT <include refid="closedTrialColumns"/>
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.group_id = #{groupId}
+          AND i.status IN ('GUILTY', 'INNOCENT')
+        ORDER BY i.updated_at DESC, i.id DESC
+    </select>
+
+    <!--
+      내가 속한 모든 그룹의 재판 기록. 지방법원 홈 「지난 재판」.
+
+      위 findClosedByGroupId 와 다른 곳은 WHERE 절 하나뿐이다 —
+      그룹 하나로 좁히는 대신 tbl_group_member 로 「내가 낀 그룹 전부」로 넓힌다.
+      findOpenByGroupId ↔ findOpenByUserId 와 같은 관계다.
+    -->
+    <select id="findClosedByUserId" resultType="com.kb.tangtang.challenge.domain.GroupClosedTrialRow">
+        SELECT <include refid="closedTrialColumns"/>
+        <include refid="fromIndictment"/>
+        JOIN tbl_group_member m ON m.group_id = i.group_id AND m.user_id = #{userId}
+        JOIN tbl_user u ON u.id = i.user_id
+        WHERE i.status IN ('GUILTY', 'INNOCENT')
+        ORDER BY i.updated_at DESC, i.id DESC
+    </select>
+
+    <!--
       ── 이하 재판 상세 (이슈 #170) ────────────────────────────────────────
     -->
 

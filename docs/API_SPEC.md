@@ -1269,14 +1269,20 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|---|
 | GET | `/api/group-challenges/my-trials` | Bearer | `MyTrial[]` |
 | GET | `/api/group-challenges/trials` | Bearer | `GroupIndictment[]` |
+| GET | `/api/group-challenges/trial-records` | Bearer | `GroupClosedTrial[]` |
+| GET | `/api/group-challenges/{groupId}/trial-records` | Bearer | `GroupClosedTrial[]` |
 | GET | `/api/group-challenges/{groupId}/detail` | Bearer | `ChallengeGroupDetail` |
 
-> `/my-trials` · `/trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다
-> 먼저 매칭한다. 순서를 바꿔도 같다.
+> `/my-trials` · `/trials` · `/trial-records` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴
+> 경로를 변수 경로보다 먼저 매칭한다. 순서를 바꿔도 같다.
 
 **앞의 둘은 범위가 다르다.** `/my-trials` 는 「내가 지금 <b>행동할 수 있는</b> 것」 2가지(내 변론 ·
 내 투표)이고, `/trials` 는 「내가 속한 그룹의 진행 중인 재판 <b>전부</b>」 6가지다.
 `/my-trials` 를 지우지 않은 것은 전체 보기 바텀시트가 아직 그 얇은 모양을 쓰기 때문이다.
+
+**`/trial-records` 둘은 그 셋의 반대다.** 위가 진행 중(`DEFENSE_WAIT`·`VOTING`)만 주는 반면
+이쪽은 **확정된 것(`GUILTY`·`INNOCENT`)만** 준다 — 두 목록은 겹치지 않는다.
+경로에 `{groupId}` 가 있으면 그 그룹만, 없으면 내가 속한 모든 그룹이다.
 
 ### 마감 시각은 저장값이 아니라 계산값이다
 
@@ -1342,6 +1348,34 @@ exceededAmount, mine, defended, myVote, voteCount, totalVoters, defenseDeadline,
   (`GET /api/group-challenges`)을 `groupId` 로 조인해 채운다 — 같은 값을 재판 수만큼 되풀이해
   내려보내지 않기 위함이다.
 - **사건번호는 없다.** `tbl_indictment` 에 대응하는 컬럼이 없다(디자인 시안에는 있다).
+
+### `GroupClosedTrial` — 확정된 재판 기록
+
+`{ id, groupId, groupName, userId, nickname, profileImageUrl, status, verdictMethod,
+aiVerdictReason, settlementDate, exceededAmount, mine, defended, myVote,
+guiltyCount, innocentCount, totalVoters, createdAt, confirmedAt }`
+
+`GroupIndictment` 과 **일부러 다른 자료형이다.** 저쪽의 축은 마감(`defenseDeadline` ·
+`voteDeadline`)이고 이쪽은 확정 시각과 개표다. 한 모양으로 합치면 진행 중 화면과
+기록 화면 중 한쪽에서 절반이 항상 NULL 이 된다.
+
+- **개표를 가리지 않는다.** 투표 중에 `guiltyCount`·`innocentCount`·`aiVerdictReason` 을
+  감춘 건 편승 투표를 막으려던 것이고(#171), 그 근거는 투표가 열려 있는 동안에만 성립한다.
+  확정된 뒤에는 실수(`0`)까지 그대로 내려간다.
+- **`verdictMethod` 는 항상 채워진다.** 프론트가 이 값으로 화면을 가른다 —
+  `AI_JUDGMENT` 면 동점 안내(`groupVoteTie`), 나머지 셋은 판결문(`verdictResult`)이다.
+  빼면 AI 판결 건이 엉뚱한 화면을 연다.
+- `aiVerdictReason` 은 `AI_JUDGMENT` 일 때만 값이 있다(`ck_ind_ai_reason` 이 그걸 강제한다).
+  나머지 방식의 사유 문구는 서버에 없고 프론트가 방식에서 만든다.
+- 정렬은 **최근 확정순**(`updated_at DESC, id DESC`)이다. 진행 중 목록의 「마감 임박순」과
+  반대인 것이 맞다 — 기록은 히스토리라 최근 것이 먼저다.
+- **`confirmedAt` 은 `tbl_indictment.updated_at` 이다.** 확정 시각 전용 컬럼이 없다.
+  상태 전이 UPDATE 4개가 모두 WHERE 에서 `GUILTY`·`INNOCENT` 를 제외해 확정 뒤로는
+  갱신되지 않는다. ⚠ 확정된 기소를 UPDATE 하는 구문이 생기면 이 값이 밀린다 —
+  그때는 `confirmed_at` 컬럼을 따로 만들어야 한다.
+- **그룹원이 아니면 빈 배열이다.** 예외를 던지지 않는다 —
+  두 쿼리 모두 `tbl_group_member` 조인이 권한 검사를 겸한다.
+- `settlementDate` 는 `GroupIndictment` 과 같이 **위반한 날짜**다(기소 생성일이 아니다).
 
 ### `ChallengeGroupDetail` — 상세 화면 한 벌
 

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { formatMonthDay, toRankingViewModel } from '../src/utils/groupRanking.js';
 
 /*
@@ -202,4 +203,39 @@ test('결산일은 「M월 D일」로, 아직 없으면 빈 문자열로 내린�
 
     const vm = toRankingViewModel(dailyDto([member()], { lastSettlementDate: null }));
     assert.equal(vm.lastSettlementDate, '');
+});
+
+/* ══ 순위 렌더링은 명예 법정 한 곳이 전담한다 ═══════════════════ */
+
+/*
+ * 종료 상세(`/group-challenges/:id`)와 명예 법정(`/group-challenges/:id/ranking`)이
+ * 시상대와 「전체 피고인 현황」을 각자 그리고 있었다. 같은 `tbl_group_member` 를 같은
+ * 순서로 읽고 제목 문자열까지 같아, 값이 어긋나도 어느 쪽이 원본인지 알 수 없었다.
+ * 종료 상세를 「내 결과」로 좁히고 순위는 명예 법정만 그린다 — 아래가 그 경계다.
+ */
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
+
+test('종료 상세는 시상대·전체 피고인 현황을 그리지 않는다', () => {
+    const view = source('src/views/challenge/group/GroupChallengeDetailView.vue');
+
+    assert.ok(!/<GroupDetailPodium/.test(view), '시상대는 명예 법정에만 있어야 한다');
+    assert.ok(!/<GroupDetailRankingTable/.test(view), '순위표는 명예 법정에만 있어야 한다');
+    assert.ok(!/GroupDetail(Podium|RankingTable)\.vue/.test(view), '죽은 import 가 남아 있다');
+});
+
+test('종료 상세에는 내 결과와 명예 법정 진입이 남는다', () => {
+    const view = source('src/views/challenge/group/GroupChallengeDetailView.vue');
+
+    assert.match(view, /최종 결과/);
+    assert.match(view, /<GroupHonorCourtEntry/);
+});
+
+test('명예 법정은 여전히 순위를 그린다', () => {
+    const view = source('src/views/challenge/group/GroupHonorCourtView.vue');
+
+    assert.match(view, /<GroupHonorPodium/);
+    assert.match(view, /<GroupHonorRankList/);
+    assert.match(view, /<GroupHonorPeriodRankList/);
 });

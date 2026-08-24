@@ -1,5 +1,6 @@
 package com.kb.tangtang.challenge.mapper;
 
+import com.kb.tangtang.challenge.domain.GroupClosedTrialRow;
 import com.kb.tangtang.challenge.domain.GroupIndictmentRow;
 import com.kb.tangtang.challenge.domain.GroupTrialDetailRow;
 import com.kb.tangtang.challenge.domain.GroupTrialStatsRow;
@@ -102,6 +103,31 @@ public interface IndictmentMapper {
      * 재판이 하나도 없어도 GROUP BY 가 없어 0 으로 채워진 행이 항상 나온다.
      */
     GroupTrialStatsRow findClosedTrialStats(@Param("groupId") Long groupId);
+
+    /**
+     * 그룹 하나의 확정된 재판 기록 목록. 위 {@link #findClosedTrialStats} 가 숫자 3개만 주는 것과 달리
+     * 목록 자체를 내려보낸다.
+     *
+     * <p><b>권한 검사를 SQL 이 겸한다.</b> {@code tbl_group_member} 조인이 있어 그룹 사람이 아니면
+     * 빈 목록이 나간다({@link #findVoteTodos} 와 같은 패턴). 조인을 지우면 남의 그룹 재판 기록이
+     * 그대로 열린다.
+     *
+     * <p>정렬은 최근 확정순({@code updated_at DESC})이다 — 기록은 히스토리라 진행 중 목록의
+     * 「마감 임박순」과 방향이 반대다. 서비스가 다시 정렬하지 않는다.
+     *
+     * @param userId 보는 사람. 소속 판정과 내 표({@code myVerdict}) 두 가지에 쓴다
+     */
+    List<GroupClosedTrialRow> findClosedByGroupId(@Param("groupId") long groupId,
+                                                  @Param("userId") long userId);
+
+    /**
+     * 내가 속한 <b>모든</b> 그룹의 확정된 재판 기록. 지방법원 홈 「지난 재판」.
+     *
+     * <p>{@link #findClosedByGroupId} 와 select 조각을 공유하고 WHERE 만 다르다 —
+     * 그룹 하나로 좁히는 대신 {@code tbl_group_member} 로 내가 낀 그룹 전부로 넓힌다.
+     * {@link #findOpenByGroupId} ↔ {@link #findOpenByUserId} 와 같은 관계다.
+     */
+    List<GroupClosedTrialRow> findClosedByUserId(@Param("userId") long userId);
 
     /**
      * 재판 상세 한 벌 (이슈 #170). 기소 안내 · 변론 작성 · 투표(#171) · 판결 상세가 모두 이것을 쓴다.
