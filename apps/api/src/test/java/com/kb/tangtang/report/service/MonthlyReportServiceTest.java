@@ -2,6 +2,7 @@ package com.kb.tangtang.report.service;
 
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.report.domain.MonthlyCategorySpendingRow;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.domain.MonthlySpendingRow;
 import com.kb.tangtang.report.dto.MonthlyCategoryReportDto;
 import com.kb.tangtang.report.dto.MonthlyReportMonthsDto;
@@ -64,7 +65,7 @@ class MonthlyReportServiceTest {
         when(mapper.countActiveFixedExpenseCandidates(USER_ID)).thenReturn(2);
         when(mapper.countActiveConfirmedFixedExpenses(USER_ID)).thenReturn(3);
 
-        MonthlySummaryDto result = service.getSummary(USER_ID, "2026-07");
+        MonthlySummaryDto result = service.calculateSummary(USER_ID, "2026-07");
 
         assertEquals(new BigDecimal("1284000"), result.getTotalSpent());
         assertEquals(new BigDecimal("1396000"), result.getPreviousMonthSpent());
@@ -80,7 +81,7 @@ class MonthlyReportServiceTest {
         when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
                 .thenReturn(new BigDecimal("10000"), BigDecimal.ZERO);
 
-        MonthlySummaryDto result = service.getSummary(USER_ID, "2026-07");
+        MonthlySummaryDto result = service.calculateSummary(USER_ID, "2026-07");
 
         assertNull(result.getMonthOverMonthRate());
     }
@@ -91,7 +92,7 @@ class MonthlyReportServiceTest {
         when(mapper.sumNetSpending(USER_ID, LocalDate.of(2026, 3, 1), LocalDate.of(2026, 4, 1)))
                 .thenReturn(new BigDecimal("50000"));
 
-        MonthlySummaryDto result = service.getSummary(USER_ID, "2026-03");
+        MonthlySummaryDto result = service.calculateSummary(USER_ID, "2026-03");
 
         assertFalse(result.isHasPreviousComparison());
         assertNull(result.getPreviousMonthSpent());
@@ -109,7 +110,7 @@ class MonthlyReportServiceTest {
         when(mapper.sumNetSpending(USER_ID, LocalDate.of(2026, 3, 1), LocalDate.of(2026, 4, 1)))
                 .thenReturn(new BigDecimal("50000"));
 
-        MonthlyCategoryReportDto result = service.getCategories(USER_ID, "2026-03");
+        MonthlyCategoryReportDto result = service.calculateCategories(USER_ID, "2026-03");
 
         assertEquals(1, result.getCategories().size());
         assertNull(result.getCategories().get(0).getPreviousMonthAmount());
@@ -123,7 +124,7 @@ class MonthlyReportServiceTest {
                 new MonthlySpendingRow("2026-03", new BigDecimal("100000")),
                 new MonthlySpendingRow("2026-05", BigDecimal.ZERO)));
 
-        MonthlySpendingTrendDto result = service.getSpendingTrend(USER_ID, "2026-05");
+        MonthlySpendingTrendDto result = service.calculateSpendingTrend(USER_ID, "2026-05");
 
         assertEquals("2025-12", result.getItems().get(0).getYearMonth());
         assertFalse(result.getItems().get(0).isHasData());
@@ -140,7 +141,7 @@ class MonthlyReportServiceTest {
         when(mapper.findMonthlySpending(eq(USER_ID), any(), any())).thenReturn(List.of(
                 new MonthlySpendingRow("2026-03", new BigDecimal("50000"))));
 
-        MonthlySpendingTrendDto result = service.getSpendingTrend(USER_ID, "2026-03");
+        MonthlySpendingTrendDto result = service.calculateSpendingTrend(USER_ID, "2026-03");
 
         assertEquals(6, result.getItems().size());
         assertTrue(result.getItems().subList(0, 5).stream().noneMatch(item -> item.isHasData()));
@@ -165,7 +166,7 @@ class MonthlyReportServiceTest {
         when(mapper.sumNetSpending(eq(USER_ID), eq(LocalDate.of(2026, 7, 1)),
                 eq(LocalDate.of(2026, 8, 1)))).thenReturn(new BigDecimal("200000"));
 
-        MonthlyCategoryReportDto result = service.getCategories(USER_ID, "2026-07");
+        MonthlyCategoryReportDto result = service.calculateCategories(USER_ID, "2026-07");
 
         assertEquals(2, result.getParentCategories().size());
         assertEquals("식비", result.getParentCategories().get(0).getCategoryName());
@@ -185,6 +186,8 @@ class MonthlyReportServiceTest {
     @DisplayName("가입월부터 현재월까지 조회 월 목록을 최신순으로 반환한다")
     void returnsAvailableMonths() {
         when(mapper.findUserCreatedDate(USER_ID)).thenReturn(LocalDate.of(2026, 6, 20));
+        when(mapper.findMonthlyReportSnapshots(USER_ID))
+                .thenReturn(List.of(snapshot("2026-07"), snapshot("2026-06")));
 
         MonthlyReportMonthsDto result = service.getAvailableMonths(USER_ID);
 
@@ -214,6 +217,7 @@ class MonthlyReportServiceTest {
     @DisplayName("가입월 마지막 날까지 온보딩이고 익월 1일부터 첫 리포트다")
     void changesFromOnboardingToFirstReportOnNextMonthFirstDay() {
         when(mapper.findUserCreatedDate(USER_ID)).thenReturn(LocalDate.of(2026, 8, 12));
+        when(mapper.findMonthlyReportSnapshots(USER_ID)).thenReturn(List.of(snapshot("2026-08")));
 
         MonthlyReportMonthsDto lastDay = serviceAt(LocalDate.of(2026, 8, 31))
                 .getAvailableMonths(USER_ID);
@@ -229,6 +233,7 @@ class MonthlyReportServiceTest {
     @DisplayName("12월 가입자는 다음 해 1월 1일부터 첫 리포트를 본다")
     void handlesYearBoundary() {
         when(mapper.findUserCreatedDate(USER_ID)).thenReturn(LocalDate.of(2025, 12, 20));
+        when(mapper.findMonthlyReportSnapshots(USER_ID)).thenReturn(List.of(snapshot("2025-12")));
 
         MonthlyReportMonthsDto result = serviceAt(LocalDate.of(2026, 1, 1))
                 .getAvailableMonths(USER_ID);
@@ -242,6 +247,7 @@ class MonthlyReportServiceTest {
     @DisplayName("윤년 2월 가입자는 3월 1일부터 첫 리포트를 본다")
     void handlesLeapYearFebruaryBoundary() {
         when(mapper.findUserCreatedDate(USER_ID)).thenReturn(LocalDate.of(2028, 2, 29));
+        when(mapper.findMonthlyReportSnapshots(USER_ID)).thenReturn(List.of(snapshot("2028-02")));
 
         MonthlyReportMonthsDto onboarding = serviceAt(LocalDate.of(2028, 2, 29))
                 .getAvailableMonths(USER_ID);
@@ -256,19 +262,31 @@ class MonthlyReportServiceTest {
     @DisplayName("잘못된 형식과 현재월 및 가입 전 월은 거절한다")
     void rejectsInvalidPeriods() {
         BusinessException invalid = assertThrows(BusinessException.class,
-                () -> service.getSummary(USER_ID, "2026-8"));
+                () -> service.calculateSummary(USER_ID, "2026-8"));
         assertEquals("INVALID_REQUEST", invalid.getCode());
 
         BusinessException current = assertThrows(BusinessException.class,
-                () -> service.getSummary(USER_ID, "2026-08"));
+                () -> service.calculateSummary(USER_ID, "2026-08"));
         assertEquals("REPORT_NOT_AVAILABLE", current.getCode());
 
         BusinessException future = assertThrows(BusinessException.class,
-                () -> service.getSummary(USER_ID, "2026-09"));
+                () -> service.calculateSummary(USER_ID, "2026-09"));
         assertEquals("REPORT_NOT_AVAILABLE", future.getCode());
 
         BusinessException beforeJoin = assertThrows(BusinessException.class,
-                () -> service.getSummary(USER_ID, "2026-02"));
+                () -> service.calculateSummary(USER_ID, "2026-02"));
         assertEquals("REPORT_NOT_AVAILABLE", beforeJoin.getCode());
+    }
+
+    private MonthlyReportSnapshotRow snapshot(String yearMonth) {
+        String json = "{\"snapshotVersion\":2,\"aiUsageConsented\":false,"
+                + "\"summary\":{\"yearMonth\":\"" + yearMonth + "\",\"totalSpent\":0,"
+                + "\"previousMonthSpent\":null,\"hasPreviousComparison\":false,"
+                + "\"monthOverMonthRate\":null,\"fixedExpenseCandidateCount\":0,"
+                + "\"confirmedFixedExpenseCount\":0},"
+                + "\"spendingTrend\":{\"yearMonth\":\"" + yearMonth + "\",\"items\":[]},"
+                + "\"categoryReport\":{\"yearMonth\":\"" + yearMonth + "\",\"totalSpent\":0,"
+                + "\"parentCategories\":[],\"categories\":[]}}";
+        return new MonthlyReportSnapshotRow(1L, yearMonth, json, "NOT_CONSENTED");
     }
 }

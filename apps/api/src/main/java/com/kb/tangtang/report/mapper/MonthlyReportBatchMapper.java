@@ -1,10 +1,12 @@
 package com.kb.tangtang.report.mapper;
 
 import com.kb.tangtang.report.domain.MonthlyReportBatchCandidate;
+import com.kb.tangtang.report.domain.MonthlyReportForceBatchCandidate;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.List;
 
 @Mapper
@@ -15,4 +17,9 @@ public interface MonthlyReportBatchMapper {
             @Param("targetMonthEnd") LocalDateTime targetMonthEnd,
             @Param("maxAutoAttempts") int maxAutoAttempts,
             @Param("retryNotBefore") LocalDateTime retryNotBefore);
+
+    List<MonthlyReportForceBatchCandidate> findForceBatchCandidates(
+            @Param("yearMonth") String yearMonth,
+            @Param("targetMonthEnd") LocalDateTime targetMonthEnd,
+            @Param("targetUserIds") Set<Long> targetUserIds);
 }
