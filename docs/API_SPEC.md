@@ -1983,6 +1983,7 @@ Bearer 인증과 함께 환경변수 `REPORT_MONTHLY_MANUAL_BATCH_KEY`로 설정
 {
   "yearMonth": "2026-07",
   "force": true,
+  "targetUserIds": [101, 102],
   "missingSnapshotAiConsents": [
     { "userId": 101, "aiUsageConsented": true },
     { "userId": 102, "aiUsageConsented": false }
@@ -1992,11 +1993,12 @@ Bearer 인증과 함께 환경변수 `REPORT_MONTHLY_MANUAL_BATCH_KEY`로 설정
 
 - `yearMonth`는 완료된 과거 월만 허용한다.
 - `force=false`는 자동 배치와 같이 미생성·재시도 대상만 멱등 처리한다.
-- `force=true`는 대상 월의 모든 활성 사용자를 재생성한다. 기존 v2 스냅샷이 있으면 저장된
-  `aiUsageConsented` 값을 사용한다.
+- `force=true`에는 하나 이상의 `targetUserIds`가 필수다. 지정한 활성 사용자만 재생성하며,
+  가입 이전 월이거나 조회할 수 없는 사용자를 포함하면 `REPORT_NOT_AVAILABLE`로 실패하고 아무도 갱신하지 않는다.
+  기존 v2 스냅샷이 있으면 저장된 `aiUsageConsented` 값을 사용한다.
 - 스냅샷이 없거나 v2 이전 형식이면 당시 AI 동의를 확인할 수 없다. 이 경우
-  `missingSnapshotAiConsents`에 해당 사용자별 값을 빠짐없이 넘겨야 하며, 하나라도 빠지면 DB를
-  변경하지 않고 `MISSING_AI_CONSENT_INPUT`으로 실패한다.
+  `missingSnapshotAiConsents`에 지정 사용자별 값을 빠짐없이 넘겨야 하며, 대상 밖의 사용자 ID 또는
+  하나라도 빠진 값이 있으면 DB를 변경하지 않고 `MISSING_AI_CONSENT_INPUT` 또는 `INVALID_REQUEST`로 실패한다.
 - 응답의 `snapshotSavedCount`는 화면 스냅샷 저장 성공 수, `aiGeneratedCount`는 AI 분석 생성 성공 수,
   `failureCount`는 사용자 단위 실패 수다.
 

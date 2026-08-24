@@ -15,5 +15,6 @@ public class MonthlyReportManualBatchRequestDto {
 
     private String yearMonth;
     private boolean force;
+    private List<Long> targetUserIds = new ArrayList<>();
     private List<MonthlyReportAiConsentOverrideDto> missingSnapshotAiConsents = new ArrayList<>();
 }

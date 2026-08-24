@@ -44,6 +44,10 @@
               AND s.`year_month` = #{yearMonth}
         WHERE u.status = 'ACTIVE'
           AND u.created_at &lt; #{targetMonthEnd}
+          AND u.id IN
+          <foreach collection="targetUserIds" item="userId" open="(" separator="," close=")">
+              #{userId}
+          </foreach>
         ORDER BY u.id
     </select>
 </mapper>

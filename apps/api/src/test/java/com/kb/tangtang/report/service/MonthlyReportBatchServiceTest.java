@@ -18,6 +18,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -94,10 +95,11 @@ class MonthlyReportBatchServiceTest {
 
     @Test
     void forceRunUsesStoredConsentAndOverwritesCompletedSnapshot() {
-        when(batchMapper.findForceBatchCandidates("2026-07", LocalDateTime.of(2026, 8, 1, 0, 0)))
+        when(batchMapper.findForceBatchCandidates("2026-07", LocalDateTime.of(2026, 8, 1, 0, 0), Set.of(1L)))
                 .thenReturn(List.of(new MonthlyReportForceBatchCandidate(1L, snapshotJson(true), "COMPLETED")));
 
-        MonthlyReportBatchRunResult result = service.runManualBatch(YearMonth.of(2026, 7), true, Map.of());
+        MonthlyReportBatchRunResult result = service.runManualBatch(
+                YearMonth.of(2026, 7), true, Set.of(1L), Map.of());
 
         assertEquals(1, result.getTargetCount());
         assertEquals(1, result.getSnapshotSavedCount());
@@ -108,13 +110,27 @@ class MonthlyReportBatchServiceTest {
 
     @Test
     void forceRunRequiresExplicitConsentForMissingOrLegacySnapshotBeforeWriting() {
-        when(batchMapper.findForceBatchCandidates("2026-07", LocalDateTime.of(2026, 8, 1, 0, 0)))
+        when(batchMapper.findForceBatchCandidates("2026-07", LocalDateTime.of(2026, 8, 1, 0, 0), Set.of(1L)))
                 .thenReturn(List.of(new MonthlyReportForceBatchCandidate(1L, null, null)));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.runManualBatch(YearMonth.of(2026, 7), true, Map.of()));
+                () -> service.runManualBatch(YearMonth.of(2026, 7), true, Set.of(1L), Map.of()));
 
         assertEquals("MISSING_AI_CONSENT_INPUT", exception.getCode());
+        verify(snapshotService, never()).saveSnapshot(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void forceRunRejectsUserWhoJoinedAfterTheTargetMonth() {
+        when(batchMapper.findForceBatchCandidates("2026-05", LocalDateTime.of(2026, 6, 1, 0, 0), Set.of(1L)))
+                .thenReturn(List.of());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.runManualBatch(YearMonth.of(2026, 5), true, Set.of(1L), Map.of()));
+
+        assertEquals("REPORT_NOT_AVAILABLE", exception.getCode());
         verify(snapshotService, never()).saveSnapshot(
                 org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());

@@ -19,6 +19,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 이전 달 월간 리포트 스냅샷과 AI 분석을 사용자 단위로 생성한다.
@@ -91,6 +92,7 @@ public class MonthlyReportBatchService {
     /** 운영 키가 검증된 수동 API에서만 과거 월 전체를 강제로 재생성한다. */
     public MonthlyReportBatchRunResult runManualBatch(YearMonth targetMonth,
                                                        boolean force,
+                                                       Set<Long> targetUserIds,
                                                        Map<Long, Boolean> missingSnapshotAiConsents) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (!force) {
@@ -98,7 +100,11 @@ public class MonthlyReportBatchService {
         }
 
         List<MonthlyReportForceBatchCandidate> candidates = batchMapper.findForceBatchCandidates(
-                targetMonth.toString(), targetMonth.plusMonths(1).atDay(1).atStartOfDay());
+                targetMonth.toString(), targetMonth.plusMonths(1).atDay(1).atStartOfDay(), targetUserIds);
+        if (candidates.size() != targetUserIds.size()) {
+            throw new BusinessException("REPORT_NOT_AVAILABLE",
+                    "가입 이전 월이거나 조회할 수 없는 사용자가 강제 배치 대상에 포함되어 있습니다.");
+        }
         return processCandidates(resolveForceCandidates(candidates, missingSnapshotAiConsents), targetMonth, true);
     }
 

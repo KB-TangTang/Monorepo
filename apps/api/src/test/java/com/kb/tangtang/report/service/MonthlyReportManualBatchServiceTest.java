@@ -29,7 +29,7 @@ class MonthlyReportManualBatchServiceTest {
         MonthlyReportManualBatchService service = serviceAt(guard, batchService);
         MonthlyReportManualBatchRequestDto request = request("2026-07", true, 17L, false);
         when(batchService.runManualBatch(eq(java.time.YearMonth.of(2026, 7)), eq(true),
-                eq(Map.of(17L, false))))
+                eq(java.util.Set.of(17L)), eq(Map.of(17L, false))))
                 .thenReturn(new MonthlyReportBatchRunResult(3, 3, 2, 1));
 
         MonthlyReportBatchRunDto result = service.run("operation-key", request);
@@ -50,6 +50,7 @@ class MonthlyReportManualBatchServiceTest {
         MonthlyReportManualBatchRequestDto request = new MonthlyReportManualBatchRequestDto();
         request.setYearMonth("2026-07");
         request.setForce(true);
+        request.setTargetUserIds(List.of(17L));
         request.setMissingSnapshotAiConsents(List.of(
                 override(17L, true), override(17L, false)));
 
@@ -84,6 +85,7 @@ class MonthlyReportManualBatchServiceTest {
         request.setYearMonth(yearMonth);
         request.setForce(force);
         if (userId != null) {
+            request.setTargetUserIds(List.of(userId));
             request.setMissingSnapshotAiConsents(List.of(override(userId, aiUsageConsented)));
         }
         return request;
