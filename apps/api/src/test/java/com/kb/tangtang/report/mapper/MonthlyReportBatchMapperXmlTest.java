@@ -25,6 +25,7 @@ class MonthlyReportBatchMapperXmlTest {
 
         String namespace = MonthlyReportBatchMapper.class.getName();
         assertTrue(configuration.hasStatement(namespace + ".findEligibleCandidates"));
+        assertTrue(configuration.hasStatement(namespace + ".findForceBatchCandidates"));
 
         String xml;
         try (InputStream inputStream = Resources.getResourceAsStream(RESOURCE)) {
@@ -40,5 +41,7 @@ class MonthlyReportBatchMapperXmlTest {
         assertTrue(xml.contains("s.ai_analysis_attempt_count &lt; #{maxAutoAttempts}"));
         assertTrue(xml.contains("s.ai_analysis_failed_at &lt;= #{retryNotBefore}"));
         assertTrue(xml.contains("'TOO_MANY_REQUESTS', 'AI_PROVIDER_UNAVAILABLE'"));
+        assertTrue(xml.contains("s.category_summary_json"));
+        assertTrue(xml.contains("s.ai_analysis_status"));
     }
 }

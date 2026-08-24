@@ -2,6 +2,7 @@ package com.kb.tangtang.report.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -55,9 +55,8 @@ class MonthlyAiAnalysisPreparedSnapshotGenerationTest {
     void usesPreparedSnapshotWithoutSavingItAgain() {
         when(mapper.findAiAnalysisSnapshot(1L, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
-        when(mapper.sumNetSpending(eq(1L), any(), any()))
-                .thenReturn(new BigDecimal("100000"), new BigDecimal("120000"));
-        when(mapper.findMonthlyCategorySpending(eq(1L), any(), any())).thenReturn(List.of());
+        when(mapper.findMonthlyReportSnapshot(1L, "2026-07"))
+                .thenReturn(new MonthlyReportSnapshotRow(1L, "2026-07", snapshotJson(), "NOT_REQUESTED"));
         when(stateService.claim(eq(1L), eq("2026-07"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), anyString())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
@@ -72,5 +71,16 @@ class MonthlyAiAnalysisPreparedSnapshotGenerationTest {
         assertEquals("COMPLETED", result.getStatus());
         verify(provider).generate(any());
         verifyNoInteractions(snapshotService);
+    }
+
+    private String snapshotJson() {
+        return "{\"snapshotVersion\":2,\"aiUsageConsented\":true,"
+                + "\"summary\":{\"yearMonth\":\"2026-07\",\"totalSpent\":100000,"
+                + "\"previousMonthSpent\":120000,\"hasPreviousComparison\":true,"
+                + "\"monthOverMonthRate\":-16.67,\"fixedExpenseCandidateCount\":0,"
+                + "\"confirmedFixedExpenseCount\":0},"
+                + "\"spendingTrend\":{\"yearMonth\":\"2026-07\",\"items\":[]},"
+                + "\"categoryReport\":{\"yearMonth\":\"2026-07\",\"totalSpent\":100000,"
+                + "\"parentCategories\":[],\"categories\":[]}}";
     }
 }

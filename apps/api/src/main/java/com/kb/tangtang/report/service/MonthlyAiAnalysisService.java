@@ -5,7 +5,8 @@ import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisCategory;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisInput;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot;
-import com.kb.tangtang.report.domain.MonthlyCategorySpendingRow;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotContent;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,7 @@ public class MonthlyAiAnalysisService {
     private final MonthlyAiAnalysisSnapshotService snapshotService;
     private final MonthlyAiAnalysisResultReader resultReader;
     private final ObjectMapper objectMapper;
+    private final MonthlyReportSnapshotReader snapshotReader;
     private final Clock clock;
     private final String model;
 
@@ -87,6 +89,7 @@ public class MonthlyAiAnalysisService {
         this.snapshotService = snapshotService;
         this.resultReader = resultReader;
         this.objectMapper = objectMapper;
+        this.snapshotReader = new MonthlyReportSnapshotReader(objectMapper);
         this.clock = clock;
         this.model = model;
     }
@@ -204,23 +207,30 @@ public class MonthlyAiAnalysisService {
     }
 
     private MonthlyAiAnalysisInput buildInput(long userId, ReportPeriod period) {
-        BigDecimal currentMonthSpent = sumMonth(userId, period.yearMonth);
-        YearMonth previousMonth = period.yearMonth.minusMonths(1);
-        boolean hasPreviousComparison = !previousMonth.isBefore(period.joinedMonth);
-        BigDecimal previousMonthSpent = hasPreviousComparison ? sumMonth(userId, previousMonth) : null;
-        BigDecimal savingsAmount = hasPreviousComparison && previousMonthSpent.compareTo(currentMonthSpent) > 0
+        MonthlyReportSnapshotRow row = monthlyReportMapper.findMonthlyReportSnapshot(
+                userId, period.yearMonth.toString());
+        MonthlyReportSnapshotContent content = row == null ? null : snapshotReader.read(row.getCategorySummaryJson());
+        if (content == null || content.getSummary() == null || content.getCategoryReport() == null) {
+            throw new BusinessException("AI_ANALYSIS_SNAPSHOT_UNAVAILABLE",
+                    "월간 리포트 스냅샷을 준비하지 못했어요. 강제 배치로 다시 생성해 주세요.",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+
+        BigDecimal currentMonthSpent = zeroIfNull(content.getSummary().getTotalSpent());
+        BigDecimal previousMonthSpent = content.getSummary().getPreviousMonthSpent();
+        boolean hasPreviousComparison = content.getSummary().isHasPreviousComparison();
+        BigDecimal savingsAmount = hasPreviousComparison && previousMonthSpent != null
+                && previousMonthSpent.compareTo(currentMonthSpent) > 0
                 ? previousMonthSpent.subtract(currentMonthSpent)
                 : BigDecimal.ZERO;
 
         List<MonthlyAiAnalysisCategory> categories = new ArrayList<>();
-        List<MonthlyCategorySpendingRow> rows = monthlyReportMapper.findMonthlyCategorySpending(
-                userId, period.yearMonth.atDay(1), period.yearMonth.plusMonths(1).atDay(1));
-        for (MonthlyCategorySpendingRow row : rows) {
-            if (period.yearMonth.toString().equals(row.getYearMonth()) && nonNegative(row.getAmount()).signum() > 0) {
+        for (com.kb.tangtang.report.dto.MonthlyCategoryItemDto item : content.getCategoryReport().getCategories()) {
+            if (nonNegative(item.getAmount()).signum() > 0) {
                 categories.add(MonthlyAiAnalysisCategory.builder()
-                        .parentCategoryName(row.getParentCategoryName())
-                        .categoryName(row.getCategoryName())
-                        .amount(nonNegative(row.getAmount()))
+                        .parentCategoryName(item.getParentCategoryName())
+                        .categoryName(item.getCategoryName())
+                        .amount(nonNegative(item.getAmount()))
                         .build());
             }
         }
@@ -260,11 +270,6 @@ public class MonthlyAiAnalysisService {
         }
     }
 
-    private BigDecimal sumMonth(long userId, YearMonth month) {
-        return nonNegative(monthlyReportMapper.sumNetSpending(
-                userId, month.atDay(1), month.plusMonths(1).atDay(1)));
-    }
-
     private String calculateInputHash(MonthlyAiAnalysisInput input) {
         try {
             byte[] source = objectMapper.writeValueAsBytes(input);
@@ -278,6 +283,10 @@ public class MonthlyAiAnalysisService {
 
     private BigDecimal nonNegative(BigDecimal amount) {
         return amount == null || amount.signum() <= 0 ? BigDecimal.ZERO : amount;
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
     }
 
     private static class ReportPeriod {
