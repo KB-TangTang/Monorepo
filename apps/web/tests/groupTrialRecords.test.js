@@ -140,11 +140,39 @@ test('그룹 상세의 「재판 기록」 진입은 기록 화면으로 간다'
     assert.match(view, /name: 'groupTrialRecords'/);
 
     /*
-     * `goToRanking` 은 nav 의 「최종 순위」 한 곳에만 남아야 한다.
-     * 하단 명예 법정 배너는 `@open` 이라 `@click` 으로 세면 걸리지 않는다.
+     * 순위 진입은 하단 명예 법정 배너(`@open`)뿐이다. nav 의 「최종 순위」 바로가기를
+     * 걷어내면서 `@click="goToRanking"` 은 이 화면에서 완전히 사라졌다 —
+     * 다시 생기면 「재판 기록」이라고 적힌 무언가가 또 순위로 새고 있다는 뜻이다.
      */
     const rankingClicks = view.match(/@click="goToRanking"/g) ?? [];
-    assert.equal(rankingClicks.length, 1, '「재판 기록」이라고 적힌 버튼이 아직 순위로 가고 있다');
+    assert.equal(rankingClicks.length, 0, '「재판 기록」이라고 적힌 버튼이 아직 순위로 가고 있다');
+});
+
+test('종료 상세는 재판 기록을 링크가 아니라 목록으로 펼친다', () => {
+    const view = source('src/views/challenge/group/GroupChallengeDetailView.vue');
+
+    assert.match(
+        view,
+        /<GroupTrialRecordCard\s+:items="recentTrialRecords"/,
+        '기록 목록이 접혀 있다. 종료 화면에서 판결을 보려면 한 번 더 눌러야 한다',
+    );
+    /* 기록 화면과 같은 컴포넌트를 써야 행 구조가 두 벌로 갈리지 않는다 */
+    assert.match(view, /components\/challenge\/group\/GroupTrialRecordCard\.vue/);
+    /* 목록이 길어지면 명예 법정이 스크롤 밖으로 밀린다 — 미리보기는 잘라 둔다 */
+    assert.match(view, /const RECORD_PREVIEW = 3;/);
+    assert.match(view, /slice\(0, RECORD_PREVIEW\)/);
+});
+
+test('종료 상세에 승소·패소 표기가 남아 있지 않다', () => {
+    const view = source('src/views/challenge/group/GroupChallengeDetailView.vue');
+
+    /*
+     * 히어로 배지와 결과 카드 두 곳에 있었다. 아래 재판 기록에 재판별 유무죄 도장이
+     * 줄줄이 서면서 같은 화면에서 「승소」와 「유죄」가 뒤섞여 읽혔다.
+     */
+    assert.equal(/'승소'/.test(view), false, '승소/패소 판정이 되살아났다');
+    assert.equal(/outcomeLabel/.test(view), false);
+    assert.equal(/gc-detail__result-badge/.test(view), false);
 });
 
 test('그룹 상세는 진행 중·종료 두 분기 모두 명예 법정 배너를 단다', () => {

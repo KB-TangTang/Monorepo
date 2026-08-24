@@ -6,7 +6,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchGroupChallengeDetail, deleteGroupChallenge } from '@/api/groupChallenge';
+import {
+    fetchGroupChallengeDetail,
+    deleteGroupChallenge,
+    fetchGroupTrialRecords,
+} from '@/api/groupChallenge';
+import { toTrialRecordCard } from '@/utils/groupTrial';
 
 import BaseModal from '@/components/common/BaseModal.vue';
 import ChallengePageHeader from '@/components/challenge/ChallengePageHeader.vue';
@@ -17,6 +22,7 @@ import GroupDetailPromise from '@/components/challenge/group/GroupDetailPromise.
 import GroupDetailMemberGrid from '@/components/challenge/group/GroupDetailMemberGrid.vue';
 import GroupDetailMemberTable from '@/components/challenge/group/GroupDetailMemberTable.vue';
 import GroupDetailTrialCarousel from '@/components/challenge/group/GroupDetailTrialCarousel.vue';
+import GroupTrialRecordCard from '@/components/challenge/group/GroupTrialRecordCard.vue';
 import GroupHonorCourtEntry from '@/components/challenge/group/GroupHonorCourtEntry.vue';
 
 import { ChevronRightIcon } from '@heroicons/vue/24/solid';
@@ -43,6 +49,8 @@ onMounted(async () => {
     } finally {
         loading.value = false;
     }
+
+    if (challenge.value?.status === 'CLOSED') await loadTrialRecords();
 });
 
 const ch = computed(() => challenge.value);
@@ -51,19 +59,35 @@ const isActive = computed(() => ch.value?.status === 'ACTIVE');
 const isClosed = computed(() => ch.value?.status === 'CLOSED');
 const isDaily = computed(() => ch.value?.evalType === 'DAILY');
 
-/* 종료 결과 텍스트 */
-const outcomeLabel = computed(() => {
-    if (!isClosed.value) return '';
-    return ch.value.finalOutcome === 'SURVIVED' ? '승소' : '패소';
-});
+/*
+ * 종료 화면의 재판 기록 — 링크가 아니라 **목록을 펼쳐서** 보여준다.
+ *
+ * 「재판 기록 보기」 한 줄만 두면 끝난 챌린지에서 제일 궁금한 것(누가 무슨 판결을 받았나)이
+ * 한 번 더 눌러야 나온다. 종료 화면에 남은 내용이 결과 카드·약속뿐이라 자리도 남는다.
+ *
+ * **최근 3건만 펼친다.** 7일 챌린지면 기소가 수십 건까지 가는데 전부 펼치면 하단 명예 법정이
+ * 스크롤 밖으로 밀린다. 나머지는 기록 화면(`groupTrialRecords`)이 맡는다 — 범위 필터·요약이
+ * 거기 있고, 여기에 또 만들면 같은 목록이 두 자리에서 어긋난다.
+ */
+const trialRecords = ref([]);
+const recordsFailed = ref(false);
 
-const outcomeStyle = computed(() => {
-    if (!isClosed.value) return {};
-    if (ch.value.finalOutcome === 'SURVIVED') {
-        return { bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' };
+async function loadTrialRecords() {
+    try {
+        const list = await fetchGroupTrialRecords(route.params.id);
+        trialRecords.value = list.map(toTrialRecordCard);
+    } catch {
+        /* 기록을 못 받아도 상세는 그대로 그린다. 대신 아래 링크 행으로 되돌아간다 */
+        recordsFailed.value = true;
     }
-    return { bg: 'var(--tt-red-soft)', color: 'var(--tt-red-deep)' };
-});
+}
+
+const RECORD_PREVIEW = 3;
+const recentTrialRecords = computed(() => trialRecords.value.slice(0, RECORD_PREVIEW));
+const recordGuiltyCount = computed(
+    () => trialRecords.value.filter((item) => item.verdict === 'GUILTY').length,
+);
+const recordInnocentCount = computed(() => trialRecords.value.length - recordGuiltyCount.value);
 
 /* 상태 뱃지 */
 const statusBadges = computed(() => {
@@ -78,10 +102,13 @@ const statusBadges = computed(() => {
         ];
     }
     if (isClosed.value) {
-        return [
-            { label: '종료됨', bg: 'var(--tt-bg-fill)', color: 'var(--tt-text-muted)' },
-            { label: outcomeLabel.value, ...outcomeStyle.value },
-        ];
+        /*
+         * 「승소 / 패소」를 붙이지 않는다. 종료된 챌린지에서 이 한 단어가 화면에 두 번(히어로
+         * 배지 · 결과 카드) 나오는데, 그 아래 재판 기록에는 재판별 유무죄 도장이 또 줄줄이 있어
+         * 같은 화면에서 「승소」와 「유죄」가 뒤섞여 읽혔다. 재판의 승패는 재판 기록이 말하고
+         * 챌린지의 결과는 순위·절약액이 말한다.
+         */
+        return [{ label: '종료됨', bg: 'var(--tt-bg-fill)', color: 'var(--tt-text-muted)' }];
     }
     return [
         { label: '진행 중', bg: 'var(--tt-green-soft)', color: 'var(--tt-green)' },
@@ -145,10 +172,23 @@ function goToRanking() {
  *
  * 이 화면의 「재판 기록」 진입 두 곳(종료 화면의 카드 · 진행 중 푸터 버튼)이 둘 다
  * `goToRanking` 을 부르고 있었다 — 이름은 기록인데 목적지는 순위였고, 그래서 확정된 재판을
- * 볼 방법이 앱 안에 없었다. 순위 진입은 nav 의 「최종 순위」와 하단 명예 법정 배너가 맡는다.
+ * 볼 방법이 앱 안에 없었다. 순위 진입은 하단 명예 법정 배너가 맡는다.
  */
 function goToTrialRecords() {
     router.push({ name: 'groupTrialRecords', params: { id: ch.value.id } });
+}
+
+/*
+ * 펼쳐 둔 기록 행에서 바로 판결문으로 들어간다. 목적지는 `toTrialRecordCard` 가
+ * `verdictRouteName` 으로 정해 놓았다 — 여기서 다시 분기하면 AI 판결을 모르는 진입로가 생긴다.
+ * (기록 화면 `GroupTrialRecordsView.vue:93` 과 같은 처리다)
+ */
+function openRecord({ item }) {
+    if (!item.routeName) return;
+    router.push({
+        name: item.routeName,
+        params: { id: item.groupId, indictmentId: item.id },
+    });
 }
 
 function goToInvite() {
@@ -241,14 +281,17 @@ async function handleDelete() {
     <div v-else-if="ch" class="gc-detail">
         <!-- ── 히어로 영역 (장식 원 + 헤더 + 상태) ── -->
         <div class="gc-detail__hero">
-            <div class="gc-detail__deco gc-detail__deco--lg"></div>
+            <!--
+                 장식 원은 진행 중·시작 전에만 둔다. 종료 화면은 결과를 읽는 자리라
+                 우상단이 비어 있는 편이 낫다 — 원본 디자인의 결과 화면에도 없다.
+            -->
+            <div v-if="!isClosed" class="gc-detail__deco gc-detail__deco--lg"></div>
 
-            <!-- 내비게이션 헤더 -->
-            <ChallengePageHeader title="그룹 챌린지" class="gc-detail__nav" @back="goBack">
-                <template v-if="isClosed" #action>
-                    <span class="gc-detail__nav-right" @click="goToRanking">최종 순위</span>
-                </template>
-            </ChallengePageHeader>
+            <!--
+                 내비게이션 헤더. 종료 화면에 있던 「최종 순위」 바로가기는 뺐다 —
+                 순위 진입은 스크롤 하단 명예 법정 배너 하나로 모은다.
+            -->
+            <ChallengePageHeader title="그룹 챌린지" class="gc-detail__nav" @back="goBack" />
 
             <!-- 상태 뱃지 + 챌린지 이름 -->
             <div class="gc-detail__status">
@@ -279,18 +322,7 @@ async function handleDelete() {
             <template v-if="isClosed">
                 <!-- 최종 결과 요약 -->
                 <div class="gc-detail__result-card">
-                    <div class="gc-detail__result-header">
-                        <span class="gc-detail__result-title">최종 결과</span>
-                        <span
-                            class="gc-detail__result-badge"
-                            :style="{
-                                background: outcomeStyle.bg,
-                                color: outcomeStyle.color,
-                            }"
-                        >
-                            {{ outcomeLabel }}
-                        </span>
-                    </div>
+                    <span class="gc-detail__result-title">최종 결과</span>
                     <div class="gc-detail__result-stats">
                         <div class="gc-detail__result-stat">
                             <span class="gc-detail__result-label">최종 순위</span>
@@ -324,9 +356,48 @@ async function handleDelete() {
                     :memo-date="ch.memoDate"
                 />
 
-                <!-- 재판 기록 보기 -->
+                <!--
+                     재판 기록 — 최근 3건을 펼쳐 둔다. 목록·행 클릭은 기록 화면과 같은
+                     `GroupTrialRecordCard` 가 그린다(행 구조가 두 벌이 되지 않게).
+                -->
+                <section v-if="trialRecords.length" class="gc-detail__records">
+                    <div class="gc-detail__records-head">
+                        <h3 class="gc-detail__records-title">재판 기록</h3>
+                        <span class="gc-detail__records-count">
+                            <span class="gc-detail__records-total"
+                                >총 {{ trialRecords.length }}건</span
+                            >
+                            <span class="gc-detail__records-guilty"
+                                >유죄 {{ recordGuiltyCount }}</span
+                            >
+                            <span class="gc-detail__records-dot">·</span>
+                            <span class="gc-detail__records-innocent"
+                                >무죄 {{ recordInnocentCount }}</span
+                            >
+                        </span>
+                    </div>
+
+                    <GroupTrialRecordCard :items="recentTrialRecords" @open="openRecord" />
+
+                    <!-- 3건을 넘길 때만 나간다. 다 보이는데 「전체 보기」가 있으면 헛걸음이다 -->
+                    <button
+                        v-if="trialRecords.length > recentTrialRecords.length"
+                        type="button"
+                        class="gc-detail__records-more"
+                        @click="goToTrialRecords"
+                    >
+                        재판 기록 {{ trialRecords.length }}건 전체 보기
+                        <ChevronRightIcon class="gc-detail__records-more-icon" />
+                    </button>
+                </section>
+
+                <!--
+                     기록 요청이 실패했을 때의 물러설 자리. 상세 응답의 집계(`trialStats`)는
+                     이미 손에 있으니 진입만이라도 남긴다 — 여기까지 없애면 종료 화면에서
+                     재판 기록으로 갈 방법이 사라진다.
+                -->
                 <div
-                    v-if="ch.trialStats && ch.trialStats.totalTrials > 0"
+                    v-else-if="recordsFailed && ch.trialStats && ch.trialStats.totalTrials > 0"
                     class="gc-detail__trial-link"
                     @click="goToTrialRecords"
                 >
@@ -350,7 +421,7 @@ async function handleDelete() {
                 <!--
                      명예 법정은 스크롤 맨 아래다. 순위가 이 화면에서 빠졌어도 위로
                      올리지 않는다 — 이 화면의 주어는 「내 결과」고, 순위 배너를 먼저
-                     읽히면 남과의 비교가 앞선다. nav 「최종 순위」가 급한 사람의 지름길이다.
+                     읽히면 남과의 비교가 앞선다. 이제 순위로 가는 길은 여기 하나다.
                 -->
                 <GroupHonorCourtEntry class="gc-detail__honor" @open="goToRanking" />
             </template>
@@ -560,13 +631,6 @@ async function handleDelete() {
     z-index: 2;
 }
 
-.gc-detail__nav-right {
-    font-size: var(--tt-fs-caption);
-    font-weight: var(--tt-fw-black);
-    color: var(--tt-blue);
-    cursor: pointer;
-}
-
 /* ── 채팅 플로팅 버튼 (좌측 하단 고정) ── */
 .gc-detail__chat-fab {
     position: fixed;
@@ -686,11 +750,20 @@ async function handleDelete() {
     color: var(--tt-white);
 }
 
+/*
+ * 중립 액션(「그룹 목록으로」 · 모달의 「그만두기」). `BaseButton` 의 ghost 와 같은 처방이다 —
+ * 흰 면 · `--tt-border` 선 · 본문색 글자.
+ *
+ * 잉크색 1.5px 테두리를 두르고 있었는데, 종료 화면에서는 이게 유일한 버튼이라 화면 폭을
+ * 가로지르는 검은 테두리 상자가 됐고 모집 중에는 옆의 연한 「소환」·붉은 「삭제」와 굵기가
+ * 어긋났다. 나가는 버튼이 화면에서 제일 센 요소일 이유가 없다.
+ * 선 두께는 같은 줄에 서는 `--secondary`·`--danger` 에 맞춰 1.5px 로 둔다.
+ */
 .gc-detail__btn--outline {
     flex: 1;
-    background: transparent;
-    border: 1.5px solid var(--tt-ink);
-    color: var(--tt-ink);
+    background: var(--tt-bg);
+    border: 1.5px solid var(--tt-border);
+    color: var(--tt-text-body);
 }
 
 .gc-detail__btn--secondary {
@@ -749,23 +822,11 @@ async function handleDelete() {
     padding: 18px 16px;
 }
 
-.gc-detail__result-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
 .gc-detail__result-title {
+    display: block;
     font-size: var(--tt-fs-button);
     font-weight: var(--tt-fw-black);
     color: var(--tt-text);
-}
-
-.gc-detail__result-badge {
-    font-size: var(--tt-fs-overline);
-    font-weight: var(--tt-fw-black);
-    padding: 4px 10px;
-    border-radius: var(--tt-radius-full);
 }
 
 .gc-detail__result-stats {
@@ -806,7 +867,70 @@ async function handleDelete() {
     color: var(--tt-red-deep);
 }
 
-/* ── 재판 기록 링크 카드 ── */
+/* ── 재판 기록 (종료 화면에 펼쳐 두는 최근 3건) ── */
+.gc-detail__records {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gc-detail__records-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--tt-space-2);
+    padding: 0 4px;
+}
+
+.gc-detail__records-title {
+    margin: 0;
+    font-size: var(--tt-fs-button);
+    font-weight: var(--tt-fw-black);
+    color: var(--tt-text);
+}
+
+.gc-detail__records-count {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+}
+.gc-detail__records-total {
+    color: var(--tt-text-body);
+}
+.gc-detail__records-guilty {
+    color: var(--tt-danger);
+}
+.gc-detail__records-innocent {
+    color: var(--tt-success);
+}
+.gc-detail__records-dot {
+    color: var(--tt-text-hint);
+}
+
+/* 목록 밖으로 나가는 줄. 카드가 아니라 링크로 읽히게 면도 선도 주지 않는다 */
+.gc-detail__records-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px;
+    background: none;
+    border: none;
+    font-size: var(--tt-fs-caption);
+    font-weight: var(--tt-fw-bold);
+    color: var(--tt-text-muted);
+    cursor: pointer;
+}
+
+.gc-detail__records-more-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* ── 재판 기록 링크 카드 (기록 요청 실패 시의 대체 진입) ── */
 /* 본문 마지막 조각. 위 카드들과 한 칸 더 떼어 「여기서 나간다」를 여백으로 말한다 */
 .gc-detail__honor {
     margin-top: 6px;
