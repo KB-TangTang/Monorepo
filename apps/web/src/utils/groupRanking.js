@@ -68,7 +68,7 @@ function lifeStatus(member, maxLives, closed) {
     if (lives === 0) {
         return { isEliminated: false, statusType: 'danger', statusLabel: '탈락 위기' };
     }
-    /* 절반 미만이면 위험. `GroupDetailRankingTable` 의 생존 판정(절반 이상)과 같은 경계다. */
+    /* 남은 목숨이 최대치의 절반 미만이면 위험. 경계는 「절반 이상 = 생존」이다. */
     return {
         isEliminated: false,
         statusType: lives * 2 < maxLives ? 'danger' : 'alive',

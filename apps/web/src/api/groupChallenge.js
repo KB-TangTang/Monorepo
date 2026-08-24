@@ -363,8 +363,13 @@ function toDetailViewModel(dto) {
             isExceeded: member.exceeded,
         })),
         /*
-         * 종료 화면의 최종 순위 (이슈 #173). CLOSED 전에는 null 을 그대로 둔다 —
-         * 빈 배열로 채우면 `v-if="ch.finalMembers"` 가 참이 되어 빈 랭킹 표가 그려진다.
+         * 종료 시점의 최종 순위 (이슈 #173). CLOSED 전에는 null 을 그대로 둔다.
+         *
+         * ⚠ **지금 이 값을 읽는 화면이 없다.** 종료 상세에서 시상대·전체 피고인 현황을
+         * 걷어내면서(#473) 순위 렌더링은 명예 법정(`/group-challenges/:id/ranking`,
+         * `GroupRankingService`)으로 일원화됐다. 서버 DTO 가 아직 내려주므로 변환만
+         * 형태대로 유지한다 — 걷어낼 때는 `ChallengeGroupDetailService.finalMembers()`
+         * 와 함께 지운다. 여기만 지우면 서버는 계속 쿼리를 돈다.
          * `trialStats` 는 이름이 같아 스프레드로 통과한다.
          */
         finalMembers: dto.finalMembers

@@ -17,8 +17,6 @@ import GroupDetailPromise from '@/components/challenge/group/GroupDetailPromise.
 import GroupDetailMemberGrid from '@/components/challenge/group/GroupDetailMemberGrid.vue';
 import GroupDetailMemberTable from '@/components/challenge/group/GroupDetailMemberTable.vue';
 import GroupDetailTrialCarousel from '@/components/challenge/group/GroupDetailTrialCarousel.vue';
-import GroupDetailPodium from '@/components/challenge/group/GroupDetailPodium.vue';
-import GroupDetailRankingTable from '@/components/challenge/group/GroupDetailRankingTable.vue';
 import GroupHonorCourtEntry from '@/components/challenge/group/GroupHonorCourtEntry.vue';
 
 import { ChevronRightIcon } from '@heroicons/vue/24/solid';
@@ -271,11 +269,14 @@ async function handleDelete() {
 
         <!-- ── 콘텐츠 영역 ── -->
         <div class="gc-detail__content">
-            <!-- 종료: 시상대 + 결과 + 약속 + 순위 + 재판 기록 -->
+            <!--
+                 종료: 내 결과 + 약속 + 재판 기록 + 명예 법정.
+                 순위(시상대·전체 피고인 현황)는 이 화면에 두지 않는다 — 명예 법정
+                 (`/group-challenges/:id/ranking`)이 전담한다. 두 화면이 같은
+                 `tbl_group_member` 를 같은 순서로 읽어 시상대와 「전체 피고인 현황」을
+                 각자 그리고 있었고, 제목 문자열까지 같아 어느 쪽이 원본인지 알 수 없었다.
+            -->
             <template v-if="isClosed">
-                <!-- 시상대 (3명 이상일 때) -->
-                <GroupDetailPodium v-if="ch.finalMembers?.length >= 3" :members="ch.finalMembers" />
-
                 <!-- 최종 결과 요약 -->
                 <div class="gc-detail__result-card">
                     <div class="gc-detail__result-header">
@@ -323,14 +324,6 @@ async function handleDelete() {
                     :memo-date="ch.memoDate"
                 />
 
-                <!-- 전체 피고인 현황 -->
-                <GroupDetailRankingTable
-                    v-if="ch.finalMembers"
-                    :members="ch.finalMembers"
-                    :eval-type="ch.evalType"
-                    :max-lives="ch.maxLives"
-                />
-
                 <!-- 재판 기록 보기 -->
                 <div
                     v-if="ch.trialStats && ch.trialStats.totalTrials > 0"
@@ -355,8 +348,9 @@ async function handleDelete() {
                 </div>
 
                 <!--
-                     명예 법정은 스크롤 맨 아래다. 「끝나고 나면 어떻게 되나」라
-                     위에 두면 최종 순위표·재판 기록보다 먼저 읽혀 우선순위가 뒤집힌다.
+                     명예 법정은 스크롤 맨 아래다. 순위가 이 화면에서 빠졌어도 위로
+                     올리지 않는다 — 이 화면의 주어는 「내 결과」고, 순위 배너를 먼저
+                     읽히면 남과의 비교가 앞선다. nav 「최종 순위」가 급한 사람의 지름길이다.
                 -->
                 <GroupHonorCourtEntry class="gc-detail__honor" @open="goToRanking" />
             </template>
