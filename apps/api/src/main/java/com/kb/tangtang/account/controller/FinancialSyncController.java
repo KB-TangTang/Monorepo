@@ -1,5 +1,6 @@
 package com.kb.tangtang.account.controller;
 
+import com.kb.tangtang.account.docs.FinancialSyncControllerDocs;
 import com.kb.tangtang.account.dto.FinancialSyncRequestDto;
 import com.kb.tangtang.account.dto.FinancialSyncResultDto;
 import com.kb.tangtang.account.service.FinancialSyncService;
@@ -20,7 +21,7 @@ import java.util.Set;
  */
 @RestController
 @RequestMapping("/api/financial-syncs")
-public class FinancialSyncController {
+public class FinancialSyncController implements FinancialSyncControllerDocs {
 
     private final FinancialSyncService financialSyncService;
 
@@ -32,6 +33,7 @@ public class FinancialSyncController {
      * institutionCodes 는 선택 항목이다 — 계좌 연동 직후 최초 동기화(LinkDoneView)만 채워 보낸다.
      * 자세한 이유는 FinancialSyncService.sync(long, Set) 참고(#334).
      */
+    @Override
     @PostMapping
     public ApiResponse<FinancialSyncResultDto> sync(@LoginUser Long userId,
                                                      @RequestBody(required = false) FinancialSyncRequestDto request) {
