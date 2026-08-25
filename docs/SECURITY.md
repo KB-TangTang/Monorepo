@@ -62,15 +62,38 @@ REST   브라우저 → Vercel(rewrite) → EC2:8080            평문 HTTP  ←
 >   `certbot --standalone -p 80:80` 도 실패한다
 > - 인증서 경로도 어긋난다(호스트 `/etc/letsencrypt` vs 도커 볼륨)
 
-REST 를 https 로 옮기려면 **아래 4가지를 반드시 함께** 해야 한다. 하나라도 빠지면 로그인이 깨진다.
+#### 전환 방법과 동반 조건 (2026-08-25 재검증)
 
-1. `ServletConfig` 의 CORS `allowedOrigins`(정확 문자열 2개) → `allowedOriginPatterns`.
-   지금 그대로면 Vercel 프리뷰 배포가 CORS 로 막힌다
-2. `auth.cookie.same-site` 를 `application-docker.properties` 에서 오버라이드.
-   기본 `Lax` 로는 오리진이 갈리는 순간 리프레시 쿠키가 실려 나가지 않는다
-3. nginx `client_max_body_size` 를 12m → **20m**. `WebConfig` 의 `MAX_REQUEST_SIZE` 가 20MB 다
-   (현재 값은 `MAX_FILE_SIZE` 10MB 만 보고 잡은 것이다)
-4. `/api/notifications/stream` 에 `proxy_buffering off` 유지 — SSE 알림이 버퍼에 갇힌다
+> 이 문단은 원래 **「4가지를 반드시 함께」** 라고만 적혀 있었다. 재검증 결과 그 목록은
+> **서로 다른 두 전환 방법의 조건을 섞어 놓은 것**이었다. 방법에 따라 필요한 조건이 다르다.
+
+| 방법 | 바꾸는 것 | 동반 조건 |
+|---|---|---|
+| **A. rewrite 대상만 https 로** (채택) | `vercel.json` 의 destination 2개를 `https://kb-tangtang.duckdns.org` 로 | **③ ④** |
+| B. 프론트가 EC2 로 직행 | `VITE_API_BASE_URL` 을 EC2 도메인으로 (기각안. `DEPLOY_WEBSOCKET.md` 부록) | ① ② ③ ④ |
+
+1. `ServletConfig` 의 CORS `allowedOrigins`(정확 문자열 2개) → `allowedOriginPatterns`
+   — **A 안에는 불필요.** Vercel rewrite 는 브라우저 리다이렉트가 아니라 **Vercel 서버가 대신
+   호출하는 서버 사이드 프록시**다. 브라우저가 보는 오리진은 `*.vercel.app` 그대로라
+   CORS 심사 자체를 타지 않는다. B 안에서만 필요하다
+2. `auth.cookie.same-site` 를 `application-docker.properties` 에서 오버라이드
+   — **A 안에는 불필요.** 같은 이유로 오리진이 갈리지 않아 리프레시 쿠키가 그대로 실린다.
+   B 안에서만 필요하다
+3. nginx `client_max_body_size` 를 12m → **20m** — **A·B 모두 필수.**
+   `WebConfig.MAX_REQUEST_SIZE` 가 20MB 이고, 그룹 챌린지 변론 증빙이
+   `DefenseService.MAX_IMAGES = 3` × `ImageProcessor.MAX_BYTES = 5MB` = **한 요청 최대 15MB** 다.
+   클라이언트 압축도 없다. 12m 이면 사진 3장 변론이 nginx 에서 **413** 으로 잘린다
+   (기존 12m 은 `MAX_FILE_SIZE` 10MB 만 보고 잡은 값이었다)
+4. `/api/notifications/stream` 에 `proxy_buffering off` — **A·B 모두 필수.**
+   없으면 SSE 알림이 버퍼에 갇힌다. 다만 프론트가 60초 폴링(`notification.js` `POLL_INTERVAL_MS`)
+   으로 강등되므로 **실시간이 죽을 뿐 완전 장애는 아니다**
+
+> **`proxy_read_timeout` 은 넣지 않는다.** nginx 기본 60초에 SSE 가 끊길 것처럼 보이지만
+> `SseHeartbeat.java:26` 이 15초마다 주석 프레임을 보내고, `RootConfig` 의 전용 스케줄러
+> 풀(`poolSize 24`)이 그 하트비트가 굶지 않도록 보장한다. 근거 없는 지시어를 늘리지 않는다.
+>
+> **전역 gzip 도 꺼져 있다** — EC2 에서 `nginx -T | grep -i gzip` 실측, `gzip on;` 없음(2026-08-25).
+> SSE 블록의 `gzip off;` 는 나중에 누가 전역 gzip 을 켜도 안전하도록 남겨 둔 보험이다.
 
 ### 🟡 Swagger 문서가 무인증으로 공개
 
@@ -134,8 +157,9 @@ REST 를 https 로 옮기려면 **아래 4가지를 반드시 함께** 해야 �
 
 - [x] 보안그룹: **3307 차단 완료**(2026-08-19). 팀은 SSH 터널로 접속한다
 - [ ] 보안그룹: 관리 포트 접근 범위를 팀 IP 로 제한 (EC2 담당 팀원 · 상세는 팀 채널)
-- [ ] **REST(8080) https 전환 → `vercel.json` 을 https 로** — **후속 이슈.**
-      위 「Vercel → EC2 구간이 평문 HTTP」의 동반 조건 4가지를 함께 처리해야 한다
+- [ ] **REST(8080) https 전환 → `vercel.json` rewrite 대상을 https 로**(위 표의 **A 안**).
+      동반 조건은 **③ ④ 둘뿐**이고, ③④ 는 2026-08-25 EC2 nginx 에 적용했다.
+      남은 것은 `apps/web/vercel.json` 의 destination 2개를 `https://kb-tangtang.duckdns.org` 로 바꾸는 일이다
 - [ ] `.env` 에 `SWAGGER_ACCESS_PASSWORD` 설정 후 재배포. 값은 팀 채널로 공유
       (EC2 env 에는 이미 넣어 뒀다. 이 PR 이 머지돼 새 war 가 올라가야 실제로 적용된다)
 - [ ] nginx 에 보안 헤더가 없다 — HSTS · `X-Content-Type-Options` · `X-Frame-Options` ·
