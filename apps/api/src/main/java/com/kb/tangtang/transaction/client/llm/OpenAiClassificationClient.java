@@ -50,7 +50,14 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
             + "반드시 사용자가 제공한 카테고리 목록의 id 중 하나만 선택하세요. "
             + "목록에 없는 id를 만들어내지 마세요. 확신이 서지 않으면 categoryId를 null로 두세요. "
             + "각 판정마다 0.0에서 1.0 사이의 confidence(확신도)도 반드시 함께 반환하세요. "
-            + "확신이 없을수록 confidence를 낮게, categoryId가 null이면 confidence도 낮게 주세요.";
+            + "확신이 없을수록 confidence를 낮게, categoryId가 null이면 confidence도 낮게 주세요. "
+            + "거래에 merchantCategoryName(카드사가 분류한 업종명)이 함께 오면, merchantName 을 "
+            + "해석하기 애매할 때는 이 값을 가장 신뢰할 수 있는 신호로 우선 반영하세요. "
+            + "merchantName 은 '브랜드명+지점명'이 공백 없이 붙어 들어올 수 있습니다 "
+            + "(예: CU역삼점, 스타벅스강남역점, 이디야논현점). 끝에 오는 지역명·역명·'점'/'지점' 토큰은 "
+            + "지점 표시이므로 무시하고 앞부분의 브랜드명만으로 업종을 판단하세요. "
+            + "브랜드명은 영문 표기(CU, GS25)뿐 아니라 한글 음차 표기(씨유, 지에스25)로도 들어올 수 "
+            + "있습니다. 같은 브랜드의 한글 음차 표기라고 해서 영문 표기보다 확신도를 낮추지 마세요.";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -143,6 +150,7 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
             ObjectNode node = transactionArray.addObject();
             node.put("transactionId", tx.getId());
             node.put("merchantName", tx.getMerchantName() == null ? "" : tx.getMerchantName());
+            node.put("merchantCategoryName", tx.getMerchantCategoryName() == null ? "" : tx.getMerchantCategoryName());
             node.put("amount", tx.getAmount() == null ? "" : tx.getAmount().toPlainString());
             node.put("description", tx.getDescription1() == null ? "" : tx.getDescription1());
         }

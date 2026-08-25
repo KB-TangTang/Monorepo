@@ -11,7 +11,7 @@ import {
     CreditCardIcon,
     ReceiptPercentIcon,
 } from '@heroicons/vue/24/solid';
-import { formatAssetHomeWon, toneColor } from '@/utils/asset';
+import { formatWon, toneColor } from '@/utils/asset';
 
 defineProps({
     accounts: { type: Array, required: true },
@@ -65,7 +65,7 @@ function goToDetail(account) {
                         class="asset-accounts__amount"
                         :class="{ 'asset-accounts__amount--negative': account.amount < 0 }"
                     >
-                        {{ formatAssetHomeWon(account.amount) }}
+                        {{ formatWon(account.amount) }}
                     </p>
                 </button>
             </li>
@@ -143,8 +143,10 @@ function goToDetail(account) {
 }
 
 .asset-accounts__amount {
+    flex-shrink: 0;
     font-family: var(--tt-font-mono);
     font-weight: var(--tt-fw-bold);
+    white-space: nowrap;
     color: var(--tt-text);
 }
 

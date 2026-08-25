@@ -757,3 +757,106 @@ export const MOCK_TRIAL_STATUS = [
         deadlineMinutes: 46 * 60,
     },
 ];
+
+/*
+ * 확정된 재판 기록. 위 MOCK_TRIAL_STATUS 의 확정판이다 — 저쪽이 진행 중(DEFENSE_WAIT·VOTING)만
+ * 담는 것과 반대로 여기는 GUILTY·INNOCENT 만 담는다.
+ *
+ * 서버 DTO 모양 그대로 둔다(profileImageUrl · mine · defended · confirmedAt). 화면이 쓰는 이름으로
+ * 바꾸는 일은 api/groupChallenge.js 가 한다 — 여기서 미리 바꿔 두면 목 모드에서만 통과하고
+ * 실서버에서 깨지는 필드가 생긴다.
+ *
+ * 판결 방식 네 가지(VOTE · NO_VOTE · CONFESSION · AI_JUDGMENT)를 모두 덮는다. AI_JUDGMENT 만
+ * 다른 화면으로 가므로 그 분기를 목 모드에서 눌러 볼 수 있어야 한다.
+ * 배열 순서가 곧 화면 순서다 — 서버가 최근 확정순으로 주고 프론트는 다시 정렬하지 않는다.
+ */
+export const MOCK_TRIAL_RECORDS = [
+    /* 다수결 유죄 · 남의 재판 */
+    {
+        id: 201,
+        groupId: 1,
+        groupName: '배달 소비 줄이기',
+        userId: 2,
+        nickname: '지판',
+        profileImageUrl: null,
+        status: 'GUILTY',
+        verdictMethod: 'VOTE',
+        aiVerdictReason: null,
+        settlementDate: '2026-08-02',
+        exceededAmount: 18300,
+        mine: false,
+        defended: true,
+        myVote: 'GUILTY',
+        guiltyCount: 3,
+        innocentCount: 1,
+        totalVoters: 5,
+        createdAt: '2026-08-03T09:00:00',
+        confirmedAt: '2026-08-04T15:00:00',
+    },
+    /* 동률 → 판사 탕이 AI 판결. 사유가 서버에서 내려온다 */
+    {
+        id: 202,
+        groupId: 1,
+        groupName: '배달 소비 줄이기',
+        userId: 1,
+        nickname: '나',
+        profileImageUrl: null,
+        status: 'INNOCENT',
+        verdictMethod: 'AI_JUDGMENT',
+        aiVerdictReason: '갑작스러운 야근으로 저녁을 사 먹은 정황이 증빙과 일치해 무죄로 판단했다.',
+        settlementDate: '2026-08-01',
+        exceededAmount: 7400,
+        mine: true,
+        defended: true,
+        myVote: null,
+        guiltyCount: 2,
+        innocentCount: 2,
+        totalVoters: 5,
+        createdAt: '2026-08-02T09:00:00',
+        confirmedAt: '2026-08-03T15:00:00',
+    },
+    /* 혐의 인정 — 투표 자체가 없다. 개표가 전부 0 인 줄이 화면에서 어떻게 보이는지 확인용 */
+    {
+        id: 203,
+        groupId: 5,
+        groupName: '편의점 간식 줄이기',
+        userId: 1,
+        nickname: '나',
+        profileImageUrl: null,
+        status: 'GUILTY',
+        verdictMethod: 'CONFESSION',
+        aiVerdictReason: null,
+        settlementDate: '2026-07-30',
+        exceededAmount: 5200,
+        mine: true,
+        defended: false,
+        myVote: null,
+        guiltyCount: 0,
+        innocentCount: 0,
+        totalVoters: 5,
+        createdAt: '2026-07-31T09:00:00',
+        confirmedAt: '2026-07-31T11:20:00',
+    },
+    /* 아무도 투표하지 않아 무죄 추정으로 끝난 재판 */
+    {
+        id: 204,
+        groupId: 4,
+        groupName: '택시 대신 지하철',
+        userId: 3,
+        nickname: '현우',
+        profileImageUrl: null,
+        status: 'INNOCENT',
+        verdictMethod: 'NO_VOTE',
+        aiVerdictReason: null,
+        settlementDate: '2026-07-28',
+        exceededAmount: 11900,
+        mine: false,
+        defended: true,
+        myVote: null,
+        guiltyCount: 0,
+        innocentCount: 0,
+        totalVoters: 5,
+        createdAt: '2026-07-29T09:00:00',
+        confirmedAt: '2026-07-30T15:00:00',
+    },
+];

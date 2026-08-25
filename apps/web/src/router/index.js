@@ -4,6 +4,7 @@ import { useAccountStore } from '@/stores/account';
 import { LINK_STEP_ROUTES, canEnterLinkStep, resolveLinkEntryRoute } from '@/utils/account';
 import { resolveOnboardingRedirect } from '@/utils/user';
 import { applyThemeColor, resolveThemeColor } from '@/utils/themeColor';
+import { hasSeenWelcome } from '@/utils/welcome';
 import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
 
 /*
@@ -13,6 +14,18 @@ import personalMissionChallengeRoutes from './personalMissionChallengeRoutes';
  * meta.tabBar — URL 경로와 다르게 활성 표시할 하단 탭 이름
  */
 const routes = [
+    /*
+     * 서비스 소개 온보딩 (이슈 #459). 로그인보다 **앞**에 뜨는 화면이라 public 이다.
+     * 아래 /onboarding/nickname 과 경로 접두사를 나눈 이유 — 그쪽은 로그인을 마친 사람이
+     * 밟는 단계다. 같은 접두사에 두면 「public 한 온보딩」과 「로그인이 필요한 온보딩」이
+     * 한 이름 아래 섞여 가드를 읽는 사람이 매번 헷갈린다.
+     */
+    {
+        path: '/welcome',
+        name: 'welcome',
+        component: () => import('@/views/onboarding/ServiceIntroView.vue'),
+        meta: { title: '서비스 소개', public: true, hideTabBar: true },
+    },
     {
         path: '/login',
         name: 'login',
@@ -164,11 +177,28 @@ const routes = [
         component: () => import('@/views/challenge/group/GroupChallengeListView.vue'),
         meta: { title: '재판 전체보기' },
     },
+    /*
+     * ⚠ 리터럴 경로는 반드시 `/group-challenges/:id` **위에** 둔다.
+     * 아래로 내려가면 `trial-records` 가 그룹 id 로 먹혀 상세 화면이 열린다(`/list` 와 같은 이유).
+     */
+    {
+        path: '/group-challenges/trial-records',
+        name: 'groupTrialRecordsAll',
+        component: () => import('@/views/challenge/group/GroupTrialRecordsView.vue'),
+        meta: { title: '재판 기록', hideTabBar: true },
+    },
     {
         path: '/group-challenges/:id',
         name: 'groupChallengeDetail',
         component: () => import('@/views/challenge/group/GroupChallengeDetailView.vue'),
         meta: { title: '그룹 챌린지 상세', hideTabBar: true },
+    },
+    /* 한 그룹의 확정된 재판 목록. 전체 기록(`groupTrialRecordsAll`)과 같은 뷰를 쓴다 */
+    {
+        path: '/group-challenges/:id/trial-records',
+        name: 'groupTrialRecords',
+        component: () => import('@/views/challenge/group/GroupTrialRecordsView.vue'),
+        meta: { title: '재판 기록', hideTabBar: true },
     },
     {
         path: '/group-challenges/:id/ranking',
@@ -386,6 +416,9 @@ const router = createRouter({
     },
 });
 
+/** 서비스 소개 온보딩으로 가로채지 않을 라우트. 이유는 아래 가드 주석에 있다 */
+const WELCOME_EXEMPT_ROUTES = new Set(['welcome', 'authCallback']);
+
 /*
  * 로그인 가드. meta.public 이 아닌 모든 화면은 로그인이 필요하다.
  * 5탭은 전부 개인 금융 데이터라 예외를 두지 않는다.
@@ -393,6 +426,29 @@ const router = createRouter({
  */
 router.beforeEach((to, from) => {
     const auth = useAuthStore();
+
+    /*
+     * 서비스 소개 온보딩 게이트 (이슈 #459). 처음 온 사람에게 로그인보다 먼저 보여준다.
+     *
+     * ⚠ meta.public 검사보다 **위**에 있어야 한다. 막으려는 대상이 /login 인데
+     *   /login 자체가 public 이라, 아래로 내려가면 그대로 통과해 버린다.
+     *
+     * 세 가지를 모두 만족할 때만 보낸다.
+     *   - 아직 로그인 전       로그인한 사람에게 소개를 다시 띄울 이유가 없다
+     *   - 아직 안 봤다         localStorage 기록. 이 화면은 로그인 전이라 서버에 남길 수 없다
+     *   - 목적지가 예외가 아님  아래 EXEMPT 참고
+     *
+     * 예외가 둘이다.
+     *   welcome       자기 자신. 빼면 리다이렉트가 무한히 돈다
+     *   authCallback  구글에서 돌아오는 길. 이 순간엔 아직 토큰이 없어 「로그인 전」으로
+     *                 보이는데, 여기서 가로채면 콜백 처리가 끝나지 못해 로그인이 통째로 깨진다
+     *
+     * 반대로 「이미 본 사람이 /welcome 에 직접 들어오는 것」은 막지 않는다. 되돌려 보내면
+     * 판정이 양쪽에 생겨 서로를 밀어내기 쉽고, 소개 화면을 다시 보는 건 해가 없다.
+     */
+    if (!auth.isLoggedIn && !WELCOME_EXEMPT_ROUTES.has(to.name) && !hasSeenWelcome()) {
+        return { name: 'welcome' };
+    }
 
     if (to.meta.public) {
         // 이미 로그인한 사용자가 로그인 화면으로 오면 홈으로 보낸다

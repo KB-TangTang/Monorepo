@@ -3,6 +3,12 @@
   언제 쓰는지: router 의 /my/consents. MyPageView 의 "동의 관리" 메뉴가 이 화면으로 보낸다.
   쓰면 안 되는 경우: 최초 가입 동의(ServiceConsentView)·계좌 연동 전 CODEF 동의(FinancialConsentView)를
     대체하지 말 것. 저쪽은 '받는' 화면이고 여기는 '되돌리는' 화면이다 — 두 화면을 건드리지 않는다.
+
+  약관 본문은 앱에 없다. item.termsUrl(GET /api/consents/me 응답, ConsentCatalog 가 채운다)은
+  노션 공개 페이지이고 새 탭으로 연다 — ConsentCheckRow·FinancialConsentView 와 같은 방식이다.
+  가입 동의 화면은 라우터 가드 때문에 가입 후 다시 들어갈 수 없다. 그래서 **가입한 뒤 약관 전문을
+  볼 수 있는 곳은 이 화면뿐이다** — 링크를 빼면 앱 어디에서도 약관을 다시 읽을 수 없다.
+  CHALLENGE 만 노션 페이지가 없어(termsUrl null) 링크가 뜨지 않는다.
 -->
 <script setup>
 import { onMounted, ref } from 'vue';
@@ -145,7 +151,20 @@ function closeSheet() {
                         </span>
                         {{ item.label }}
                     </p>
-                    <p class="consent-manage__meta">{{ consentStatusText(item) }}</p>
+                    <div class="consent-manage__meta-row">
+                        <p class="consent-manage__meta">{{ consentStatusText(item) }}</p>
+                        <!-- 항목별 라벨을 aria-label 에 넣는다 — 안 넣으면 화면낭독기가 "전문 보기"만 일곱 번 읽는다 -->
+                        <a
+                            v-if="item.termsUrl"
+                            class="consent-manage__terms"
+                            :href="item.termsUrl"
+                            :aria-label="`${item.label} 약관 전문 보기 (새 창)`"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            전문 보기 ›
+                        </a>
+                    </div>
                 </div>
                 <button
                     type="button"
@@ -163,7 +182,8 @@ function closeSheet() {
 
             <p class="consent-manage__notice">
                 동의를 철회하면 <strong>추가 수집과 동기화가 즉시 중단</strong>돼요. 기존 데이터는
-                고지된 정책에 따라 보관·파기돼요.
+                고지된 정책에 따라 보관·파기돼요. 각 항목의 <strong>전문 보기</strong>에서 약관
+                원문을 확인할 수 있어요.
             </p>
         </template>
 
@@ -192,7 +212,7 @@ function closeSheet() {
                     </template>
                     <template v-else>
                         {{ target?.label }} 동의를 다시 켜면 오늘부터 수집과 동기화가 재개돼요. 약관
-                        전문은 동의 화면에서 확인할 수 있어요.
+                        전문은 항목의 '전문 보기'에서 확인할 수 있어요.
                     </template>
                 </p>
                 <p v-if="actionError" class="consent-manage__sheet-error">{{ actionError }}</p>
@@ -278,11 +298,37 @@ function closeSheet() {
     color: var(--tt-text-muted);
 }
 
-.consent-manage__meta {
+/* 상태 문구와 전문 보기 링크를 한 줄에. 라벨이 길어도 토글을 밀지 않게 __text 에 min-width:0 */
+.consent-manage__text {
+    min-width: 0;
+}
+
+.consent-manage__meta-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--tt-space-2);
     margin: var(--tt-space-1) 0 0;
+}
+
+.consent-manage__meta {
+    margin: 0;
     font-family: var(--tt-font-mono);
     font-size: var(--tt-fs-caption);
     color: var(--tt-text-muted);
+}
+
+/* ConsentCheckRow__link 와 같은 톤 — 상태 문구에 묻히지 않게 밑줄만 더 둔다 */
+.consent-manage__terms {
+    flex-shrink: 0;
+    font-size: var(--tt-fs-caption);
+    color: var(--tt-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.consent-manage__terms:hover {
+    color: var(--tt-text);
 }
 
 /* ── 토글 스위치 (공용 컴포넌트 없음 — /dev/ui 확인 후 이 화면 전용으로 만듦) ── */

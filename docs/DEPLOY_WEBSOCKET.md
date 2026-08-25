@@ -8,11 +8,25 @@ REST(방 정보·이전 대화·읽음 처리)는 그 전부터 정상이었고,
 ## 요청이 두 길로 갈린다
 
 ```
-REST   브라우저 → Vercel(rewrite) → EC2:8080          ← 기존 그대로
-소켓   브라우저 → EC2:443(nginx)  → 127.0.0.1:8080     ← #268 에서 뚫은 길
+REST   브라우저 → Vercel(rewrite) → EC2:443(nginx) → 127.0.0.1:8080   ← #484 에서 https 로
+소켓   브라우저 → EC2:443(nginx)  →                  127.0.0.1:8080   ← #268 에서 뚫은 길
 ```
 
-**소켓만 EC2 로 직행시킨다.** REST 까지 옮기지 않는 이유는 아래 「부록 — REST 까지 옮기면 생기는 일」 참고.
+**소켓만 EC2 로 직행시킨다.** REST 는 Vercel 을 한 번 거치지만, #484 이후로는 그 다음 구간도
+이 nginx 의 443 을 탄다(원래는 `http://<EC2>:8080` 평문이었다).
+
+> ⚠ **REST 를 https 로 옮기는 방법은 두 가지고 조건이 전혀 다르다. 섞어 읽지 말 것.**
+>
+> | | A. rewrite 대상만 https | B. 프론트가 EC2 직행 |
+> |---|---|---|
+> | 바꾸는 곳 | `vercel.json` destination | `VITE_API_BASE_URL` |
+> | 브라우저가 보는 오리진 | `*.vercel.app` (그대로) | `kb-tangtang.duckdns.org` (갈린다) |
+> | CORS · 쿠키 SameSite | **영향 없음** | 둘 다 고쳐야 함 |
+> | 상태 | 채택 (2026-08-25) | **기각** — 아래 부록 |
+>
+> 아래 「부록」은 **B 안**을 기각한 기록이다. **A 안에는 부록의 두 조건이 적용되지 않는다.**
+> rewrite 는 브라우저 리다이렉트가 아니라 Vercel 서버가 대신 호출하는 서버 사이드 프록시라
+> 오리진이 갈리지 않기 때문이다.
 
 ## 왜 소켓이 rewrite 를 못 타나
 
@@ -30,10 +44,16 @@ REST   브라우저 → Vercel(rewrite) → EC2:8080          ← 기존 그대�
 | API 도메인 | `kb-tangtang.duckdns.org` (DuckDNS, A 레코드 → `3.35.24.153`) |
 | 인증서 | Let's Encrypt (`certbot --nginx`). `certbot renew` 타이머로 자동 갱신 |
 | nginx 설정 | `/etc/nginx/conf.d/tangtang.conf` |
-| 프록시 대상 | `/ws/` · `/api/` · `/uploads/` → `127.0.0.1:8080` |
-| 보안그룹 | 80 · 443 개방 (**8080 은 그대로 유지** — REST 가 아직 rewrite 로 이 길을 쓴다) |
+| 프록시 대상 | `/ws/` · `/api/notifications/stream` · `/api/` · `/uploads/` → `127.0.0.1:8080` |
+| 보안그룹 | 80 · 443 개방. **8080 도 열어 둔다** — #484 이후 정상 경로는 443 이지만, `vercel.json` 을 되돌리는 것이 유일한 롤백 수단이라 그 목적지를 살려 둔다 |
 
 ## nginx 설정
+
+**아래는 2026-08-25 기준 EC2 실제 파일 내용이다.** `certbot --nginx` 가 이 파일을 관리하므로
+`ssl_certificate` · `include options-ssl-nginx.conf` · `ssl_dhparam` 줄은 손대지 않는다.
+
+> 실제 파일에는 주석이 없다. vi 로 붙여넣을 때 autoindent 가 계단식으로 들여쓰기를 망가뜨려서
+> **주석 없는 본문만 `sudo tee ... <<'NGINXCONF'` 로 넣었다.** 설명은 이 문서가 갖는다.
 
 ```nginx
 # /etc/nginx/conf.d/tangtang.conf
@@ -52,15 +72,17 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;                 # nginx 1.25+ 는 `listen 443 ssl http2` 가 deprecated 라 별도 지시어다
     server_name kb-tangtang.duckdns.org;
 
+    # ↓ 이 4줄은 certbot 이 관리한다. 갱신 때 덮어써도 되도록 그대로 둔다.
     ssl_certificate     /etc/letsencrypt/live/kb-tangtang.duckdns.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/kb-tangtang.duckdns.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
     # ── 채팅 WebSocket ──────────────────────────────────
-    # 이 블록이 /api 블록보다 먼저 와야 한다(location 은 접두 일치라 순서가 아니라 구체성으로
-    # 정해지지만, 사람이 읽을 때 헷갈리지 않게 위에 둔다).
     location /ws/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -75,12 +97,27 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
 
         # STOMP 연결은 오래 열려 있다. 기본 60초면 1분마다 끊겨 재연결을 반복한다.
-        # 서버가 보내는 하트비트 주기보다 넉넉히 길게 잡는다.
         proxy_read_timeout  3600s;
         proxy_send_timeout  3600s;
 
         # 실시간 프레임이 버퍼에 고이면 지연으로 보인다.
         proxy_buffering off;
+    }
+
+    # ── SSE 알림 (2026-08-25 추가) ───────────────────────
+    # location 은 「선언 순서」가 아니라 「가장 긴 접두 일치」로 정해진다.
+    # 그래서 이 블록이 /api/ 보다 우선한다 — 위치를 옮겨도 동작은 같다.
+    location /api/notifications/stream {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;   # 없으면 SSE 가 버퍼에 갇혀 프론트가 60초 폴링으로 강등된다
+        gzip off;              # 전역 gzip 은 현재 꺼져 있다. 나중에 켜질 때를 위한 보험
+        # proxy_read_timeout 은 넣지 않는다 — SseHeartbeat 가 15초마다 ping 을 보낸다
     }
 
     # ── REST ────────────────────────────────────────────
@@ -91,7 +128,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        client_max_body_size 12m;          # 프로필 이미지 업로드 상한(10MB)보다 크게
+
+        # 20m = WebConfig.MAX_REQUEST_SIZE. 변론 증빙이 5MB × 3장 = 15MB 까지 올라온다.
+        # 이전 값 12m 은 MAX_FILE_SIZE(10MB) 만 보고 잡은 것이라 3장 업로드가 413 으로 잘렸다.
+        client_max_body_size 20m;
     }
 
     location /uploads/ {
@@ -100,6 +140,25 @@ server {
     }
 }
 ```
+
+### 변경 이력
+
+| 날짜 | 변경 | 이유 |
+|---|---|---|
+| 2026-08-19 (#268) | 최초 작성 — `/ws/` wss 종단 | 채팅 실시간 |
+| 2026-08-25 | `client_max_body_size` 12m → **20m** | 변론 증빙 3장(15MB) 413 방지 |
+| 2026-08-25 | `location /api/notifications/stream` 블록 추가 | REST 를 이 nginx 로 넘길 때 SSE 버퍼링 방지 |
+
+**적용 절차** — 되돌릴 수 있게 백업부터 한다.
+
+```bash
+sudo cp /etc/nginx/conf.d/tangtang.conf ~/tangtang.conf.bak   # 1. 백업
+sudo vi /etc/nginx/conf.d/tangtang.conf                       # 2. 수정 (sudo 없이 열면 E45 readonly)
+sudo nginx -t                                                 # 3. 문법 검사 — 반드시 통과 후에만 다음
+sudo systemctl reload nginx                                   # 4. 무중단 반영
+```
+
+`nginx -t` 가 실패하면 reload 하지 말고 백업을 되돌린다: `sudo cp ~/tangtang.conf.bak /etc/nginx/conf.d/tangtang.conf`
 
 ## 프론트 설정
 
@@ -136,6 +195,83 @@ VITE_WS_BASE_URL=https://kb-tangtang.duckdns.org
    > 개념이 없어 **400** 이 돌아온다. 설정 오류가 아니다. 실제 브라우저는 WebSocket 핸드셰이크를
    > 항상 HTTP/1.1 로 하므로 영향이 없다.
 3. 브라우저에서 채팅방 입장 → DevTools → Network → **WS** 필터 → `chat` 항목이 잡히고 프레임이 오간다.
+
+### REST 를 이 nginx 로 넘긴 뒤 추가로 볼 것 (A 안 전환 시)
+
+`/api/` 블록은 #268 당시 `curl -I .../api/health` 로 **GET 200 만** 확인했다.
+아래 세 가지는 그 확인에 포함되지 않았으므로 전환 후 반드시 별도로 본다.
+
+| 확인할 것 | 방법 | 기대 |
+|---|---|---|
+| 대용량 multipart POST | 아래 「업로드 상한 확인」 | 15MB 통과 · 25MB 만 413 |
+| SSE 알림 | 아래 「SSE 확인」 | `connected` 즉시 도착 |
+| 로그인 유지 | 새로고침 · 15분 후 액세스 토큰 재발급 | 재로그인 요구 없음 (쿠키가 그대로 실리는지) |
+
+**업로드 상한 확인** — 변론 화면으로 사진을 올려 보는 것보다 경계를 직접 때리는 편이 빠르고 정확하다.
+인증이 없어도 **nginx 단계**는 판정할 수 있다(401/400 이면 nginx 를 통과한 것, 413 이면 nginx 가 막은 것).
+
+```bash
+head -c 15000000 /dev/zero > /tmp/15mb.bin
+head -c 25000000 /dev/zero > /tmp/25mb.bin
+for f in /tmp/15mb.bin /tmp/25mb.bin; do
+  echo -n "$f -> "
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+    -F "file=@$f" https://kb-tangtang.duckdns.org/api/users/me/profile-image
+done
+```
+
+> **실측(2026-08-25)**: `15mb.bin → 400` · `25mb.bin → 413`. 경계가 20m 에 정확히 있다.
+> **15MB 가 413 이면 `client_max_body_size` 가 반영되지 않은 것**이다.
+
+**SSE 확인** — ⚠ **DevTools 로는 하트비트가 안 보인다.** 두 가지 이유가 겹친다.
+
+- 하트비트는 `:ping` 이라는 **주석 프레임**이고, `sseStream.js:28-30` 이 `:` 로 시작하는 줄을 버린다
+- Chrome 의 EventStream 탭도 주석은 표시하지 않는다
+
+그래서 **판정 근거는 「15초 프레임」이 아니라 `connected` 이벤트의 도착 시각**이다.
+`NotificationController.java:70` 이 연결 직후 이걸 한 번 쏘는데, 버퍼링이 켜져 있으면
+4096바이트 버퍼가 찰 때까지(`:ping\n\n` 7바이트 × 585회 ≈ **2.4시간**) 아무것도 오지 않는다.
+
+프로덕션 페이지에서 **로그인을 마친 뒤** 콘솔에 붙여넣는다. 액세스 토큰은 메모리(Pinia)에만 있어
+꺼낼 방법이 없으므로, axios 가 쓰는 XHR 의 헤더 설정을 한 번만 가로채 받아온다.
+
+```js
+(() => {
+    const orig = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+        if (k.toLowerCase() === 'authorization' && !window.__done) {
+            window.__done = true;
+            XMLHttpRequest.prototype.setRequestHeader = orig; // 즉시 원복
+            start(v);
+        }
+        return orig.apply(this, arguments);
+    };
+    function start(tok) {
+        fetch('https://kb-tangtang.duckdns.org/api/notifications/stream', {
+            headers: { Authorization: tok },
+        }).then(async (res) => {
+            console.log('[nginx] 응답 ' + res.status);
+            if (!res.ok) return console.log('인증 실패');
+            const rd = res.body.getReader(), dec = new TextDecoder(), t0 = Date.now();
+            for (;;) {
+                const { value, done } = await rd.read();
+                const s = ((Date.now() - t0) / 1000).toFixed(1);
+                if (done) return console.log('[nginx] +' + s + 's 끊김');
+                console.log('[nginx] +' + s + 's', JSON.stringify(dec.decode(value)));
+            }
+        });
+    }
+    console.log('설치 완료. 하단 탭을 아무거나 눌러 API 를 한 번 호출하세요.');
+})();
+```
+
+> **실측(2026-08-25)**: `+0.3s "event:connected\ndata:ok\n\n"` 이후 `+15.3s`·`+30.3s` … 로
+> `":ping\n\n"` 이 15초 간격으로 들어왔다.
+>
+> ⚠ **로그인 「전」에 붙여넣으면 안 된다.** 구글 OAuth 는 전체 페이지 이동이라 패치가 날아간다.
+
+> **되돌리기**: `vercel.json` 의 destination 을 `http://3.35.24.153:8080` 로 되돌리고 재배포하면 끝이다.
+> 그래서 **보안그룹의 8080 을 닫지 않는다** — 8080 이 롤백 경로다.
 
 ## 부록 — REST 까지 EC2 직행으로 옮기면 생기는 일 (기각한 안)
 

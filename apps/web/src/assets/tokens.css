@@ -55,6 +55,31 @@
     --tt-court-bell-ink: #1c2b4a; /* 알림 벨 아이콘 */
     --tt-court-bell-surface: rgba(255, 255, 255, 0.95); /* 알림 벨 원 */
 
+    /* ── 홈 헤더 풍경 (하늘 → 잔디 일러스트 풀블리드) ──
+     * 위 Ink · 법원 계열과 다른 값이다. 일러스트(구름·나무·수풀)의 실제 픽셀 색에서 뽑았고,
+     * 하늘·잔디 그라데이션이 이미지와 이어져 보이게 하는 게 목적이라 임의로 못 바꾼다.
+     * 홈 히어로 헤더 말고 다른 곳에 쓰지 않는다. */
+    --tt-scene-sky-top: #afd7f2; /* 하늘 맨 위 */
+    --tt-scene-sky-mid: #c6e4f8;
+    --tt-scene-sky-low: #e3f2fb; /* 지평선 근처 옅은 하늘 */
+    --tt-scene-field-far: #e8f4e6; /* 하늘과 잔디가 만나는 띠 */
+    --tt-scene-field: #dcedd5; /* 잔디 */
+    --tt-scene-field-deep: #cbe4c0; /* 잔디 앞쪽(진한 쪽) */
+    --tt-scene-sun: rgba(255, 252, 225, 0.9); /* 햇무리 중심 */
+    --tt-scene-sun-out: rgba(255, 252, 225, 0); /* 햇무리 바깥 (같은 색의 투명) */
+    --tt-scene-path: rgba(120, 180, 120, 0.28); /* 탕이가 걷는 길 띠 */
+    --tt-scene-tangi-shade: #5e9a5e; /* 탕이 발밑 그림자 */
+    --tt-scene-greet: #3d5a78; /* 인사말 윗줄 */
+    --tt-scene-greet-strong: #17324f; /* 인사말 아랫줄 */
+    --tt-scene-bell-surface: rgba(255, 255, 255, 0.88); /* 알림 벨 판 */
+    --tt-scene-bell-ink: #5a6478; /* 알림 벨 아이콘 */
+    /*
+     * 잔디 맨 아래가 본문 배경으로 녹아드는 페이드의 시작점.
+     * --tt-neutral-paper 와 **같은 색의 알파 0** 이어야 한다. `transparent` 로 두면
+     * 브라우저에 따라 중간이 회색으로 뜬다. 위 값을 바꾸면 여기도 같이 바꾼다.
+     */
+    --tt-scene-fade-out: rgba(250, 250, 251, 0);
+
     /* ── 탭바 전용 ────────────────────────────────────── */
     --tt-tab-active: #f5b921; /* 활성 탭 아이콘 + 라벨 */
     --tt-tab-inactive: #aeb0bc; /* 비활성 탭 아이콘 + 라벨 */
@@ -144,6 +169,25 @@
     --tt-court-header-caption: var(--tt-court-caption);
     --tt-court-bell-bg: var(--tt-court-bell-surface);
     --tt-court-bell-fg: var(--tt-court-bell-ink);
+
+    /* 홈 히어로 헤더 — 풍경 일러스트 위에 인사말과 알림 벨만 얹는다 */
+    --tt-home-hero-sky-top: var(--tt-scene-sky-top);
+    --tt-home-hero-sky-mid: var(--tt-scene-sky-mid);
+    --tt-home-hero-sky-low: var(--tt-scene-sky-low);
+    --tt-home-hero-field-far: var(--tt-scene-field-far);
+    --tt-home-hero-field: var(--tt-scene-field);
+    --tt-home-hero-field-deep: var(--tt-scene-field-deep);
+    --tt-home-hero-sun: var(--tt-scene-sun);
+    --tt-home-hero-sun-out: var(--tt-scene-sun-out);
+    --tt-home-hero-path: var(--tt-scene-path);
+    --tt-home-hero-tangi-shade: var(--tt-scene-tangi-shade);
+    --tt-home-hero-greet: var(--tt-scene-greet);
+    --tt-home-hero-greet-strong: var(--tt-scene-greet-strong);
+    --tt-home-hero-bell-bg: var(--tt-scene-bell-surface);
+    --tt-home-hero-bell-fg: var(--tt-scene-bell-ink);
+    /* 헤더 아래 본문 배경(.home)과 같은 값이어야 한다 — 다르면 잔디 끝에 색 띠가 생긴다 */
+    --tt-home-hero-fade: var(--tt-bg-subtle);
+    --tt-home-hero-fade-out: var(--tt-scene-fade-out);
 
     --tt-bg: var(--tt-neutral-surface); /* 카드 배경 */
     --tt-bg-subtle: var(--tt-neutral-paper); /* 페이지 배경 / 섹션 배경 */
@@ -258,6 +302,9 @@
     --tt-elevation-court-bell: 0 6px 14px rgba(0, 0, 0, 0.25); /* 법원 헤더 알림 벨 */
     /* 말풍선은 PNG 라 box-shadow 가 아니라 filter: drop-shadow() 로 건다 — spread 를 쓰면 안 된다 */
     --tt-elevation-court-speech: 0 12px 14px rgba(0, 0, 0, 0.24); /* 법원 헤더 양피지 말풍선 */
+    --tt-elevation-home-bell: 0 4px 12px rgba(28, 42, 90, 0.08); /* 홈 히어로 알림 벨 */
+    /* 탕이도 PNG 라 drop-shadow() 로 건다. 잔디 위에 서 있어 초록끼가 도는 그림자다 */
+    --tt-elevation-home-tangi: 0 4px 6px rgba(30, 90, 45, 0.15); /* 홈 히어로 탕이 */
 
     /* ── z-index ────────────────────────────────────────
      * 컴포넌트에 z-index 숫자를 직접 쓰지 않는다. 반드시 이 토큰만 참조한다. */
@@ -299,4 +346,16 @@
         var(--tt-touch-min) + var(--tt-space-2) + var(--tt-space-2) + var(--tt-space-4)
     );
     --tt-content-max: 480px;
+
+    /* ── 서비스 소개 온보딩 (이슈 #459) ──
+     * 로그인 앞단 5면 소개 화면 전용. 다른 화면에 쓰지 않는다.
+     *
+     * 나머지 색은 전부 기존 토큰과 이미 값이 같아 새로 만들지 않았다
+     * (제목 파랑 = --tt-blue, 본문 = --tt-neutral-body, 버튼 = --tt-ink).
+     * 여기 넷만 대응하는 토큰이 없어서 추가한다. */
+    --tt-onb-bg-top: #edf3fe; /* 배경 그라데이션 맨 위 (옅은 하늘빛) */
+    --tt-onb-bg-mid: #f8fafe; /* 60% 지점 */
+    --tt-onb-bg-bottom: #f7f8fa; /* 맨 아래 — 종이색으로 잦아든다 */
+    --tt-onb-dot-idle: #d6deee; /* 인디케이터 비활성 점 */
+    --tt-onb-sparkle: #9fb8e8; /* 배경에 떠 있는 반짝임 (파랑) */
 }

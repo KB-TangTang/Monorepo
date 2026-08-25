@@ -576,6 +576,9 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
 
         /* CARD: 카드 upsert -> 승인건은 거래로, 청구서는 별도 테이블로. */
         for (CardSyncDto card : bundle.cards) {
+            if (inactiveKeys.contains(cardExclusionKey(card.getCardNoMasked()))) {
+                continue;   // 계좌 선택에서 체크를 푼 카드(#467) — 카드도 승인건도 저장하지 않는다
+            }
             Long cardId = upsertCard(userId, card, now);
             /* 01=신용, 02=체크. 목서버에 공식 enum 이 없어 시드 관례를 따른다(설계 「미해결」 항목). */
             String sourceType = "01".equals(card.getCardTypeCode()) ? "CARD_CREDIT" : "CARD_CHECK";
@@ -604,7 +607,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         /* 나머지 소스(DEPOSIT/SECURITIES/LOAN/PAY_MONEY)도 같은 upsert-then-transaction 패턴. */
         saveDeposits(userId, bundle, now, upserted, inactiveKeys);
         saveSecurities(userId, bundle, now, upserted, inactiveKeys);
-        saveLoans(userId, bundle, upserted);
+        saveLoans(userId, bundle, upserted, inactiveKeys);
         savePayMoney(userId, bundle, now, upserted, inactiveKeys);
 
         /* 반환값은 연결된 쌍의 수가 아니라 갱신된 행 수(쌍당 2)다 — 다중 테이블 UPDATE 라서.
@@ -750,12 +753,40 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
         return cash.add(marketValue);
     }
 
-    private void saveLoans(long userId, SyncBundle bundle, List<Transaction> upserted) {
+    /**
+     * 대출·카드 제외 키(#467). tbl_loan/tbl_card 에는 is_active 가 없어, 사용자가 체크를 풀거나 해제한 상품은
+     * tbl_connected_account 에 이 키로 is_active=0 행을 남겨 두고 여기서 건너뛴다 — 페이머니가 이미 쓰는 방식이다.
+     * AccountLinkService 가 제외 행을 만들 때 같은 함수를 쓴다. 형식을 한쪽만 바꾸면 조용히 되살아난다.
+     */
+    public static String loanExclusionKey(long mockLoanId) {
+        return "MOCK-LOAN-" + mockLoanId;
+    }
+
+    /**
+     * ⚠ 카드만 목서버 id 가 아니라 **마스킹 카드번호**로 키를 만든다(#467).
+     * 해제는 `tbl_card` 행에서 키를 되찾아야 하는데 그 테이블에 목서버 cardId 가 없다.
+     * `card_no_masked` 는 `UNIQUE(user_id, card_no_masked)` 이고 `CardMapper.update` 의 자연키이며
+     * 동기화 응답(CardSyncDto)에도 그대로 있어, 양쪽에서 같은 키가 나오는 유일한 값이다.
+     * (대출은 `tbl_loan.loan_no_encrypted` 에 목서버 id 기반 키가 저장돼 있어 이 문제가 없다)
+     */
+    public static String cardExclusionKey(String cardNoMasked) {
+        return "MOCK-CARD-" + cardNoMasked;
+    }
+
+    public static String payMoneyExclusionKey(long mockPayMoneyId) {
+        return "MOCK-PAYMONEY-" + mockPayMoneyId;
+    }
+
+    private void saveLoans(long userId, SyncBundle bundle, List<Transaction> upserted,
+                           Set<String> inactiveKeys) {
         for (LoanSyncDto loan : bundle.loans) {
+            if (inactiveKeys.contains(loanExclusionKey(loan.getLoanId()))) {
+                continue;   // 해제했거나 체크를 푼 대출(#467) — 되살리지 않는다
+            }
             Loan row = Loan.builder()
                     .userId(userId)
                     /* 목서버는 마스킹된 대출번호만 준다 — 해시할 원본이 없어 소스 식별자를 그대로 쓴다. */
-                    .loanNoEncrypted("MOCK-LOAN-" + loan.getLoanId())
+                    .loanNoEncrypted(loanExclusionKey(loan.getLoanId()))
                     .loanNoMasked(loan.getLoanNoMasked())
                     .bankName(loan.getInstitutionName())
                     .bankCode(loan.getInstitutionCode())
@@ -793,7 +824,7 @@ public class FinancialSyncServiceImpl implements FinancialSyncService {
     private void savePayMoney(long userId, SyncBundle bundle, LocalDateTime now,
                               List<Transaction> upserted, Set<String> inactiveKeys) {
         for (PayMoneySyncDto payMoney : bundle.payMoney) {
-            String accountNoEncrypted = "MOCK-PAYMONEY-" + payMoney.getPayMoneyId();
+            String accountNoEncrypted = payMoneyExclusionKey(payMoney.getPayMoneyId());
             ConnectedAccount row = ConnectedAccount.builder()
                     .userId(userId)
                     .bankCode(payMoney.getProviderCode())

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { formatWon } from '../src/utils/asset.js';
 
 /*
  * 이슈 #323 - 2026-08-19 배포본 점검에서 나온 화면 결함 2건.
@@ -56,40 +57,20 @@ test('끝난 챌린지의 빈 방에는 말을 걸라고 권하지 않는다', (
 /*
  * 홈 순자산이 「1,244,200」으로 나갔다. 같은 화면의 다른 금액은 전부 「0원」이라
  * 무엇을 세는 숫자인지 알 수 없었다.
+ *
+ * 홈 v7 개편(#450)으로 이 자리가 HomeAssetCard 로 옮겨갔다. 숫자 span 과 단위 span 을
+ * 나눠 붙이던 방식 대신 단위를 항상 포함해 돌려주는 formatWon 을 쓴다 —
+ * 단위를 빠뜨릴 수 있는 자리 자체가 없어졌다. 지키려는 규칙은 그대로다.
+ *
+ * 천만원을 넘으면 「1585만원」으로 줄이던 formatAssetHomeWon 은 걷어냈다. 끝자리가 사라져
+ * 같은 값이 자산탭과 어긋나 보였다.
  */
-test('홈 순자산 금액에 원 단위를 붙인다', () => {
-    const homeView = source('src/views/HomeView.vue');
+test('홈 순자산 금액에 원 단위를 붙이고 자릿수를 줄이지 않는다', () => {
+    const assetCard = source('src/components/home/HomeAssetCard.vue');
 
-    const amountBlock = homeView.match(/<strong class="summary-card__amount">[\s\S]*?<\/strong>/);
-    assert.ok(amountBlock, 'summary-card__amount 블록을 찾지 못했다');
-    assert.match(amountBlock[0], /summary-card__unit">원</, '단위 span 이 있어야 한다');
-});
-
-/*
- * 숫자는 mono + tabular-nums 로 두는 것이 의도된 디자인이다.
- * 단위까지 mono 로 끌려가면 한글이 폴백 서체로 떨어져 어색해진다.
- */
-test('단위는 본문 서체로 되돌린다 - 숫자만 mono 로 남긴다', () => {
-    const homeCss = source('src/views/HomeView.css');
-
-    const unitRule = homeCss.match(/\.summary-card__unit\s*\{[\s\S]*?\}/);
-    assert.ok(unitRule, 'summary-card__unit 규칙이 없다');
-    assert.match(unitRule[0], /font-family:\s*var\(--tt-font-sans\)/);
-
-    assert.doesNotMatch(
-        unitRule[0],
-        /--tt-font-base/,
-        '존재하지 않는 토큰이다. 폴백이 mono 를 상속해 조용히 어긋난다',
-    );
-});
-
-test('금액 숫자는 여전히 mono 와 tabular-nums 를 쓴다', () => {
-    const homeCss = source('src/views/HomeView.css');
-
-    const amountRule = homeCss.match(/\.summary-card__amount\s*\{\s*font-family[\s\S]*?\}/);
-    assert.ok(amountRule, 'summary-card__amount 의 서체 규칙이 없다');
-    assert.match(amountRule[0], /var\(--tt-font-mono\)/);
-    assert.match(amountRule[0], /tabular-nums/);
+    assert.match(assetCard, /formatWon\(summary\.netWorth\)/);
+    assert.equal(formatWon(1244200), '1,244,200원');
+    assert.equal(formatWon(15854000), '15,854,000원');
 });
 
 /* ── 채팅 헤더의 미구현 버튼 (이슈 #331) ─────────────── */

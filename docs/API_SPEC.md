@@ -1228,6 +1228,7 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 | 메서드 | 경로 | 인증 | 응답 |
 |---|---|---|---|
 | POST | `/api/dev/batches/{name}?date=` | Bearer | `{ batch, baseDate, affected }` |
+| POST | `/api/dev/reports/monthly/batch` | Bearer + `X-Report-Batch-Key` | `{ yearMonth, targetCount, snapshotSavedCount, aiGeneratedCount, failureCount, forced }` |
 
 자정을 기다리지 않고 배치를 돌리기 위한 시연·검증용이다.
 
@@ -1259,6 +1260,8 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|
 | `DEV_API_DISABLED` | 400 | 로컬 환경이 아니다 (`app.env != local`) |
 | `DEV_BATCH_NOT_FOUND` | 400 | 없는 배치 이름 |
+| `MANUAL_REPORT_BATCH_DISABLED` | 400 | `REPORT_MONTHLY_MANUAL_BATCH_KEY`가 설정되지 않았다 |
+| `MANUAL_REPORT_BATCH_FORBIDDEN` | 400 | 월간 리포트 수동 배치 운영 키가 틀렸다 |
 
 ## 그룹 챌린지 — 재판 진입로 (이슈 #169 · #432)
 
@@ -1269,14 +1272,20 @@ API 모드에서 월 목록을 새로 조회할 때 전월 행이 없으면 해�
 |---|---|---|---|
 | GET | `/api/group-challenges/my-trials` | Bearer | `MyTrial[]` |
 | GET | `/api/group-challenges/trials` | Bearer | `GroupIndictment[]` |
+| GET | `/api/group-challenges/trial-records` | Bearer | `GroupClosedTrial[]` |
+| GET | `/api/group-challenges/{groupId}/trial-records` | Bearer | `GroupClosedTrial[]` |
 | GET | `/api/group-challenges/{groupId}/detail` | Bearer | `ChallengeGroupDetail` |
 
-> `/my-trials` · `/trials` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴 경로를 변수 경로보다
-> 먼저 매칭한다. 순서를 바꿔도 같다.
+> `/my-trials` · `/trials` · `/trial-records` 는 `/{groupId}` 와 겹쳐 보이지만 Spring 이 리터럴
+> 경로를 변수 경로보다 먼저 매칭한다. 순서를 바꿔도 같다.
 
 **앞의 둘은 범위가 다르다.** `/my-trials` 는 「내가 지금 <b>행동할 수 있는</b> 것」 2가지(내 변론 ·
 내 투표)이고, `/trials` 는 「내가 속한 그룹의 진행 중인 재판 <b>전부</b>」 6가지다.
 `/my-trials` 를 지우지 않은 것은 전체 보기 바텀시트가 아직 그 얇은 모양을 쓰기 때문이다.
+
+**`/trial-records` 둘은 그 셋의 반대다.** 위가 진행 중(`DEFENSE_WAIT`·`VOTING`)만 주는 반면
+이쪽은 **확정된 것(`GUILTY`·`INNOCENT`)만** 준다 — 두 목록은 겹치지 않는다.
+경로에 `{groupId}` 가 있으면 그 그룹만, 없으면 내가 속한 모든 그룹이다.
 
 ### 마감 시각은 저장값이 아니라 계산값이다
 
@@ -1342,6 +1351,34 @@ exceededAmount, mine, defended, myVote, voteCount, totalVoters, defenseDeadline,
   (`GET /api/group-challenges`)을 `groupId` 로 조인해 채운다 — 같은 값을 재판 수만큼 되풀이해
   내려보내지 않기 위함이다.
 - **사건번호는 없다.** `tbl_indictment` 에 대응하는 컬럼이 없다(디자인 시안에는 있다).
+
+### `GroupClosedTrial` — 확정된 재판 기록
+
+`{ id, groupId, groupName, userId, nickname, profileImageUrl, status, verdictMethod,
+aiVerdictReason, settlementDate, exceededAmount, mine, defended, myVote,
+guiltyCount, innocentCount, totalVoters, createdAt, confirmedAt }`
+
+`GroupIndictment` 과 **일부러 다른 자료형이다.** 저쪽의 축은 마감(`defenseDeadline` ·
+`voteDeadline`)이고 이쪽은 확정 시각과 개표다. 한 모양으로 합치면 진행 중 화면과
+기록 화면 중 한쪽에서 절반이 항상 NULL 이 된다.
+
+- **개표를 가리지 않는다.** 투표 중에 `guiltyCount`·`innocentCount`·`aiVerdictReason` 을
+  감춘 건 편승 투표를 막으려던 것이고(#171), 그 근거는 투표가 열려 있는 동안에만 성립한다.
+  확정된 뒤에는 실수(`0`)까지 그대로 내려간다.
+- **`verdictMethod` 는 항상 채워진다.** 프론트가 이 값으로 화면을 가른다 —
+  `AI_JUDGMENT` 면 동점 안내(`groupVoteTie`), 나머지 셋은 판결문(`verdictResult`)이다.
+  빼면 AI 판결 건이 엉뚱한 화면을 연다.
+- `aiVerdictReason` 은 `AI_JUDGMENT` 일 때만 값이 있다(`ck_ind_ai_reason` 이 그걸 강제한다).
+  나머지 방식의 사유 문구는 서버에 없고 프론트가 방식에서 만든다.
+- 정렬은 **최근 확정순**(`updated_at DESC, id DESC`)이다. 진행 중 목록의 「마감 임박순」과
+  반대인 것이 맞다 — 기록은 히스토리라 최근 것이 먼저다.
+- **`confirmedAt` 은 `tbl_indictment.updated_at` 이다.** 확정 시각 전용 컬럼이 없다.
+  상태 전이 UPDATE 4개가 모두 WHERE 에서 `GUILTY`·`INNOCENT` 를 제외해 확정 뒤로는
+  갱신되지 않는다. ⚠ 확정된 기소를 UPDATE 하는 구문이 생기면 이 값이 밀린다 —
+  그때는 `confirmed_at` 컬럼을 따로 만들어야 한다.
+- **그룹원이 아니면 빈 배열이다.** 예외를 던지지 않는다 —
+  두 쿼리 모두 `tbl_group_member` 조인이 권한 검사를 겸한다.
+- `settlementDate` 는 `GroupIndictment` 과 같이 **위반한 날짜**다(기소 생성일이 아니다).
 
 ### `ChallengeGroupDetail` — 상세 화면 한 벌
 
@@ -1856,7 +1893,7 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 | GET | `/api/reports/monthly/categories?yearMonth=YYYY-MM` | 대분류 차트와 소분류 선고 명세용 순소비 정보 |
 | GET | `/api/reports/monthly/months` | 가입월부터 현재월까지의 월 선택기 정보 |
 | POST | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 매월 1일 00:15 KST 배치가 자동 생성하는 결과의 수동 재처리·재시도 또는 저장된 성공 결과 재사용 |
-| GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유 조회. 스냅샷 행이 없으면 온디맨드 생성 후 결과 반환 |
+| GET | `/api/reports/monthly/ai-analysis?yearMonth=YYYY-MM` | 저장된 AI 분석 상태·소비 피드백·절약 비유 조회. 스냅샷 행이 없으면 생성하지 않고 빈 결과 반환 |
 
 `fixedExpenseCandidateCount`는 `ACTIVE`·미제외·미확정 항목 수이고, `confirmedFixedExpenseCount`는 `ACTIVE`·미제외·확정 항목 수다. 후보가 없어도 확정 항목이 있으면 절약 감정서로 이동할 수 있다.
 
@@ -1881,7 +1918,8 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 진행 중이면 `ONBOARDING`으로 반환하며, 이 항목은 `available=true`, `hasReport=false`다.
 가입월 이후 현재월은 `CURRENT`로 반환하고 조회할 수 없다
 (`available=false`, `hasReport=false`). 완료된 가입월은 `FIRST_REPORT`, 그 이후 완료월은
-`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. `ONBOARDING` 월을
+`READY`로 반환하며 두 상태 모두 `available=true`, `hasReport=true`다. 단, 완료된 월이라도
+v2 리포트 스냅샷이 없으면 목록에 노출하지 않는다. `ONBOARDING` 월을
 선택한 화면은 상세 집계 API를 호출하지 않고 온보딩 화면만 표시한다.
 
 집계에는 `CONSUMPTION` 거래만 포함하고 `is_excluded_from_summary=1`인 거래는 제외한다.
@@ -1911,14 +1949,58 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
 대상 월의 다음 달 1일보다 전에 가입한 사용자만 처리하며, 서버 기동 시 과거 월을 일괄 보정하지 않는다.
 리포트 생성 시점에 `AI_USAGE` 동의가 없으면 스냅샷 상태를 `NOT_CONSENTED`로 고정하고 외부 AI를 호출하지 않는다.
 이후 동의해도 이미 `NOT_CONSENTED`로 저장된 과거 월 리포트에는 AI 분석을 소급 제공하지 않는다.
-같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에는 아래 #154 카테고리 응답 구조를 저장한다.
-스냅샷이 없거나 AI 상태가 `NOT_REQUESTED`·`FAILED`인 경우에만 최신 집계를 저장한다. `COMPLETED` 또는
-`IN_PROGRESS` 행은 `category_summary_json`을 포함한 스냅샷을 갱신하지 않는다.
+같은 사용자·월의 `tbl_asset_snapshot.category_summary_json`에는 아래처럼 화면 전체 리포트 페이로드를
+저장한다. 컬럼명은 과거 호환을 위해 유지한다. `snapshotVersion=2` 행만 월간 소비 리포트 화면의
+조회 기준이며, 이후 거래·카테고리·고정지출 데이터가 바뀌어도 `summary`·`spendingTrend`·`categoryReport`
+값은 바뀌지 않는다. 이전 형식 행과 스냅샷 없는 과거 월은 원본 거래 데이터로 대체 조회하지 않으며,
+수동 강제 배치로 v2 스냅샷을 생성해야 한다.
+
+```json
+{
+  "snapshotVersion": 2,
+  "aiUsageConsented": true,
+  "summary": { "yearMonth": "2026-07" },
+  "spendingTrend": { "yearMonth": "2026-07", "items": [] },
+  "categoryReport": { "yearMonth": "2026-07", "parentCategories": [], "categories": [] }
+}
+```
+
+일반 배치는 기존 v2 스냅샷을 수정하지 않는다. `force=true` 수동 배치만 기존 화면 스냅샷과 AI 결과를
+초기화한 뒤 재생성한다. AI 분석도 위 JSON의 `summary`·`categoryReport`만 입력으로 사용한다.
 
 일시 장애(`TOO_MANY_REQUESTS`, `AI_PROVIDER_UNAVAILABLE`)로 `FAILED`가 된 행은 총 3회 시도 안에서만
 자동 재시도한다. 1~3일 **00:40 KST** 복구 실행은 마지막 실패 후 20분이 지난 행만 다시 처리한다.
 `IN_PROGRESS`는 자동 복구하지 않아 외부 AI의 중복 호출을 피한다. AI 생성 실패는 해당 사용자의 상태만
 `FAILED`로 남기며, 월간 집계·추이·카테고리 조회는 계속 가능하다.
+
+### `POST /api/dev/reports/monthly/batch`
+
+월간 소비 리포트의 수동 배치다. 일반 DEV API와 달리 로컬뿐 아니라 배포 환경에서도 실행할 수 있다.
+Bearer 인증과 함께 환경변수 `REPORT_MONTHLY_MANUAL_BATCH_KEY`로 설정한 값을
+`X-Report-Batch-Key` 헤더에 넣어야 하며, 키가 비어 있으면 API 자체가 비활성화된다.
+
+```json
+{
+  "yearMonth": "2026-07",
+  "force": true,
+  "targetUserIds": [101, 102],
+  "missingSnapshotAiConsents": [
+    { "userId": 101, "aiUsageConsented": true },
+    { "userId": 102, "aiUsageConsented": false }
+  ]
+}
+```
+
+- `yearMonth`는 완료된 과거 월만 허용한다.
+- `force=false`는 자동 배치와 같이 미생성·재시도 대상만 멱등 처리한다.
+- `force=true`에는 하나 이상의 `targetUserIds`가 필수다. 지정한 활성 사용자만 재생성하며,
+  가입 이전 월이거나 조회할 수 없는 사용자를 포함하면 `REPORT_NOT_AVAILABLE`로 실패하고 아무도 갱신하지 않는다.
+  기존 v2 스냅샷이 있으면 저장된 `aiUsageConsented` 값을 사용한다.
+- 스냅샷이 없거나 v2 이전 형식이면 당시 AI 동의를 확인할 수 없다. 이 경우
+  `missingSnapshotAiConsents`에 지정 사용자별 값을 빠짐없이 넘겨야 하며, 대상 밖의 사용자 ID 또는
+  하나라도 빠진 값이 있으면 DB를 변경하지 않고 `MISSING_AI_CONSENT_INPUT` 또는 `INVALID_REQUEST`로 실패한다.
+- 응답의 `snapshotSavedCount`는 화면 스냅샷 저장 성공 수, `aiGeneratedCount`는 AI 분석 생성 성공 수,
+  `failureCount`는 사용자 단위 실패 수다.
 
 ```json
 {
@@ -2128,3 +2210,37 @@ events.publishEvent(new GroupTrialEvents.TrialOpened(groupId, indictmentId, targ
   데이터가 있는 전체 월을 합쳐서 반환한다(검색 화면 전용).
 - `yearMonth`가 `YYYY-MM` 형식이 아니면 `400 INVALID_REQUEST`, 데이터가 있는 가장 이른 달보다
   이전이면 `400 LEDGER_NOT_AVAILABLE`.
+
+## 오늘 쓴 돈 요약 (홈 카드)
+
+| 메서드 | 경로 | 인증 | 응답 |
+|---|---|---|---|
+| GET | `/api/transactions/summary/daily` | Bearer | `{ date, todayAmount, monthAmount, changeRate }` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "date": "2026-08-23",
+    "todayAmount": 32000,
+    "monthAmount": 486300,
+    "changeRate": -20.00
+  }
+}
+```
+- 홈 최상단 「오늘 쓴 돈」 카드 전용이다. 필드명이 프론트 `HomeSpendingCard` 의 props 와 1:1로 맞춰져 있다.
+- 구간은 **서버 KST**(`transaction.ledger.zone`, 기본 `Asia/Seoul`) 기준 반개구간이다.
+  오늘 `[오늘, 내일)` · 어제 `[어제, 오늘)` · 이번 달 `[1일, 다음 달 1일)`.
+- `date`: 서버가 판단한 "오늘"(`yyyy-MM-dd`). 자정 넘김·서버 타임존 사고를 프론트에서 확인할 유일한 단서다.
+- **`monthAmount`는 month-to-date가 아니라 월 전체다.** 장부 월 요약(`GET /api/transactions?yearMonth=`)의
+  `summary.totalSpent`와 **같은 값이어야 한다** — 카드에 「거래내역」 입구가 붙어 있어 사용자가 한 탭 만에
+  두 숫자를 대조한다. 미래 날짜 거래가 한 행이라도 생기면 month-to-date 로 자른 순간 두 값이 갈린다.
+- 환불은 지출을 상계하므로 **금액이 음수일 수 있다.** 0으로 자르지 않고 그대로 내려준다(장부와 같은 규칙).
+- 금액 두 개는 데이터가 없어도 `null`이 아니라 `0`이다. 카드의 「—」·「집계 중」 자리는 **API 호출 실패 전용**이라
+  0원 쓴 날에 `null`을 주면 정상이 장애처럼 보인다.
+- `changeRate`: 어제 대비 증감률(%, scale 2). 음수면 덜 쓴 것이다. **어제 순지출이 0 이하면 `null`이다** —
+  비율을 낼 수 없고, 음수를 분모로 쓰면 부호가 뒤집혀 "더 썼는데 적게 쓰는 중"이 뜬다.
+  장부의 `monthOverMonthRate`는 같은 상황에서 `0`을 주므로 **계약이 다르다.** 혼동하지 말 것.
+- 집계 기준은 장부·월간 리포트와 같다(`classification='CONSUMPTION'` + `is_excluded_from_summary=0`).
+  > ⚠ **미션·그룹챌린지 집계는 여기에 `direction='OUT'`을 더 건다.** 페이머니 소비(`direction`이 `NULL`)가
+  > 빠지므로 같은 사용자·같은 기간이라도 값이 다를 수 있다. 기존 시스템의 알려진 불일치이고 아직 통일하지 않았다.

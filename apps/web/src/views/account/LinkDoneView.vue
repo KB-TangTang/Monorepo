@@ -16,7 +16,12 @@ import BaseButton from '@/components/common/BaseButton.vue';
 import InstitutionLogo from '@/components/account/InstitutionLogo.vue';
 import { useAccountStore } from '@/stores/account';
 import { useAuthStore } from '@/stores/auth';
-import { connectedAccountsForDone, PROGRESS_STATUS } from '@/utils/account';
+import {
+    connectedAccountsForDone,
+    LINK_DONE_ANIMATION_HOLD_MS,
+    PROGRESS_STATUS,
+    showsLinkDoneAnimation,
+} from '@/utils/account';
 import { NICKNAME_SETUP_ROUTE } from '@/utils/user';
 import successAnimation from '@/assets/images/link-success.svg';
 
@@ -44,6 +49,20 @@ const syncFailed = ref(false);
  * 계속 돌았다). 끄는 경우(reduced-motion 이거나 동기화가 끝난 경우)엔 정적인 체크를 그린다.
  */
 const playsAnimation = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/*
+ * 동기화가 1초 안에 끝나면 위 조건만으로는 한 바퀴도 못 돈다(#465). 마운트 뒤 한 바퀴 길이만큼은
+ * 동기화가 끝났어도 재생을 이어 간다. 홀드가 풀린 뒤에는 syncing 만 본다 — 820c2d6 의 의도 그대로.
+ */
+const animationHoldElapsed = ref(false);
+let animationHoldTimer = null;
+const showsAnimation = computed(() =>
+    showsLinkDoneAnimation({
+        playsAnimation,
+        syncing: syncing.value,
+        holdElapsed: animationHoldElapsed.value,
+    }),
+);
 
 /**
  * 방금 연결한 계좌.
@@ -147,12 +166,16 @@ function onPopState() {
 onMounted(() => {
     window.history.pushState({ ttLinkDone: true }, '');
     window.addEventListener('popstate', onPopState);
+    animationHoldTimer = setTimeout(() => {
+        animationHoldElapsed.value = true;
+    }, LINK_DONE_ANIMATION_HOLD_MS);
     runInitialSync();
 });
 
 /* 화면을 떠나면 반드시 걷어낸다 — 남으면 다른 화면의 뒤로가기까지 이 핸들러가 가로챈다. */
 onBeforeUnmount(() => {
     window.removeEventListener('popstate', onPopState);
+    clearTimeout(animationHoldTimer);
 });
 </script>
 
@@ -161,7 +184,7 @@ onBeforeUnmount(() => {
         <div class="link-done__body">
             <div class="link-done__hero">
                 <img
-                    v-if="playsAnimation && syncing"
+                    v-if="showsAnimation"
                     class="link-done__animation"
                     :src="successAnimation"
                     alt=""

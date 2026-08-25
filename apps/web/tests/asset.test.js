@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
     formatWon,
     formatSignedWon,
     formatCompactWon,
-    formatAssetHomeWon,
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,
@@ -13,6 +13,10 @@ import {
     getHoldingCost,
     getHoldingAveragePrice,
 } from '../src/utils/asset.js';
+
+function source(path) {
+    return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 
 test('formatWon 은 금액 뒤에 "원"을 붙인다', () => {
     assert.equal(formatWon(12846000), '12,846,000원');
@@ -42,7 +46,7 @@ test('getHoldingAveragePrice 는 보유수량이 0이하이면 0으로 나누지
 
 test('formatCompactWon 은 1만/1억 경계에서 단위를 바꾼다', () => {
     assert.equal(formatCompactWon(9999), '9,999원');
-    /* 만 단위에 콤마를 넣지 않는다(이슈 #326) - 같은 화면의 formatAssetHomeWon 과 표기를 맞춘다 */
+    /* 만 단위에 콤마를 넣지 않는다(이슈 #326) */
     assert.equal(formatCompactWon(13146000), '1315만원');
     assert.equal(formatCompactWon(150000000), '1.5억원');
     assert.equal(formatCompactWon(-20000), '-2만원');
@@ -54,11 +58,38 @@ test('formatCompactWon 은 반올림으로 1억을 넘는 값도 억 단위로 �
     assert.equal(formatCompactWon(100000000), '1.0억원');
 });
 
-test('formatAssetHomeWon 은 천만원 이상 금액을 만원/억 단위로 줄인다', () => {
-    assert.equal(formatAssetHomeWon(9999999), '9,999,999원');
-    assert.equal(formatAssetHomeWon(10000000), '1000만원');
-    assert.equal(formatAssetHomeWon(21320000000), '213억2000만원');
-    assert.equal(formatAssetHomeWon(-150000000), '-1억5000만원');
+test('자산 홈 순자산은 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
+    const netWorthCard = source('src/components/asset/AssetNetWorthCard.vue');
+
+    assert.match(netWorthCard, /formatWon\(netWorth\)/);
+    assert.equal(formatWon(15850000), '15,850,000원');
+});
+
+test('자산 홈 계좌 목록은 잔액을 축약하지 않고 원 단위 전체 금액으로 표시한다', () => {
+    const accountList = source('src/components/asset/AssetAccountList.vue');
+
+    assert.match(accountList, /formatWon\(account\.amount\)/);
+    assert.equal(formatWon(15850000), '15,850,000원');
+    assert.equal(formatWon(-25000000), '-25,000,000원');
+});
+
+/*
+ * 1000만원대부터 순자산이 두 줄로 잘렸다. 줄바꿈을 막고 자릿수만큼 글자 크기를 낮춘다 -
+ * 단위를 「~만원」으로 줄이는 쪽은 끝자리가 사라지므로 쓰지 않는다.
+ */
+test('순자산 카드는 금액을 줄바꿈하지 않고 자릿수에 따라 글자 크기를 낮춘다', () => {
+    const netWorthCard = source('src/components/asset/AssetNetWorthCard.vue');
+
+    assert.match(netWorthCard, /white-space:\s*nowrap/, '금액 줄바꿈을 막아야 한다');
+    assert.match(netWorthCard, /AMOUNT_FONT_STEPS/, '자릿수별 축소 단계가 있어야 한다');
+    assert.match(netWorthCard, /:style="amountStyle"/, '금액에 축소 결과를 적용해야 한다');
+});
+
+/* 자산탭 도넛 범례도 순자산 카드와 같은 표기를 쓴다 - 한 화면에서 단위가 갈리면 안 된다. */
+test('자산 구성 범례도 원 단위 전체 금액으로 표시한다', () => {
+    const compositionCard = source('src/components/asset/AssetCompositionCard.vue');
+
+    assert.match(compositionCard, /formatWon\(item\.amount\)/);
 });
 
 test('getCompositionTotal 은 amount 합계를 반환한다', () => {
@@ -107,6 +138,21 @@ test('getSparklinePoints 는 빈 배열에 안전하다', () => {
     const { pointsAttr, lastPoint } = getSparklinePoints([], 20, 10);
     assert.equal(pointsAttr, '');
     assert.equal(lastPoint, null);
+});
+
+// 이슈 #444: 최고/최저치 달의 좌표가 viewBox 가장자리(0 또는 width/height)에 그대로
+// 닿으면 SVG 기본 overflow:hidden 에 끝점 마커(원)가 잘려 보인다. padding 만큼
+// 안쪽으로 들어와야 한다.
+test('getSparklinePoints 는 padding 만큼 좌표를 안쪽으로 들여 그린다', () => {
+    const { pointsAttr, lastPoint } = getSparklinePoints([0, 5, 10], 20, 10, 3);
+    assert.equal(pointsAttr, '3,7 10,5 17,3');
+    assert.deepEqual(lastPoint, { x: 17, y: 3 });
+});
+
+test('getSparklinePoints 는 마지막 달이 최고치여도 padding 이 있으면 y·x 모두 가장자리에 닿지 않는다', () => {
+    const { lastPoint } = getSparklinePoints([1, 2, 3], 20, 10, 3);
+    assert.ok(lastPoint.x <= 20 - 3 && lastPoint.x >= 3);
+    assert.ok(lastPoint.y <= 10 - 3 && lastPoint.y >= 3);
 });
 
 test('getBarHeights 는 총자산이 가장 큰 달을 기준으로 높이를 정규화한다', () => {

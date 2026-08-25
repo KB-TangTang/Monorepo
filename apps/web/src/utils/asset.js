@@ -1,6 +1,5 @@
 const EOK = 100000000;
 const MAN = 10000;
-const TEN_MILLION = 10000000;
 
 /*
  * v1 디자인 토큰(--tt-gray-*, --tt-accent-700 등)은 tokens.css v2(Ink/Gold 체계)로 교체되며
@@ -45,12 +44,11 @@ function getHoldingAveragePrice(cost, quantity) {
 }
 
 /*
- * 도넛 중앙처럼 폭이 좁은 자리에 쓴다(이슈 #326).
+ * 도넛 중앙처럼 폭이 좁은 자리에 쓴다(이슈 #326). 만 단위에 콤마를 넣지 않는다.
  *
- * 만 단위에 콤마를 넣지 않는다 - formatAssetHomeWon 과 표기를 맞추기 위해서다.
- * 예전에는 같은 1913만이 순자산 카드에서 「1913만원」, 바로 아래 도넛 중앙에서
- * 「1,913만원」으로 갈렸다.
- * 억 단위(`1.9억원`)는 좁은 원 안에 들어가야 해서 축약형을 그대로 둔다.
+ * 자산 화면의 금액은 전부 formatWon 으로 전체 자릿수를 적는다 - 「1585만원」처럼 줄이면
+ * 끝자리가 사라져 다른 화면의 같은 값과 어긋나 보인다. 좁아서 넘칠 때는 단위를 줄이는
+ * 대신 글자 크기를 줄인다(AssetNetWorthCard).
  */
 function formatCompactWon(amount) {
     const sign = amount < 0 ? '-' : '';
@@ -68,26 +66,6 @@ function formatCompactWon(amount) {
     return formatWon(amount);
 }
 
-function formatAssetHomeWon(amount) {
-    const sign = amount < 0 ? '-' : '';
-    const abs = Math.abs(Math.trunc(amount));
-    if (abs < TEN_MILLION) {
-        return formatWon(amount);
-    }
-
-    const totalMan = Math.round(abs / MAN);
-    const eok = Math.floor(totalMan / MAN);
-    const man = totalMan % MAN;
-
-    if (eok > 0 && man > 0) {
-        return `${sign}${eok}억${man}만원`;
-    }
-    if (eok > 0) {
-        return `${sign}${eok}억원`;
-    }
-    return `${sign}${totalMan}만원`;
-}
-
 function getCompositionTotal(composition) {
     return composition.reduce((sum, item) => sum + item.amount, 0);
 }
@@ -103,17 +81,25 @@ function getCompositionRatios(composition) {
     });
 }
 
-function getSparklinePoints(trend, width, height) {
+/*
+ * padding 은 선 끝의 마커(원)나 stroke-width 가 viewBox 가장자리에서 잘리지 않게
+ * 그려지는 영역을 안쪽으로 줄인다(이슈 #444). 값이 최고/최저치인 달은 y 가 정확히
+ * 0 또는 height 에 닿고, 마지막 달은 x 가 항상 정확히 width 에 닿는다 — SVG 는
+ * 기본적으로 viewBox 밖을 잘라내므로(overflow: hidden) 그 지점의 마커가 매번 잘려 보였다.
+ */
+function getSparklinePoints(trend, width, height, padding = 0) {
     if (trend.length === 0) {
         return { pointsAttr: '', lastPoint: null };
     }
     const min = Math.min(...trend);
     const max = Math.max(...trend);
     const range = max - min || 1;
-    const stepX = trend.length > 1 ? width / (trend.length - 1) : 0;
+    const drawWidth = width - padding * 2;
+    const drawHeight = height - padding * 2;
+    const stepX = trend.length > 1 ? drawWidth / (trend.length - 1) : 0;
     const coords = trend.map((value, index) => {
-        const x = stepX * index;
-        const y = height - ((value - min) / range) * height;
+        const x = padding + stepX * index;
+        const y = padding + drawHeight - ((value - min) / range) * drawHeight;
         return { x, y };
     });
     const pointsAttr = coords.map(({ x, y }) => `${x},${y}`).join(' ');
@@ -149,7 +135,6 @@ export {
     formatSignedWon,
     formatSignedPercent,
     formatCompactWon,
-    formatAssetHomeWon,
     getCompositionTotal,
     getCompositionRatios,
     getSparklinePoints,

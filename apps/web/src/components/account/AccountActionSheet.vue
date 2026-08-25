@@ -10,7 +10,7 @@
 <script setup>
 import { computed } from 'vue';
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue';
-import { formatSyncTime, needsReconnect } from '@/utils/account';
+import { formatSyncTime, needsReconnect, showsResyncAction } from '@/utils/account';
 
 const props = defineProps({
     modelValue: { type: Boolean, required: true },
@@ -55,7 +55,11 @@ function pick(event) {
                     <span class="action-sheet__hint">인증이 만료돼 다시 연결해야 해요</span>
                 </button>
             </li>
-            <li v-else>
+            <!--
+              대출 표시 행(manageable=false, #467)은 기관 단위로만 다시 긁어오므로 개별 재조회가 없다.
+              예전엔 이 항목이 그대로 보여 누르면 400 이었다. 「전체 즉시 조회」와 「연결 해제」는 된다.
+            -->
+            <li v-else-if="showsResyncAction(account)">
                 <button class="action-sheet__item" type="button" @click="pick('resync')">
                     <span>지금 동기화</span>
                     <span class="action-sheet__hint">이 계좌의 거래를 다시 가져와요</span>

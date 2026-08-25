@@ -2,6 +2,7 @@ package com.kb.tangtang.report.mapper;
 
 import com.kb.tangtang.report.domain.MonthlyCategorySpendingRow;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.domain.MonthlySpendingRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -36,13 +37,26 @@ public interface MonthlyReportMapper {
 
     BigDecimal sumLoanBalances(@Param("userId") long userId);
 
-    int upsertPendingAiAnalysisSnapshot(@Param("userId") long userId,
-                                        @Param("yearMonth") String yearMonth,
-                                        @Param("totalAsset") BigDecimal totalAsset,
-                                        @Param("totalDebt") BigDecimal totalDebt,
-                                        @Param("netWorth") BigDecimal netWorth,
-                                        @Param("categorySummaryJson") String categorySummaryJson,
-                                        @Param("aiAnalysisStatus") String aiAnalysisStatus);
+    int insertMonthlyReportSnapshotIfAbsent(@Param("userId") long userId,
+                                             @Param("yearMonth") String yearMonth,
+                                             @Param("totalAsset") BigDecimal totalAsset,
+                                             @Param("totalDebt") BigDecimal totalDebt,
+                                             @Param("netWorth") BigDecimal netWorth,
+                                             @Param("categorySummaryJson") String categorySummaryJson,
+                                             @Param("aiAnalysisStatus") String aiAnalysisStatus);
+
+    int overwriteMonthlyReportSnapshot(@Param("userId") long userId,
+                                       @Param("yearMonth") String yearMonth,
+                                       @Param("totalAsset") BigDecimal totalAsset,
+                                       @Param("totalDebt") BigDecimal totalDebt,
+                                       @Param("netWorth") BigDecimal netWorth,
+                                       @Param("categorySummaryJson") String categorySummaryJson,
+                                       @Param("aiAnalysisStatus") String aiAnalysisStatus);
+
+    MonthlyReportSnapshotRow findMonthlyReportSnapshot(@Param("userId") long userId,
+                                                        @Param("yearMonth") String yearMonth);
+
+    List<MonthlyReportSnapshotRow> findMonthlyReportSnapshots(@Param("userId") long userId);
 
     MonthlyAiAnalysisSnapshot findAiAnalysisSnapshot(@Param("userId") long userId,
                                                       @Param("yearMonth") String yearMonth);

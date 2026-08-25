@@ -13,11 +13,13 @@ import com.kb.tangtang.account.client.sync.dto.LoanSyncDto;
 import com.kb.tangtang.account.client.sync.dto.PayMoneySyncDto;
 import com.kb.tangtang.account.domain.AuthMethod;
 import com.kb.tangtang.account.domain.AuthStatus;
+import com.kb.tangtang.account.domain.Card;
 import com.kb.tangtang.account.domain.ConnectedAccount;
 import com.kb.tangtang.account.domain.Loan;
 import com.kb.tangtang.account.domain.ProgressStatus;
 import com.kb.tangtang.account.domain.SyncStatus;
 import com.kb.tangtang.account.dto.*;
+import com.kb.tangtang.account.mapper.CardMapper;
 import com.kb.tangtang.account.mapper.ConnectedAccountMapper;
 import com.kb.tangtang.account.mapper.LoanMapper;
 import com.kb.tangtang.common.exception.BusinessException;
@@ -64,6 +66,8 @@ public class AccountLinkService {
     private final FinancialDataClient client;
     private final ConnectedAccountMapper mapper;
     private final LoanMapper loanMapper;
+    /** 관리 목록의 카드 행과 카드 연결 해제용(#467). 카드 저장 자체는 FinancialSyncServiceImpl 이 한다. */
+    private final CardMapper cardMapper;
     private final LinkProgressStore progressStore;
     private final InstitutionCatalog catalog;
     private final AccountNumberPolicy accountNumbers;
@@ -103,6 +107,7 @@ public class AccountLinkService {
     public AccountLinkService(FinancialDataClient client,
                               ConnectedAccountMapper mapper,
                               LoanMapper loanMapper,
+                              CardMapper cardMapper,
                               LinkProgressStore progressStore,
                               InstitutionCatalog catalog,
                               AccountNumberPolicy accountNumbers,
@@ -111,14 +116,15 @@ public class AccountLinkService {
                               ApplicationEventPublisher events,
                               ConsentService consentService,
                               @Value("${financial.sync.batch.fixed-delay-ms}") long batchFixedDelayMs) {
-        this(client, mapper, loanMapper, progressStore, catalog, accountNumbers, syncClient, scenarioKeyProvider,
-                events, consentService, batchFixedDelayMs, Clock.systemDefaultZone());
+        this(client, mapper, loanMapper, cardMapper, progressStore, catalog, accountNumbers, syncClient,
+                scenarioKeyProvider, events, consentService, batchFixedDelayMs, Clock.systemDefaultZone());
     }
 
     /** 테스트에서 시간을 고정하기 위한 생성자. */
     AccountLinkService(FinancialDataClient client,
                        ConnectedAccountMapper mapper,
                        LoanMapper loanMapper,
+                       CardMapper cardMapper,
                        LinkProgressStore progressStore,
                        InstitutionCatalog catalog,
                        AccountNumberPolicy accountNumbers,
@@ -131,6 +137,7 @@ public class AccountLinkService {
         this.client = client;
         this.mapper = mapper;
         this.loanMapper = loanMapper;
+        this.cardMapper = cardMapper;
         this.progressStore = progressStore;
         this.catalog = catalog;
         this.accountNumbers = accountNumbers;
@@ -409,12 +416,20 @@ public class AccountLinkService {
         long previewAccountId = -1L;   // 음수로 둬 은행 계좌의 실 accountId(1L 부터)와 절대 안 겹치게 한다.
         for (String code : selectedCodes) {
             List<LinkableAccountDto> accounts = new ArrayList<>();
+            /*
+             * 미리보기 id 와 원본 키를 progress 에 함께 적어 둔다(#467). 사용자가 이 행의 체크를 풀면
+             * link() 가 그 키로 제외 행을 남겨 최초 동기화·배치가 해당 상품을 건너뛴다.
+             */
             for (LoanSyncDto loan : loans) {
                 if (!code.equals(loan.getInstitutionCode())) {
                     continue;
                 }
+                long id = previewAccountId--;
+                progress.registerPreview(id, new LinkProgress.PreviewEntry(
+                        FinancialSyncServiceImpl.loanExclusionKey(loan.getLoanId()),
+                        code, loan.getInstitutionName(), loan.getProductName(), "LOAN"));
                 accounts.add(LinkableAccountDto.builder()
-                        .accountId(previewAccountId--)
+                        .accountId(id)
                         .bankCode(code)
                         .bankName(loan.getInstitutionName())
                         .accountType("LOAN")
@@ -428,8 +443,12 @@ public class AccountLinkService {
                 if (!code.equals(wallet.getProviderCode())) {
                     continue;
                 }
+                long id = previewAccountId--;
+                progress.registerPreview(id, new LinkProgress.PreviewEntry(
+                        FinancialSyncServiceImpl.payMoneyExclusionKey(wallet.getPayMoneyId()),
+                        code, wallet.getProviderName(), wallet.getWalletName(), "PAYMONEY"));
                 accounts.add(LinkableAccountDto.builder()
-                        .accountId(previewAccountId--)
+                        .accountId(id)
                         .bankCode(code)
                         .bankName(wallet.getProviderName())
                         .accountType("PAYMONEY")
@@ -442,8 +461,12 @@ public class AccountLinkService {
                 if (!code.equals(card.getInstitutionCode())) {
                     continue;
                 }
+                long id = previewAccountId--;
+                progress.registerPreview(id, new LinkProgress.PreviewEntry(
+                        FinancialSyncServiceImpl.cardExclusionKey(card.getCardNoMasked()),
+                        code, card.getInstitutionName(), card.getProductName(), "CARD"));
                 accounts.add(LinkableAccountDto.builder()
-                        .accountId(previewAccountId--)
+                        .accountId(id)
                         .bankCode(code)
                         .bankName(card.getInstitutionName())
                         .accountType("CARD")
@@ -547,10 +570,74 @@ public class AccountLinkService {
             linked++;
         }
 
+        /*
+         * 자동 연동 미리보기에서 체크를 푼 상품(#467). 은행 계좌의 제외 행과 같은 장치다 — 키만 있는
+         * is_active=0 행을 남기면 FinancialSyncServiceImpl 의 inactiveKeys 검사가 그 상품을 건너뛴다.
+         * 모르는 id(화면이 지어낸 값)는 조용히 무시한다. 이미 연결돼 있던 상품(페이머니)이면 그 행이
+         * 꺼진다 — 체크 해제는 곧 연결 해제다.
+         */
+        List<Long> excluded = request.getExcludedAccountIds() == null ? List.of() : request.getExcludedAccountIds();
+        Set<Long> excludedIds = new LinkedHashSet<>(excluded);
+        /*
+         * 이번에 체크한 채로 둔 상품에 예전 제외 행이 남아 있으면 먼저 걷어낸다(#467 되돌리기).
+         * 예전에 풀었거나 해제했던 상품은 is_active=0 행 때문에 동기화가 영원히 건너뛴다 — 다시 연동하려고
+         * 체크해도 아무 일이 없는 것처럼 보인다. 페이머니는 실제 연결 행이라 되살리고(은행 계좌와 같다),
+         * 대출·카드는 키만 있는 그림자 행이라 지운다(실체는 tbl_loan/tbl_card 에 동기화가 다시 만든다).
+         * excludedSeen 에서도 빼야 아래 제외 루프가 "이미 기록됨"으로 오판하지 않는다.
+         */
+        for (Map.Entry<Long, LinkProgress.PreviewEntry> preview : progress.previewEntries().entrySet()) {
+            LinkProgress.PreviewEntry entry = preview.getValue();
+            if (excludedIds.contains(preview.getKey()) || !excludedSeen.contains(entry.key())) {
+                continue;
+            }
+            if ("PAYMONEY".equals(entry.accountType())) {
+                mapper.reactivate(exclusionRow(userId, progress.getConnectionId(), entry, now));
+            } else {
+                mapper.deleteInactiveByHash(userId, entry.key());
+            }
+            excludedSeen.remove(entry.key());
+        }
+        for (Long previewId : excludedIds) {
+            LinkProgress.PreviewEntry entry = previewId == null ? null : progress.previewOf(previewId);
+            if (entry == null || !excludedSeen.add(entry.key())) {
+                continue;
+            }
+            recordExclusion(userId, progress.getConnectionId(), entry, now);
+        }
+
         if (linked == 0 && !hasDirectAssets) {
             throw new BusinessException("EXTERNAL_API_ERROR", "연결된 계좌가 없어요.");
         }
         return LinkResultDto.builder().linkedCount(linked).directAssetsPending(hasDirectAssets).build();
+    }
+
+    /**
+     * 대출·페이머니·카드 제외 행(#467). 행이 이미 있으면(이전에 연동했던 상품) 새로 만들지 않고 끈다.
+     * reactivate 가 먼저 켜고 deactivateByHash 가 끄는 순서라 결과는 항상 is_active=0 이다.
+     */
+    private void recordExclusion(long userId, String connectionId, LinkProgress.PreviewEntry entry,
+                                 LocalDateTime now) {
+        ConnectedAccount row = exclusionRow(userId, connectionId, entry, now);
+        if (mapper.reactivate(row) == 0) {
+            mapper.insert(row);
+        }
+        mapper.deactivateByHash(userId, entry.key());
+    }
+
+    private ConnectedAccount exclusionRow(long userId, String connectionId, LinkProgress.PreviewEntry entry,
+                                          LocalDateTime now) {
+        return ConnectedAccount.builder()
+                .userId(userId)
+                .codefConnectedId(connectionId)
+                .bankCode(entry.bankCode())
+                .bankName(entry.bankName())
+                .accountName(entry.accountName())
+                .accountNoEncrypted(entry.key())
+                .accountType(entry.accountType())
+                .balance(BigDecimal.ZERO)
+                .syncStatus(SyncStatus.NORMAL.name())
+                .expiresAt(now.plusDays(CONSENT_VALID_DAYS))
+                .build();
     }
 
     /**
@@ -618,6 +705,9 @@ public class AccountLinkService {
                 .toList());
         accounts.addAll(loanMapper.findByUser(userId).stream()
                 .map(this::loanAsConnectedAccount)
+                .toList());
+        accounts.addAll(cardMapper.findByUser(userId).stream()
+                .map(this::cardAsConnectedAccount)
                 .toList());
 
         /*
@@ -698,7 +788,7 @@ public class AccountLinkService {
     private ConnectedAccountDto loanAsConnectedAccount(Loan loan) {
         String bankCode = loan.getBankCode() != null ? loan.getBankCode() : catalog.codeOfName(loan.getBankName());
         return ConnectedAccountDto.builder()
-                .accountId(-loan.getId())
+                .accountId(ManagedAccountId.ofLoan(loan.getId()))
                 .bankCode(bankCode)
                 .bankName(loan.getBankName())
                 .shortLabel(catalog.shortLabelOf(bankCode))
@@ -707,6 +797,34 @@ public class AccountLinkService {
                 .accountType("LOAN")
                 .balance(loan.getBalance())
                 .syncStatus("NORMAL")
+                .manageable(false)
+                .build();
+    }
+
+    /**
+     * 카드는 잔액이 없다 — 자산이 아니라 **거래의 출처**다(#467).
+     *
+     * 그래서 자산 탭에는 들어가지 않고 이 관리 목록에만 나온다. 화면 제목이 「내 계좌와 카드」이고
+     * 해제 문구가 "거래 수집을 멈춰요" 인 것과 같은 뜻이다 — 장부에 찍힌 카드 승인 내역, 고정지출 탐지,
+     * 미션 판정이 전부 여기서 나오므로 그 출처를 확인하고 끊을 자리가 있어야 한다.
+     * 잔액 칸에는 화면이 카드 종류(신용/체크)를 대신 그린다.
+     */
+    private ConnectedAccountDto cardAsConnectedAccount(Card card) {
+        String bankCode = card.getInstitutionCode() != null
+                ? card.getInstitutionCode()
+                : catalog.codeOfName(card.getInstitutionName());
+        return ConnectedAccountDto.builder()
+                .accountId(ManagedAccountId.ofCard(card.getId()))
+                .bankCode(bankCode)
+                .bankName(card.getInstitutionName())
+                .shortLabel(catalog.shortLabelOf(bankCode))
+                .accountName(card.getProductName())
+                .accountNoMasked(card.getCardNoMasked())
+                .accountType("CARD")
+                .cardTypeCode(card.getCardTypeCode())
+                .syncStatus("NORMAL")
+                .lastSyncAt(text(card.getLastSyncAt()))
+                /* 대출과 같다 — 기관 단위로만 다시 긁어오므로 개별 재조회가 없다. */
                 .manageable(false)
                 .build();
     }
@@ -723,10 +841,63 @@ public class AccountLinkService {
 
     @Transactional
     public DisconnectResultDto disconnect(long userId, long accountId) {
-        if (mapper.deactivate(accountId, userId) == 0) {
-            throw new BusinessException("NOT_FOUND", "연결된 계좌를 찾을 수 없어요.");
+        switch (ManagedAccountId.kindOf(accountId)) {
+            case LOAN:
+                disconnectLoan(userId, ManagedAccountId.rawId(accountId));
+                break;
+            case CARD:
+                disconnectCard(userId, ManagedAccountId.rawId(accountId));
+                break;
+            default:
+                if (mapper.deactivate(accountId, userId) == 0) {
+                    throw new BusinessException("NOT_FOUND", "연결된 계좌를 찾을 수 없어요.");
+                }
         }
         return DisconnectResultDto.builder().accountId(accountId).disconnected(true).build();
+    }
+
+    /**
+     * 대출 연결 해제(#467). 관리 목록의 대출 행은 tbl_loan 을 `-id` 로 꾸민 것이라(loanAsConnectedAccount)
+     * tbl_connected_account 를 끌 수 없다 — 예전엔 그래서 400 이었다.
+     *
+     * 은행 계좌와 같은 원칙이다 — **해제 전까지 모은 이력은 남기고 수집만 멈춘다.** tbl_loan 에는 is_active 가
+     * 없으니 행을 지우지 않고, 같은 키의 제외 행(is_active=0)을 "숨김 플래그"로 쓴다. LoanMapper 의 조회
+     * 쿼리가 이 키를 가진 대출을 빼고 읽어(관리 목록·자산 합계·동기화 범위 전부), 동기화는 같은 키로 건너뛴다.
+     * 다시 연동하면 link() 가 제외 행을 지워 행과 거래가 그대로 되살아난다 — 지웠다 다시 받으면 거래가 새
+     * loan id 로 또 들어와 장부에 두 번 보였을 것이다.
+     */
+    private void disconnectLoan(long userId, long loanId) {
+        Loan loan = loanMapper.findByUser(userId).stream()
+                .filter(item -> item.getId() != null && item.getId() == loanId)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "연결된 계좌를 찾을 수 없어요."));
+        String bankCode = loan.getBankCode() != null ? loan.getBankCode() : catalog.codeOfName(loan.getBankName());
+        recordExclusion(userId, null,
+                new LinkProgress.PreviewEntry(loan.getLoanNoEncrypted(), bankCode, loan.getBankName(),
+                        loan.getLoanType(), "LOAN"),
+                LocalDateTime.now(clock));
+    }
+
+    /**
+     * 카드 연결 해제(#467). 대출과 같은 방식이다 — 행·거래는 그대로 두고 수집만 멈춘다.
+     *
+     * `tbl_card` 에도 is_active 가 없어 제외 행(is_active=0)을 숨김 플래그로 쓴다. 키를 마스킹 카드번호로
+     * 만드는 이유는 FinancialSyncServiceImpl.cardExclusionKey 주석 참고 — 그 함수와 **반드시 같은 값**이어야
+     * 동기화가 이 카드를 알아보고 건너뛴다.
+     */
+    private void disconnectCard(long userId, long cardId) {
+        Card card = cardMapper.findByUser(userId).stream()
+                .filter(item -> item.getId() != null && item.getId() == cardId)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "연결된 카드를 찾을 수 없어요."));
+        String bankCode = card.getInstitutionCode() != null
+                ? card.getInstitutionCode()
+                : catalog.codeOfName(card.getInstitutionName());
+        recordExclusion(userId, null,
+                new LinkProgress.PreviewEntry(
+                        FinancialSyncServiceImpl.cardExclusionKey(card.getCardNoMasked()),
+                        bankCode, card.getInstitutionName(), card.getProductName(), "CARD"),
+                LocalDateTime.now(clock));
     }
 
     /**
@@ -736,6 +907,12 @@ public class AccountLinkService {
      * (이 클래스의 원칙). 갱신은 계좌 단위로 독립적이라 한 덩어리로 묶을 이유도 없다.
      */
     public ResyncResultDto resync(long userId, long accountId) {
+        if (ManagedAccountId.kindOf(accountId) != ManagedAccountId.Kind.ACCOUNT) {
+            /* 대출·카드 표시 행(#467). 기관 단위로만 다시 긁어오므로 「전체 즉시 조회」가 맞는 길이다. */
+            String label = ManagedAccountId.kindOf(accountId) == ManagedAccountId.Kind.CARD ? "카드" : "대출";
+            throw new BusinessException("NOT_SUPPORTED",
+                    label + "는 개별로 다시 조회할 수 없어요. 「전체 즉시 조회」를 써 주세요.");
+        }
         ConnectedAccount account = mapper.findByIdAndUser(accountId, userId);
         if (account == null) {
             throw new BusinessException("NOT_FOUND", "연결된 계좌를 찾을 수 없어요.");

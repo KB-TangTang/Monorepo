@@ -19,6 +19,8 @@ public class ConnectedAccountDto {
     private final String accountName;
     private final String accountNoMasked;
     private final String accountType;
+    /** 카드 행 전용(#467). `01`=신용, `02`=체크. 화면이 잔액 자리에 카드 종류를 그린다. */
+    private final String cardTypeCode;
     private final BigDecimal balance;
     private final String syncStatus;
     private final String lastSyncAt;

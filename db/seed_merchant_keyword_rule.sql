@@ -33,14 +33,10 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '카페/간식', '투썸플레이스'
     UNION ALL SELECT '카페/간식', '이디야'
     UNION ALL SELECT '카페/간식', '메가커피'
-<<<<<<< Updated upstream
-=======
     UNION ALL SELECT '카페/간식', '카페'
     UNION ALL SELECT '카페/간식', '메가MGC'
     UNION ALL SELECT '카페/간식', '메머드익스프레스'
-    UNION ALL SELECT '카페/간식', '매머드익스프레스'
     UNION ALL SELECT '카페/간식', '커피'
->>>>>>> Stashed changes
     UNION ALL SELECT '카페/간식', '컴포즈커피'
     UNION ALL SELECT '카페/간식', '파리바게뜨'
     UNION ALL SELECT '카페/간식', '뚜레쥬르'
@@ -48,6 +44,7 @@ SELECT keyword_seed.keyword,
     -- 식비 · 편의점
     UNION ALL SELECT '편의점', 'GS25'
     UNION ALL SELECT '편의점', 'CU'
+    UNION ALL SELECT '편의점', '씨유'
     UNION ALL SELECT '편의점', '세븐일레븐'
     UNION ALL SELECT '편의점', '이마트24'
     -- 식비 · 음식점/외식
@@ -85,6 +82,7 @@ SELECT keyword_seed.keyword,
     -- 교통 · 주차/통행료
     UNION ALL SELECT '주차/통행료', '하이패스'
     UNION ALL SELECT '주차/통행료', '아이파킹'
+    UNION ALL SELECT '주차/통행료', '주차장'
     UNION ALL SELECT '주차/통행료', '파킹클라우드'
     -- 구독/디지털 · OTT
     UNION ALL SELECT 'OTT', '넷플릭스'
@@ -919,6 +917,10 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '도서', '윌라'
     UNION ALL SELECT '취미', '하비풀'
     UNION ALL SELECT '취미', '모두의공방'
+    UNION ALL SELECT '취미', '가챠'
+    UNION ALL SELECT '취미', '노래방'
+    UNION ALL SELECT '취미', '코인노래'
+    UNION ALL SELECT '취미', '클라이밍'
     UNION ALL SELECT '레저', '야놀자레저'
     UNION ALL SELECT '레저', '서울랜드'
     UNION ALL SELECT '레저', '에버랜드'
@@ -981,6 +983,7 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '장보기/마트', '이마트'
     UNION ALL SELECT '장보기/마트', '홈플러스'
     UNION ALL SELECT '장보기/마트', '롯데마트'
+    UNION ALL SELECT '장보기/마트', '슈퍼'
     UNION ALL SELECT '장보기/마트', '코스트코'
     UNION ALL SELECT '장보기/마트', '농협하나로마트'
     UNION ALL SELECT '장보기/마트', '하나로마트'
@@ -1029,6 +1032,7 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '소프트웨어·클라우드', '드롭박스'
     UNION ALL SELECT '소프트웨어·클라우드', '구글원'
     -- 문화/여가 · 여행
+    UNION ALL SELECT '문화/여가', '핫트랙스'
     UNION ALL SELECT '영화·공연·전시', '티켓링크'
     UNION ALL SELECT '영화·공연·전시', '예스24라이브홀'
     UNION ALL SELECT '영화·공연·전시', '국립박물관'
@@ -1038,6 +1042,8 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '취미', '클래스101'
     UNION ALL SELECT '취미', '프립'
     UNION ALL SELECT '취미', '오늘의클래스'
+    UNION ALL SELECT '취미', '인형뽑기'
+    UNION ALL SELECT '취미', '오락실'
     UNION ALL SELECT '레저', '골프존'
     UNION ALL SELECT '레저', '스크린골프'
     UNION ALL SELECT '레저', '볼링장'
@@ -1050,6 +1056,7 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '교통권', 'SRT'
     UNION ALL SELECT '숙박', '호텔스닷컴'
     UNION ALL SELECT '숙박', '아고다'
+    UNION ALL SELECT '숙박', '호텔'
     UNION ALL SELECT '숙박', '부킹닷컴'
     UNION ALL SELECT '숙박', '호텔스컴바인'
     UNION ALL SELECT '관광·여행상품', '노랑풍선'

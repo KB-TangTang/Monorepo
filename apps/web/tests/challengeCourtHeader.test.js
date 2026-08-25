@@ -143,6 +143,11 @@ test('건물 이미지는 항상 폭을 넘겨 아래에 붙인다', () => {
 
     assert.match(img, /bottom:\s*0;/, '하단을 붙여야 아래 그라데이션 패널과 이어져 보인다');
     assert.match(img, /width:\s*var\(--court-img-w\);/);
+    assert.match(
+        img,
+        /max-width:\s*none;/,
+        'base.css 의 전역 img{max-width:100%} 가 위 width 를 깎아 크롭이 무효가 된다',
+    );
 
     /*
      * 이미지가 박스 좌우를 다 덮지 못하면 배경색 띠가 드러나 풀블리드 디자인이 깨진다.
@@ -160,6 +165,40 @@ test('건물 이미지는 항상 폭을 넘겨 아래에 붙인다', () => {
         assert.ok(
             50 + width / 2 + shift >= 100,
             `${variant} 의 이미지 오른쪽에 배경이 드러난다 (폭 ${width}% · 이동 ${shift}%)`,
+        );
+    }
+});
+
+/*
+ * 두 원본 png 는 맨 바깥 열이 밝은 회보라색이다(대법원 왼쪽 1px · 오른쪽 2px, 지방법원 양쪽 1px).
+ * 크롭이 그보다 얇으면 헤더 양옆에 세로선처럼 남는다 — 실제로 전역 img{max-width:100%} 탓에
+ * 크롭이 0 이 되어 그렇게 보였다. 여기서 원본 픽셀로 환산해 여유를 확인한다.
+ */
+test('건물 이미지 크롭이 원본 가장자리 헤어라인을 덮는다', () => {
+    const css = source(HEADER_CSS);
+
+    /* [원본 폭, 왼쪽 헤어라인 px, 오른쪽 헤어라인 px] */
+    const HAIRLINE = {
+        supreme: [650, 1, 2],
+        district: [654, 1, 1],
+    };
+
+    for (const [variant, [imageWidth, leftPx, rightPx]] of Object.entries(HAIRLINE)) {
+        const body = rule(css, `.court-header--${variant} {`);
+        const width = Number(body.match(/--court-img-w:\s*([\d.]+)%/)[1]);
+        const shift = (Number(body.match(/--court-img-x:\s*(-?[\d.]+)%/)[1]) * width) / 100;
+
+        /* 박스 기준 넘침(%) → 이미지 자기 폭 기준 비율 → 원본 픽셀 */
+        const leftCrop = ((width / 2 - 50 - shift) / width) * imageWidth;
+        const rightCrop = ((width / 2 - 50 + shift) / width) * imageWidth;
+
+        assert.ok(
+            leftCrop >= leftPx,
+            `${variant} 왼쪽 크롭 ${leftCrop.toFixed(1)}px 가 헤어라인 ${leftPx}px 를 못 덮는다`,
+        );
+        assert.ok(
+            rightCrop >= rightPx,
+            `${variant} 오른쪽 크롭 ${rightCrop.toFixed(1)}px 가 헤어라인 ${rightPx}px 를 못 덮는다`,
         );
     }
 });
