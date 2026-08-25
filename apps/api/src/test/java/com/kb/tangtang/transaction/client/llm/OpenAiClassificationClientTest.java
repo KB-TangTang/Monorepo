@@ -209,6 +209,62 @@ class OpenAiClassificationClientTest {
     }
 
     @Test
+    @DisplayName("content 가 유효한 JSON 이 아니면 한 번 더 물어보고, 재시도에서 성공하면 그 결과를 쓴다")
+    void retriesOnceWhenContentIsMalformedJsonAndSucceeds() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"이건 JSON 이 아니다\"}}]}",
+                        MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"{\\\"results\\\":"
+                                + "[{\\\"transactionId\\\":1,\\\"categoryId\\\":5,\\\"confidence\\\":0.95}]}\"}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        List<CategoryAssignmentDto> result = client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build()));
+
+        assertEquals(1, result.size());
+        assertEquals(5L, result.get(0).getCategoryId());
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("재시도에서도 content 가 계속 깨져 있으면 예외를 던지고 더 이상 재시도하지 않는다")
+    void stopsAfterMaxAttemptsWhenContentStaysMalformed() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"이건 JSON 이 아니다\"}}]}",
+                        MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"content\":\"또 깨졌다\"}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        BusinessException e = assertThrows(BusinessException.class, () -> client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build())));
+
+        assertEquals("EXTERNAL_API_ERROR", e.getCode());
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("모델이 거부(refusal)한 경우는 파싱 재시도 없이 바로 예외를 던진다")
+    void doesNotRetryOnRefusal() {
+        mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"refusal\":\"I can't help with that.\"},"
+                                + "\"finish_reason\":\"stop\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThrows(BusinessException.class, () -> client.classify(
+                List.of(tx(1L, "스타벅스")),
+                List.of(Category.builder().id(5L).categoryName("카페/간식").parentId(1L).build())));
+
+        /* 두 번째 요청이 없어야 한다 — 등록된 expectation 은 하나뿐이라, 더 불렀다면 mockServer.verify()가 아니라
+           unexpected request 예외로 먼저 실패한다. */
     @DisplayName("요청 본문에 merchantCategoryName(MCC 업종명)이 포함된다")
     void requestBodyIncludesMerchantCategoryName() throws Exception {
         mockServer.expect(requestTo("https://api.openai.com/v1/chat/completions"))

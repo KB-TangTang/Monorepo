@@ -34,6 +34,14 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
 
     private static final String CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
 
+    /*
+     * Structured Outputs 를 강제해도 드물게 content 가 온전한 JSON 이 아닌 경우가 있다(모델이
+     * 스키마를 어기고 텍스트를 섞어 보내는 등). 그 묶음을 통째로 FAILED(→ 미분류)로 버리기 전에
+     * 같은 요청으로 한 번 더 물어본다. refusal·finish_reason 같은 다른 실패는 다시 물어봐도
+     * 결과가 같을 가능성이 높아 재시도 대상에서 제외한다(아래 parseResults 참고).
+     */
+    private static final int MAX_ATTEMPTS = 2;
+
     private static final String SYSTEM_PROMPT =
             "당신은 한국 개인 금융 거래를 표준 소비 카테고리로 분류하는 어시스턴트입니다. "
             + "카테고리 목록에서 parentId 가 없는 항목은 대분류, parentId 가 있는 항목은 그 대분류에 속한 "
@@ -89,14 +97,24 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
         headers.setBearerAuth(apiKey);
 
         HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
-        ResponseEntity<String> response;
-        try {
-            response = restTemplate.exchange(baseUrl + CHAT_COMPLETIONS_PATH, HttpMethod.POST, entity, String.class);
-        } catch (Exception e) {
-            throw new BusinessException("EXTERNAL_API_ERROR", "OpenAI 호출 실패: " + e.getMessage());
-        }
 
-        return parseResults(response.getBody());
+        LlmContentParseException lastParseFailure = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            ResponseEntity<String> response;
+            try {
+                response = restTemplate.exchange(baseUrl + CHAT_COMPLETIONS_PATH, HttpMethod.POST, entity, String.class);
+            } catch (Exception e) {
+                throw new BusinessException("EXTERNAL_API_ERROR", "OpenAI 호출 실패: " + e.getMessage());
+            }
+
+            try {
+                return parseResults(response.getBody());
+            } catch (LlmContentParseException e) {
+                lastParseFailure = e;
+            }
+        }
+        throw new BusinessException("EXTERNAL_API_ERROR",
+                MAX_ATTEMPTS + "번 재시도했지만 OpenAI 응답 파싱에 계속 실패했다: " + lastParseFailure.getMessage());
     }
 
     private ObjectNode buildRequestBody(List<Transaction> transactions, List<Category> categories) {
@@ -230,7 +248,15 @@ public class OpenAiClassificationClient implements LlmClassificationClient {
             }
             return results;
         } catch (Exception e) {
-            throw new BusinessException("EXTERNAL_API_ERROR", "OpenAI 응답 파싱 실패: " + e.getMessage());
+            /* 재시도 대상: content 가 유효한 JSON 이 아니거나 기대한 모양이 아니다. classify() 가 잡아 재시도한다. */
+            throw new LlmContentParseException("OpenAI 응답 파싱 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /** content 필드가 유효한 JSON 이 아닐 때만 던진다 — classify() 가 이 예외만 잡아 한 번 더 요청한다. */
+    private static class LlmContentParseException extends RuntimeException {
+        LlmContentParseException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }
