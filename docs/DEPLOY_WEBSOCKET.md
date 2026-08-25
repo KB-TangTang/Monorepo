@@ -8,11 +8,12 @@ REST(방 정보·이전 대화·읽음 처리)는 그 전부터 정상이었고,
 ## 요청이 두 길로 갈린다
 
 ```
-REST   브라우저 → Vercel(rewrite) → EC2:8080          ← 기존 그대로
-소켓   브라우저 → EC2:443(nginx)  → 127.0.0.1:8080     ← #268 에서 뚫은 길
+REST   브라우저 → Vercel(rewrite) → EC2:443(nginx) → 127.0.0.1:8080   ← #484 에서 https 로
+소켓   브라우저 → EC2:443(nginx)  →                  127.0.0.1:8080   ← #268 에서 뚫은 길
 ```
 
-**소켓만 EC2 로 직행시킨다.**
+**소켓만 EC2 로 직행시킨다.** REST 는 Vercel 을 한 번 거치지만, #484 이후로는 그 다음 구간도
+이 nginx 의 443 을 탄다(원래는 `http://<EC2>:8080` 평문이었다).
 
 > ⚠ **REST 를 https 로 옮기는 방법은 두 가지고 조건이 전혀 다르다. 섞어 읽지 말 것.**
 >
@@ -44,7 +45,7 @@ REST   브라우저 → Vercel(rewrite) → EC2:8080          ← 기존 그대�
 | 인증서 | Let's Encrypt (`certbot --nginx`). `certbot renew` 타이머로 자동 갱신 |
 | nginx 설정 | `/etc/nginx/conf.d/tangtang.conf` |
 | 프록시 대상 | `/ws/` · `/api/notifications/stream` · `/api/` · `/uploads/` → `127.0.0.1:8080` |
-| 보안그룹 | 80 · 443 개방 (**8080 은 그대로 유지** — REST 가 아직 rewrite 로 이 길을 쓴다) |
+| 보안그룹 | 80 · 443 개방. **8080 도 열어 둔다** — #484 이후 정상 경로는 443 이지만, `vercel.json` 을 되돌리는 것이 유일한 롤백 수단이라 그 목적지를 살려 둔다 |
 
 ## nginx 설정
 
@@ -202,9 +203,72 @@ VITE_WS_BASE_URL=https://kb-tangtang.duckdns.org
 
 | 확인할 것 | 방법 | 기대 |
 |---|---|---|
-| 대용량 multipart POST | 그룹 챌린지 변론에 **사진 3장(각 4~5MB)** 첨부 후 제출 | 성공. **413 이면 `client_max_body_size` 미반영** |
-| SSE 알림 | 로그인 후 DevTools → Network → `stream` → 15초마다 프레임 | 실시간 도착. 안 오면 `proxy_buffering off` 미반영 |
+| 대용량 multipart POST | 아래 「업로드 상한 확인」 | 15MB 통과 · 25MB 만 413 |
+| SSE 알림 | 아래 「SSE 확인」 | `connected` 즉시 도착 |
 | 로그인 유지 | 새로고침 · 15분 후 액세스 토큰 재발급 | 재로그인 요구 없음 (쿠키가 그대로 실리는지) |
+
+**업로드 상한 확인** — 변론 화면으로 사진을 올려 보는 것보다 경계를 직접 때리는 편이 빠르고 정확하다.
+인증이 없어도 **nginx 단계**는 판정할 수 있다(401/400 이면 nginx 를 통과한 것, 413 이면 nginx 가 막은 것).
+
+```bash
+head -c 15000000 /dev/zero > /tmp/15mb.bin
+head -c 25000000 /dev/zero > /tmp/25mb.bin
+for f in /tmp/15mb.bin /tmp/25mb.bin; do
+  echo -n "$f -> "
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+    -F "file=@$f" https://kb-tangtang.duckdns.org/api/users/me/profile-image
+done
+```
+
+> **실측(2026-08-25)**: `15mb.bin → 400` · `25mb.bin → 413`. 경계가 20m 에 정확히 있다.
+> **15MB 가 413 이면 `client_max_body_size` 가 반영되지 않은 것**이다.
+
+**SSE 확인** — ⚠ **DevTools 로는 하트비트가 안 보인다.** 두 가지 이유가 겹친다.
+
+- 하트비트는 `:ping` 이라는 **주석 프레임**이고, `sseStream.js:28-30` 이 `:` 로 시작하는 줄을 버린다
+- Chrome 의 EventStream 탭도 주석은 표시하지 않는다
+
+그래서 **판정 근거는 「15초 프레임」이 아니라 `connected` 이벤트의 도착 시각**이다.
+`NotificationController.java:70` 이 연결 직후 이걸 한 번 쏘는데, 버퍼링이 켜져 있으면
+4096바이트 버퍼가 찰 때까지(`:ping\n\n` 7바이트 × 585회 ≈ **2.4시간**) 아무것도 오지 않는다.
+
+프로덕션 페이지에서 **로그인을 마친 뒤** 콘솔에 붙여넣는다. 액세스 토큰은 메모리(Pinia)에만 있어
+꺼낼 방법이 없으므로, axios 가 쓰는 XHR 의 헤더 설정을 한 번만 가로채 받아온다.
+
+```js
+(() => {
+    const orig = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+        if (k.toLowerCase() === 'authorization' && !window.__done) {
+            window.__done = true;
+            XMLHttpRequest.prototype.setRequestHeader = orig; // 즉시 원복
+            start(v);
+        }
+        return orig.apply(this, arguments);
+    };
+    function start(tok) {
+        fetch('https://kb-tangtang.duckdns.org/api/notifications/stream', {
+            headers: { Authorization: tok },
+        }).then(async (res) => {
+            console.log('[nginx] 응답 ' + res.status);
+            if (!res.ok) return console.log('인증 실패');
+            const rd = res.body.getReader(), dec = new TextDecoder(), t0 = Date.now();
+            for (;;) {
+                const { value, done } = await rd.read();
+                const s = ((Date.now() - t0) / 1000).toFixed(1);
+                if (done) return console.log('[nginx] +' + s + 's 끊김');
+                console.log('[nginx] +' + s + 's', JSON.stringify(dec.decode(value)));
+            }
+        });
+    }
+    console.log('설치 완료. 하단 탭을 아무거나 눌러 API 를 한 번 호출하세요.');
+})();
+```
+
+> **실측(2026-08-25)**: `+0.3s "event:connected\ndata:ok\n\n"` 이후 `+15.3s`·`+30.3s` … 로
+> `":ping\n\n"` 이 15초 간격으로 들어왔다.
+>
+> ⚠ **로그인 「전」에 붙여넣으면 안 된다.** 구글 OAuth 는 전체 페이지 이동이라 패치가 날아간다.
 
 > **되돌리기**: `vercel.json` 의 destination 을 `http://3.35.24.153:8080` 로 되돌리고 재배포하면 끝이다.
 > 그래서 **보안그룹의 8080 을 닫지 않는다** — 8080 이 롤백 경로다.
