@@ -8,8 +8,16 @@
 > **2026-08-19 갱신** — 최초 점검 이후 배포 구조가 바뀌었다.
 > - 3307 은 SSH 터널 전환이 끝나 **차단 완료**(아래 1번)
 > - EC2 앞단에 호스트 nginx 가 서고 443 에서 **wss 만** 종단한다(이슈 #268).
->   REST 는 여전히 Vercel rewrite → 8080 평문이다. 구조는 `docs/DEPLOY_WEBSOCKET.md` 가 원본
+>   REST 는 Vercel rewrite → 8080 평문이었다. 구조는 `docs/DEPLOY_WEBSOCKET.md` 가 원본
 > - 이 점검에서 준비했던 `deploy/` TLS 구성은 위 구조와 충돌해 **폐기했다**(아래 2번)
+>
+> **2026-08-25 갱신** — 이슈 [#484](https://github.com/KB-TangTang/Monorepo/issues/484) 에서
+> **REST·업로드 구간도 https 로 전환**했다(PR 리뷰 대기).
+> - 보류 사유였던 「4가지 동반 조건」이 **서로 다른 두 전환 방법의 조건을 섞은 것**임을 재검증했다.
+>   채택안에 실제로 필요한 건 ③④ 둘뿐이고, EC2 nginx 에 적용을 마쳤다 (아래 2번)
+> - **Swagger 접근 제어는 이미 적용돼 동작 중**임을 실측으로 확인했다 (아래 3번)
+> - **보안 헤더 3종을 Vercel 에 추가**했다. 함께 적혀 있던 HSTS 는 **이미 적용돼 있었고**,
+>   `nosniff` 담당도 EC2 nginx 가 아니라 Vercel 이었다 (아래 4번)
 
 ---
 
@@ -42,14 +50,22 @@
 | 결과 | `http://<EC2>:8080` — 브라우저↔Vercel 구간만 TLS 다 |
 | 영향 | 액세스 토큰(Authorization 헤더) · 리프레시 쿠키 · 계좌·거래내역이 평문으로 인터넷을 지난다 |
 
-**현재 상태 — 미해결. 후속 이슈로 넘긴다.**
+**현재 상태 — 이슈 [#484](https://github.com/KB-TangTang/Monorepo/issues/484) 에서 전환. PR 리뷰 대기(2026-08-25).**
 
-이슈 #268(그룹 채팅 wss)에서 EC2 앞단에 TLS 종단이 생겼다. 다만 **소켓 전용**이다.
+이슈 #268(그룹 채팅 wss)에서 EC2 앞단에 TLS 종단이 생겼다. 다만 당시에는 **소켓 전용**이었다.
 
 ```
-REST   브라우저 → Vercel(rewrite) → EC2:8080            평문 HTTP  ← 이 항목
-소켓   브라우저 → EC2:443(호스트 nginx) → 127.0.0.1:8080  wss       ← 해결됨
+[#484 이전]
+REST   브라우저 → Vercel(rewrite) → EC2:8080                  평문 HTTP  ← 이 항목
+소켓   브라우저 → EC2:443(호스트 nginx) → 127.0.0.1:8080       wss       ← #268 해결
+
+[#484 이후]
+REST   브라우저 → Vercel(rewrite) → EC2:443(nginx) → :8080    https     ← 전환
+소켓   브라우저 → EC2:443(호스트 nginx) → 127.0.0.1:8080       wss
 ```
+
+**세 구간이 모두 TLS 가 되어 종단 간 암호화가 완성된다.** 브라우저가 보는 오리진은
+`*.vercel.app` 그대로이므로(rewrite 는 서버 사이드 프록시다) 애플리케이션 코드 변경은 없다.
 
 호스트에 직접 설치한 nginx 가 `kb-tangtang.duckdns.org` 인증서로 443 을 종단하고 `/ws/` 만
 업그레이드 프록시한다. 설정 원본과 적용 절차는 **`docs/DEPLOY_WEBSOCKET.md`** 다.
@@ -62,15 +78,44 @@ REST   브라우저 → Vercel(rewrite) → EC2:8080            평문 HTTP  ←
 >   `certbot --standalone -p 80:80` 도 실패한다
 > - 인증서 경로도 어긋난다(호스트 `/etc/letsencrypt` vs 도커 볼륨)
 
-REST 를 https 로 옮기려면 **아래 4가지를 반드시 함께** 해야 한다. 하나라도 빠지면 로그인이 깨진다.
+#### 전환 방법과 동반 조건 (2026-08-25 재검증)
 
-1. `ServletConfig` 의 CORS `allowedOrigins`(정확 문자열 2개) → `allowedOriginPatterns`.
-   지금 그대로면 Vercel 프리뷰 배포가 CORS 로 막힌다
-2. `auth.cookie.same-site` 를 `application-docker.properties` 에서 오버라이드.
-   기본 `Lax` 로는 오리진이 갈리는 순간 리프레시 쿠키가 실려 나가지 않는다
-3. nginx `client_max_body_size` 를 12m → **20m**. `WebConfig` 의 `MAX_REQUEST_SIZE` 가 20MB 다
-   (현재 값은 `MAX_FILE_SIZE` 10MB 만 보고 잡은 것이다)
-4. `/api/notifications/stream` 에 `proxy_buffering off` 유지 — SSE 알림이 버퍼에 갇힌다
+> 이 문단은 원래 **「4가지를 반드시 함께」** 라고만 적혀 있었다. 재검증 결과 그 목록은
+> **서로 다른 두 전환 방법의 조건을 섞어 놓은 것**이었다. 방법에 따라 필요한 조건이 다르다.
+
+| 방법 | 바꾸는 것 | 동반 조건 |
+|---|---|---|
+| **A. rewrite 대상만 https 로** (채택) | `vercel.json` 의 destination 2개를 `https://kb-tangtang.duckdns.org` 로 | **③ ④** |
+| B. 프론트가 EC2 로 직행 | `VITE_API_BASE_URL` 을 EC2 도메인으로 (기각안. `DEPLOY_WEBSOCKET.md` 부록) | ① ② ③ ④ |
+
+1. `ServletConfig` 의 CORS `allowedOrigins`(정확 문자열 2개) → `allowedOriginPatterns`
+   — **A 안에는 불필요.** Vercel rewrite 는 브라우저 리다이렉트가 아니라 **Vercel 서버가 대신
+   호출하는 서버 사이드 프록시**다. 브라우저가 보는 오리진은 `*.vercel.app` 그대로라
+   CORS 심사 자체를 타지 않는다. B 안에서만 필요하다
+2. `auth.cookie.same-site` 를 `application-docker.properties` 에서 오버라이드
+   — **A 안에는 불필요.** 같은 이유로 오리진이 갈리지 않아 리프레시 쿠키가 그대로 실린다.
+   B 안에서만 필요하다
+3. nginx `client_max_body_size` 를 12m → **20m** — **A·B 모두 필수.**
+   `WebConfig.MAX_REQUEST_SIZE` 가 20MB 이고, 그룹 챌린지 변론 증빙이
+   `DefenseService.MAX_IMAGES = 3` × `ImageProcessor.MAX_BYTES = 5MB` = **한 요청 최대 15MB** 다.
+   클라이언트 압축도 없다. 12m 이면 사진 3장 변론이 nginx 에서 **413** 으로 잘린다
+   (기존 12m 은 `MAX_FILE_SIZE` 10MB 만 보고 잡은 값이었다)
+   → **실측(2026-08-25)**: 15MB 본문 = **400**(nginx 통과, 앱까지 도달) · 25MB 본문 = **413**(nginx 차단).
+   경계가 의도대로 20m 에 있다
+4. `/api/notifications/stream` 에 `proxy_buffering off` — **A·B 모두 필수.**
+   없으면 SSE 알림이 버퍼에 갇힌다. 다만 프론트가 60초 폴링(`notification.js` `POLL_INTERVAL_MS`)
+   으로 강등되므로 **실시간이 죽을 뿐 완전 장애는 아니다**
+   → **실측(2026-08-25)**: 브라우저에서 `https://kb-tangtang.duckdns.org/api/notifications/stream`
+   직접 구독 → `connected` 이벤트가 **+0.3초에 즉시** 도착하고 이후 `:ping` 이 **15초 간격**으로 들어온다.
+   버퍼링이 켜져 있었다면 4096바이트 버퍼가 찰 때까지(`:ping\n\n` 7바이트 × 585회 ≈ **2.4시간**)
+   아무것도 오지 않는다. 즉 「즉시 도착」 자체가 `proxy_buffering off` 의 증거다
+
+> **`proxy_read_timeout` 은 넣지 않는다.** nginx 기본 60초에 SSE 가 끊길 것처럼 보이지만
+> `SseHeartbeat.java:26` 이 15초마다 주석 프레임을 보내고, `RootConfig` 의 전용 스케줄러
+> 풀(`poolSize 24`)이 그 하트비트가 굶지 않도록 보장한다. 근거 없는 지시어를 늘리지 않는다.
+>
+> **전역 gzip 도 꺼져 있다** — EC2 에서 `nginx -T | grep -i gzip` 실측, `gzip on;` 없음(2026-08-25).
+> SSE 블록의 `gzip off;` 는 나중에 누가 전역 gzip 을 켜도 안전하도록 남겨 둔 보험이다.
 
 ### 🟡 Swagger 문서가 무인증으로 공개
 
@@ -85,9 +130,14 @@ REST 를 https 로 옮기려면 **아래 4가지를 반드시 함께** 해야 �
 명세 전문이 다운로드된다.** 실제 호출은 `DevEnvironmentGuard` 가 막지만, 배치 트리거·미션 재배정
 같은 내부 운영 엔드포인트의 형태가 노출된다.
 
-**조치**: `SwaggerAccessInterceptor` 로 배포 환경에서만 HTTP Basic 인증을 요구한다.
-로컬(`app.env=local`)은 그대로 열린다. **비밀번호를 설정하지 않으면 404 로 숨긴다** —
-설정 누락 시 열린 채 남는 것보다 안 보이는 편이 안전하기 때문이다.
+**조치 — 완료(적용 확인 2026-08-25)**: `SwaggerAccessInterceptor` 로 배포 환경에서만
+HTTP Basic 인증을 요구한다. 로컬(`app.env=local`)은 그대로 열린다.
+**비밀번호를 설정하지 않으면 404 로 숨긴다** — 설정 누락 시 열린 채 남는 것보다 안 보이는 편이
+안전하기 때문이다.
+
+> **실측(2026-08-25)** — EC2 8080 에 직접 요청해 `/swagger-ui.html` · `/swagger-resources` 가
+> 모두 **401** 을 돌려주는 것을 확인했다. 이 문서에는 오래 「미적용」으로 남아 있었으나
+> **이미 배포돼 동작 중**이다.
 
 ### 🟡 관리 포트 접근 범위
 
@@ -134,12 +184,36 @@ REST 를 https 로 옮기려면 **아래 4가지를 반드시 함께** 해야 �
 
 - [x] 보안그룹: **3307 차단 완료**(2026-08-19). 팀은 SSH 터널로 접속한다
 - [ ] 보안그룹: 관리 포트 접근 범위를 팀 IP 로 제한 (EC2 담당 팀원 · 상세는 팀 채널)
-- [ ] **REST(8080) https 전환 → `vercel.json` 을 https 로** — **후속 이슈.**
-      위 「Vercel → EC2 구간이 평문 HTTP」의 동반 조건 4가지를 함께 처리해야 한다
-- [ ] `.env` 에 `SWAGGER_ACCESS_PASSWORD` 설정 후 재배포. 값은 팀 채널로 공유
-      (EC2 env 에는 이미 넣어 뒀다. 이 PR 이 머지돼 새 war 가 올라가야 실제로 적용된다)
-- [ ] nginx 에 보안 헤더가 없다 — HSTS · `X-Content-Type-Options` · `X-Frame-Options` ·
-      `Referrer-Policy` 전무. `server` 헤더로 버전도 나간다(`server_tokens off` 로 끈다)
+- [x] **REST(8080) https 전환**(위 표의 **A 안**) — 이슈 #484, **PR 리뷰 대기**.
+      동반 조건 ③④ 는 2026-08-25 EC2 nginx 에 적용·실측 완료.
+      `apps/web/vercel.json` 의 destination 2개를 `https://kb-tangtang.duckdns.org` 로 바꿨다.
+      **머지 직후 프로덕션에서 로그인 → 홈 · 새로고침 로그인 유지 2가지를 확인한다**
+      (Vercel 프리뷰는 구글 OAuth `redirect_uri` 가 프로덕션 URL 로 고정돼 있어 로그인 검증이 불가능하다)
+- [x] Swagger 접근 제어 — **이미 적용돼 동작 중**(401 실측, 2026-08-25). `SWAGGER_ACCESS_PASSWORD` 는
+      EC2 env 에 설정돼 있다
+- [x] **보안 헤더 3종 추가**(2026-08-25, 이슈 #484 에 포함). 원래 이 줄은 **5개를 전부 nginx 에
+      넣는 것**으로 적혀 있었으나, **헤더는 그 응답을 브라우저에 최종적으로 내보내는 쪽에 붙어야
+      효과가 있다.** 실측 결과 그 지점은 EC2 가 아니라 **Vercel** 이었다.
+
+      | 헤더 | 조치 | 근거 (2026-08-25 `curl -sI` 실측) |
+      |---|---|---|
+      | `X-Frame-Options: DENY` | **Vercel 에 추가** | 없었다. `apps/web/src` 에 `iframe` · `window.parent` · `window.top` 0건이라 `DENY` 로 둔다 |
+      | `X-Content-Type-Options: nosniff` | **Vercel 에 추가** | 양쪽 다 없었다. `/uploads/**` 도 rewrite 를 타므로 EC2 가 아닌 Vercel 몫이다(아래) |
+      | `Referrer-Policy: strict-origin-when-cross-origin` | **Vercel 에 추가** | 없었다 |
+      | **HSTS** | **할 일 없음 — 이미 적용돼 있다** | Vercel 이 `.vercel.app` 에 기본 적용한다: `max-age=63072000; includeSubDomains; preload`. `vercel.app` 자체가 HSTS preload 목록에 있어 `vercel.json` 에 무엇을 적든 바뀌지 않는다 |
+      | `server_tokens off` | **남겨둠**(우선순위 낮음) | `kb-tangtang.duckdns.org` 직접 호출에서만 `nginx/1.30.3` 이 보인다. rewrite 를 타면 Vercel 이 `server: vercel` 로 갈아끼운다. 실제 직접 경로는 wss 핸드셰이크와 외부 스캐너뿐 |
+
+      > **왜 `nosniff` 가 EC2 가 아니라 Vercel 인가.** `/uploads/**` 요청은 Vercel rewrite →
+      > EC2 nginx → Tomcat 을 거치는데, **Vercel 이 응답 헤더를 자기 것으로 갈아끼운다.**
+      > `https://<vercel>/api/health` 응답의 `server` 가 `nginx/1.30.3` 이 아니라 `vercel` 인 것으로
+      > 확인했다. EC2 nginx 에만 넣었으면 **「했는데 안 걸리는」** 상태가 됐을 것이다.
+      >
+      > **HSTS 를 "롤백이 어려우니 짧게 시작한다"고 적어두었던 것도 무의미했다.**
+      > 이미 2년짜리가 preload 와 함께 걸려 있다.
+
+      적용 위치: `apps/web/vercel.json` 의 `headers` 블록.
+      **머지 후 확인 대상** — `nosniff` 는 Content-Type 이 틀린 응답을 브라우저가 추측으로 구제하지
+      못하게 만든다. `/uploads/**` 프로필 이미지가 실제로 렌더되는지 한 번 본다.
 
 > 점검 방법은 팀 소유 서버를 대상으로 **연결 가능 여부와 배너 확인**까지만 했다.
 > 인증 시도·취약점 스캐너는 돌리지 않았다.
