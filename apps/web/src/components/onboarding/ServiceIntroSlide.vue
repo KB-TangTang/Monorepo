@@ -217,26 +217,48 @@ const layers = computed(() =>
     display: flex;
     min-height: 0;
     flex: 1;
+    /*
+     * stretch 로 두면 캔버스의 aspect-ratio 를 덮어써 비율이 깨진다.
+     * 캔버스가 스스로 높이를 갖게 두고 남는 세로는 위아래로 나눈다.
+     */
+    align-items: center;
     justify-content: center;
+    /* 캔버스가 이 상자의 높이를 100cqh 로 읽는다 — 아래 캔버스 주석 참고 */
+    container-type: size;
 }
 
 /*
- * 원본 비율을 지키는 상자.
+ * 원본 비율을 지키는 상자. object-fit: contain 과 같은 「잘리지도 찌그러지지도 않는」 동작.
  *
- * ⚠ 예전엔 `position:absolute; inset:0; margin:auto` 였는데 **aspect-ratio 가 무시됐다.**
- * top·bottom 이 둘 다 0 이고 height 가 auto 면 브라우저는 비율을 쓰지 않고 높이를 그냥
- * 늘려 버린다(실측: 비율대로면 650 이어야 할 상자가 무대 높이 504 로 나왔다).
+ * ⚠ **폭을 높이에서 역산하면 안 된다. WebKit(= iOS 전 브라우저)이 못 한다.**
  *
- * 그래서 절대배치를 버리고 flex 항목으로 만든다.
- *   - 세로: align-items 기본값 stretch 가 무대 높이를 그대로 준다 (퍼센트를 안 쓴다)
- *   - 가로: 그 높이에서 aspect-ratio 가 폭을 끌어낸다
- *   - max-width 100% 가 걸리면 비율이 폭 기준으로 다시 계산돼 세로가 줄어든다
- * 결과적으로 object-fit: contain 과 같은 「잘리지도 찌그러지지도 않는」 동작이 된다.
+ * 실패한 두 방식이 여기 다 적혀 있다. 다시 시도하지 말 것.
+ *
+ *  1) `position:absolute; inset:0; margin:auto`
+ *     top·bottom 이 둘 다 0 이고 height 가 auto 면 브라우저가 비율을 버리고 높이를 늘린다.
+ *     (실측: 비율대로면 650 이어야 할 상자가 무대 높이 504 로 나왔다)
+ *
+ *  2) flex 항목으로 두고 `stretch 로 받은 높이` × aspect-ratio 로 폭을 구하기
+ *     크롬은 되고 **iOS 는 폭이 0 이 됐다.** Flexbox §9.8 의 「stretch 된 아이템의 cross
+ *     size 는 definite 하다」를 WebKit 이 따르지 않아 width:auto 가 max-content 로 떨어지는데,
+ *     자식이 전부 position:absolute 라 max-content 가 0 이다.
+ *     레이어는 폭이 % 라 전부 사라지고, 폭이 px 로 고정된 반짝임만 화면 정중앙에 남았다.
+ *     (실측: 높이 611px 은 정상인데 폭만 0. iOS 는 크롬·파이어폭스도 엔진이 WebKit 이라 전멸)
+ *
+ * 그래서 **정방향(폭 → 높이)으로만 계산한다.**
+ *   - 무대 높이를 컨테이너 쿼리 단위 100cqh 로 직접 읽어 폭을 정한다 (역산이 아니다)
+ *   - 그 폭에서 aspect-ratio 가 높이를 만든다 — 이 방향은 어느 엔진에서나 동작한다
+ *   - min(100%, …) 이 가로가 좁은 기기에서 넘치는 것을 막는다
  */
 .intro-slide__canvas {
     position: relative;
-    max-width: 100%;
     aspect-ratio: var(--intro-canvas-ratio, 328 / 490);
+    /*
+     * cqh 미지원(iOS 15 이하) 폴백. 세로가 짧은 기기에서 아래가 잘리지만 **보이기는 한다** —
+     * 폭 0 으로 통째로 사라지는 것보다 낫다. 아래 줄을 지우면 폴백이 없어진다.
+     */
+    width: 100%;
+    width: min(100%, calc(100cqh * (var(--intro-canvas-ratio, 328 / 490))));
 }
 
 /* 면마다 제목 줄 수·하단 버튼 유무가 달라 무대에 남는 세로가 다르다 */
