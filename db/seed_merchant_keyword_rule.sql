@@ -33,6 +33,14 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '카페/간식', '투썸플레이스'
     UNION ALL SELECT '카페/간식', '이디야'
     UNION ALL SELECT '카페/간식', '메가커피'
+<<<<<<< Updated upstream
+=======
+    UNION ALL SELECT '카페/간식', '카페'
+    UNION ALL SELECT '카페/간식', '메가MGC'
+    UNION ALL SELECT '카페/간식', '메머드익스프레스'
+    UNION ALL SELECT '카페/간식', '매머드익스프레스'
+    UNION ALL SELECT '카페/간식', '커피'
+>>>>>>> Stashed changes
     UNION ALL SELECT '카페/간식', '컴포즈커피'
     UNION ALL SELECT '카페/간식', '파리바게뜨'
     UNION ALL SELECT '카페/간식', '뚜레쥬르'
@@ -1008,11 +1016,16 @@ SELECT keyword_seed.keyword,
     UNION ALL SELECT '앱·게임', '구글플레이'
     UNION ALL SELECT '앱·게임', '애플앱스토어'
     UNION ALL SELECT '앱·게임', '스팀'
+    UNION ALL SELECT '앱·게임', 'Blizzard'
     UNION ALL SELECT '앱·게임', '넥슨'
     UNION ALL SELECT '앱·게임', '리디'
     UNION ALL SELECT '소프트웨어·클라우드', '마이크로소프트'
     UNION ALL SELECT '소프트웨어·클라우드', '어도비'
     UNION ALL SELECT '소프트웨어·클라우드', '노션'
+    UNION ALL SELECT '소프트웨어·클라우드', 'Figma'
+    UNION ALL SELECT '소프트웨어·클라우드', 'ChatGPT'
+    UNION ALL SELECT '소프트웨어·클라우드', 'Anthropic'
+    UNION ALL SELECT '소프트웨어·클라우드', 'Cloud'
     UNION ALL SELECT '소프트웨어·클라우드', '드롭박스'
     UNION ALL SELECT '소프트웨어·클라우드', '구글원'
     -- 문화/여가 · 여행
