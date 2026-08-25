@@ -109,7 +109,32 @@
           )
     </select>
 
-    <insert id="upsertPendingAiAnalysisSnapshot">
+    <insert id="insertMonthlyReportSnapshotIfAbsent">
+        INSERT INTO tbl_asset_snapshot (
+            user_id,
+            `year_month`,
+            net_worth,
+            total_asset,
+            total_debt,
+            category_summary_json,
+            ai_comment,
+            compare_comment,
+            ai_analysis_status
+        ) VALUES (
+            #{userId},
+            #{yearMonth},
+            #{netWorth},
+            #{totalAsset},
+            #{totalDebt},
+            CAST(#{categorySummaryJson} AS JSON),
+            NULL,
+            NULL,
+            #{aiAnalysisStatus}
+        )
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <insert id="overwriteMonthlyReportSnapshot">
         INSERT INTO tbl_asset_snapshot (
             user_id,
             `year_month`,
@@ -132,27 +157,45 @@
             #{aiAnalysisStatus}
         )
         ON DUPLICATE KEY UPDATE
-            net_worth = CASE
-                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(net_worth)
-                ELSE net_worth
-            END,
-            total_asset = CASE
-                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_asset)
-                ELSE total_asset
-            END,
-            total_debt = CASE
-                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(total_debt)
-                ELSE total_debt
-            END,
-            category_summary_json = CASE
-                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN VALUES(category_summary_json)
-                ELSE category_summary_json
-            END,
-            ai_analysis_status = CASE
-                WHEN ai_analysis_status IN ('NOT_REQUESTED', 'FAILED') THEN #{aiAnalysisStatus}
-                ELSE ai_analysis_status
-            END
+            net_worth = VALUES(net_worth),
+            total_asset = VALUES(total_asset),
+            total_debt = VALUES(total_debt),
+            category_summary_json = VALUES(category_summary_json),
+            ai_comment = NULL,
+            compare_comment = NULL,
+            ai_analysis_status = VALUES(ai_analysis_status),
+            ai_analysis_provider = NULL,
+            ai_analysis_model = NULL,
+            ai_analysis_prompt_version = NULL,
+            ai_analysis_input_hash = NULL,
+            ai_analysis_attempt_count = 0,
+            ai_analysis_requested_at = NULL,
+            ai_analysis_completed_at = NULL,
+            ai_analysis_failed_at = NULL,
+            ai_analysis_failure_code = NULL
     </insert>
+
+    <select id="findMonthlyReportSnapshot"
+            resultType="com.kb.tangtang.report.domain.MonthlyReportSnapshotRow">
+        SELECT id,
+               `year_month`,
+               category_summary_json,
+               ai_analysis_status
+        FROM tbl_asset_snapshot
+        WHERE user_id = #{userId}
+          AND `year_month` = #{yearMonth}
+    </select>
+
+    <select id="findMonthlyReportSnapshots"
+            resultType="com.kb.tangtang.report.domain.MonthlyReportSnapshotRow">
+        SELECT id,
+               `year_month`,
+               category_summary_json,
+               ai_analysis_status
+        FROM tbl_asset_snapshot
+        WHERE user_id = #{userId}
+        ORDER BY `year_month` DESC
+    </select>
 
     <select id="findAiAnalysisSnapshot"
             resultType="com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot">

@@ -130,6 +130,9 @@ services:
       # ⚠ 빈 문자열을 넘기면 Spring 이 cron 표현식 파싱에 실패해 앱이 기동하지 못한다.
       #   그래서 `${VAR:-}` 가 아니라 기본값을 그대로 적은 `${VAR:-0 0 23 * * *}` 로 둔다.
       FIXED_EXPENSE_DETECTION_CRON: "${FIXED_EXPENSE_DETECTION_CRON:-0 0 23 * * *}"
+      # 월간 리포트 수동 배치 운영 키(이슈 #478). 비어 있으면 그 API 만 400 으로 막힌다 —
+      # 앱 기동에는 영향이 없어 `${VAR:-}` 로 둔다.
+      REPORT_MONTHLY_MANUAL_BATCH_KEY: ${REPORT_MONTHLY_MANUAL_BATCH_KEY:-}
       TZ: Asia/Seoul
     # 업로드된 프로필 이미지. 이 볼륨이 없으면 배포(down && up --build)마다 사진이 전부 사라진다.
     volumes:

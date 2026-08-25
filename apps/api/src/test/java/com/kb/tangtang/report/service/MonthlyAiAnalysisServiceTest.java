@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kb.tangtang.common.exception.BusinessException;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisInput;
 import com.kb.tangtang.report.domain.MonthlyAiAnalysisSnapshot;
+import com.kb.tangtang.report.domain.MonthlyReportSnapshotRow;
 import com.kb.tangtang.report.dto.MonthlyAiAnalysisDto;
 import com.kb.tangtang.report.mapper.MonthlyReportMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,9 +86,7 @@ class MonthlyAiAnalysisServiceTest {
     void savesGeneratedResult() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
-                .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        prepareReportSnapshot("2026-07", new BigDecimal("1284000"), new BigDecimal("1412000"), true);
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
@@ -158,9 +157,7 @@ class MonthlyAiAnalysisServiceTest {
     void savesFailureWhenProviderRateLimited() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
-                .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        prepareReportSnapshot("2026-07", new BigDecimal("1284000"), new BigDecimal("1412000"), true);
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenThrow(new AiProviderException("TOO_MANY_REQUESTS",
@@ -180,8 +177,7 @@ class MonthlyAiAnalysisServiceTest {
     void doesNotCreateSavingsAnalogyForFirstReport() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-03"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any())).thenReturn(new BigDecimal("50000"));
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        prepareReportSnapshot("2026-03", new BigDecimal("50000"), null, false);
         when(stateService.claim(eq(USER_ID), eq("2026-03"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
@@ -215,9 +211,7 @@ class MonthlyAiAnalysisServiceTest {
     void retriesFailedGeneration() {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "FAILED"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
-                .thenReturn(new BigDecimal("1284000"), new BigDecimal("1412000"));
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        prepareReportSnapshot("2026-07", new BigDecimal("1284000"), new BigDecimal("1412000"), true);
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
@@ -238,9 +232,7 @@ class MonthlyAiAnalysisServiceTest {
     private void assertZeroSavings(BigDecimal currentMonthSpent, BigDecimal previousMonthSpent) {
         when(mapper.findAiAnalysisSnapshot(USER_ID, "2026-07"))
                 .thenReturn(new MonthlyAiAnalysisSnapshot(1L, null, null, "NOT_REQUESTED"));
-        when(mapper.sumNetSpending(eq(USER_ID), any(), any()))
-                .thenReturn(currentMonthSpent, previousMonthSpent);
-        when(mapper.findMonthlyCategorySpending(eq(USER_ID), any(), any())).thenReturn(List.of());
+        prepareReportSnapshot("2026-07", currentMonthSpent, previousMonthSpent, true);
         when(stateService.claim(eq(USER_ID), eq("2026-07"), eq("OPENAI"),
                 eq("gpt-5-nano"), eq("monthly-report-ai-v10"), any())).thenReturn(1);
         when(provider.generate(any())).thenReturn(MonthlyAiAnalysisDto.builder()
@@ -255,5 +247,23 @@ class MonthlyAiAnalysisServiceTest {
         ArgumentCaptor<MonthlyAiAnalysisInput> inputCaptor = ArgumentCaptor.forClass(MonthlyAiAnalysisInput.class);
         verify(provider, org.mockito.Mockito.atLeastOnce()).generate(inputCaptor.capture());
         assertEquals(BigDecimal.ZERO, inputCaptor.getValue().getSavingsAmount());
+    }
+
+    private void prepareReportSnapshot(String yearMonth,
+                                       BigDecimal totalSpent,
+                                       BigDecimal previousMonthSpent,
+                                       boolean hasPreviousComparison) {
+        String previous = previousMonthSpent == null ? "null" : previousMonthSpent.toPlainString();
+        String json = "{\"snapshotVersion\":2,\"aiUsageConsented\":true,"
+                + "\"summary\":{\"yearMonth\":\"" + yearMonth + "\",\"totalSpent\":"
+                + totalSpent.toPlainString() + ",\"previousMonthSpent\":" + previous
+                + ",\"hasPreviousComparison\":" + hasPreviousComparison
+                + ",\"monthOverMonthRate\":null,\"fixedExpenseCandidateCount\":0,"
+                + "\"confirmedFixedExpenseCount\":0},"
+                + "\"spendingTrend\":{\"yearMonth\":\"" + yearMonth + "\",\"items\":[]},"
+                + "\"categoryReport\":{\"yearMonth\":\"" + yearMonth + "\",\"totalSpent\":"
+                + totalSpent.toPlainString() + ",\"parentCategories\":[],\"categories\":[]}}";
+        when(mapper.findMonthlyReportSnapshot(USER_ID, yearMonth))
+                .thenReturn(new MonthlyReportSnapshotRow(1L, yearMonth, json, "NOT_REQUESTED"));
     }
 }
